@@ -75,7 +75,6 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Logf(tt.name)
 			if err := ValidateBatchSchedulerConfig(tt.args.logger, tt.args.config); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateBatchSchedulerConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
