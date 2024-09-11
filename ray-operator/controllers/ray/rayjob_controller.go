@@ -193,9 +193,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
+		if rayJobInstance.Spec.SubmissionMode != rayv1.NoneMode {
+			logger.Info("Invalid RayJob State", "RayJob", rayJobInstance.Name, "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJob %s is in the Waiting status, but the SubmissionMode is not NoneMode", rayJobInstance.Name)
+		}
+		logger.Info("JobDeploymentStatusWaiting", "RayJob", rayJobInstance.Name)
+
+		// Try to get the Ray job id from the Ray job annotations.
 		rayJobId, found := rayJobInstance.ObjectMeta.Annotations[utils.RayJobSubmissionIdLabelKey]
 		if !found {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJobId is not found in the annotations")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 		rayJobInstance.Status.JobId = rayJobId
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
@@ -619,6 +626,7 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurren
 // This function is the sole place where `JobDeploymentStatusInitializing` is defined. It initializes `Status.JobId` and `Status.RayClusterName`
 // prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations. In addition, this
 // function also sets `Status.StartTime` to support `ActiveDeadlineSeconds`.
+// This function will set or generate JobId if SubmissionMode is not NoneMode.
 func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
