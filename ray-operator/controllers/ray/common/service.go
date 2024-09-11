@@ -307,9 +307,10 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "None",
-			Selector:  selectorLabels,
-			Type:      corev1.ServiceTypeClusterIP,
+			ClusterIP:                "None",
+			Selector:                 selectorLabels,
+			Type:                     corev1.ServiceTypeClusterIP,
+			PublishNotReadyAddresses: true,
 		},
 	}
 
