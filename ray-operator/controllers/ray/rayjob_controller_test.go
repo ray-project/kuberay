@@ -691,17 +691,17 @@ var _ = Context("RayJob with different submission modes", func() {
 		})
 	})
 
-	Context("RayJob in NoneMode", func() {
+	Context("RayJob in UserMode", func() {
 		Describe("Successful RayJob", Ordered, func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-none-mode", namespace)
-			rayJob.Spec.SubmissionMode = rayv1.NoneMode
+			rayJob.Spec.SubmissionMode = rayv1.UserMode
 			rayCluster := &rayv1.RayCluster{}
 			testRayJobId := "fake-id"
 
 			It("Verify RayJob spec", func() {
-				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.NoneMode))
+				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.UserMode))
 				Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 				Expect(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs).To(HaveLen(1))
 			})

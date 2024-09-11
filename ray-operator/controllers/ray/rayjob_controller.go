@@ -177,8 +177,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.DashboardURL = clientURL
 		}
 
-		if rayJobInstance.Spec.SubmissionMode == rayv1.NoneMode {
-			logger.Info("SubmissionMode is NoneMode and the RayCluster is created. Transition the status from `Initializing` to `Waiting`.")
+		if rayJobInstance.Spec.SubmissionMode == rayv1.UserMode {
+			logger.Info("SubmissionMode is UserMode and the RayCluster is created. Transition the status from `Initializing` to `Waiting`.")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusWaiting
 			break
 		}
@@ -193,9 +193,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
-		if rayJobInstance.Spec.SubmissionMode != rayv1.NoneMode {
+		if rayJobInstance.Spec.SubmissionMode != rayv1.UserMode {
 			logger.Info("Invalid RayJob State", "RayJob", rayJobInstance.Name, "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJob %s is in the Waiting status, but the SubmissionMode is not NoneMode", rayJobInstance.Name)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJob %s is in the Waiting status, but the SubmissionMode is not UserMode", rayJobInstance.Name)
 		}
 		logger.Info("JobDeploymentStatusWaiting", "RayJob", rayJobInstance.Name)
 
@@ -626,7 +626,7 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurren
 // This function is the sole place where `JobDeploymentStatusInitializing` is defined. It initializes `Status.JobId` and `Status.RayClusterName`
 // prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations. In addition, this
 // function also sets `Status.StartTime` to support `ActiveDeadlineSeconds`.
-// This function will set or generate JobId if SubmissionMode is not NoneMode.
+// This function will set or generate JobId if SubmissionMode is not UserMode.
 func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
@@ -636,7 +636,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 		return nil
 	}
 
-	if rayJob.Spec.SubmissionMode != rayv1.NoneMode && rayJob.Status.JobId == "" {
+	if rayJob.Spec.SubmissionMode != rayv1.UserMode && rayJob.Status.JobId == "" {
 		if rayJob.Spec.JobId != "" {
 			rayJob.Status.JobId = rayJob.Spec.JobId
 		} else {
