@@ -83,7 +83,7 @@ jobs:
             kubectl logs -n ray-system --tail -1 -l app.kubernetes.io/name=kuberay | tee ${KUBERAY_TEST_OUTPUT_DIR}/kuberay-operator.log
 
         - name: Upload logs
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           if: (!inputs.plugin-test) && always() && steps.deploy.outcome == 'success'
           with:
             name: logs
