@@ -37,7 +37,7 @@ runs:
     uses: docker-practice/actions-setup-docker@master
 
   - name: Download Artifact Operator
-    uses: actions/download-artifact@v2
+    uses: actions/download-artifact@v4
     with:
       name: operator_img
       path: /tmp
