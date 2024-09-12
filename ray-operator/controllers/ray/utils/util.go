@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -500,14 +499,6 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 		return false
 	}
 	return reflect.DeepEqual(v1, v2)
-}
-
-func ConvertUnixTimeToMetav1Time(unixTime uint64) *metav1.Time {
-	// The Ray jobInfo returns the start_time, which is a unix timestamp in milliseconds.
-	// https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo
-	t := time.Unix(int64(unixTime)/1000, int64(unixTime)%1000*1000000)
-	kt := metav1.NewTime(t)
-	return &kt
 }
 
 // Json-serializes obj and returns its hash string

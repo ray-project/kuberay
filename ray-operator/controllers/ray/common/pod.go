@@ -264,9 +264,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.LivenessProbe == nil {
+		probeTimeout := int32(utils.DefaultLivenessProbeTimeoutSeconds)
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = int32(utils.DefaultHeadLivenessProbeTimeoutSeconds)
+		}
+
 		rayContainer.LivenessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultLivenessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultLivenessProbeTimeoutSeconds,
+			TimeoutSeconds:      probeTimeout,
 			PeriodSeconds:       utils.DefaultLivenessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
@@ -275,9 +280,13 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.ReadinessProbe == nil {
+		probeTimeout := int32(utils.DefaultReadinessProbeTimeoutSeconds)
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = int32(utils.DefaultHeadReadinessProbeTimeoutSeconds)
+		}
 		rayContainer.ReadinessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultReadinessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultReadinessProbeTimeoutSeconds,
+			TimeoutSeconds:      probeTimeout,
 			PeriodSeconds:       utils.DefaultReadinessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
@@ -536,7 +545,7 @@ func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName st
 }
 
 func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 	// Init containers in both head and worker require FQ_RAY_IP.
@@ -552,7 +561,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 

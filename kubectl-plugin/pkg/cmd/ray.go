@@ -1,13 +1,16 @@
 package cmd
 
 import (
-	cluster "github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/cluster"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/cluster"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/log"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/session"
 )
 
-func NewRayCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ray",
 		Short:        "ray kubectl plugin",
@@ -19,5 +22,7 @@ func NewRayCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(cluster.NewClusterCommand(streams))
+	cmd.AddCommand(session.NewSessionCommand(streams))
+	cmd.AddCommand(log.NewClusterLogCommand(streams))
 	return cmd
 }

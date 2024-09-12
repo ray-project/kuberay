@@ -20,6 +20,7 @@ spec:
         env_vars:
           MODEL_ID: "meta-llama/Meta-Llama-3-8B-Instruct"
           TENSOR_PARALLELISM: "2"
+          PIPELINE_PARALLELISM: "1"
   rayClusterConfig:
     headGroupSpec:
       rayStartParams:

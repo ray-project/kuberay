@@ -57,8 +57,13 @@ spec:
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
+            {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
+            {{- end -}}
+            {{- if .Values.batchScheduler.name -}}
+            {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
+            {{- end -}}
             {{- end -}}
             {{- $watchNamespace := "" -}}
             {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
@@ -81,6 +86,9 @@ spec:
             {{- if .Values.logging.fileEncoder -}}
             {{- $argList = append $argList "--log-file-encoder" -}}
             {{- $argList = append $argList .Values.logging.fileEncoder -}}
+            {{- end -}}
+            {{- if hasKey .Values "useKubernetesProxy" -}}
+            {{- $argList = append $argList (printf "--use-kubernetes-proxy=%t" .Values.useKubernetesProxy) -}}
             {{- end -}}
             {{- if hasKey .Values "leaderElectionEnabled" -}}
             {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}

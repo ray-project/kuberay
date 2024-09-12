@@ -1128,7 +1128,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
-	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe.
+	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe for worker pod.
 	// Here we test the case where the Ray Pod originates from RayServiceCRD,
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
@@ -1138,4 +1138,20 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
 	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
+
+	// Test 3: User does not define a custom probe. KubeRay will inject Exec probe for head pod.
+	// Here we test the case where the Ray Pod originates from RayServiceCRD,
+	// implying that an additional serve health check will be added to the readiness probe.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	// head pod should not have Ray Serve proxy health probes
+	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.False(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
 }

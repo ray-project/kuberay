@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.58.1
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
           mv ./bin/golangci-lint /usr/local/bin/golangci-lint
         shell: bash
       - uses: actions/checkout@v3
@@ -76,7 +76,7 @@ jobs:
           docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
 
       - name: Upload Artifact Apiserver
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: apiserver_img
           path: /tmp/apiserver.tar
@@ -150,7 +150,7 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Upload security proxy artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: security-proxy_img
           path: /tmp/security-proxy.tar
@@ -228,7 +228,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Upload Artifact Operator
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: operator_img
         path: /tmp/operator.tar
