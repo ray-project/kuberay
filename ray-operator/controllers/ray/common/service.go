@@ -288,7 +288,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 }
 
 // BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
-func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Service {
 	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	namespace := rayCluster.Namespace
 
@@ -310,10 +310,13 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 			ClusterIP: "None",
 			Selector:  selectorLabels,
 			Type:      corev1.ServiceTypeClusterIP,
+			// The headless worker service is used for peer communication between multi-host workers and should not be
+			// dependent on Proxy Actor placement to publish DNS addresses.
+			PublishNotReadyAddresses: true,
 		},
 	}
 
-	return headlessService, nil
+	return headlessService
 }
 
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
