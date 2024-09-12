@@ -483,6 +483,12 @@ func TestBuildHeadlessServiceForRayCluster(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedClusterIP, actualClusterIP)
 	}
 
+	actualPublishNotReadyAddresses := svc.Spec.PublishNotReadyAddresses
+	expectedPublishNotReadyAddresses := true
+	if !reflect.DeepEqual(expectedClusterIP, actualClusterIP) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedPublishNotReadyAddresses, actualPublishNotReadyAddresses)
+	}
+
 	expectedName := fmt.Sprintf("%s-%s", instanceForSvc.Name, utils.HeadlessServiceSuffix)
 	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
