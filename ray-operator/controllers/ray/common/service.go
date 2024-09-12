@@ -310,7 +310,9 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 			ClusterIP:                "None",
 			Selector:                 selectorLabels,
 			Type:                     corev1.ServiceTypeClusterIP,
-			PublishNotReadyAddresses: true,
+			// The headless worker service is used for peer communication between multi-host workers and should not be
+			// dependent on Proxy Actor placement to publish DNS addresses.
+			PublishNotReadyAddresses: true, 
 		},
 	}
 
