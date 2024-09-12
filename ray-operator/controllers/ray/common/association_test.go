@@ -130,8 +130,7 @@ func TestRayClusterHeadlessServiceListOptions(t *testing.T) {
 			Namespace: "test-ns",
 		},
 	}
-	headlessSvc, err := BuildHeadlessServiceForRayCluster(*instance)
-	assert.Nil(t, err)
+	headlessSvc := BuildHeadlessServiceForRayCluster(*instance)
 
 	rayClusterName := ""
 	for k, v := range headlessSvc.Labels {
