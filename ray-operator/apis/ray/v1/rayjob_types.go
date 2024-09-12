@@ -59,7 +59,7 @@ type JobSubmissionMode string
 const (
 	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
 	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
-	UserMode   JobSubmissionMode = "UserMode"   // Don't submit job
+	UserMode   JobSubmissionMode = "UserMode"   // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID
 )
 
 type SubmitterConfig struct {
