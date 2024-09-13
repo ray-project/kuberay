@@ -17,11 +17,6 @@ func ValidateBatchSchedulerConfig(logger logr.Logger, config Configuration) erro
 	}
 
 	if len(config.BatchScheduler) > 0 {
-		// default option, no-opt.
-		if config.BatchScheduler == "default" {
-			return nil
-		}
-
 		// if a customized scheduler is configured, check it is supported
 		if config.BatchScheduler == volcano.GetPluginName() || config.BatchScheduler == yunikorn.GetPluginName() {
 			logger.Info("Feature flag batch-scheduler is enabled",
@@ -30,5 +25,6 @@ func ValidateBatchSchedulerConfig(logger logr.Logger, config Configuration) erro
 			return fmt.Errorf("scheduler is not supported, name=%s", config.BatchScheduler)
 		}
 	}
+
 	return nil
 }

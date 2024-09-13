@@ -71,6 +71,17 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "invalid option, invalid scheduler name default",
+			args: args{
+				logger: testr.New(t),
+				config: Configuration{
+					EnableBatchScheduler: false,
+					BatchScheduler:       "default",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

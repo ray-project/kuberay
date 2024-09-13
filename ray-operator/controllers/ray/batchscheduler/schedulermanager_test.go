@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
@@ -19,16 +21,17 @@ func TestGetSchedulerFactory(t *testing.T) {
 		rayConfigs v1alpha1.Configuration
 	}
 	tests := []struct {
-		want reflect.Type
-		name string
-		args args
+		want           reflect.Type
+		name           string
+		expectedErrMsg string
+		args           args
 	}{
 		{
-			name: "enableBatchScheduler=false, batchScheduler set to default",
+			name: "enableBatchScheduler=false, batchScheduler=''",
 			args: args{
 				rayConfigs: v1alpha1.Configuration{
 					EnableBatchScheduler: false,
-					BatchScheduler:       schedulerinterface.GetDefaultPluginName(),
+					BatchScheduler:       "",
 				},
 			},
 			want: reflect.TypeOf(DefaultFactory),
@@ -81,6 +84,15 @@ func TestGetSchedulerFactory(t *testing.T) {
 			want: reflect.TypeOf(VolcanoFactory),
 		},
 		{
+			name: "enableBatchScheduler not set, batchScheduler set to unknown value",
+			args: args{
+				rayConfigs: v1alpha1.Configuration{
+					BatchScheduler: "unknown-scheduler-name",
+				},
+			},
+			expectedErrMsg: "the scheduler is not supported, name=unknown-scheduler-name",
+		},
+		{
 			// for backwards compatibility, if enableBatchScheduler=true, always use volcano
 			name: "enableBatchScheduler=true, batchScheduler set to yunikorn",
 			args: args{
@@ -108,7 +120,7 @@ func TestGetSchedulerFactory(t *testing.T) {
 			args: args{
 				rayConfigs: v1alpha1.Configuration{
 					EnableBatchScheduler: true,
-					BatchScheduler:       schedulerinterface.GetDefaultPluginName(),
+					BatchScheduler:       "",
 				},
 			},
 			want: reflect.TypeOf(VolcanoFactory),
@@ -117,7 +129,13 @@ func TestGetSchedulerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getSchedulerFactory(tt.args.rayConfigs); reflect.TypeOf(got) != tt.want {
+			got, err := getSchedulerFactory(tt.args.rayConfigs)
+			if len(tt.expectedErrMsg) > 0 {
+				assert.Errorf(t, err, tt.expectedErrMsg)
+				return
+			}
+
+			if reflect.TypeOf(got) != tt.want {
 				t.Errorf("getSchedulerFactory() = %v, want %v", got, tt.want)
 			}
 		})
