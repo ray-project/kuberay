@@ -97,7 +97,7 @@ var (
 			},
 		},
 	}
-	instanceForServeSvc = &rayv1.RayCluster{
+	instanceForSvc = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample-svc",
 			Namespace: "default",
@@ -450,6 +450,49 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	}
 }
 
+func TestBuildHeadlessServiceForRayCluster(t *testing.T) {
+	svc := BuildHeadlessServiceForRayCluster(*instanceForSvc)
+
+	actualSelector := svc.Spec.Selector[utils.RayClusterLabelKey]
+	expectedSelector := instanceForSvc.Name
+	if !reflect.DeepEqual(expectedSelector, actualSelector) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedSelector, actualSelector)
+	}
+
+	actualSelector = svc.Spec.Selector[utils.RayNodeTypeLabelKey]
+	expectedSelector = string(rayv1.WorkerNode)
+	if !reflect.DeepEqual(expectedSelector, actualSelector) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedSelector, actualSelector)
+	}
+
+	actualLabel := svc.Labels[utils.RayClusterHeadlessServiceLabelKey]
+	expectedLabel := instanceForSvc.Name
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualType := svc.Spec.Type
+	expectedType := corev1.ServiceTypeClusterIP
+	if !reflect.DeepEqual(expectedType, actualType) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
+	}
+
+	actualClusterIP := svc.Spec.ClusterIP
+	expectedClusterIP := corev1.ClusterIPNone
+	if !reflect.DeepEqual(expectedClusterIP, actualClusterIP) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedClusterIP, actualClusterIP)
+	}
+
+	actualPublishNotReadyAddresses := svc.Spec.PublishNotReadyAddresses
+	expectedPublishNotReadyAddresses := true
+	if !reflect.DeepEqual(expectedClusterIP, actualClusterIP) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedPublishNotReadyAddresses, actualPublishNotReadyAddresses)
+	}
+
+	expectedName := fmt.Sprintf("%s-%s", instanceForSvc.Name, utils.HeadlessServiceSuffix)
+	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
+}
+
 func TestBuildServeServiceForRayService(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
 	assert.Nil(t, err)
@@ -483,17 +526,17 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 }
 
 func TestBuildServeServiceForRayCluster(t *testing.T) {
-	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForServeSvc)
+	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForSvc)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := instanceForServeSvc.Name
+	expectedResult := instanceForSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
 	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
-	expectedLabel := instanceForServeSvc.Name
+	expectedLabel := instanceForSvc.Name
 	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
@@ -501,12 +544,12 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualType := svc.Spec.Type
-	expectedType := instanceForServeSvc.Spec.HeadGroupSpec.ServiceType
+	expectedType := instanceForSvc.Spec.HeadGroupSpec.ServiceType
 	if !reflect.DeepEqual(expectedType, actualType) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
 	}
 
-	expectedName := fmt.Sprintf("%s-%s-%s", instanceForServeSvc.Name, "serve", "svc")
+	expectedName := fmt.Sprintf("%s-%s-%s", instanceForSvc.Name, "serve", "svc")
 	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
 
