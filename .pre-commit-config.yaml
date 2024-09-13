@@ -56,3 +56,11 @@ repos:
         language: golang
         require_serial: true
         files: ^kubectl-plugin/
+
+  - repo: local
+    hooks:
+      - id: validate-helm-charts
+        name: Validate Helm Charts with kubeconform
+        entry: bash scripts/validate-helm.sh
+        language: system
+        pass_filenames: false
