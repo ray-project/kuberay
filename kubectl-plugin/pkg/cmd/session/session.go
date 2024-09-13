@@ -3,43 +3,68 @@ package session
 import (
 	"context"
 	"fmt"
+	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/cmd/portforward"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/spf13/cobra"
+	"k8s.io/kubectl/pkg/util/templates"
 )
 
 const (
-	DASHBOARD_PORT = 8265
-	CLIENT_PORT    = 10001
+	dashboardPort = 8265
+	clientPort    = 10001
+	servePort     = 8000
 )
 
 type SessionOptions struct {
-	ioStreams    *genericiooptions.IOStreams
 	configFlags  *genericclioptions.ConfigFlags
+	ioStreams    *genericiooptions.IOStreams
+	client       client.Client
+	ResourceType util.ResourceType
 	ResourceName string
 	Namespace    string
 }
 
+var (
+	sessionLong = templates.LongDesc(`
+		Forward local ports to the Ray resources.
+
+		Forward different local ports depending on the resource type: RayCluster, RayJob, or RayService.
+	`)
+
+	sessionExample = templates.Examples(`
+		# Forward local ports to the RayCluster resource
+		kubectl ray session raycluster/my-raycluster
+
+		# Forward local ports to the RayJob resource
+		kubectl ray session rayjob/my-rayjob
+
+		# Forward local ports to the RayService resource
+		kubectl ray session rayservice/my-rayservice
+	`)
+)
+
 func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
+	configFlags := genericclioptions.NewConfigFlags(true)
 	return &SessionOptions{
 		ioStreams:   &streams,
-		configFlags: genericclioptions.NewConfigFlags(true),
+		configFlags: configFlags,
 	}
 }
 
 func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	options := NewSessionOptions(streams)
-	factory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:   "session NAME",
-		Short: "Forward local ports to the Ray resources. Currently only supports RayCluster.",
+		Use:     "session TYPE/NAME",
+		Short:   "Forward local ports to the Ray resources.",
+		Long:    sessionLong,
+		Example: sessionExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
@@ -47,7 +72,7 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			return options.Run(cmd.Context(), factory)
+			return options.Run(cmd.Context())
 		},
 	}
 	options.configFlags.AddFlags(cmd.Flags())
@@ -58,13 +83,37 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 	}
-	options.ResourceName = args[0]
+
+	typeAndName := strings.Split(args[0], "/")
+	if len(typeAndName) != 2 || typeAndName[1] == "" {
+		return cmdutil.UsageErrorf(cmd, "invalid resource type/name: %s", args[0])
+	}
+
+	switch typeAndName[0] {
+	case string(util.RayCluster):
+		options.ResourceType = util.RayCluster
+	case string(util.RayJob):
+		options.ResourceType = util.RayJob
+	case string(util.RayService):
+		options.ResourceType = util.RayService
+	default:
+		return cmdutil.UsageErrorf(cmd, "unsupported resource type: %s", typeAndName[0])
+	}
+
+	options.ResourceName = typeAndName[1]
 
 	if *options.configFlags.Namespace == "" {
 		options.Namespace = "default"
 	} else {
 		options.Namespace = *options.configFlags.Namespace
 	}
+
+	factory := cmdutil.NewFactory(options.configFlags)
+	k8sClient, err := client.NewClient(factory)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+	options.client = k8sClient
 
 	return nil
 }
@@ -81,46 +130,35 @@ func (options *SessionOptions) Validate() error {
 	return nil
 }
 
-func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-	kubeClientSet, err := factory.KubernetesClientSet()
-	if err != nil {
-		return fmt.Errorf("failed to initialize clientset: %w", err)
-	}
+func (options *SessionOptions) Run(ctx context.Context) error {
+	factory := cmdutil.NewFactory(options.configFlags)
 
-	svcName, err := findServiceName(ctx, kubeClientSet, options.Namespace, options.ResourceName)
+	svcName, err := options.client.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
 	if err != nil {
 		return err
 	}
 
 	portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
-	portForwardCmd.SetArgs([]string{svcName, fmt.Sprintf("%d:%d", DASHBOARD_PORT, DASHBOARD_PORT), fmt.Sprintf("%d:%d", CLIENT_PORT, CLIENT_PORT)})
+	args := []string{
+		"service/" + svcName,
+		fmt.Sprintf("%d:%d", dashboardPort, dashboardPort),
+		fmt.Sprintf("%d:%d", clientPort, clientPort),
+	}
+	if options.ResourceType == util.RayService {
+		args = append(args, fmt.Sprintf("%d:%d", servePort, servePort))
+	}
+	portForwardCmd.SetArgs(args)
 
-	fmt.Printf("Ray Dashboard: http://localhost:%d\nRay Interactive Client: http://localhost:%d\n\n", DASHBOARD_PORT, CLIENT_PORT)
+	fmt.Printf("Ray Dashboard: http://localhost:%d\n", dashboardPort)
+	fmt.Printf("Ray Interactive Client: http://localhost:%d\n", clientPort)
+	if options.ResourceType == util.RayService {
+		fmt.Printf("Ray Serve: http://localhost:%d\n", servePort)
+	}
+	fmt.Println()
 
 	if err := portForwardCmd.ExecuteContext(ctx); err != nil {
 		return fmt.Errorf("failed to port-forward: %w", err)
 	}
 
 	return nil
-}
-
-func findServiceName(ctx context.Context, kubeClientSet kubernetes.Interface, namespace, resourceName string) (string, error) {
-	listopts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("ray.io/cluster=%s, ray.io/node-type=head", resourceName),
-	}
-
-	rayHeadSvcs, err := kubeClientSet.CoreV1().Services(namespace).List(ctx, listopts)
-	if err != nil {
-		return "", fmt.Errorf("unable to retrieve ray head services: %w", err)
-	}
-
-	if len(rayHeadSvcs.Items) == 0 {
-		return "", fmt.Errorf("no ray head services found")
-	}
-	if len(rayHeadSvcs.Items) > 1 {
-		return "", fmt.Errorf("more than one ray head service found")
-	}
-
-	rayHeadSrc := rayHeadSvcs.Items[0]
-	return "service/" + rayHeadSrc.Name, nil
 }
