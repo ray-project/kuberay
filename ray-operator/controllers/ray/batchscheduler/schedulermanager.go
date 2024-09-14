@@ -1,6 +1,7 @@
 package batchscheduler
 
 import (
+	"fmt"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,7 +29,11 @@ type SchedulerManager struct {
 // NewSchedulerManager maintains a specific scheduler plugin based on config
 func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config) (*SchedulerManager, error) {
 	// init the scheduler factory from config
-	factory := getSchedulerFactory(rayConfigs)
+	factory, err := getSchedulerFactory(rayConfigs)
+	if err != nil {
+		return nil, err
+	}
+
 	scheduler, err := factory.New(config)
 	if err != nil {
 		return nil, err
@@ -44,11 +49,12 @@ func NewSchedulerManager(rayConfigs configapi.Configuration, config *rest.Config
 	return &manager, nil
 }
 
-func getSchedulerFactory(rayConfigs configapi.Configuration) schedulerinterface.BatchSchedulerFactory {
+func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface.BatchSchedulerFactory, error) {
 	var factory schedulerinterface.BatchSchedulerFactory
-	// init with the default factory
-	factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
+
 	// when a batch scheduler name is provided
+	// only support a white list of names, empty value is the default value
+	// it throws error if an unknown name is provided
 	if len(rayConfigs.BatchScheduler) > 0 {
 		switch rayConfigs.BatchScheduler {
 		case volcano.GetPluginName():
@@ -56,8 +62,12 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) schedulerinterface.
 		case yunikorn.GetPluginName():
 			factory = &yunikorn.YuniKornSchedulerFactory{}
 		default:
-			factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
+			return nil, fmt.Errorf("the scheduler is not supported, name=%s", rayConfigs.BatchScheduler)
 		}
+	} else {
+		// empty is the default value, when not set
+		// use DefaultBatchSchedulerFactory, it's a no-opt factory
+		factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 	}
 
 	// legacy option, if this is enabled, register volcano
@@ -66,7 +76,7 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) schedulerinterface.
 		factory = &volcano.VolcanoBatchSchedulerFactory{}
 	}
 
-	return factory
+	return factory, nil
 }
 
 func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {
