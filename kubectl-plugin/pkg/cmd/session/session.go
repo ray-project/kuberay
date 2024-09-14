@@ -38,6 +38,9 @@ var (
 	`)
 
 	sessionExample = templates.Examples(`
+		# Without specifying the resource type, forward local ports to the RayCluster resource
+		kubectl ray session my-raycluster
+
 		# Forward local ports to the RayCluster resource
 		kubectl ray session raycluster/my-raycluster
 
@@ -61,7 +64,7 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	options := NewSessionOptions(streams)
 
 	cmd := &cobra.Command{
-		Use:     "session TYPE/NAME",
+		Use:     "session (RAYCLUSTER | TYPE/NAME)",
 		Short:   "Forward local ports to the Ray resources.",
 		Long:    sessionLong,
 		Example: sessionExample,
@@ -85,22 +88,27 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 	}
 
 	typeAndName := strings.Split(args[0], "/")
-	if len(typeAndName) != 2 || typeAndName[1] == "" {
-		return cmdutil.UsageErrorf(cmd, "invalid resource type/name: %s", args[0])
-	}
-
-	switch typeAndName[0] {
-	case string(util.RayCluster):
+	if len(typeAndName) == 1 {
 		options.ResourceType = util.RayCluster
-	case string(util.RayJob):
-		options.ResourceType = util.RayJob
-	case string(util.RayService):
-		options.ResourceType = util.RayService
-	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported resource type: %s", typeAndName[0])
-	}
+		options.ResourceName = typeAndName[0]
+	} else {
+		if len(typeAndName) != 2 || typeAndName[1] == "" {
+			return cmdutil.UsageErrorf(cmd, "invalid resource type/name: %s", args[0])
+		}
 
-	options.ResourceName = typeAndName[1]
+		switch typeAndName[0] {
+		case string(util.RayCluster):
+			options.ResourceType = util.RayCluster
+		case string(util.RayJob):
+			options.ResourceType = util.RayJob
+		case string(util.RayService):
+			options.ResourceType = util.RayService
+		default:
+			return cmdutil.UsageErrorf(cmd, "unsupported resource type: %s", typeAndName[0])
+		}
+
+		options.ResourceName = typeAndName[1]
+	}
 
 	if *options.configFlags.Namespace == "" {
 		options.Namespace = "default"

@@ -58,6 +58,15 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
+			name:                 "no slash default to raycluster",
+			namespace:            "",
+			args:                 []string{"test-resource"},
+			expectedResourceType: util.RayCluster,
+			expectedNamespace:    "default",
+			expectedName:         "test-resource",
+			hasErr:               false,
+		},
+		{
 			name:   "invalid args (no args)",
 			args:   []string{},
 			hasErr: true,
@@ -65,11 +74,6 @@ func TestComplete(t *testing.T) {
 		{
 			name:   "invalid args (too many args)",
 			args:   []string{"raycluster/test-raycluster", "extra-arg"},
-			hasErr: true,
-		},
-		{
-			name:   "invalid args (no slash)",
-			args:   []string{"test-resource"},
 			hasErr: true,
 		},
 		{
