@@ -10,6 +10,7 @@ export KUBERAY_HOME=${CURRENT_PATH}/..
 
 # Install kubeconform
 KUBECONFORM_INSTALL=$(mktemp -d)
+trap 'rm -rf "${KUBECONFORM_INSTALL}"' EXIT
 curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "${KUBECONFORM_INSTALL}"
 curl -o "${KUBECONFORM_INSTALL}/crd2schema.py" https://raw.githubusercontent.com/yannh/kubeconform/master/scripts/openapi2jsonschema.py
 SCRIPT_PATH="${KUBECONFORM_INSTALL}/crd2schema.py"
