@@ -11,7 +11,7 @@ export KUBERAY_HOME=${CURRENT_PATH}/..
 # Install kubeconform
 KUBECONFORM_INSTALL=$(mktemp -d)
 curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "${KUBECONFORM_INSTALL}"
-curl -o "${KUBECONFORM_INSTALL}/crd2schema.py" https://raw.githubusercontent.com/yannh/kubeconform/master/scripts/openapi2jsonschema.py 
+curl -o "${KUBECONFORM_INSTALL}/crd2schema.py" https://raw.githubusercontent.com/yannh/kubeconform/master/scripts/openapi2jsonschema.py
 SCRIPT_PATH="${KUBECONFORM_INSTALL}/crd2schema.py"
 RAYCLUSTER_CRD_PATH="$KUBERAY_HOME/ray-operator/config/crd/bases/ray.io_rayclusters.yaml"
 
