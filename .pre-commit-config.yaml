@@ -60,7 +60,7 @@ repos:
   - repo: local
     hooks:
       - id: validate-helm-charts
-        name: Validate Helm Charts with kubeconform
+        name: validate helm charts with kubeconform
         entry: bash scripts/validate-helm.sh
         language: system
         pass_filenames: false
