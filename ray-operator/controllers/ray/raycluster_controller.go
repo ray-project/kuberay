@@ -302,9 +302,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					logger.Info("Redis cleanup Job already exists. Requeue the RayCluster CR.")
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRedisCleanupJob),
+					"Failed to create Redis cleanup Job %s/%s, %v", redisCleanupJob.Namespace, redisCleanupJob.Name, err)
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 			logger.Info("Created Redis cleanup Job", "name", redisCleanupJob.Name)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedRedisCleanupJob),
+				"Created Redis cleanup Job %s/%s", redisCleanupJob.Namespace, redisCleanupJob.Name)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 		}
 	}
