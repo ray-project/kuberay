@@ -243,6 +243,10 @@ const (
 	DeletedWorkerPod        K8sEventType = "DeletedWorkerPod"
 	FailedToDeleteWorkerPod K8sEventType = "FailedToDeleteWorkerPod"
 
+	// Redis Cleanup Job event list
+	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
+	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
+
 	// Generic Pod event list
 	DeletedPod        K8sEventType = "DeletedPod"
 	FailedToDeletePod K8sEventType = "FailedToDeletePod"

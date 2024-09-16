@@ -2428,6 +2428,93 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	}
 }
 
+func TestEvents_RedisCleanup(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
+
+	// Add the Redis cleanup finalizer to the RayCluster and modify the RayCluster's DeleteTimestamp to trigger the Redis cleanup.
+	controllerutil.AddFinalizer(gcsFTEnabledCluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	gcsFTEnabledCluster.DeletionTimestamp = &now
+	errInjected := errors.New("random error")
+
+	tests := map[string]struct {
+		fakeClientFn func(client.Object) client.Client
+		errInjected  error
+	}{
+		"Created Redis cleanup Job": {
+			fakeClientFn: func(obj client.Object) client.Client {
+				return clientFake.NewClientBuilder().
+					WithScheme(newScheme).
+					WithRuntimeObjects([]runtime.Object{obj}...).
+					Build()
+			},
+			errInjected: nil,
+		},
+		"Failed to create Redis cleanup Job": {
+			fakeClientFn: func(obj client.Object) client.Client {
+				return clientFake.NewClientBuilder().
+					WithScheme(newScheme).
+					WithRuntimeObjects([]runtime.Object{obj}...).
+					WithInterceptorFuncs(interceptor.Funcs{
+						Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+							return errInjected
+						},
+					}).
+					Build()
+			},
+			errInjected: errInjected,
+		},
+	}
+
+	for message, tc := range tests {
+		t.Run(message, func(t *testing.T) {
+			cluster := gcsFTEnabledCluster.DeepCopy()
+			ctx := context.Background()
+
+			fakeClient := tc.fakeClientFn(cluster)
+
+			// Buffer length of 100 is arbitrary here. We should have only 1 event generated, but we keep 100
+			// if that isn't the case in the future. If this test starts timing out because of a full
+			// channel, this is probably the reason, and we should change our approach or increase buffer length.
+			recorder := record.NewFakeRecorder(100)
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+
+			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
+			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			assert.ErrorIs(t, err, tc.errInjected)
+
+			var foundEvent bool
+			var events []string
+			for len(recorder.Events) > 0 {
+				event := <-recorder.Events
+				if strings.Contains(event, message) {
+					foundEvent = true
+					break
+				}
+				events = append(events, event)
+			}
+			assert.Truef(t, foundEvent, "Expected event to be generated for redis cleanup job creation, got events: %s", strings.Join(events, "\n"))
+		})
+	}
+}
+
 func Test_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()
