@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# This script is directly derived from:
+# Source: https://github.com/yannh/kubeconform/blob/master/scripts/openapi2jsonschema.py
+
 # Derived from https://github.com/instrumenta/openapi2jsonschema
 import yaml
 import json
