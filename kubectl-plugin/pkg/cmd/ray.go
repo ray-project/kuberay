@@ -19,6 +19,9 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)
 		},
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
 	}
 
 	cmd.AddCommand(cluster.NewClusterCommand(streams))
