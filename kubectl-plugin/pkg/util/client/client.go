@@ -95,6 +95,13 @@ func (c *k8sClient) getRayHeadSvcNameByRayJob(ctx context.Context, namespace str
 	return svcName, nil
 }
 
+// There are 3 services associated with a RayService:
+// - <rayservice-name>-head-svc
+// - <rayservice-name>-serve-svc
+// - <raycluster-name>-head-svc
+// This function retrieves the name of the <raycluster-name>-head-svc service.
+// Actually there is no difference between which service to use, because kubectl port-forward source code first tries to find the underlying pod.
+// See https://github.com/kubernetes/kubectl/blob/262825a8a665c7cae467dfaa42b63be5a5b8e5a2/pkg/cmd/portforward/portforward.go#L345 for details.
 func (c *k8sClient) getRayHeadSvcNameByRayService(ctx context.Context, namespace string, name string) (string, error) {
 	rayService, err := c.DynamicClient().Resource(util.RayServiceGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
