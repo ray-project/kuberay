@@ -60,7 +60,7 @@ repos:
   - repo: local
     hooks:
       - id: check-kubeconform-version
-        name: check kubeconform version
+        name: kubeconform version check
         entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | grep -oP "(?<=v)[\d\.]+")" = "$version" ] || { echo "kubeconform version is not $version"; }'
         language: system
         always_run: true
