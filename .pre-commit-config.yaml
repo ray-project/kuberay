@@ -59,8 +59,18 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-kubeconform-version
+        name: check kubeconform version
+        entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | grep -oP "(?<=v)[\d\.]+")" = "$version" ] || { echo "kubeconform version is not $version"; }'
+        language: system
+        always_run: true
+        fail_fast: true
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: validate-helm-charts
         name: validate helm charts with kubeconform
-        entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | grep -oP "(?<=v)[\d\.]+")" = "$version" ] || { echo "kubeconform version is not $version"; exit 1; }; bash scripts/validate-helm.sh'
+        entry: bash scripts/validate-helm.sh
         language: system
         pass_filenames: false
