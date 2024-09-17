@@ -15,11 +15,10 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 )
 
-const (
-	dashboardPort = 8265
-	clientPort    = 10001
-	servePort     = 8000
-)
+type appPort struct {
+	name string
+	port int
+}
 
 type SessionOptions struct {
 	configFlags  *genericclioptions.ConfigFlags
@@ -29,6 +28,21 @@ type SessionOptions struct {
 	ResourceName string
 	Namespace    string
 }
+
+var (
+	dashboardPort = appPort{
+		name: "Ray Dashboard",
+		port: 8265,
+	}
+	clientPort = appPort{
+		name: "Ray Interactive Client",
+		port: 10001,
+	}
+	servePort = appPort{
+		name: "Ray Serve",
+		port: 8000,
+	}
+)
 
 var (
 	sessionLong = templates.LongDesc(`
@@ -44,10 +58,10 @@ var (
 		# Forward local ports to the RayCluster resource
 		kubectl ray session raycluster/my-raycluster
 
-		# Forward local ports to the RayJob resource
+		# Forward local ports to the RayCluster used for the RayJob resource
 		kubectl ray session rayjob/my-rayjob
 
-		# Forward local ports to the RayService resource
+		# Forward local ports to the RayCluster used for the RayService resource
 		kubectl ray session rayservice/my-rayservice
 	`)
 )
@@ -145,22 +159,29 @@ func (options *SessionOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Forwarding ports to service %s\n", svcName)
+
+	var appPorts []appPort
+	switch options.ResourceType {
+	case util.RayCluster:
+		appPorts = []appPort{dashboardPort, clientPort}
+	case util.RayJob:
+		appPorts = []appPort{dashboardPort}
+	case util.RayService:
+		appPorts = []appPort{dashboardPort, servePort}
+	default:
+		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
+	}
 
 	portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
-	args := []string{
-		"service/" + svcName,
-		fmt.Sprintf("%d:%d", dashboardPort, dashboardPort),
-		fmt.Sprintf("%d:%d", clientPort, clientPort),
-	}
-	if options.ResourceType == util.RayService {
-		args = append(args, fmt.Sprintf("%d:%d", servePort, servePort))
+	args := []string{"service/" + svcName}
+	for _, appPort := range appPorts {
+		args = append(args, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
 	portForwardCmd.SetArgs(args)
 
-	fmt.Printf("Ray Dashboard: http://localhost:%d\n", dashboardPort)
-	fmt.Printf("Ray Interactive Client: http://localhost:%d\n", clientPort)
-	if options.ResourceType == util.RayService {
-		fmt.Printf("Ray Serve: http://localhost:%d\n", servePort)
+	for _, appPort := range appPorts {
+		fmt.Printf("%s: http://localhost:%d\n", appPort.name, appPort.port)
 	}
 	fmt.Println()
 
