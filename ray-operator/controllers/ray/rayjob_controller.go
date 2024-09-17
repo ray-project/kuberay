@@ -129,6 +129,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if err := validateRayJobStatus(rayJobInstance); err != nil {
+		logger.Error(err, "The RayJob status is invalid")
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
@@ -193,11 +198,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
-		if rayJobInstance.Spec.SubmissionMode != rayv1.UserMode {
-			logger.Info("Invalid RayJob State", "RayJob", rayJobInstance.Name, "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJob %s is in the Waiting status, but the SubmissionMode is not UserMode", rayJobInstance.Name)
-		}
-
 		// Try to get the Ray job id from the Ray job annotations.
 		rayJobId, found := rayJobInstance.ObjectMeta.Annotations[utils.RayJobSubmissionIdLabelKey]
 		logger.Info("Get Ray job id from the Ray job annotations", "RayJobId", rayJobId, "Found", found)
@@ -830,5 +830,13 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
+	return nil
+}
+
+func validateRayJobStatus(rayJob *rayv1.RayJob) error {
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusWaiting && rayJob.Spec.SubmissionMode != rayv1.UserMode {
+		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not UserMode")
+	}
+
 	return nil
 }
