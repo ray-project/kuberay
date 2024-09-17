@@ -167,7 +167,9 @@ spec:
             {{- if $values.envFrom }}
             envFrom: {{- toYaml $values.envFrom | nindent 14 }}
             {{- end }}
+            {{- if $values.ports }}
             ports: {{- toYaml $values.ports | nindent 14}}
+            {{- end }}
             {{- if $values.lifecycle }}
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
@@ -262,7 +264,9 @@ spec:
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
+            {{- if .Values.worker.ports }}
             ports: {{- toYaml .Values.worker.ports | nindent 14}}
+            {{- end }}
             {{- if .Values.worker.lifecycle }}
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}

@@ -17,6 +17,13 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
           mv ./bin/golangci-lint /usr/local/bin/golangci-lint
         shell: bash
+
+      - name: Install kubeconform
+        run: |
+          curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
+          tar -xzf kubeconform.tar.gz
+          mv kubeconform /usr/local/bin/
+
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.1
