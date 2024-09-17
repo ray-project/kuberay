@@ -189,7 +189,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		logger.Info("SubmissionMode is K8sJobMode and both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.",
+		logger.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode,
 			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
@@ -197,10 +197,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Info("Invalid RayJob State", "RayJob", rayJobInstance.Name, "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, fmt.Errorf("RayJob %s is in the Waiting status, but the SubmissionMode is not UserMode", rayJobInstance.Name)
 		}
-		logger.Info("JobDeploymentStatusWaiting", "RayJob", rayJobInstance.Name)
 
 		// Try to get the Ray job id from the Ray job annotations.
 		rayJobId, found := rayJobInstance.ObjectMeta.Annotations[utils.RayJobSubmissionIdLabelKey]
+		logger.Info("Get Ray job id from the Ray job annotations", "RayJobId", rayJobId, "Found", found)
 		if !found {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
