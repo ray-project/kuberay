@@ -7,6 +7,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
@@ -23,7 +24,6 @@ type appPort struct {
 type SessionOptions struct {
 	configFlags  *genericclioptions.ConfigFlags
 	ioStreams    *genericiooptions.IOStreams
-	client       client.Client
 	ResourceType util.ResourceType
 	ResourceName string
 	Namespace    string
@@ -76,12 +76,14 @@ func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
 
 func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	options := NewSessionOptions(streams)
+	factory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:     "session (RAYCLUSTER | TYPE/NAME)",
-		Short:   "Forward local ports to the Ray resources.",
-		Long:    sessionLong,
-		Example: sessionExample,
+		Use:               "session (RAYCLUSTER | TYPE/NAME)",
+		Short:             "Forward local ports to the Ray resources.",
+		Long:              sessionLong,
+		Example:           sessionExample,
+		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
@@ -89,7 +91,7 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			return options.Run(cmd.Context())
+			return options.Run(cmd.Context(), factory)
 		},
 	}
 	options.configFlags.AddFlags(cmd.Flags())
@@ -130,13 +132,6 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 		options.Namespace = *options.configFlags.Namespace
 	}
 
-	factory := cmdutil.NewFactory(options.configFlags)
-	k8sClient, err := client.NewClient(factory)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-	options.client = k8sClient
-
 	return nil
 }
 
@@ -152,10 +147,13 @@ func (options *SessionOptions) Validate() error {
 	return nil
 }
 
-func (options *SessionOptions) Run(ctx context.Context) error {
-	factory := cmdutil.NewFactory(options.configFlags)
+func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+	k8sClient, err := client.NewClient(factory)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
 
-	svcName, err := options.client.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
+	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
 	if err != nil {
 		return err
 	}
