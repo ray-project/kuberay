@@ -248,6 +248,16 @@ const (
 	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
 
+	// RayJob event list
+	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
+	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
+	FailedToCreateRayJobSubmitter K8sEventType = "FailedToCreateRayJobSubmitter"
+	FailedToDeleteRayJobSubmitter K8sEventType = "FailedToDeleteRayJobSubmitter"
+	CreatedRayCluster             K8sEventType = "CreatedRayCluster"
+	DeletedRayCluster             K8sEventType = "DeletedRayCluster"
+	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
+	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
+
 	// Generic Pod event list
 	DeletedPod        K8sEventType = "DeletedPod"
 	FailedToDeletePod K8sEventType = "FailedToDeletePod"

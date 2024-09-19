@@ -312,6 +312,67 @@ var _ = Context("RayJob with different submission modes", func() {
 			})
 		})
 
+		Describe("Invalid RayJob in K8sJobMode", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-invalid-test", namespace)
+			rayCluster := &rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec}
+			template := common.GetDefaultSubmitterTemplate(rayCluster)
+			template.Spec.RestartPolicy = "" // Make it invalid to create a submitter. Ref: https://github.com/ray-project/kuberay/pull/2389#issuecomment-2359564334
+			rayJob.Spec.SubmitterPodTemplate = &template
+
+			It("Verify RayJob spec", func() {
+				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.K8sJobMode))
+			})
+
+			It("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+			})
+
+			It("In Initializing state, the RayCluster should eventually be created.", func() {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+			})
+
+			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			})
+
+			It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+				Eventually(
+					func() ([]corev1.Event, error) {
+						events := &corev1.EventList{}
+						if err := k8sClient.List(ctx, events, client.InNamespace(rayJob.Namespace)); err != nil {
+							return nil, err
+						}
+						return events.Items, nil
+					},
+					time.Second*3, time.Millisecond*500).Should(ContainElement(HaveField("Message", ContainSubstring("Failed to create new Kubernetes Job default/rayjob-invalid-test"))))
+
+				_ = k8sClient.Delete(ctx, rayJob)
+			})
+		})
+
 		Describe("Successful RayJob in K8sjobMode with DELETE_RAYJOB_CR_AFTER_JOB_FINISHES", Ordered, func() {
 			ctx := context.Background()
 			namespace := "default"
