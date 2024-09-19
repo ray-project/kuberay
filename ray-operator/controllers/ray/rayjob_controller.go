@@ -224,7 +224,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// mode is not stuck in the `Running` status indefinitely.
 			namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
-				logger.Error(err, "Failed to get the submitter Kubernetes Job", "NamespacedName", namespacedName)
+				logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if shouldUpdate := r.checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
@@ -443,7 +443,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 		return err
 	}
 
-	logger.Info("Kubernetes Job already exists", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	logger.Info("The submitter Kubernetes Job for RayJob already exists", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
 	return nil
 }
 
@@ -528,12 +528,12 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 	// Create the Kubernetes Job
 	if err := r.Client.Create(ctx, job); err != nil {
-		logger.Error(err, "Failed to create new Kubernetes Job")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayJobSubmitter), "Failed to create new Kubernetes Job %s: %v", job.Name, err)
+		logger.Error(err, "Failed to create new submitter Kubernetes Job for RayJob")
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayJobSubmitter), "Failed to create new Kubernetes Job %s/%s: %v", job.Namespace, job.Name, err)
 		return err
 	}
-	logger.Info("Kubernetes Job created", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
-	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedRayJobSubmitter), "Created Kubernetes Job %s", job.Name)
+	logger.Info("Created submitter Kubernetes Job for RayJob", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedRayJobSubmitter), "Created Kubernetes Job %s/%s", job.Namespace, job.Name)
 	return nil
 }
 
@@ -559,14 +559,14 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 		}
 	} else {
 		if !job.DeletionTimestamp.IsZero() {
-			logger.Info("The Job deletion is ongoing.", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+			logger.Info("The deletion of submitter Kubernetes Job for RayJob is ongoing.", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
 		} else {
 			if err := r.Client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayJobSubmitter), "Failed to delete submitter K8s Job %s: %v", job.Name, err)
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayJobSubmitter), "Failed to delete submitter K8s Job %s/%s: %v", job.Namespace, job.Name, err)
 				return false, err
 			}
-			logger.Info("The associated submitter Job is deleted", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayJobSubmitter), "Deleted submitter K8s Job %s", job.Name)
+			logger.Info("The associated submitter Kubernetes Job for RayJob is deleted", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayJobSubmitter), "Deleted submitter K8s Job %s/%s", job.Namespace, job.Name)
 		}
 	}
 
@@ -586,20 +586,20 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 			// If the cluster is not found, it means the cluster has been already deleted.
 			// Don't return error to make this function idempotent.
 			isClusterDeleted = true
-			logger.Info("The associated cluster has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
+			logger.Info("The associated RayCluster for RayJob has been already deleted and it can not be found", "RayCluster", clusterIdentifier, "RayJob", rayJobInstance.Name)
 		} else {
 			return false, err
 		}
 	} else {
 		if !cluster.DeletionTimestamp.IsZero() {
-			logger.Info("The cluster deletion is ongoing.", "rayjob", rayJobInstance.Name, "raycluster", cluster.Name)
+			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayJob", rayJobInstance.Name, "RayCluster", cluster.Name)
 		} else {
 			if err := r.Delete(ctx, &cluster); err != nil {
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete cluster %s: %v", rayJobInstance.Status.RayClusterName, err)
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete cluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
 				return false, err
 			}
-			logger.Info("The associated cluster is deleted", "RayCluster", clusterIdentifier)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted cluster %s", rayJobInstance.Status.RayClusterName)
+			logger.Info("The associated RayCluster for RayJob is deleted", "RayCluster", clusterIdentifier, "RayJob", rayJobInstance.Name)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted cluster %s/%s", cluster.Namespace, cluster.Name)
 		}
 	}
 
@@ -714,15 +714,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 				return nil, err
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s: %v", rayJobInstance.Status.RayClusterName, err)
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 				return nil, err
 			}
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedRayCluster), "Created RayCluster %s", rayJobInstance.Status.RayClusterName)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedRayCluster), "Created RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 		} else {
 			return nil, err
 		}
 	}
-	logger.Info("Found associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
+	logger.Info("Found the associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
 
 	// Verify that RayJob is not in cluster selector mode first to avoid nil pointer dereference error during spec comparison.
 	// This is checked by ensuring len(rayJobInstance.Spec.ClusterSelector) equals 0.

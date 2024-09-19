@@ -23,7 +23,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
-func TestCreateK8sJobIfNeed(t *testing.T) {
+func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
@@ -376,7 +376,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 	assert.Error(t, err, "The RayJob is invalid because the backoffLimit must be a positive integer.")
 }
 
-func TestFailedCreatek8sJobEvent(t *testing.T) {
+func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-rayjob",
