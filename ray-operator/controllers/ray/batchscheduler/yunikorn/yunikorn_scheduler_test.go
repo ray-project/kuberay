@@ -3,8 +3,9 @@ package yunikorn
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"testing"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -45,7 +46,7 @@ func TestPopulatePodLabels(t *testing.T) {
 
 	rayCluster2 := createRayClusterWithLabels(
 		"ray-cluster-without-labels",
-		"test",
+		"test1",
 		nil, // empty labels
 	)
 	rayPod3 := createPod("my-pod-2", "test")
@@ -92,7 +93,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 	queue1 := "root.default"
 	rayCluster := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
-		"test",
+		"test2",
 		map[string]string{
 			RayClusterApplicationIDLabelName:  job1,
 			RayClusterQueueLabelName:          queue1,
@@ -112,7 +113,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	// test the case when gang-scheduling is enabled
 	rayClusterWithGangScheduling := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
-		"test",
+		"test3",
 		map[string]string{
 			RayClusterApplicationIDLabelName:  job1,
 			RayClusterQueueLabelName:          queue1,

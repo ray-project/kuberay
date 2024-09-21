@@ -3,7 +3,6 @@ package yunikorn
 import (
 	"encoding/json"
 
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -18,13 +17,13 @@ type TaskGroups struct {
 
 // TaskGroup is the struct for yunikorn to consider a pod belongs to a gang group
 type TaskGroup struct {
-	Name                      string                            `json:"name"`
-	MinMember                 int32                             `json:"minMember"`
 	MinResource               map[string]resource.Quantity      `json:"minResource"`
 	NodeSelector              map[string]string                 `json:"nodeSelector,omitempty"`
 	Tolerations               []corev1.Toleration               `json:"tolerations,omitempty"`
-	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
+	Name                      string                            `json:"name"`
+	MinMember                 int32                             `json:"minMember"`
 }
 
 func newTaskGroups() *TaskGroups {

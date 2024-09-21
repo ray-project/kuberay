@@ -39,7 +39,7 @@ func (y *YuniKornScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
