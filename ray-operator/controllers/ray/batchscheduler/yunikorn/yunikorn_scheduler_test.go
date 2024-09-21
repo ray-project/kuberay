@@ -3,11 +3,12 @@ package yunikorn
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"testing"
-
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"

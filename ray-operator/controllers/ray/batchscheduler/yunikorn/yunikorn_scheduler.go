@@ -40,6 +40,8 @@ func (y *YuniKornScheduler) Name() string {
 }
 
 func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+	// yunikorn doesn't require any resources to be created upfront
+	// this is a no-opt for this implementation
 	return nil
 }
 
