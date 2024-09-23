@@ -154,18 +154,6 @@ func createRayClusterWithLabels(name string, namespace string, labels map[string
 	return rayCluster
 }
 
-func createRayClusterWithAnnotations(name string, namespace string, annotations map[string]string) *rayv1.RayCluster {
-	rayCluster := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			Annotations: annotations,
-		},
-	}
-
-	return rayCluster
-}
-
 func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
 	// app.Spec.HeadGroupSpec.Template.Spec.Containers
 	headContainers := []v1.Container{
@@ -233,23 +221,6 @@ func podLabelsContains(pod *v1.Pod, key string, value string) bool {
 		labelValue, exist := pod.Labels[key]
 		if exist {
 			if labelValue == value {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func podAnnotationContains(pod *v1.Pod, key string, value string) bool {
-	if pod == nil {
-		return false
-	}
-
-	if len(pod.Annotations) > 0 {
-		annotationValue, exist := pod.Annotations[key]
-		if exist {
-			if annotationValue == value {
 				return true
 			}
 		}

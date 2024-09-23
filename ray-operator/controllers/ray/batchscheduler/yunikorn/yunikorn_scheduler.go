@@ -96,7 +96,7 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(app *rayv1.RayClus
 	taskGroups := newTaskGroupsFromApp(app)
 	taskGroupsAnnotationValue, err := taskGroups.marshal()
 	if err != nil {
-		return fmt.Errorf("failed to marshal task groups info, error: %v", err)
+		return fmt.Errorf("failed to marshal task groups info, error: %w", err)
 	}
 
 	y.log.Info("add task groups info to pod's annotation",
