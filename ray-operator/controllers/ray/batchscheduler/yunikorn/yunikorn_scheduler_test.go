@@ -56,36 +56,6 @@ func TestPopulatePodLabels(t *testing.T) {
 	assert.Equal(t, podLabelsContains(rayPod3, YuniKornPodQueueLabelName, queue2), false)
 }
 
-func TestPopulatePodAnnotations(t *testing.T) {
-	yk := &YuniKornScheduler{}
-
-	// --- case 1
-	// Ray Cluster CR has task groups annotations defined
-	rayCluster1 := createRayClusterWithAnnotations(
-		"ray-cluster-with-annotations",
-		"test",
-		map[string]string{
-			YuniKornTaskGroupsAnnotationName: "some-task-group",
-		},
-	)
-
-	rayPod := createPod("my-pod-1", "test")
-	yk.populatePodAnnotations(rayCluster1, rayPod, YuniKornTaskGroupsAnnotationName, YuniKornTaskGroupsAnnotationName)
-	assert.Equal(t, podAnnotationContains(rayPod, YuniKornTaskGroupsAnnotationName, "some-task-group"), true)
-
-	// --- case 2
-	// Ray Cluster CR doesn't have the task groups annotation defined
-	// In this case, the pod will not be populated with the required annotations
-	rayCluster2 := createRayClusterWithAnnotations(
-		"ray-cluster-without-labels",
-		"test",
-		nil, // empty annotations
-	)
-	rayPod = createPod("my-pod-2", "test")
-	yk.populatePodAnnotations(rayCluster2, rayPod, YuniKornTaskGroupsAnnotationName, YuniKornTaskGroupsAnnotationName)
-	assert.Equal(t, len(rayPod.Annotations), 0)
-}
-
 func TestIsGangSchedulingEnabled(t *testing.T) {
 	yk := &YuniKornScheduler{}
 
@@ -142,7 +112,8 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
 	rayPod := createPod("ray-pod", "default")
-	yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
+	err := yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
+	assert.NoError(t, err, "failed to populate task groups annotation to pod")
 
 	kk, err := GetTaskGroupsFromAnnotation(rayPod)
 	assert.NoError(t, err)
