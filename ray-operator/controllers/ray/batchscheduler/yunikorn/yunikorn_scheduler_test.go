@@ -207,10 +207,6 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 		},
 	}
 
-	if len(app.Spec.WorkerGroupSpecs) == 0 {
-		app.Spec.WorkerGroupSpecs = make([]rayv1.WorkerGroupSpec, 0)
-	}
-
 	app.Spec.WorkerGroupSpecs = append(app.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		GroupName:   workerGroupName,
 		Replicas:    &replicas,
