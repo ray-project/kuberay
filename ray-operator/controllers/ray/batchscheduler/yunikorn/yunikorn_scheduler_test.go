@@ -61,9 +61,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 
 	job1 := "job-1-01234"
 	queue1 := "root.default"
-	rayCluster := createRayClusterWithLabels(
+	rayCluster1 := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
-		"test2",
+		"test1",
 		map[string]string{
 			RayClusterApplicationIDLabelName:  job1,
 			RayClusterQueueLabelName:          queue1,
@@ -71,7 +71,30 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster), true)
+	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster1), true)
+
+	rayCluster2 := createRayClusterWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test2",
+		map[string]string{
+			RayClusterApplicationIDLabelName:  job1,
+			RayClusterQueueLabelName:          queue1,
+			RayClusterGangSchedulingLabelName: "",
+		},
+	)
+
+	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster2), true)
+
+	rayCluster3 := createRayClusterWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test3",
+		map[string]string{
+			RayClusterApplicationIDLabelName: job1,
+			RayClusterQueueLabelName:         queue1,
+		},
+	)
+
+	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster3), false)
 }
 
 func TestPopulateGangSchedulingAnnotations(t *testing.T) {

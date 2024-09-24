@@ -81,12 +81,8 @@ func (y *YuniKornScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupName st
 }
 
 func (y *YuniKornScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
-	if value, exist := app.Labels[RayClusterGangSchedulingLabelName]; exist {
-		if value == "true" {
-			return true
-		}
-	}
-	return false
+	_, exist := app.Labels[RayClusterGangSchedulingLabelName]
+	return exist
 }
 
 func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(app *rayv1.RayCluster, pod *corev1.Pod) error {
