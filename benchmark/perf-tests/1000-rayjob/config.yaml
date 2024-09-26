@@ -1,6 +1,6 @@
 name: kuberay
 namespace:
-  number: 10
+  number: 100
 tuningSets:
 - name: Uniform100qps
   qpsLoad:
@@ -32,26 +32,26 @@ steps:
   phases:
   - namespaceRange:
       min: 1
-      max: 10
-    replicasPerNamespace: 10
+      max: 100
+    replicasPerNamespace: 5
     tuningSet: Uniform100qps
     objectBundle:
     - basename: pytorch-mnist
       objectTemplatePath: pytorch-mnist-rayjob.yaml
       templateFillMap:
-        Image: "rayproject/ray:2.34.0" # replace with image built from images/ray-pytorch
+        Image: "rayproject/ray:2.9.3"
 - name: Creating RayJobs for Ray Data Image Resizing
   phases:
   - namespaceRange:
       min: 1
-      max: 10
-    replicasPerNamespace: 10
+      max: 100
+    replicasPerNamespace: 5
     tuningSet: Uniform100qps
     objectBundle:
     - basename: ray-data-image-resize
       objectTemplatePath: ray-data-image-resize.yaml
       templateFillMap:
-        Image: "rayproject/ray:2.34.0" # replace with image built from images/ray-pytorch
+        Image: "rayproject/ray:2.9.3"
 - name: Wait for RayJobs complete
   measurements:
   - Identifier: WaitForRayJob
@@ -61,8 +61,8 @@ steps:
       command:
       - "bash"
       - "common/wait-for-rayjobs.sh"
-      - "100"
-- name: Wait for pods to be running
+      - "500" # 1000 since we deploy two RayJobs with 500 instances each
+- name: Measure wait for pods to be running
   measurements:
   - Identifier: WaitForControlledPodsRunning
     Method: WaitForControlledPodsRunning
