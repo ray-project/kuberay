@@ -27,7 +27,16 @@ for previously executed runs of the tests.
 The current lists of tests are:
 * [100 RayCluster test](./100-raycluster/)
 * [100 RayJob test](./100-rayjob/)
+* [1000 RayCluster test](./1000-raycluster/)
+* [1000 RayJob test](./1000-rayjob/)
+* [5000 RayCluster test](./5000-raycluster/)
+* [5000 RayJob test](./5000-rayjob/)
+* [10000 RayCluster test](./10000-raycluster/)
+* [10000 RayJob test](./10000-rayjob/)
 
+All published results are based on tests that ran on GKE clusters using KubeRay v1.1.1. Each test directory contains a
+`results/junit.xml` file containing the Cluster Loader 2 steps that were successfully completed.
+To learn more about the benchmark measurements, see [Cluster Loader 2 Measurements](https://github.com/kubernetes/perf-tests/tree/master/clusterloader2#measurement).
 
 ## Run a performance test with Kind
 

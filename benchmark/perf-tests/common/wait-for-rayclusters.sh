@@ -1,6 +1,6 @@
 #!/bin/bash
 
-expect_succeeded=100
+expect_succeeded=$1
 echo "waiting for $expect_succeeded RayClusters to be completed successfully"
 
 while true; do
