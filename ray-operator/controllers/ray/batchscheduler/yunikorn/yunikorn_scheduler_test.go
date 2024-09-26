@@ -65,9 +65,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test1",
 		map[string]string{
-			RayClusterApplicationIDLabelName:  job1,
-			RayClusterQueueLabelName:          queue1,
-			RayClusterGangSchedulingLabelName: "true",
+			RayClusterApplicationIDLabelName:      job1,
+			RayClusterQueueLabelName:              queue1,
+			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -77,9 +77,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test2",
 		map[string]string{
-			RayClusterApplicationIDLabelName:  job1,
-			RayClusterQueueLabelName:          queue1,
-			RayClusterGangSchedulingLabelName: "",
+			RayClusterApplicationIDLabelName:      job1,
+			RayClusterQueueLabelName:              queue1,
+			utils.RayClusterGangSchedulingEnabled: "",
 		},
 	)
 
@@ -108,9 +108,9 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test3",
 		map[string]string{
-			RayClusterApplicationIDLabelName:  job1,
-			RayClusterQueueLabelName:          queue1,
-			RayClusterGangSchedulingLabelName: "true",
+			RayClusterApplicationIDLabelName:      job1,
+			RayClusterQueueLabelName:              queue1,
+			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -135,8 +135,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
 	rayPod := createPod("ray-pod", "default")
-	err := yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
-	assert.NoError(t, err, "failed to populate task groups annotation to pod")
+	yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
 
 	kk, err := GetTaskGroupsFromAnnotation(rayPod)
 	assert.NoError(t, err)
