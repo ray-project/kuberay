@@ -19,8 +19,8 @@ const (
 	SchedulerName                       string = "yunikorn"
 	YuniKornPodApplicationIDLabelName   string = "applicationId"
 	YuniKornPodQueueLabelName           string = "queue"
-	RayClusterApplicationIDLabelName    string = "yunikorn.apache.org/application-id"
-	RayClusterQueueLabelName            string = "yunikorn.apache.org/queue-name"
+	RayClusterApplicationIDLabelName    string = "yunikorn.apache.org/app-id"
+	RayClusterQueueLabelName            string = "yunikorn.apache.org/queue"
 	YuniKornTaskGroupNameAnnotationName string = "yunikorn.apache.org/task-group-name"
 	YuniKornTaskGroupsAnnotationName    string = "yunikorn.apache.org/task-groups"
 )
