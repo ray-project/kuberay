@@ -137,7 +137,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	rayPod := createPod("ray-pod", "default")
 	yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
 
-	kk, err := GetTaskGroupsFromAnnotation(rayPod)
+	kk, err := getTaskGroupsFromAnnotation(rayPod)
 	assert.NoError(t, err)
 	assert.Equal(t, len(kk), 2)
 	// verify the annotation value
@@ -247,7 +247,7 @@ func podLabelsContains(pod *v1.Pod, key string, value string) bool {
 	return false
 }
 
-func GetTaskGroupsFromAnnotation(pod *v1.Pod) ([]TaskGroup, error) {
+func getTaskGroupsFromAnnotation(pod *v1.Pod) ([]TaskGroup, error) {
 	taskGroupInfo, exist := pod.Annotations[YuniKornTaskGroupsAnnotationName]
 	if !exist {
 		return nil, fmt.Errorf("not found")
