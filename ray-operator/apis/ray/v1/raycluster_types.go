@@ -172,6 +172,8 @@ type RayClusterConditionType string
 const (
 	AllPodRunningAndReadyFirstTime = "AllPodRunningAndReadyFirstTime"
 	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
+	RayClusterSuspended            = "RayClusterSuspended"
+	RayClusterSuspending           = "RayClusterSuspending"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
 	// UnknownReason says that the reason for the condition is unknown.
@@ -186,6 +188,8 @@ const (
 	HeadPodReady RayClusterConditionType = "HeadPodReady"
 	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
 	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
+	// RayClusterSuspend is added in a RayCluster when a user change its .Spec.Suspend to true
+	RayClusterSuspend RayClusterConditionType = "RayClusterSuspend"
 )
 
 // HeadInfo gives info about head

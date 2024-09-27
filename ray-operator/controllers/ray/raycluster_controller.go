@@ -55,6 +55,11 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
+
+	// errSuspendCondition, errSuspending and errResuming are internal errors for shortcutting the reconcilePods.
+	errSuspendCondition = errstd.New("suspend condition changed")
+	errSuspending       = fmt.Errorf("suspending: %w", errSuspendCondition)
+	errResuming         = fmt.Errorf("resuming: %w", errSuspendCondition)
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -330,7 +335,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	for _, fn := range reconcileFuncs {
-		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
+		if reconcileErr = fn(ctx, instance); reconcileErr != nil && !errstd.Is(reconcileErr, errSuspendCondition) {
 			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
 			break
@@ -614,8 +619,10 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	// if RayCluster is suspended, delete all pods and skip reconcile
-	if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+	// if RayCluster is suspending, delete all pods and skip reconcile
+	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
+	if suspendStatus == rayv1.RayClusterSuspending ||
+		(!features.Enabled(features.RayClusterStatusConditions) && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePod),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
@@ -627,6 +634,19 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Deleted Pods for RayCluster %s/%s due to suspension",
 			instance.Namespace, instance.Name)
 		return nil
+	}
+
+	if features.Enabled(features.RayClusterStatusConditions) {
+		if suspendStatus == rayv1.RayClusterSuspended {
+			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
+				return errResuming
+			}
+			return nil // stop reconcilePods because the cluster is suspended.
+		}
+		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
+		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+			return errSuspending
+		}
 	}
 
 	// check if all the pods exist
@@ -1170,7 +1190,7 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1.RayCluster, reconcileErr error) (*rayv1.RayCluster, error) {
 	// TODO: Replace this log and use reconcileErr to set the condition field.
 	logger := ctrl.LoggerFrom(ctx)
-	if reconcileErr != nil {
+	if reconcileErr != nil && !errstd.Is(reconcileErr, errSuspendCondition) {
 		logger.Info("Reconciliation error", "error", reconcileErr)
 	}
 
@@ -1178,7 +1198,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance := instance.DeepCopy()
 
 	if features.Enabled(features.RayClusterStatusConditions) {
-		if reconcileErr != nil {
+		if errstd.Is(reconcileErr, errSuspending) {
+			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+				Type:   string(rayv1.RayClusterSuspend),
+				Reason: rayv1.RayClusterSuspending,
+				Status: metav1.ConditionTrue,
+			})
+		} else if errstd.Is(reconcileErr, errResuming) {
+			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+				Type:   string(rayv1.RayClusterSuspend),
+				Reason: rayv1.RayClusterSuspended,
+				Status: metav1.ConditionFalse,
+			})
+		} else if reconcileErr != nil {
 			if reason := utils.RayClusterReplicaFailureReason(reconcileErr); reason != "" {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterReplicaFailure),
@@ -1218,7 +1250,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 
-	// Check if the head node is running and ready by checking the head pod's status.
+	// Check if the head node is running and ready by checking the head pod's status or if the cluster has been suspended.
 	if features.Enabled(features.RayClusterStatusConditions) {
 		headPod, err := common.GetRayClusterHeadPod(ctx, r, newInstance)
 		if err != nil {
@@ -1239,7 +1271,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 		if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
 			// RayClusterProvisioned indicates whether all Ray Pods are ready when the RayCluster is first created.
-			// Note RayClusterProvisioned StatusCondition will not be updated after all Ray Pods are ready for the first time.
+			// Note RayClusterProvisioned StatusCondition will not be updated after all Ray Pods are ready for the first time. Unless the cluster has been suspended.
 			if utils.CheckAllPodsRunning(ctx, runtimePods) {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
@@ -1257,6 +1289,15 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			}
 		}
 
+		suspendStatus := utils.FindRayClusterSuspendStatus(newInstance)
+		if suspendStatus == rayv1.RayClusterSuspending && len(runtimePods.Items) == 0 {
+			meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned))
+			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+				Type:   string(rayv1.RayClusterSuspend),
+				Reason: rayv1.RayClusterSuspended,
+				Status: metav1.ConditionTrue,
+			})
+		}
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {

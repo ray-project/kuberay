@@ -102,6 +102,18 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 	return headPodReadyCondition
 }
 
+func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) string {
+	for _, cond := range instance.Status.Conditions {
+		if cond.Type == string(rayv1.RayClusterSuspend) {
+			if cond.Status == metav1.ConditionTrue {
+				return cond.Reason
+			}
+			break
+		}
+	}
+	return ""
+}
+
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {
