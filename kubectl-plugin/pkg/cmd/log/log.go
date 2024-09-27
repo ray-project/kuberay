@@ -22,6 +22,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 )
 
 const filePathInPod = "/tmp/ray/session_latest/logs/"
@@ -34,6 +37,23 @@ type ClusterLogOptions struct {
 	nodeType    string
 	args        []string
 }
+
+var (
+	logLong = templates.LongDesc(`
+		Download logs from a RayCluster and save them to a directory.
+	`)
+
+	logExample = templates.Examples(`
+		# Download logs from a RayCluster and save them to a directory with the RayCluster's name
+		kubectl ray log my-raycluster
+
+		# Download logs from a RayCluster and save them to a directory named /path/to/dir
+		kubectl ray log my-raycluster --out-dir /path/to/dir
+
+		# Download logs from a RayCluster, but only for the head node
+		kubectl ray log my-raycluster --node-type head
+	`)
+)
 
 func NewClusterLogOptions(streams genericclioptions.IOStreams) *ClusterLogOptions {
 	return &ClusterLogOptions{
@@ -49,10 +69,13 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:          "log (RAY_CLUSTER_NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
-		Short:        "Get ray cluster log",
-		Aliases:      []string{"logs"},
-		SilenceUsage: true,
+		Use:               "log (RAYCLUSTER) [--out-dir DIR_PATH] [--node-type all|head|worker]",
+		Short:             "Get ray cluster log",
+		Long:              logLong,
+		Example:           logExample,
+		Aliases:           []string{"logs"},
+		SilenceUsage:      true,
+		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args); err != nil {
 				return err
