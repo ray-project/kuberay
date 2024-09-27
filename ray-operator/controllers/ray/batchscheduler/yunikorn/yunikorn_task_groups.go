@@ -16,6 +16,7 @@ type TaskGroups struct {
 }
 
 // TaskGroup is the struct for yunikorn to consider a pod belongs to a gang group
+// the original schema is defined here: https://github.com/apache/yunikorn-k8shim/blob/master/pkg/cache/amprotocol.go
 type TaskGroup struct {
 	MinResource               map[string]resource.Quantity      `json:"minResource"`
 	NodeSelector              map[string]string                 `json:"nodeSelector,omitempty"`
@@ -48,7 +49,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 			Affinity:     headGroupSpec.Template.Spec.Affinity,
 		})
 
-	// worker Groups
+	// worker groups
 	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
 		minWorkers := workerGroupSpec.MinReplicas
