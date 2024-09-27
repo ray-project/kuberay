@@ -46,6 +46,8 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *
 }
 
 // populatePodLabels is a helper function that copies RayCluster's label to the given pod based on the label key
+// TODO: remove the legacy labels, i.e "applicationId" and "queue", directly populate
+// RayClusterApplicationIDLabelName and RayClusterQueueLabelName to pod labels
 func (y *YuniKornScheduler) populatePodLabels(app *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
 	// check labels
 	if value, exist := app.Labels[sourceKey]; exist {
