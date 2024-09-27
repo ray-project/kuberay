@@ -6,6 +6,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -121,6 +122,43 @@ func (c *k8sClient) getRayHeadSvcNameByRayService(ctx context.Context, namespace
 		return "", fmt.Errorf("unable to extract RayHead service name from RayJob %s: %w", name, err)
 	}
 	return svcName, nil
+}
+
+func (c *k8sClient) CreateRayCustomResource(ctx context.Context, namespace string, resourceType util.ResourceType, unstructuredCR *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	switch resourceType {
+	case util.RayCluster:
+		return c.createRayClusterResource(ctx, namespace, unstructuredCR)
+	case util.RayJob:
+		return c.createRayJobResource(ctx, namespace, unstructuredCR)
+	case util.RayService:
+		return c.createRayServiceResource(ctx, namespace, unstructuredCR)
+	default:
+		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
+	}
+}
+
+func (c *k8sClient) createRayJobResource(ctx context.Context, namespace string, unstructuredCR *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	rayJobResource, err := c.DynamicClient().Resource(util.RayJobGVR).Namespace(namespace).Create(ctx, unstructuredCR, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create RayJob: %w", err)
+	}
+	return rayJobResource, nil
+}
+
+func (c *k8sClient) createRayClusterResource(ctx context.Context, namespace string, unstructuredCR *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	rayClusterResource, err := c.DynamicClient().Resource(util.RayClusterGVR).Namespace(namespace).Create(ctx, unstructuredCR, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create RayCluster: %w", err)
+	}
+	return rayClusterResource, nil
+}
+
+func (c *k8sClient) createRayServiceResource(ctx context.Context, namespace string, unstructuredCR *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	rayServiceResource, err := c.DynamicClient().Resource(util.RayServiceGVR).Namespace(namespace).Create(ctx, unstructuredCR, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create RayService: %w", err)
+	}
+	return rayServiceResource, nil
 }
 
 func extractRayHeadSvcNameFromRayClusterStatus(status interface{}) (string, error) {
