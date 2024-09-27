@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -753,9 +754,15 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	if _, ok := rayStartParams["num-gpus"]; !ok {
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
 		for resourceKey, resource := range resource.Limits {
-			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
+			resourceKeyString := string(resourceKey)
+			if strings.HasSuffix(resourceKeyString, "gpu") && !resource.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
 				// For now, only support one GPU type. Break on first match.
+				break
+			} else if resourceKeyString == "aws.amazon.com/neuroncore" && !resource.IsZero() {
+				if err := addNeuronCoresToResourcesIfNotExists(rayStartParams, resource.Value()); err != nil {
+					log.Error(err, "failed to add neuron_cores to resources")
+				}
 				break
 			}
 		}
@@ -772,6 +779,38 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	}
 	log.Info("generateRayStartCommand", "rayStartCmd", rayStartCmd)
 	return rayStartCmd
+}
+
+func addNeuronCoresToResourcesIfNotExists(rayStartParams map[string]string, neuronCoresCount int64) error {
+	resourcesMap, err := getResourcesMap(rayStartParams)
+	if err != nil {
+		return err
+	}
+
+	if _, exists := resourcesMap["neuron_cores"]; !exists {
+		resourcesMap["neuron_cores"] = float64(neuronCoresCount)
+	}
+
+	if updatedResourcesStr, err := json.Marshal(resourcesMap); err != nil {
+		return fmt.Errorf("failed to marshal resources map to string %w", err)
+	} else {
+		rayStartParams["resources"] = string(updatedResourcesStr)
+	}
+
+	return nil
+}
+
+func getResourcesMap(rayStartParams map[string]string) (map[string]float64, error) {
+	var resources map[string]float64
+	if resourcesStr, ok := rayStartParams["resources"]; !ok {
+		resources = make(map[string]float64)
+	} else {
+		err := json.Unmarshal([]byte(resourcesStr), &resources)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal resources %w", err)
+		}
+	}
+	return resources, nil
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {

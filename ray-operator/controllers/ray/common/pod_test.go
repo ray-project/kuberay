@@ -1155,3 +1155,89 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
 }
+
+func TestGenerateRayStartCommand(t *testing.T) {
+	tests := []struct {
+		name           string
+		nodeType       rayv1.RayNodeType
+		rayStartParams map[string]string
+		resource       corev1.ResourceRequirements
+		expected       string
+	}{
+		{
+			name:           "WorkerNode with GPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"nvidia.com/gpu": resource.MustParse("1"),
+				},
+			},
+			expected: "ray start  --num-gpus=1 ",
+		},
+		{
+			name:           "HeadNode with Neuron Cores",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources={"neuron_cores":4} `,
+		},
+		{
+			name:     "HeadNode with existing resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `{"custom_resource":2}`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources={"custom_resource":2,"neuron_cores":4} `,
+		},
+		{
+			name:     "HeadNode with existing neuron_cores resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `{"custom_resource":2,"neuron_cores":3}`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources={"custom_resource":2,"neuron_cores":3} `,
+		},
+		{
+			name:     "HeadNode with invalid resources string",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": "{",
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: "ray start --head  --resources={ ",
+		},
+		{
+			name:           "Invalid node type",
+			nodeType:       "InvalidType",
+			rayStartParams: map[string]string{},
+			resource:       corev1.ResourceRequirements{},
+			expected:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
