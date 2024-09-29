@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: client
-    image: rayproject/ray:2.34.0
+    image: rayproject/ray:2.9.0
     args: [/bin/sh, -c, 'python -c "import ray; ray.init(\"ray://$FQ_RAY_IP:10001\"); print(ray.cluster_resources())" && sleep infinity']
     env:
     - name: RAY_USE_TLS
@@ -30,7 +30,7 @@ spec:
         name: gen-tls-script
   initContainers:
   - name: gen-cert
-    image: rayproject/ray:2.34.0
+    image: rayproject/ray:2.9.0
     args: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
     volumeMounts:
       - mountPath: /etc/ca/tls

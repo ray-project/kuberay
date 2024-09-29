@@ -14,7 +14,7 @@ spec:
         import_path: fruit.deployment_graph
         route_prefix: /fruit
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/4d2c9a59d9eabfd4c8a9e04a7aae44fc8f5b416f.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
         deployments:
           - name: MangoStand
             num_replicas: 2
@@ -60,7 +60,7 @@ spec:
           - name: Router
             num_replicas: 1
   rayClusterConfig:
-    rayVersion: '2.34.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
@@ -74,7 +74,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.34.0
+              image: rayproject/ray:2.9.0
               resources:
                 limits:
                   cpu: 2
@@ -107,7 +107,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.34.0
+                image: rayproject/ray:2.9.0
                 lifecycle:
                   preStop:
                     exec:

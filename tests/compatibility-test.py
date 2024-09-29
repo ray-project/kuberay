@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 
 # parse global variables from env
-ray_image = os.getenv('RAY_IMAGE', 'rayproject/ray:2.34.0')
+ray_image = os.getenv('RAY_IMAGE', 'rayproject/ray:2.9.0')
 ray_version = ray_image.split(':')[-1]
 kuberay_operator_image = os.getenv('OPERATOR_IMAGE')
 
