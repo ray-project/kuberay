@@ -34,7 +34,7 @@ metadata:
     # A unique identifier for the head node and workers of this cluster.
   name: raycluster-heterogeneous
 spec:
-  rayVersion: '2.34.0'
+  rayVersion: '2.9.0'
   ######################headGroupSpecs#################################
   # Ray head pod template
   headGroupSpec:
@@ -48,7 +48,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.34.0
+          image: rayproject/ray:2.9.0
           resources:
             limits:
               cpu: "1"
@@ -87,7 +87,7 @@ spec:
       spec:
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.34.0
+          image: rayproject/ray:2.9.0
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
@@ -123,7 +123,7 @@ spec:
       spec:
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.34.0
+          image: rayproject/ray:2.9.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:

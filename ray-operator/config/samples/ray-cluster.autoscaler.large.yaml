@@ -20,7 +20,7 @@ metadata:
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.34.0'
+  rayVersion: '2.9.0'
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
@@ -72,7 +72,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.34.0
+          image: rayproject/ray:2.9.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
@@ -127,7 +127,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.34.0
+          image: rayproject/ray:2.9.0
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
