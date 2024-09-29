@@ -21,7 +21,6 @@ spec:
           working_dir: "https://github.com/ray-project/test_dag/archive/59c994656f55ff8e0e642efe63f380debc831931.zip"
         deployments:
           - name: Blocked
-            max_ongoing_requests: 1000
             autoscaling_config:
               metrics_interval_s: 0.2
               min_replicas: 1
@@ -29,20 +28,18 @@ spec:
               look_back_period_s: 2
               downscale_delay_s: 5
               upscale_delay_s: 2
-              target_ongoing_requests: 1
+              target_num_ongoing_requests_per_replica: 1
             graceful_shutdown_timeout_s: 5
+            max_concurrent_queries: 1000
             ray_actor_options:
               num_cpus: 0.5
       - name: signal
         import_path: autoscaling.signaling:app
         route_prefix: /signal
-        deployments:
-          - name: SignalDeployment
-            max_ongoing_requests: 1000
         runtime_env:
           working_dir: "https://github.com/ray-project/test_dag/archive/59c994656f55ff8e0e642efe63f380debc831931.zip"
   rayClusterConfig:
-    rayVersion: '2.34.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
     ## raycluster autoscaling config
     enableInTreeAutoscaling: true
     autoscalerOptions:
@@ -66,7 +63,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.34.0
+              image: rayproject/ray:2.9.0
               resources:
                 limits:
                   cpu: 2
@@ -99,7 +96,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.34.0
+                image: rayproject/ray:2.9.0
                 lifecycle:
                   preStop:
                     exec:

@@ -50,7 +50,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 			SubmissionMode:           rayv1.K8sJobMode,
 			ShutdownAfterJobFinishes: true,
 			RayClusterSpec: &rayv1.RayClusterSpec{
-				RayVersion: "2.34.0",
+				RayVersion: "2.9.0",
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
@@ -58,7 +58,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.34.0",
+									Image: "rayproject/ray:2.9.0",
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
 											corev1.ResourceCPU:    resource.MustParse("1"),
@@ -100,7 +100,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 								Containers: []corev1.Container{
 									{
 										Name:  "ray-worker",
-										Image: "rayproject/ray:2.34.0",
+										Image: "rayproject/ray:2.9.0",
 									},
 								},
 							},

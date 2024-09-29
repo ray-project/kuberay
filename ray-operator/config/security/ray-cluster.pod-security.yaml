@@ -21,7 +21,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray-ml:2.9.0
+          image: rayproject/ray-ml:2.4.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -85,7 +85,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray-ml:2.9.0
+          image: rayproject/ray-ml:2.4.0
           # environment variables to set in the container.Optional.
           # Refer to https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
           lifecycle:

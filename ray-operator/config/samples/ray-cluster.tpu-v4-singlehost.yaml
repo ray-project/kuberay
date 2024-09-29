@@ -21,7 +21,7 @@ spec:
             - mountPath: /tmp/ray
               name: ray-logs
             name: ray-head
-            image: rayproject/ray:2.34.0-py310
+            image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -78,7 +78,7 @@ spec:
             - mountPath: /tmp/ray
               name: ray-logs
             name: ray-worker
-            image: rayproject/ray:2.34.0-py310
+            image: rayproject/ray:2.9.0-py310
             imagePullPolicy: IfNotPresent
             resources:
               limits:
