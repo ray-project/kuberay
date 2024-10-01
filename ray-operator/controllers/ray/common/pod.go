@@ -33,7 +33,12 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
+	NeuronCoreResourceName             = "aws.amazon.com/neuroncore"
 )
+
+var customAcceleratorToRayResourceMap = map[string]string{
+	NeuronCoreResourceName: "neuron_cores",
+}
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
@@ -759,10 +764,11 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
 				// For now, only support one GPU type. Break on first match.
 				break
-			} else if resourceKeyString == "aws.amazon.com/neuroncore" && !resource.IsZero() {
-				if err := addNeuronCoresToResourcesIfNotExists(rayStartParams, resource.Value()); err != nil {
-					log.Error(err, "failed to add neuron_cores to resources")
+			} else if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resource.IsZero() {
+				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, rayResourceName, resource.Value()); err != nil {
+					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
 				}
+				// For now, only support one custom accelerator type. Break on first match.
 				break
 			}
 		}
@@ -781,14 +787,14 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
-func addNeuronCoresToResourcesIfNotExists(rayStartParams map[string]string, neuronCoresCount int64) error {
+func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string, resourceName string, resourceCount int64) error {
 	resourcesMap, err := getResourcesMap(rayStartParams)
 	if err != nil {
 		return err
 	}
 
-	if _, exists := resourcesMap["neuron_cores"]; !exists {
-		resourcesMap["neuron_cores"] = float64(neuronCoresCount)
+	if _, exists := resourcesMap[resourceName]; !exists {
+		resourcesMap[resourceName] = float64(resourceCount)
 	}
 
 	if updatedResourcesStr, err := json.Marshal(resourcesMap); err != nil {
