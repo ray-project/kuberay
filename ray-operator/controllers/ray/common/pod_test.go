@@ -1158,11 +1158,11 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 func TestGenerateRayStartCommand(t *testing.T) {
 	tests := []struct {
-		name           string
-		nodeType       rayv1.RayNodeType
 		rayStartParams map[string]string
-		resource       corev1.ResourceRequirements
+		name           string
 		expected       string
+		nodeType       rayv1.RayNodeType
+		resource       corev1.ResourceRequirements
 	}{
 		{
 			name:           "WorkerNode with GPU",

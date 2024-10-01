@@ -797,12 +797,12 @@ func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string
 		resourcesMap[resourceName] = float64(resourceCount)
 	}
 
-	if updatedResourcesStr, err := json.Marshal(resourcesMap); err != nil {
+	updatedResourcesStr, err := json.Marshal(resourcesMap)
+	if err != nil {
 		return fmt.Errorf("failed to marshal resources map to string %w", err)
-	} else {
-		rayStartParams["resources"] = string(updatedResourcesStr)
 	}
 
+	rayStartParams["resources"] = string(updatedResourcesStr)
 	return nil
 }
 
