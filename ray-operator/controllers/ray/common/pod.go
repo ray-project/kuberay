@@ -33,11 +33,12 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
-	NeuronCoreResourceName             = "aws.amazon.com/neuroncore"
+	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName          = "neuron_cores"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
-	NeuronCoreResourceName: "neuron_cores",
+	NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
 }
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
@@ -759,12 +760,17 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	if _, ok := rayStartParams["num-gpus"]; !ok {
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
 		for resourceKey, resource := range resource.Limits {
-			resourceKeyString := string(resourceKey)
-			if strings.HasSuffix(resourceKeyString, "gpu") && !resource.IsZero() {
+			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
 				// For now, only support one GPU type. Break on first match.
 				break
-			} else if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resource.IsZero() {
+			}
+		}
+	}
+
+	if _, ok := rayStartParams["resources"]; !ok {
+		for resourceKey, resource := range resource.Limits {
+			if rayResourceName, ok := customAcceleratorToRayResourceMap[string(resourceKey)]; ok && !resource.IsZero() {
 				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, rayResourceName, resource.Value()); err != nil {
 					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
 				}
