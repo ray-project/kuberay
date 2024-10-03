@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -32,7 +33,13 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
+	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName          = "neuron_cores"
 )
+
+var customAcceleratorToRayResourceMap = map[string]string{
+	NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
+}
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
@@ -761,6 +768,18 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		}
 	}
 
+	if _, ok := rayStartParams["resources"]; !ok {
+		for resourceKey, resource := range resource.Limits {
+			if rayResourceName, ok := customAcceleratorToRayResourceMap[string(resourceKey)]; ok && !resource.IsZero() {
+				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, rayResourceName, resource.Value()); err != nil {
+					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
+				}
+				// For now, only support one custom accelerator type. Break on first match.
+				break
+			}
+		}
+	}
+
 	rayStartCmd := ""
 	switch nodeType {
 	case rayv1.HeadNode:
@@ -772,6 +791,38 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	}
 	log.Info("generateRayStartCommand", "rayStartCmd", rayStartCmd)
 	return rayStartCmd
+}
+
+func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string, resourceName string, resourceCount int64) error {
+	resourcesMap, err := getResourcesMap(rayStartParams)
+	if err != nil {
+		return err
+	}
+
+	if _, exists := resourcesMap[resourceName]; !exists {
+		resourcesMap[resourceName] = float64(resourceCount)
+	}
+
+	updatedResourcesStr, err := json.Marshal(resourcesMap)
+	if err != nil {
+		return fmt.Errorf("failed to marshal resources map to string %w", err)
+	}
+
+	rayStartParams["resources"] = string(updatedResourcesStr)
+	return nil
+}
+
+func getResourcesMap(rayStartParams map[string]string) (map[string]float64, error) {
+	var resources map[string]float64
+	if resourcesStr, ok := rayStartParams["resources"]; !ok {
+		resources = make(map[string]float64)
+	} else {
+		err := json.Unmarshal([]byte(resourcesStr), &resources)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal resources %w", err)
+		}
+	}
+	return resources, nil
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
