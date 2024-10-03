@@ -2,6 +2,7 @@ version: 2
 
 before:
   hooks:
+    - cp ../LICENSE .
     - go mod tidy
 
 builds:
