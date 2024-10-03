@@ -5,10 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-logr/logr"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -759,7 +760,7 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	}
 
 	// Add GPU and custom accelerator resources to rayStartParams if not already present.
-	addGPUAndCustomAcceleratorResourcesIfNotExists(log, rayStartParams, resource.Limits)
+	addWellKnownAcceleratorResources(log, rayStartParams, resource.Limits)
 
 	rayStartCmd := ""
 	switch nodeType {
@@ -774,7 +775,7 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
-func addGPUAndCustomAcceleratorResourcesIfNotExists(log logr.Logger, rayStartParams map[string]string, resourceLimits corev1.ResourceList) {
+func addWellKnownAcceleratorResources(log logr.Logger, rayStartParams map[string]string, resourceLimits corev1.ResourceList) {
 	resourcesMap, _ := getResourcesMap(rayStartParams)
 
 	// Flag to track if any custom accelerator resource are present/added in rayStartParams resources.
