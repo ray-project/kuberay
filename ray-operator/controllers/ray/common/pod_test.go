@@ -1197,7 +1197,20 @@ func TestGenerateRayStartCommand(t *testing.T) {
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
 				},
 			},
-			expected: `ray start --head  --resources={"custom_resource":2} `,
+			expected: `ray start --head  --resources={"custom_resource":2,"neuron_cores":4} `,
+		},
+		{
+			name:     "HeadNode with existing neuron_cores resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `{"custom_resource":2,"neuron_cores":3}`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources={"custom_resource":2,"neuron_cores":3} `,
 		},
 		{
 			name:     "HeadNode with invalid resources string",

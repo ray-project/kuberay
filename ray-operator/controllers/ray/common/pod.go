@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-logr/logr"
 	"os"
 	"strconv"
 	"strings"
@@ -757,28 +758,8 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		}
 	}
 
-	if _, ok := rayStartParams["num-gpus"]; !ok {
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
-		for resourceKey, resource := range resource.Limits {
-			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
-				// For now, only support one GPU type. Break on first match.
-				break
-			}
-		}
-	}
-
-	if _, ok := rayStartParams["resources"]; !ok {
-		for resourceKey, resource := range resource.Limits {
-			if rayResourceName, ok := customAcceleratorToRayResourceMap[string(resourceKey)]; ok && !resource.IsZero() {
-				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, rayResourceName, resource.Value()); err != nil {
-					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
-				}
-				// For now, only support one custom accelerator type. Break on first match.
-				break
-			}
-		}
-	}
+	// Add GPU and custom accelerator resources to rayStartParams if not already present.
+	addGPUAndCustomAcceleratorResourcesIfNotExists(log, rayStartParams, resource.Limits)
 
 	rayStartCmd := ""
 	switch nodeType {
@@ -793,12 +774,48 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
-func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string, resourceName string, resourceCount int64) error {
-	resourcesMap, err := getResourcesMap(rayStartParams)
-	if err != nil {
-		return err
+func addGPUAndCustomAcceleratorResourcesIfNotExists(log logr.Logger, rayStartParams map[string]string, resourceLimits corev1.ResourceList) {
+	resourcesMap, _ := getResourcesMap(rayStartParams)
+
+	// Flag to track if any custom accelerator resource are present/added in rayStartParams resources.
+	isCustomAcceleratorResourceAdded := isCustomAcceleratorPresentInResources(resourcesMap)
+
+	for resourceKey, resourceValue := range resourceLimits {
+		resourceKeyString := string(resourceKey)
+
+		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		if _, ok := rayStartParams["num-gpus"]; !ok {
+			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+			}
+		}
+
+		// Add the first encountered custom accelerator resource from the resource limits to the rayStartParams if not already present
+		if resourcesMap != nil && !isCustomAcceleratorResourceAdded {
+			if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resourceValue.IsZero() {
+				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, resourcesMap, rayResourceName, resourceValue.Value()); err != nil {
+					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
+				}
+				isCustomAcceleratorResourceAdded = true
+			}
+		}
+	}
+}
+
+func isCustomAcceleratorPresentInResources(resourcesMap map[string]float64) bool {
+	// Check whether there exists any custom accelerator resources specified as part of rayStartParams
+	if len(resourcesMap) > 0 {
+		for _, customAcceleratorRayResource := range customAcceleratorToRayResourceMap {
+			if _, ok := resourcesMap[customAcceleratorRayResource]; ok {
+				return true
+			}
+		}
 	}
 
+	return false
+}
+
+func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string, resourcesMap map[string]float64, resourceName string, resourceCount int64) error {
 	if _, exists := resourcesMap[resourceName]; !exists {
 		resourcesMap[resourceName] = float64(resourceCount)
 	}
