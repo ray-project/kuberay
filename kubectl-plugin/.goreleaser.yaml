@@ -16,6 +16,7 @@ builds:
       - arm64
     main: ./cmd
     binary: kubectl-ray
+    ldflags: -X github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/version.Version={{- .Tag -}}
 
 archives:
   - format: tar.gz
