@@ -1,9 +1,7 @@
 package client
 
 import (
-	"time"
-
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -24,7 +22,7 @@ func (cc RayClusterClient) RayClusterClient(namespace string) rayv1.RayClusterIn
 	return cc.client.RayClusters(namespace)
 }
 
-func NewRayClusterClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) ClusterClientInterface {
+func NewRayClusterClientOrFatal(options util.ClientOptions) ClusterClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		klog.Fatalf("Failed to create RayCluster client. Error: %v", err)

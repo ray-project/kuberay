@@ -1,9 +1,7 @@
 package client
 
 import (
-	"time"
-
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -24,7 +22,7 @@ func (cc RayServiceClient) RayServiceClient(namespace string) rayv1.RayServiceIn
 	return cc.client.RayServices(namespace)
 }
 
-func NewRayServiceClientOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) ServiceClientInterface {
+func NewRayServiceClientOrFatal(options util.ClientOptions) ServiceClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		klog.Fatalf("Failed to create RayService client. Error: %v", err)
