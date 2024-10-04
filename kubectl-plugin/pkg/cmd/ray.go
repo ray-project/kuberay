@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/job"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/log"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/session"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/version"
 )
 
 func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
@@ -29,5 +30,6 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd.AddCommand(session.NewSessionCommand(streams))
 	cmd.AddCommand(log.NewClusterLogCommand(streams))
 	cmd.AddCommand(job.NewJobCommand(streams))
+	cmd.AddCommand(version.NewVersionCommand())
 	return cmd
 }
