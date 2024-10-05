@@ -7,14 +7,14 @@ metadata:
     yunikorn.apache.org/app-id: test-yunikorn-0
     yunikorn.apache.org/queue: root.test
 spec:
-  rayVersion: "2.34.0"
+  rayVersion: "2.9.0"
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.34.0
+            image: rayproject/ray:2.9.0
             resources:
               limits:
                 cpu: "1"
@@ -32,7 +32,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.34.0
+              image: rayproject/ray:2.9.0
               resources:
                 limits:
                   cpu: "1"
