@@ -1283,8 +1283,9 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 
 	newTestRayCluster := testRayCluster.DeepCopy()
 	newTestRayCluster.Status.Reason = reason
-	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
+	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster reason")
+	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster after updating reason")
@@ -1563,8 +1564,9 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	state := rayv1.Ready
 	newTestRayCluster := testRayCluster.DeepCopy()
 	newTestRayCluster.Status.State = state //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	err = testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
+	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
+	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster after updating state")

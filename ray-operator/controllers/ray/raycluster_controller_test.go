@@ -488,7 +488,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Suspended))
 			if withConditionEnabled {
 				Eventually(
-					func() string {
+					func() rayv1.RayClusterConditionType {
 						if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 							return ""
 						}
@@ -554,7 +554,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			if withConditionEnabled {
 				Eventually(
-					func() string {
+					func() rayv1.RayClusterConditionType {
 						if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 							return ""
 						}
@@ -603,7 +603,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 			if withConditionEnabled {
 				Eventually(
-					func() string {
+					func() rayv1.RayClusterConditionType {
 						if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
 							return ""
 						}

@@ -55,11 +55,6 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
-
-	// errSuspendCondition, errSuspending and errResuming are internal errors for shortcutting the reconcilePods.
-	errSuspendCondition = errstd.New("suspend condition changed")
-	errSuspending       = fmt.Errorf("suspending: %w", errSuspendCondition)
-	errResuming         = fmt.Errorf("resuming: %w", errSuspendCondition)
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -335,7 +330,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	for _, fn := range reconcileFuncs {
-		if reconcileErr = fn(ctx, instance); reconcileErr != nil && !errstd.Is(reconcileErr, errSuspendCondition) {
+		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
 			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
 			break
@@ -345,10 +340,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// Calculate the new status for the RayCluster. Note that the function will deep copy `instance` instead of mutating it.
 	newInstance, calculateErr := r.calculateStatus(ctx, instance, reconcileErr)
 	var updateErr error
+	var inconsistent bool
 	if calculateErr != nil {
 		logger.Info("Got error when calculating new status", "cluster name", request.Name, "error", calculateErr)
 	} else {
-		updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
+		inconsistent, updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
 
 	// Return error based on order.
@@ -360,7 +356,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	} else {
 		err = updateErr
 	}
-	if err != nil {
+	if err != nil || inconsistent {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
@@ -621,8 +617,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 	// if RayCluster is suspending, delete all pods and skip reconcile
 	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
+	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if suspendStatus == rayv1.RayClusterSuspending ||
-		(!features.Enabled(features.RayClusterStatusConditions) && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
+		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePod),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
@@ -636,16 +633,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		return nil
 	}
 
-	if features.Enabled(features.RayClusterStatusConditions) {
+	if statusConditionGateEnabled {
 		if suspendStatus == rayv1.RayClusterSuspended {
-			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
-				return errResuming
-			}
 			return nil // stop reconcilePods because the cluster is suspended.
 		}
 		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
 		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
-			return errSuspending
+			return nil // stop reconcilePods because the cluster is going to suspend.
 		}
 	}
 
@@ -1190,27 +1184,16 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1.RayCluster, reconcileErr error) (*rayv1.RayCluster, error) {
 	// TODO: Replace this log and use reconcileErr to set the condition field.
 	logger := ctrl.LoggerFrom(ctx)
-	if reconcileErr != nil && !errstd.Is(reconcileErr, errSuspendCondition) {
+	if reconcileErr != nil {
 		logger.Info("Reconciliation error", "error", reconcileErr)
 	}
 
 	// Deep copy the instance, so we don't mutate the original object.
 	newInstance := instance.DeepCopy()
 
-	if features.Enabled(features.RayClusterStatusConditions) {
-		if errstd.Is(reconcileErr, errSuspending) {
-			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-				Type:   string(rayv1.RayClusterSuspend),
-				Reason: rayv1.RayClusterSuspending,
-				Status: metav1.ConditionTrue,
-			})
-		} else if errstd.Is(reconcileErr, errResuming) {
-			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-				Type:   string(rayv1.RayClusterSuspend),
-				Reason: rayv1.RayClusterSuspended,
-				Status: metav1.ConditionFalse,
-			})
-		} else if reconcileErr != nil {
+	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
+	if statusConditionGateEnabled {
+		if reconcileErr != nil {
 			if reason := utils.RayClusterReplicaFailureReason(reconcileErr); reason != "" {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterReplicaFailure),
@@ -1251,7 +1234,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	// Check if the head node is running and ready by checking the head pod's status or if the cluster has been suspended.
-	if features.Enabled(features.RayClusterStatusConditions) {
+	if statusConditionGateEnabled {
 		headPod, err := common.GetRayClusterHeadPod(ctx, r, newInstance)
 		if err != nil {
 			return nil, err
@@ -1290,13 +1273,47 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 
 		suspendStatus := utils.FindRayClusterSuspendStatus(newInstance)
-		if suspendStatus == rayv1.RayClusterSuspending && len(runtimePods.Items) == 0 {
-			meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned))
+		if suspendStatus == rayv1.RayClusterSuspending {
+			if len(runtimePods.Items) == 0 {
+				meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned))
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspending),
+					Reason: string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionFalse,
+				})
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspended),
+					Reason: string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionTrue,
+				})
+			}
+		} else if suspendStatus == rayv1.RayClusterSuspended {
+			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspended),
+					Reason: string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionFalse,
+				})
+			}
+		} else {
 			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-				Type:   string(rayv1.RayClusterSuspend),
-				Reason: rayv1.RayClusterSuspended,
-				Status: metav1.ConditionTrue,
+				Type:   string(rayv1.RayClusterSuspended),
+				Reason: string(rayv1.RayClusterSuspended),
+				Status: metav1.ConditionFalse,
 			})
+			if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspending),
+					Reason: string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionTrue,
+				})
+			} else {
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspending),
+					Reason: string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionFalse,
+				})
+			}
 		}
 	}
 
@@ -1555,17 +1572,18 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 	return nil
 }
 
-func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	if !r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status) {
-		return nil
+	inconsistent := r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status)
+	if !inconsistent {
+		return inconsistent, nil
 	}
 	logger.Info("updateRayClusterStatus", "name", originalRayClusterInstance.Name, "old status", originalRayClusterInstance.Status, "new status", newInstance.Status)
 	err := r.Status().Update(ctx, newInstance)
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	}
-	return err
+	return inconsistent, err
 }
 
 // sumGPUs sums the GPUs in the given resource list.

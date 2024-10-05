@@ -102,13 +102,12 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 	return headPodReadyCondition
 }
 
-func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) string {
+func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) rayv1.RayClusterConditionType {
 	for _, cond := range instance.Status.Conditions {
-		if cond.Type == string(rayv1.RayClusterSuspend) {
+		if cond.Type == string(rayv1.RayClusterSuspending) || cond.Type == string(rayv1.RayClusterSuspended) {
 			if cond.Status == metav1.ConditionTrue {
-				return cond.Reason
+				return rayv1.RayClusterConditionType(cond.Type)
 			}
-			break
 		}
 	}
 	return ""
