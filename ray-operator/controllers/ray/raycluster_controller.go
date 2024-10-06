@@ -210,9 +210,23 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, filters common
 	return pods, nil
 }
 
+func (r *RayClusterReconciler) validateRayClusterStatus(instance *rayv1.RayCluster) error {
+	suspending := meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterSuspending))
+	suspended := meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterSuspended))
+	if suspending && suspended {
+		return errstd.New("invalid RayCluster State: rayv1.RayClusterSuspending and rayv1.RayClusterSuspended conditions should not be both true")
+	}
+	return nil
+}
+
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request ctrl.Request, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
+
+	if err := r.validateRayClusterStatus(instance); err != nil {
+		logger.Error(err, "The RayCluster status is invalid")
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 
 	// Please do NOT modify `originalRayClusterInstance` in the following code.
 	originalRayClusterInstance := instance.DeepCopy()
@@ -356,6 +370,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	} else {
 		err = updateErr
 	}
+	// Besides an error, we also requeue the reconciliation if status changed.
+	// This behavior is required by atomic operations that depend on status changes, such as suspending a RayCluster.
 	if err != nil || inconsistent {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -1275,7 +1291,12 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		suspendStatus := utils.FindRayClusterSuspendStatus(newInstance)
 		if suspendStatus == rayv1.RayClusterSuspending {
 			if len(runtimePods.Items) == 0 {
-				meta.RemoveStatusCondition(&newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned))
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterProvisioned),
+					Status:  metav1.ConditionFalse,
+					Reason:  rayv1.RayClusterPodsProvisioning,
+					Message: "RayCluster has been suspended",
+				})
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspending),
 					Reason: string(rayv1.RayClusterSuspending),
@@ -1417,6 +1438,9 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 	if headPod != nil {
 		instance.Status.Head.PodIP = headPod.Status.PodIP
 		instance.Status.Head.PodName = headPod.Name
+	} else {
+		instance.Status.Head.PodIP = ""
+		instance.Status.Head.PodName = ""
 	}
 
 	ip, name, err := r.getHeadServiceIPAndName(ctx, instance)
@@ -1572,6 +1596,8 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 	return nil
 }
 
+// updateRayClusterStatus updates the RayCluster status if it is inconsistent with the old status and returns a bool to indicate the inconsistency.
+// We rely on the returning bool to requeue the reconciliation for atomic operations, such as suspending a RayCluster.
 func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	inconsistent := r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status)
