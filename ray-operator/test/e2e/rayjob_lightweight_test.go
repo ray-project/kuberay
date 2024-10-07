@@ -47,7 +47,7 @@ env_vars:
 							"dashboard-host": "0.0.0.0",
 							"num-gpus":       "4",
 							"num-cpus":       "4",
-							"resources":      `{"R1": 4}`,
+							"resources":      `'{"R1": 4}'`,
 						}).
 						WithTemplate(podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
 							mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))

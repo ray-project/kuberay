@@ -807,7 +807,7 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 						return fmt.Errorf("failed to marshal resources map to string: %w", err)
 					}
 
-					rayStartParams["resources"] = string(updatedResourcesStr)
+					rayStartParams["resources"] = fmt.Sprintf("'%s'", updatedResourcesStr)
 				}
 				isCustomAcceleratorResourceAdded = true
 			}
@@ -835,6 +835,8 @@ func getResourcesMap(rayStartParams map[string]string) (map[string]float64, erro
 	if resourcesStr, ok := rayStartParams["resources"]; !ok {
 		resources = make(map[string]float64)
 	} else {
+		// Trim any surrounding quotes (single, double, or backticks) and spaces
+		resourcesStr = strings.Trim(resourcesStr, "'\"` ")
 		err := json.Unmarshal([]byte(resourcesStr), &resources)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal resources %w", err)
