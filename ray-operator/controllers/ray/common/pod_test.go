@@ -1158,12 +1158,13 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 func TestGenerateRayStartCommand(t *testing.T) {
 	tests := []struct {
-		rayStartParams map[string]string
-		name           string
-		expected       string
-		err            string
-		nodeType       rayv1.RayNodeType
-		resource       corev1.ResourceRequirements
+		rayStartParams                        map[string]string
+		mockCustomAcceleratorToRayResourceMap map[string]string
+		name                                  string
+		expected                              string
+		err                                   string
+		nodeType                              rayv1.RayNodeType
+		resource                              corev1.ResourceRequirements
 	}{
 		{
 			name:           "WorkerNode with GPU",
@@ -1198,6 +1199,23 @@ func TestGenerateRayStartCommand(t *testing.T) {
 				},
 			},
 			expected: `ray start --head  --resources={"neuron_cores":4}  --num-gpus=1 `,
+		},
+		{
+			name:           "HeadNode with multiple custom accelerators",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"cloud-tpus.google.com/v3":  resource.MustParse("8"),
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+					"nvidia.com/gpu":            resource.MustParse("1"),
+				},
+			},
+			mockCustomAcceleratorToRayResourceMap: map[string]string{
+				NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
+				"cloud-tpus.google.com/v3":      "tpu",
+			},
+			expected: `ray start --head  --resources={"tpu":8}  --num-gpus=1 `,
 		},
 		{
 			name:     "HeadNode with existing resources",
@@ -1249,6 +1267,15 @@ func TestGenerateRayStartCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Mock the customAcceleratorToRayResourceMap with the value specified in the test
+			if tt.mockCustomAcceleratorToRayResourceMap != nil {
+				originalCustomAcceleratorToRayResourceMap := customAcceleratorToRayResourceMap
+				customAcceleratorToRayResourceMap = tt.mockCustomAcceleratorToRayResourceMap
+				defer func() {
+					customAcceleratorToRayResourceMap = originalCustomAcceleratorToRayResourceMap
+				}()
+			}
+
 			if tt.err != "" {
 				assert.PanicsWithError(t, tt.err, func() {
 					generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
