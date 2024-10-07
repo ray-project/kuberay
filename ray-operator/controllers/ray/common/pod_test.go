@@ -1161,6 +1161,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 		rayStartParams map[string]string
 		name           string
 		expected       string
+		err            string
 		nodeType       rayv1.RayNodeType
 		resource       corev1.ResourceRequirements
 	}{
@@ -1185,6 +1186,18 @@ func TestGenerateRayStartCommand(t *testing.T) {
 				},
 			},
 			expected: `ray start --head  --resources={"neuron_cores":4} `,
+		},
+		{
+			name:           "HeadNode with multiple accelerators",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+					"nvidia.com/gpu":            resource.MustParse("1"),
+				},
+			},
+			expected: `ray start --head  --resources={"neuron_cores":4}  --num-gpus=1 `,
 		},
 		{
 			name:     "HeadNode with existing resources",
@@ -1223,7 +1236,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
 				},
 			},
-			expected: "ray start --head  --resources={ ",
+			err: "failed to add accelerator resources to rayStartParams: failed to get resources map from rayStartParams: failed to unmarshal resources unexpected end of JSON input",
 		},
 		{
 			name:           "Invalid node type",
@@ -1236,8 +1249,14 @@ func TestGenerateRayStartCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
-			assert.Equal(t, tt.expected, result)
+			if tt.err != "" {
+				assert.PanicsWithError(t, tt.err, func() {
+					generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+				})
+			} else {
+				result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+				assert.Equal(t, tt.expected, result)
+			}
 		})
 	}
 }
