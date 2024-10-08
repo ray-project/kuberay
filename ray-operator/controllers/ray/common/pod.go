@@ -777,6 +777,10 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 }
 
 func addWellKnownAcceleratorResources(rayStartParams map[string]string, resourceLimits corev1.ResourceList) error {
+	if len(resourceLimits) == 0 {
+		return nil
+	}
+
 	resourcesMap, err := getResourcesMap(rayStartParams)
 	if err != nil {
 		return fmt.Errorf("failed to get resources map from rayStartParams: %w", err)
