@@ -104,6 +104,33 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 	return headPodReadyCondition
 }
 
+// FindRayClusterSuspendStatus returns the current suspend status from two conditions:
+//  1. rayv1.RayClusterSuspending
+//  2. rayv1.RayClusterSuspended
+//
+// The two conditions should not be both True at the same time. The transition logic should be the following:
+//
+//	rayv1.RayClusterSuspending:
+//	  False by default
+//	  False -> True: when `spec.Suspend` is true.
+//	  True -> False: when all Pods are deleted, set rayv1.RayClusterSuspended from False to True.
+//	rayv1.RayClusterSuspended
+//	  False by default
+//	  False -> True: when suspending transitions from True to False
+//	  True -> False: when `spec.Suspend` is false.
+//
+// If both rayv1.RayClusterSuspending and rayv1.RayClusterSuspended are False, FindRayClusterSuspendStatus returns "".
+func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) rayv1.RayClusterConditionType {
+	for _, cond := range instance.Status.Conditions {
+		if cond.Type == string(rayv1.RayClusterSuspending) || cond.Type == string(rayv1.RayClusterSuspended) {
+			if cond.Status == metav1.ConditionTrue {
+				return rayv1.RayClusterConditionType(cond.Type)
+			}
+		}
+	}
+	return ""
+}
+
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {

@@ -186,6 +186,10 @@ const (
 	HeadPodReady RayClusterConditionType = "HeadPodReady"
 	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
 	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
+	// RayClusterSuspending is set to true when a user sets .Spec.Suspend to true, ensuring the atomicity of the suspend operation.
+	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
+	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
+	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
 )
 
 // HeadInfo gives info about head
