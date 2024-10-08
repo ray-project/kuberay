@@ -510,6 +510,8 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
 					WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
 				Expect(meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))).To(BeFalse())
+				// rayCluster.Status.Head.PodName will be cleared.
+				// rayCluster.Status.Head.PodIP will also be cleared, but we don't test it here since we don't have IPs in tests.
 				Expect(rayCluster.Status.Head.PodName).To(BeEmpty())
 			}
 		})
@@ -594,6 +596,8 @@ var _ = Context("Inside the default namespace", func() {
 				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
 					WithArguments(ctx, rayCluster).Should(BeEmpty())
 				Expect(meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))).To(BeTrue())
+				// rayCluster.Status.Head.PodName should have a value now.
+				// rayCluster.Status.Head.PodIP should also have a value now, but we don't test it here since we don't have IPs in tests.
 				Expect(rayCluster.Status.Head.PodName).NotTo(BeEmpty())
 			}
 		})
