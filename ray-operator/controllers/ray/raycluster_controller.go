@@ -1269,7 +1269,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			meta.SetStatusCondition(&newInstance.Status.Conditions, headPodReadyCondition)
 		}
 
-		if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
+		suspendStatus := utils.FindRayClusterSuspendStatus(newInstance)
+		if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) && suspendStatus != rayv1.RayClusterSuspended {
 			// RayClusterProvisioned indicates whether all Ray Pods are ready when the RayCluster is first created.
 			// Note RayClusterProvisioned StatusCondition will not be updated after all Ray Pods are ready for the first time. Unless the cluster has been suspended.
 			if utils.CheckAllPodsRunning(ctx, runtimePods) {
@@ -1289,7 +1290,6 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			}
 		}
 
-		suspendStatus := utils.FindRayClusterSuspendStatus(newInstance)
 		if suspendStatus == rayv1.RayClusterSuspending {
 			if len(runtimePods.Items) == 0 {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
