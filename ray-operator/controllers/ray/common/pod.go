@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -757,27 +758,9 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		}
 	}
 
-	if _, ok := rayStartParams["num-gpus"]; !ok {
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
-		for resourceKey, resource := range resource.Limits {
-			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
-				// For now, only support one GPU type. Break on first match.
-				break
-			}
-		}
-	}
-
-	if _, ok := rayStartParams["resources"]; !ok {
-		for resourceKey, resource := range resource.Limits {
-			if rayResourceName, ok := customAcceleratorToRayResourceMap[string(resourceKey)]; ok && !resource.IsZero() {
-				if err := addCustomAcceleratorToResourcesIfNotExists(rayStartParams, rayResourceName, resource.Value()); err != nil {
-					log.Error(err, fmt.Sprintf("failed to add %s to resources", rayResourceName))
-				}
-				// For now, only support one custom accelerator type. Break on first match.
-				break
-			}
-		}
+	// Add GPU and custom accelerator resources to rayStartParams if not already present.
+	if err := addWellKnownAcceleratorResources(rayStartParams, resource.Limits); err != nil {
+		log.Error(err, "failed to add accelerator resources to rayStartParams")
 	}
 
 	rayStartCmd := ""
@@ -793,23 +776,62 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
-func addCustomAcceleratorToResourcesIfNotExists(rayStartParams map[string]string, resourceName string, resourceCount int64) error {
+func addWellKnownAcceleratorResources(rayStartParams map[string]string, resourceLimits corev1.ResourceList) error {
+	if len(resourceLimits) == 0 {
+		return nil
+	}
+
 	resourcesMap, err := getResourcesMap(rayStartParams)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get resources map from rayStartParams: %w", err)
 	}
 
-	if _, exists := resourcesMap[resourceName]; !exists {
-		resourcesMap[resourceName] = float64(resourceCount)
+	// Flag to track if any custom accelerator resource are present/added in rayStartParams resources.
+	isCustomAcceleratorResourceAdded := isCustomAcceleratorPresentInResources(resourcesMap)
+
+	for resourceKey, resourceValue := range resourceLimits {
+		resourceKeyString := string(resourceKey)
+
+		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		if _, ok := rayStartParams["num-gpus"]; !ok {
+			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+			}
+		}
+
+		// Add the first encountered custom accelerator resource from the resource limits to the rayStartParams if not already present
+		if !isCustomAcceleratorResourceAdded {
+			if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resourceValue.IsZero() {
+				if _, exists := resourcesMap[rayResourceName]; !exists {
+					resourcesMap[rayResourceName] = float64(resourceValue.Value())
+
+					// Update the resources map in the rayStartParams
+					updatedResourcesStr, err := json.Marshal(resourcesMap)
+					if err != nil {
+						return fmt.Errorf("failed to marshal resources map to string: %w", err)
+					}
+
+					rayStartParams["resources"] = fmt.Sprintf("'%s'", updatedResourcesStr)
+				}
+				isCustomAcceleratorResourceAdded = true
+			}
+		}
 	}
 
-	updatedResourcesStr, err := json.Marshal(resourcesMap)
-	if err != nil {
-		return fmt.Errorf("failed to marshal resources map to string %w", err)
-	}
-
-	rayStartParams["resources"] = string(updatedResourcesStr)
 	return nil
+}
+
+func isCustomAcceleratorPresentInResources(resourcesMap map[string]float64) bool {
+	// Check whether there exists any custom accelerator resources specified as part of rayStartParams
+	if len(resourcesMap) > 0 {
+		for _, customAcceleratorRayResource := range customAcceleratorToRayResourceMap {
+			if _, ok := resourcesMap[customAcceleratorRayResource]; ok {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func getResourcesMap(rayStartParams map[string]string) (map[string]float64, error) {
@@ -817,6 +839,8 @@ func getResourcesMap(rayStartParams map[string]string) (map[string]float64, erro
 	if resourcesStr, ok := rayStartParams["resources"]; !ok {
 		resources = make(map[string]float64)
 	} else {
+		// Trim any surrounding quotes (single, double, or backticks) and spaces
+		resourcesStr = strings.Trim(resourcesStr, "'\"` ")
 		err := json.Unmarshal([]byte(resourcesStr), &resources)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal resources %w", err)
@@ -826,11 +850,19 @@ func getResourcesMap(rayStartParams map[string]string) (map[string]float64, erro
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
+	// Order rayStartParams keys for consistent ray start command flags generation
+	keys := make([]string, 0, len(rayStartParams))
+	for k := range rayStartParams {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	flags := new(bytes.Buffer)
 	// specialParameterOptions' arguments can be true or false.
 	// For example, --log-color can be auto | false | true.
 	specialParameterOptions := []string{"log-color", "include-dashboard"}
-	for option, argument := range rayStartParams {
+	for _, option := range keys {
+		argument := rayStartParams[option]
 		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
 			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
 			if strings.ToLower(argument) == "true" {

@@ -161,7 +161,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
 				WithGroupName(groupName).
-				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `"{\"CustomResource\": 1}"`}).
+				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
 				WithTemplate(workerPodTemplateApplyConfiguration()))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
