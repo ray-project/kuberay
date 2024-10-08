@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -758,9 +759,8 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	}
 
 	// Add GPU and custom accelerator resources to rayStartParams if not already present.
-	err := addWellKnownAcceleratorResources(rayStartParams, resource.Limits)
-	if err != nil {
-		panic(fmt.Errorf("failed to add accelerator resources to rayStartParams: %w", err))
+	if err := addWellKnownAcceleratorResources(rayStartParams, resource.Limits); err != nil {
+		log.Error(err, "failed to add accelerator resources to rayStartParams")
 	}
 
 	rayStartCmd := ""
@@ -850,11 +850,19 @@ func getResourcesMap(rayStartParams map[string]string) (map[string]float64, erro
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
+	// Order rayStartParams keys for consistent ray start command flags generation
+	keys := make([]string, 0, len(rayStartParams))
+	for k := range rayStartParams {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	flags := new(bytes.Buffer)
 	// specialParameterOptions' arguments can be true or false.
 	// For example, --log-color can be auto | false | true.
 	specialParameterOptions := []string{"log-color", "include-dashboard"}
-	for option, argument := range rayStartParams {
+	for _, option := range keys {
+		argument := rayStartParams[option]
 		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
 			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
 			if strings.ToLower(argument) == "true" {
