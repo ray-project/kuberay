@@ -33,7 +33,7 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		count := 0
 		for _, aPod := range workerPods.Items {
-			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && aPod.DeletionTimestamp == nil {
+			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && (aPod.DeletionTimestamp == nil || len(aPod.Finalizers) != 0) {
 				count++
 			}
 		}

@@ -110,12 +110,12 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 //
 //	rayv1.RayClusterSuspending:
 //	  False by default
-//	  False -> True: when Spec.Suspend is true.
-//	  True -> False: when all Pods are deleted, and also set rayv1.RayClusterSuspended from False to True.
+//	  False -> True: when `spec.Suspend` is true.
+//	  True -> False: when all Pods are deleted, set rayv1.RayClusterSuspended from False to True.
 //	rayv1.RayClusterSuspended
 //	  False by default
 //	  False -> True: when suspending transitions from True to False
-//	  True -> False: when spec.Suspend is false.
+//	  True -> False: when `spec.Suspend` is false.
 //
 // If both rayv1.RayClusterSuspending and rayv1.RayClusterSuspended are False, FindRayClusterSuspendStatus returns "".
 func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) rayv1.RayClusterConditionType {

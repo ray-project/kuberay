@@ -370,8 +370,9 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	} else {
 		err = updateErr
 	}
-	// Besides an error, we also requeue the reconciliation if status changed.
-	// This behavior is required by atomic operations that depend on status changes, such as suspending a RayCluster.
+	// If the custom resource's status is updated, requeue the reconcile key.
+	// Without this behavior, atomic operations such as the suspend operation would need to wait for `RAYCLUSTER_DEFAULT_REQUEUE_SECONDS` to delete Pods
+	// after the condition rayv1.RayClusterSuspending is set to true.
 	if err != nil || inconsistent {
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
