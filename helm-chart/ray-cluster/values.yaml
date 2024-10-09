@@ -116,17 +116,17 @@ head:
     #   annotations:
     #     prometheus.io/scrape: "true"
 
-    # Custom pod DNS configuration
-    # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
-    # dnsConfig:
-    #   nameservers:
-    #     - 8.8.8.8
-    #   searches:
-    #     - example.local
-    #   options:
-    #     - name: ndots
-    #       value: "2"
-    #     - name: edns0
+  # Custom pod DNS configuration
+  # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+  # dnsConfig:
+  #   nameservers:
+  #     - 8.8.8.8
+  #   searches:
+  #     - example.local
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+  #     - name: edns0
 
 
 worker:
