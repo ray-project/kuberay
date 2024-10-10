@@ -748,6 +748,12 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		cpu := resource.Limits[corev1.ResourceCPU]
 		if !cpu.IsZero() {
 			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+		} else {
+			// Fall back to CPU request if limit is not specified
+			cpu := resource.Requests[corev1.ResourceCPU]
+			if !cpu.IsZero() {
+				rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+			}
 		}
 	}
 
