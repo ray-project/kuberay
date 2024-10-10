@@ -145,6 +145,15 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
+// Add resource to container
+func addResourceToContainer(container *corev1.Container, resourceName string, quantity uint32) {
+	if quantity > 0 {
+		quantityStr := fmt.Sprint(quantity)
+		container.Resources.Requests[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
+		container.Resources.Limits[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
+	}
+}
+
 // Build head node template
 func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*corev1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -232,15 +241,18 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 	// We are filtering container by name `ray-head`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			addResourceToContainer(&container, accelerator, gpu)
 		}
+
+		if efa := computeRuntime.GetEfa(); efa != 0 {
+			addResourceToContainer(&container, "vpc.amazonaws.com/efa", efa)
+		}
+
 		globalEnv := convertEnvironmentVariables(envs)
 		if len(globalEnv) > 0 {
 			container.Env = append(container.Env, globalEnv...)
@@ -528,16 +540,16 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	// We are filtering container by name `ray-worker`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
+			addResourceToContainer(&container, accelerator, gpu)
+		}
 
-			// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+		if efa := computeRuntime.GetEfa(); efa != 0 {
+			addResourceToContainer(&container, "vpc.amazonaws.com/efa", efa)
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -808,6 +820,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
 		"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
 		"gpu_accelerator": runtime.GpuAccelerator,
+		"efa":             strconv.FormatUint(uint64(runtime.Efa), 10),
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {

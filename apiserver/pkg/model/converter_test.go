@@ -130,6 +130,7 @@ var configMapWithoutTolerations = corev1.ConfigMap{
 		"gpu":             "0",
 		"gpu_accelerator": "",
 		"memory":          "8",
+		"efa":             "0",
 		"name":            "head-node-template",
 		"namespace":       "max",
 	},
@@ -141,6 +142,7 @@ var configMapWithTolerations = corev1.ConfigMap{
 		"gpu":             "0",
 		"gpu_accelerator": "",
 		"memory":          "8",
+		"efa":             "0",
 		"name":            "head-node-template",
 		"namespace":       "max",
 		"tolerations":     "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
@@ -578,6 +580,11 @@ func TestPopulateTemplate(t *testing.T) {
 		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(template.Tolerations[0]),
 			tolerationToString(&expectedTolerations))
 	}
+
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(t, uint32(0), template.Efa, "EFA mismatch")
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
