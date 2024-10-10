@@ -38,6 +38,9 @@ spec:
     {{- end }}
     template:
       spec:
+        {{- if .Values.head.dnsConfig }}
+        dnsConfig: {{- toYaml .Values.head.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.head.serviceAccountName }}
         serviceAccountName: {{ .Values.head.serviceAccountName }}
@@ -135,6 +138,9 @@ spec:
     groupName: {{ $groupName }}
     template:
       spec:
+        {{- if $values.dnsConfig }}
+        dnsConfig: {{- toYaml $values.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
         {{- if $values.serviceAccountName }}
         serviceAccountName: {{ $values.serviceAccountName }}
@@ -232,6 +238,9 @@ spec:
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
+        {{- if .Values.worker.dnsConfig }}
+        dnsConfig: {{- toYaml .Values.worker.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.worker.serviceAccountName }}
         serviceAccountName: {{ .Values.worker.serviceAccountName }}
