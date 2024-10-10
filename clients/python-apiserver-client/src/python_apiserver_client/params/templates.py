@@ -92,6 +92,7 @@ class Template:
         memory - required, template memory (GB)
         gpus - optional, number of GPUs, default 0
         gpu_accelerator - optional, if not defined nvidia.com/gpu is assumed
+        efa - optional, if not defined vpc.amazonaws.com/efa is assumed
         tolerations - optional, tolerations for pod placing, default none
     - to_string() -> str: convert toleration to string for printing
     - to_dict() -> dict[str, Any] convert to dict
@@ -106,6 +107,7 @@ class Template:
             memory: int,
             gpu: int = 0,
             gpu_accelerator: str = None,
+            efa: int = None,
             tolerations: list[Toleration] = None,
     ):
         """
@@ -124,6 +126,7 @@ class Template:
         self.memory = memory
         self.gpu = gpu
         self.gpu_accelerator = gpu_accelerator
+        self.efa = efa
         self.tolerations = tolerations
 
     def to_string(self) -> str:
@@ -136,6 +139,8 @@ class Template:
             val = val + f", gpu {self.gpu}"
         if self.gpu_accelerator is not None:
             val = val + f", gpu accelerator {self.gpu_accelerator}"
+        if self.efa is not None:
+            val = val + f", efa {self.efa}"
         if self.tolerations is None:
             return val
         val = val + ", tolerations ["
@@ -158,6 +163,8 @@ class Template:
             dct["gpu"] = self.gpu
         if self.gpu_accelerator is not None:
             dct["gpu accelerator"] = self.gpu_accelerator
+        if self.efa is not None:
+            dct["efa"] = self.efa
         if self.tolerations is not None:
             dct["tolerations"] = [tl.to_dict() for tl in self.tolerations]
         return dct
@@ -199,6 +206,7 @@ def template_decoder(dct: dict[str, Any]) -> Template:
         memory=int(dct.get("memory", "0")),
         gpu=int(dct.get("gpu", "0")),
         gpu_accelerator=dct.get("gpu_accelerator"),
+        efa=dct.get("efa"),
         tolerations=tolerations,
     )
 

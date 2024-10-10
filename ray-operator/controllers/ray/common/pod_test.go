@@ -84,9 +84,10 @@ var instance = rayv1.RayCluster{
 								Image: "repo/image:custom",
 								Resources: corev1.ResourceRequirements{
 									Limits: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("1"),
-										corev1.ResourceMemory: testMemoryLimit,
-										"nvidia.com/gpu":      resource.MustParse("3"),
+										corev1.ResourceCPU:      resource.MustParse("1"),
+										corev1.ResourceMemory:   testMemoryLimit,
+										"nvidia.com/gpu":        resource.MustParse("3"),
+										"vpc.amazonaws.com/efa": resource.MustParse("4"),
 									},
 								},
 								Env: []corev1.EnvVar{
@@ -362,6 +363,18 @@ func TestBuildPod(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+
+	// Check resources
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	expectedResources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:      resource.MustParse("1"),
+			corev1.ResourceMemory:   testMemoryLimit,
+			"nvidia.com/gpu":        resource.MustParse("3"),
+			"vpc.amazonaws.com/efa": resource.MustParse("4"),
+		},
+	}
+	assert.Equal(t, expectedResources.Limits, rayContainer.Resources.Limits, "Resource limits do not match")
 
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]

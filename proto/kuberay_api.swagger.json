@@ -1548,6 +1548,11 @@
             "$ref": "#/definitions/protoPodToleration"
           },
           "title": "Optional pod tolerations"
+        },
+        "efa": {
+          "type": "integer",
+          "format": "int64",
+          "title": "Optional. Number of efas"
         }
       },
       "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc",
