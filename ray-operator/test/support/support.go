@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	TestApplyOptions = metav1.ApplyOptions{FieldManager: "kuberay-test", Force: true}
+	TestApplyOptions  = metav1.ApplyOptions{FieldManager: "kuberay-test", Force: true}
+	TestCreateOptions = metav1.CreateOptions{FieldManager: "kuberay-test"}
 
 	TestTimeoutShort  = 1 * time.Minute
 	TestTimeoutMedium = 2 * time.Minute
