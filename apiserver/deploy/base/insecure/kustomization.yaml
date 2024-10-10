@@ -6,10 +6,12 @@ namespace: ray-system
 resources:
 - apiserver.yaml
 
-commonLabels:
-  app.kubernetes.io/name: kuberay
-  app.kubernetes.io/component: kuberay-apiserver
 images:
 - name: kuberay/apiserver
   newName: kuberay/apiserver
   newTag: nightly
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/component: kuberay-apiserver
+    app.kubernetes.io/name: kuberay
