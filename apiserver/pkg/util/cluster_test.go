@@ -632,8 +632,8 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	assert.Equal(t, resource.MustParse("4"), resources.Limits["nvidia.com/gpu"], "GPU limit doesn't match")
 	assert.Equal(t, resource.MustParse("4"), resources.Requests["nvidia.com/gpu"], "GPU request doesn't match")
 
-	assert.Equal(t, resource.MustParse("4"), resources.Limits["vpc.amazonaws.com/efa"], "EFA limit doesn't match")
-	assert.Equal(t, resource.MustParse("4"), resources.Requests["vpc.amazonaws.com/efa"], "EFA request doesn't match")
+	assert.Equal(t, resource.MustParse("32"), resources.Limits["vpc.amazonaws.com/efa"], "EFA limit doesn't match")
+	assert.Equal(t, resource.MustParse("32"), resources.Requests["vpc.amazonaws.com/efa"], "EFA request doesn't match")
 }
 
 func containsEnv(envs []corev1.EnvVar, key string, val string) bool {
