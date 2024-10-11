@@ -124,6 +124,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
+
+	if err := validateRayServiceSpec(rayServiceInstance); err != nil {
+		logger.Error(err, "The RayService spec is invalid")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
 	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
@@ -234,6 +240,13 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func validateRayServiceSpec(rayService *rayv1.RayService) error {
+	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
+		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+	}
+	return nil
 }
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
