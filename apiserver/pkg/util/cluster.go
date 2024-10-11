@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
@@ -464,7 +464,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "requests.cpu",
+									Resource:      "requests.memory",
 								},
 							},
 						},
@@ -473,7 +473,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "limits.cpu",
+									Resource:      "limits.memory",
 								},
 							},
 						},
