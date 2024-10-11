@@ -410,10 +410,13 @@
           },
           "title": "Optional pod tolerations"
         },
-        "efa": {
-          "type": "integer",
-          "format": "int64",
-          "title": "Optional. Number of efas"
+        "extendedResources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": "Optional. Name and number of the extended resources"
         }
       },
       "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc",

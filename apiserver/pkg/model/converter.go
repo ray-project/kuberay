@@ -377,7 +377,6 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	cpu, _ := strconv.ParseUint(configMap.Data["cpu"], 10, 32)
 	memory, _ := strconv.ParseUint(configMap.Data["memory"], 10, 32)
 	gpu, _ := strconv.ParseUint(configMap.Data["gpu"], 10, 32)
-	efa, _ := strconv.ParseUint(configMap.Data["efa"], 10, 32)
 
 	runtime := &api.ComputeTemplate{}
 	runtime.Name = configMap.Name
@@ -386,8 +385,17 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	runtime.Memory = uint32(memory)
 	runtime.Gpu = uint32(gpu)
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
-	runtime.Efa = uint32(efa)
-	val, ok := configMap.Data["tolerations"]
+
+	val, ok := configMap.Data["extended_resources"]
+	if ok {
+		err := json.Unmarshal([]byte(val), &runtime.ExtendedResources)
+		if err != nil {
+			klog.Error("failed to unmarshall extended resources for compute template ", runtime.Name, " value ",
+				runtime.ExtendedResources, " error ", err)
+		}
+	}
+
+	val, ok = configMap.Data["tolerations"]
 	if ok {
 		err := json.Unmarshal([]byte(val), &runtime.Tolerations)
 		if err != nil {

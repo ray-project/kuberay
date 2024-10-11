@@ -249,8 +249,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			addResourceToContainer(&container, accelerator, gpu)
 		}
 
-		if efa := computeRuntime.GetEfa(); efa != 0 {
-			addResourceToContainer(&container, "vpc.amazonaws.com/efa", efa)
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -548,8 +548,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			addResourceToContainer(&container, accelerator, gpu)
 		}
 
-		if efa := computeRuntime.GetEfa(); efa != 0 {
-			addResourceToContainer(&container, "vpc.amazonaws.com/efa", efa)
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -812,15 +812,20 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 
 // Build compute template
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
+	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+	}
+
 	// Create data map
 	dmap := map[string]string{
-		"name":            runtime.Name,
-		"namespace":       runtime.Namespace,
-		"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
-		"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
-		"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
-		"gpu_accelerator": runtime.GpuAccelerator,
-		"efa":             strconv.FormatUint(uint64(runtime.Efa), 10),
+		"name":               runtime.Name,
+		"namespace":          runtime.Namespace,
+		"cpu":                strconv.FormatUint(uint64(runtime.Cpu), 10),
+		"memory":             strconv.FormatUint(uint64(runtime.Memory), 10),
+		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
+		"gpu_accelerator":    runtime.GpuAccelerator,
+		"extended_resources": string(extendedResourcesJSON),
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {

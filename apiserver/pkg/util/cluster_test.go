@@ -244,12 +244,12 @@ var template = api.ComputeTemplate{
 }
 
 var templateWorker = api.ComputeTemplate{
-	Name:      "",
-	Namespace: "",
-	Cpu:       2,
-	Memory:    8,
-	Gpu:       4,
-	Efa:       4,
+	Name:              "",
+	Namespace:         "",
+	Cpu:               2,
+	Memory:            8,
+	Gpu:               4,
+	ExtendedResources: map[string]uint32{"vpc.amazonaws.com/efa": 32},
 	Tolerations: []*api.PodToleration{
 		{
 			Key:      "blah1",
