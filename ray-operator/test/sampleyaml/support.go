@@ -8,6 +8,8 @@ import (
 
 	"github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -50,4 +52,25 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	err := kubectlCmd.Run()
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 	t.T().Logf("Successfully applied %s", filename)
+}
+
+func IsPodRunningAndReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func AllPodsRunningAndReady(pods []corev1.Pod) bool {
+	for _, pod := range pods {
+		if !IsPodRunningAndReady(&pod) {
+			return false
+		}
+	}
+	return true
 }

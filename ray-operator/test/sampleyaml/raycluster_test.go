@@ -81,6 +81,14 @@ func TestRayCluster(t *testing.T) {
 				}
 			}
 			test.Expect(rayCluster.Status.DesiredWorkerReplicas).To(gomega.Equal(desiredWorkerReplicas))
+
+			// Check if the head pod is ready
+			headPod := GetHeadPod(test, rayCluster)
+			test.Eventually(IsPodRunningAndReady(headPod), TestTimeoutShort).Should(gomega.BeTrue())
+
+			// Check if all worker pods are ready
+			workerPods := GetWorkerPods(test, rayCluster)
+			test.Eventually(AllPodsRunningAndReady(workerPods), TestTimeoutShort).Should(gomega.BeTrue())
 		})
 	}
 }
