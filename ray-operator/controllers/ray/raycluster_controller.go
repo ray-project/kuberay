@@ -225,6 +225,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 
 	if err := r.validateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
+			"The RayCluster status is invalid %s/%s, %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
