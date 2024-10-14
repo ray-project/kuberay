@@ -151,8 +151,17 @@ func addResourceToContainer(container *corev1.Container, resourceName string, qu
 		return
 	}
 	quantityStr := fmt.Sprint(quantity)
-	container.Resources.Requests[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
-	container.Resources.Limits[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
+	resourceQuantity := resource.MustParse(quantityStr)
+
+	if container.Resources.Requests == nil {
+		container.Resources.Requests = make(corev1.ResourceList)
+	}
+	if container.Resources.Limits == nil {
+		container.Resources.Limits = make(corev1.ResourceList)
+	}
+
+	container.Resources.Requests[corev1.ResourceName(resourceName)] = resourceQuantity
+	container.Resources.Limits[corev1.ResourceName(resourceName)] = resourceQuantity
 }
 
 // Build head node template
