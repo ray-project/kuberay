@@ -147,11 +147,12 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 
 // Add resource to container
 func addResourceToContainer(container *corev1.Container, resourceName string, quantity uint32) {
-	if quantity > 0 {
-		quantityStr := fmt.Sprint(quantity)
-		container.Resources.Requests[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
-		container.Resources.Limits[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
+	if quantity == 0 {
+		return
 	}
+	quantityStr := fmt.Sprint(quantity)
+	container.Resources.Requests[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
+	container.Resources.Limits[corev1.ResourceName(resourceName)] = resource.MustParse(quantityStr)
 }
 
 // Build head node template
