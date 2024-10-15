@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	klog "k8s.io/klog/v2"
-
 	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -813,11 +811,9 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
 		t, err := json.Marshal(runtime.Tolerations)
 		if err != nil {
-			klog.Error("failed to marshall tolerations ", runtime.Tolerations, " for compute template ", runtime.Name,
-				" error ", err)
-		} else {
-			dmap["tolerations"] = string(t)
+			return nil, fmt.Errorf("failed to marshal tolerations for compute template %s: %w", runtime.Name, err)
 		}
+		dmap["tolerations"] = string(t)
 	}
 
 	config := &corev1.ConfigMap{
