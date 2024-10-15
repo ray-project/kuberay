@@ -362,6 +362,17 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
 
+	// Check resources
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	expectedResources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: testMemoryLimit,
+			"nvidia.com/gpu":      resource.MustParse("3"),
+		},
+	}
+	assert.Equal(t, expectedResources.Limits, rayContainer.Resources.Limits, "Resource limits do not match")
+
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, utils.RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")

@@ -145,6 +145,25 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
+// Add resource to container
+func addResourceToContainer(container *corev1.Container, resourceName string, quantity uint32) {
+	if quantity == 0 {
+		return
+	}
+	quantityStr := fmt.Sprint(quantity)
+	resourceQuantity := resource.MustParse(quantityStr)
+
+	if container.Resources.Requests == nil {
+		container.Resources.Requests = make(corev1.ResourceList)
+	}
+	if container.Resources.Limits == nil {
+		container.Resources.Limits = make(corev1.ResourceList)
+	}
+
+	container.Resources.Requests[corev1.ResourceName(resourceName)] = resourceQuantity
+	container.Resources.Limits[corev1.ResourceName(resourceName)] = resourceQuantity
+}
+
 // Build head node template
 func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*corev1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
@@ -232,15 +251,18 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 	// We are filtering container by name `ray-head`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			addResourceToContainer(&container, accelerator, gpu)
 		}
+
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
+		}
+
 		globalEnv := convertEnvironmentVariables(envs)
 		if len(globalEnv) > 0 {
 			container.Env = append(container.Env, globalEnv...)
@@ -528,16 +550,16 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	// We are filtering container by name `ray-worker`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
+			addResourceToContainer(&container, accelerator, gpu)
+		}
 
-			// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -800,14 +822,20 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 
 // Build compute template
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
+	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+	}
+
 	// Create data map
 	dmap := map[string]string{
-		"name":            runtime.Name,
-		"namespace":       runtime.Namespace,
-		"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
-		"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
-		"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
-		"gpu_accelerator": runtime.GpuAccelerator,
+		"name":               runtime.Name,
+		"namespace":          runtime.Namespace,
+		"cpu":                strconv.FormatUint(uint64(runtime.Cpu), 10),
+		"memory":             strconv.FormatUint(uint64(runtime.Memory), 10),
+		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
+		"gpu_accelerator":    runtime.GpuAccelerator,
+		"extended_resources": string(extendedResourcesJSON),
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {

@@ -77,8 +77,14 @@ def test_templates():
     tm2_json = json.dumps(temp2.to_dict())
     print(f"template 2 JSON: {tm2_json}")
 
+    temp3 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1, extended_resources={"vpc.amazonaws.com/efa": 32})
+    print(f"template 3: {temp3.to_string()}")
+    tm3_json = json.dumps(temp3.to_dict())
+    print(f"template 3 JSON: {tm3_json}")
+
     assert temp1.to_string() == template_decoder(json.loads(tm1_json)).to_string()
     assert temp2.to_string() == template_decoder(json.loads(tm2_json)).to_string()
+    assert temp3.to_string() == template_decoder(json.loads(tm3_json)).to_string()
 
 
 def test_volumes():

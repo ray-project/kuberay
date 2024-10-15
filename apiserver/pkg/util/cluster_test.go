@@ -243,6 +243,22 @@ var template = api.ComputeTemplate{
 	},
 }
 
+var templateWorker = api.ComputeTemplate{
+	Name:              "",
+	Namespace:         "",
+	Cpu:               2,
+	Memory:            8,
+	Gpu:               4,
+	ExtendedResources: map[string]uint32{"vpc.amazonaws.com/efa": 32},
+	Tolerations: []*api.PodToleration{
+		{
+			Key:      "blah1",
+			Operator: "Exists",
+			Effect:   "NoExecute",
+		},
+	},
+}
+
 var expectedToleration = corev1.Toleration{
 	Key:      "blah1",
 	Operator: "Exists",
@@ -591,34 +607,33 @@ func TestBuildRayCluster(t *testing.T) {
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &templateWorker)
 	assert.Nil(t, err)
 
-	if podSpec.Spec.ServiceAccountName != "account" {
-		t.Errorf("failed to propagate service account")
-	}
-	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
-		t.Errorf("failed to propagate image pull secret")
-	}
-	if (string)(podSpec.Spec.Containers[0].ImagePullPolicy) != "Always" {
-		t.Errorf("failed to propagate image pull policy")
-	}
-	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
-		t.Errorf("failed to propagate environment")
-	}
-	if len(podSpec.Spec.Tolerations) != 1 {
-		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
-	}
-	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
-		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(&podSpec.Spec.Tolerations[0]),
-			tolerationToString(&expectedToleration))
-	}
-	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
-		t.Errorf("failed to convert annotations")
-	}
-	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
-		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
-	}
+	assert.Equal(t, "account", podSpec.Spec.ServiceAccountName, "failed to propagate service account")
+	assert.Equal(t, "foo", podSpec.Spec.ImagePullSecrets[0].Name, "failed to propagate image pull secret")
+	assert.Equal(t, corev1.PullAlways, podSpec.Spec.Containers[0].ImagePullPolicy, "failed to propagate image pull policy")
+	assert.True(t, containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar"), "failed to propagate environment")
+	assert.Len(t, podSpec.Spec.Tolerations, 1, "failed to propagate tolerations")
+	assert.Equal(t, expectedToleration, podSpec.Spec.Tolerations[0], "failed to propagate tolerations")
+	assert.Equal(t, "bar", podSpec.Annotations["foo"], "failed to convert annotations")
+	assert.Equal(t, expectedLabels, podSpec.Labels, "failed to convert labels")
+
+	// Check Resources
+	container := podSpec.Spec.Containers[0]
+	resources := container.Resources
+
+	assert.Equal(t, resource.MustParse("2"), resources.Limits[corev1.ResourceCPU], "CPU limit doesn't match")
+	assert.Equal(t, resource.MustParse("2"), resources.Requests[corev1.ResourceCPU], "CPU request doesn't match")
+
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Limits[corev1.ResourceMemory], "Memory limit doesn't match")
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Requests[corev1.ResourceMemory], "Memory request doesn't match")
+
+	assert.Equal(t, resource.MustParse("4"), resources.Limits["nvidia.com/gpu"], "GPU limit doesn't match")
+	assert.Equal(t, resource.MustParse("4"), resources.Requests["nvidia.com/gpu"], "GPU request doesn't match")
+
+	assert.Equal(t, resource.MustParse("32"), resources.Limits["vpc.amazonaws.com/efa"], "EFA limit doesn't match")
+	assert.Equal(t, resource.MustParse("32"), resources.Requests["vpc.amazonaws.com/efa"], "EFA request doesn't match")
 }
 
 func containsEnv(envs []corev1.EnvVar, key string, val string) bool {

@@ -126,24 +126,26 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 
 var configMapWithoutTolerations = corev1.ConfigMap{
 	Data: map[string]string{
-		"cpu":             "4",
-		"gpu":             "0",
-		"gpu_accelerator": "",
-		"memory":          "8",
-		"name":            "head-node-template",
-		"namespace":       "max",
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
 	},
 }
 
 var configMapWithTolerations = corev1.ConfigMap{
 	Data: map[string]string{
-		"cpu":             "4",
-		"gpu":             "0",
-		"gpu_accelerator": "",
-		"memory":          "8",
-		"name":            "head-node-template",
-		"namespace":       "max",
-		"tolerations":     "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
+		"tolerations":        "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
 	},
 }
 
@@ -578,6 +580,11 @@ func TestPopulateTemplate(t *testing.T) {
 		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(template.Tolerations[0]),
 			tolerationToString(&expectedTolerations))
 	}
+
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(t, map[string]uint32{"vpc.amazonaws.com/efa": 32}, template.ExtendedResources, "Extended resources mismatch")
 }
 
 func tolerationToString(toleration *api.PodToleration) string {

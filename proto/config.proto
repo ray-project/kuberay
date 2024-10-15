@@ -128,6 +128,8 @@ message ComputeTemplate {
   string gpu_accelerator = 6;
   // Optional pod tolerations
   repeated PodToleration tolerations = 7;
+  // Optional. Name and number of the extended resources
+  map<string, uint32> extended_resources = 8;
 }
 
 // This service is not implemented.

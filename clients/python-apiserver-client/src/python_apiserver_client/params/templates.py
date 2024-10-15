@@ -92,6 +92,7 @@ class Template:
         memory - required, template memory (GB)
         gpus - optional, number of GPUs, default 0
         gpu_accelerator - optional, if not defined nvidia.com/gpu is assumed
+        extended_resources - optional, name and number of the extended resources
         tolerations - optional, tolerations for pod placing, default none
     - to_string() -> str: convert toleration to string for printing
     - to_dict() -> dict[str, Any] convert to dict
@@ -106,6 +107,7 @@ class Template:
             memory: int,
             gpu: int = 0,
             gpu_accelerator: str = None,
+            extended_resources: dict[str, int] = None,
             tolerations: list[Toleration] = None,
     ):
         """
@@ -116,6 +118,7 @@ class Template:
         :param memory: memory
         :param gpu: gpu
         :param gpu_accelerator: accelerator type
+        :param extended_resources: extended resources
         :param tolerations: tolerations
         """
         self.name = name
@@ -124,6 +127,7 @@ class Template:
         self.memory = memory
         self.gpu = gpu
         self.gpu_accelerator = gpu_accelerator
+        self.extended_resources = extended_resources
         self.tolerations = tolerations
 
     def to_string(self) -> str:
@@ -136,6 +140,8 @@ class Template:
             val = val + f", gpu {self.gpu}"
         if self.gpu_accelerator is not None:
             val = val + f", gpu accelerator {self.gpu_accelerator}"
+        if self.extended_resources is not None:
+            val = val + f", extended resources {self.extended_resources}"
         if self.tolerations is None:
             return val
         val = val + ", tolerations ["
@@ -158,6 +164,8 @@ class Template:
             dct["gpu"] = self.gpu
         if self.gpu_accelerator is not None:
             dct["gpu accelerator"] = self.gpu_accelerator
+        if self.extended_resources is not None:
+            dct["extended resources"] = self.extended_resources
         if self.tolerations is not None:
             dct["tolerations"] = [tl.to_dict() for tl in self.tolerations]
         return dct
@@ -199,6 +207,7 @@ def template_decoder(dct: dict[str, Any]) -> Template:
         memory=int(dct.get("memory", "0")),
         gpu=int(dct.get("gpu", "0")),
         gpu_accelerator=dct.get("gpu_accelerator"),
+        extended_resources=dct.get("extended_resources"),
         tolerations=tolerations,
     )
 
