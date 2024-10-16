@@ -233,6 +233,8 @@ func RayClusterReplicaFailureReason(err error) string {
 type K8sEventType string
 
 const (
+	// RayCluster event list
+	InvalidRayClusterStatus K8sEventType = "InvalidRayClusterStatus"
 	// Head Pod event list
 	CreatedHeadPod        K8sEventType = "CreatedHeadPod"
 	FailedToCreateHeadPod K8sEventType = "FailedToCreateHeadPod"
@@ -250,6 +252,8 @@ const (
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
 
 	// RayJob event list
+	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
+	InvalidRayJobStatus           K8sEventType = "InvalidRayJobStatus"
 	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
 	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
 	FailedToCreateRayJobSubmitter K8sEventType = "FailedToCreateRayJobSubmitter"
@@ -258,6 +262,9 @@ const (
 	DeletedRayCluster             K8sEventType = "DeletedRayCluster"
 	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
+
+	// RayService event list
+	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
 
 	// Generic Pod event list
 	DeletedPod        K8sEventType = "DeletedPod"
