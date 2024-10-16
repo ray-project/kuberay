@@ -14,6 +14,6 @@ def tpu_cores():
     import jax
     return "TPU cores:" + str(jax.device_count())
 
-num_workers = os.environ['TPU_HOSTS'] # Set in env of RayJob or RayCluster.
+num_workers = int(os.environ['TPU_HOSTS']) # Set in env of RayJob or RayCluster.
 result = [tpu_cores.remote() for _ in range(num_workers)]
 print(ray.get(result))

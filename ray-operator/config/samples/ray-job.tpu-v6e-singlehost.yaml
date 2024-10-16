@@ -1,14 +1,16 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: kuberay-tpu-job
+  name: ray-single-host-job
 spec:
-  entrypoint: python /home/ray/samples/tpu_print_resources.py
+  entrypoint: python ray-operator/config/samples/tpu_print_resources.py
   runtimeEnvYAML: |
+    working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     pip:
       - jax[tpu]==0.4.33
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-
+    env_vars:
+      TPU_HOSTS: "1"
   rayClusterSpec:
     rayVersion: '2.37.0'
     headGroupSpec:

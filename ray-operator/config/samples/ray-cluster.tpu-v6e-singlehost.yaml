@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: tpu-cluster-multi-host
+  name: tpu-cluster-single-host
 spec:
   headGroupSpec:
     rayStartParams: {}
