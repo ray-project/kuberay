@@ -65,7 +65,8 @@ if __name__ == '__main__':
         'ray-cluster.tpu-v4-singlehost.yaml': 'Skip this test because it requires TPU resources.',
         'ray-cluster.tpu-v4-multihost.yaml' : 'Skip this test because it requires TPU resources',
         'ray-cluster.tpu-v6e-singlehost.yaml' : 'Skip this test because it requires TPU resources',
-        'ray-cluster.tpu-v6e-multihost.yaml' : 'Skip this test because it requires TPU resources',
+        'ray-cluster.tpu-v6e-16-multihost.yaml' : 'Skip this test because it requires TPU resources',
+        'ray-cluster.tpu-v6e-256-multihost.yaml' : 'Skip this test because it requires TPU resources',
         'ray-cluster.gke-bucket.yaml': 'Skip this test because it requires GKE and k8s service accounts.',
         'ray-service.high-availability-locust.yaml': 'Skip this test because the RayCluster here is only used for testing RayService.',
     }
