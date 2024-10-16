@@ -1,16 +1,14 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: ray-multi-host-job
+  name: v6e-256-job
 spec:
-  entrypoint: python ray-operator/config/samples/ray-tpu-scripts/tpu_list_devices.py
+  entrypoint: python ray-operator/config/samples/tpu/tpu_list_devices.py
   runtimeEnvYAML: |
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     pip:
       - jax[tpu]==0.4.33
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-    env_vars:
-      TPU_HOSTS: "64"
   rayClusterSpec:
     rayVersion: '2.37.0'
     headGroupSpec:
@@ -50,10 +48,6 @@ spec:
             containers:
               - name: ray-worker
                 image: rayproject/ray:2.37.0-py310
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: [ "/bin/sh","-c","ray stop" ]
                 resources:
                   limits:
                     cpu: "100"
