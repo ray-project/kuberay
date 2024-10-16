@@ -74,7 +74,7 @@ kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  submissionMode: 'UserMode'`
+  submissionMode: 'InteractiveMode'`
 
 	rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
 
@@ -132,7 +132,7 @@ kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  submissionMode: 'UserMode'`
+  submissionMode: 'InteractiveMode'`
 	_, err = rayjobtmpfile.Write([]byte(rayYaml))
 	assert.Nil(t, err)
 
@@ -145,7 +145,7 @@ spec:
 
 	submissionMode, ok := rayJobYamlActual.Object["spec"].(map[string]interface{})["submissionMode"]
 	assert.True(t, ok)
-	assert.Equal(t, "UserMode", submissionMode)
+	assert.Equal(t, "InteractiveMode", submissionMode)
 }
 
 func TestRuntimeEnvHasWorkingDir(t *testing.T) {

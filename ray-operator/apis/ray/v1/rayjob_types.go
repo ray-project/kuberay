@@ -57,9 +57,9 @@ const (
 type JobSubmissionMode string
 
 const (
-	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
-	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
-	UserMode   JobSubmissionMode = "UserMode"   // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID
+	K8sJobMode      JobSubmissionMode = "K8sJobMode"      // Submit job via Kubernetes Job
+	HTTPMode        JobSubmissionMode = "HTTPMode"        // Submit job via HTTP request
+	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
 type SubmitterConfig struct {
@@ -97,6 +97,7 @@ type RayJobSpec struct {
 	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
 	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
 	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
+	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
 	// +kubebuilder:default:=K8sJobMode
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
 	// EntrypointResources specifies the custom resources and quantities to reserve for the

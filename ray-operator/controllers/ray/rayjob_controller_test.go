@@ -752,17 +752,17 @@ var _ = Context("RayJob with different submission modes", func() {
 		})
 	})
 
-	Context("RayJob in UserMode", func() {
+	Context("RayJob in InteractiveMode", func() {
 		Describe("Successful RayJob", Ordered, func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-none-mode", namespace)
-			rayJob.Spec.SubmissionMode = rayv1.UserMode
+			rayJob.Spec.SubmissionMode = rayv1.InteractiveMode
 			rayCluster := &rayv1.RayCluster{}
 			testRayJobId := "fake-id"
 
 			It("Verify RayJob spec", func() {
-				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.UserMode))
+				Expect(rayJob.Spec.SubmissionMode).To(Equal(rayv1.InteractiveMode))
 				Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 				Expect(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs).To(HaveLen(1))
 			})
@@ -818,8 +818,8 @@ var _ = Context("RayJob with different submission modes", func() {
 					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusWaiting), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 			})
 
-			It("sets annotation to RayJob", func() {
-				err := setAnnotationOnRayJob(ctx, rayJob, utils.RayJobSubmissionIdLabelKey, testRayJobId)
+			It("sets jobId in RayJob", func() {
+				err := setJobIdOnRayJob(ctx, rayJob, testRayJobId)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"github.com/onsi/gomega"
@@ -306,13 +304,13 @@ func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend
 	})
 }
 
-func setAnnotationOnRayJob(ctx context.Context, rayJob *rayv1.RayJob, key, value string) error {
+func setJobIdOnRayJob(ctx context.Context, rayJob *rayv1.RayJob, jobId string) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
 		if err != nil {
 			return err
 		}
-		metav1.SetMetaDataAnnotation(&rayJob.ObjectMeta, key, value)
+		rayJob.Spec.JobId = jobId
 		return k8sClient.Update(ctx, rayJob)
 	})
 }
