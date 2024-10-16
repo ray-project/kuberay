@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: ray-single-host-job
+  name: v6e-4-job
 spec:
   entrypoint: python ray-operator/config/samples/ray-tpu-scripts/tpu_list_devices.py
   runtimeEnvYAML: |
@@ -9,8 +9,6 @@ spec:
     pip:
       - jax[tpu]==0.4.33
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-    env_vars:
-      TPU_HOSTS: "1"
   rayClusterSpec:
     rayVersion: '2.37.0'
     headGroupSpec:
