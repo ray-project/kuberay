@@ -27,8 +27,6 @@ spec:
               name: client
             - containerPort: 8000
               name: serve
-            - containerPort: 8081
-              name: mxla
             - containerPort: 8888
               name: grpc
   workerGroupSpecs:
@@ -36,7 +34,7 @@ spec:
     replicas: 1
     minReplicas: 0
     maxReplicas: 1
-    numOfHosts: 1
+    numOfHosts: 64
     rayStartParams: {}
     template:
       spec:
@@ -55,6 +53,20 @@ spec:
                 cpu: "24"
                 google.com/tpu: "4"
                 memory: 200G
+            env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: VBAR_CONTROL_SERVICE_URL
+              value: $(NODE_IP):8353
+            - name: JAX_PLATFORMS
+              value: tpu,cpu
+            - name: ENABLE_PJRT_COMPATIBILITY
+              value: "true"
+            ports:
+            - containerPort: 8081
+              name: mxla
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
-          cloud.google.com/gke-tpu-topology: 2x2
+          cloud.google.com/gke-tpu-topology: 16x16

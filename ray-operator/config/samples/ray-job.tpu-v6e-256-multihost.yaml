@@ -25,6 +25,8 @@ spec:
                   name: dashboard
                 - containerPort: 10001
                   name: client
+                - containerPort: 8888
+                  name: grpc
               resources:
                 limits:
                   cpu: "8"
@@ -59,6 +61,20 @@ spec:
                     ephemeral-storage: 20Gi
                     google.com/tpu: "4"
                     memory: 200G
+                env:
+                - name: NODE_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.hostIP
+                - name: VBAR_CONTROL_SERVICE_URL
+                  value: $(NODE_IP):8353
+                - name: JAX_PLATFORMS
+                  value: tpu,cpu
+                - name: ENABLE_PJRT_COMPATIBILITY
+                  value: "true"
+                ports:
+                - containerPort: 8081
+                  name: mxla
             nodeSelector:
               cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
               cloud.google.com/gke-tpu-topology: 16x16
