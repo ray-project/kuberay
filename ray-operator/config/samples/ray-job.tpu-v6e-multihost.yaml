@@ -3,7 +3,7 @@ kind: RayJob
 metadata:
   name: ray-multi-host-job
 spec:
-  entrypoint: python ray-operator/config/samples/tpu_print_resources.py
+  entrypoint: python ray-operator/config/samples/ray-tpu-scripts/tpu_print_resources.py
   runtimeEnvYAML: |
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     pip:
