@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,11 +117,13 @@ func TestRayClusterLogComplete(t *testing.T) {
 	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
 	fakeArgs := []string{"Expectedoutput"}
 
-	err := fakeClusterLogOptions.Complete(fakeArgs)
+	cmd := &cobra.Command{Use: "log"}
 
-	assert.Equal(t, fakeClusterLogOptions.nodeType, "head")
+	err := fakeClusterLogOptions.Complete(cmd, fakeArgs)
+
+	assert.Equal(t, fakeClusterLogOptions.nodeType, "all")
 	assert.Nil(t, err)
-	assert.Equal(t, fakeClusterLogOptions.args, fakeArgs)
+	assert.Equal(t, fakeClusterLogOptions.ResourceName, fakeArgs[0])
 }
 
 func TestRayClusterLogValidate(t *testing.T) {
@@ -180,59 +183,23 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Test validation when no context is set",
 			opts: &ClusterLogOptions{
-				configFlags: genericclioptions.NewConfigFlags(false),
-				outputDir:   fakeDir,
-				args:        []string{"fake-cluster"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
+				configFlags:  genericclioptions.NewConfigFlags(false),
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
 			},
 			expectError: "no context is currently set, use \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "Test validation when more than 1 arg",
-			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeDir,
-				args:        []string{"fake-cluster", "another-fake"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
-			},
-			expectError: "must have at only one argument",
-		},
-		{
-			name: "Test validation when node type is `all`",
-			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeDir,
-				args:        []string{"fake-cluster"},
-				nodeType:    "all",
-				ioStreams:   &testStreams,
-			},
-			expectError: "node type `all` is currently not supported",
-		},
-		{
-			name: "Test validation when node type is `worker`",
-			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeDir,
-				args:        []string{"fake-cluster"},
-				nodeType:    "worker",
-				ioStreams:   &testStreams,
-			},
-			expectError: "node type `worker` is currently not supported",
 		},
 		{
 			name: "Test validation when node type is `random-string`",
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeDir,
-				args:        []string{"fake-cluster"},
-				nodeType:    "random-string",
-				ioStreams:   &testStreams,
+				configFlags:  fakeConfigFlags,
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "random-string",
+				ioStreams:    &testStreams,
 			},
 			expectError: "unknown node type `random-string`",
 		},
@@ -240,23 +207,23 @@ func TestRayClusterLogValidate(t *testing.T) {
 			name: "Successful validation call",
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeDir,
-				args:        []string{"random_arg"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
+				configFlags:  fakeConfigFlags,
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
 			},
 			expectError: "",
 		},
 		{
-			name: "Validate output directory when no out-dir i set.",
+			name: "Validate output directory when no out-dir is set.",
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   "",
-				args:        []string{"cluster-name"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
+				configFlags:  fakeConfigFlags,
+				outputDir:    "",
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
 			},
 			expectError: "",
 		},
@@ -264,11 +231,11 @@ func TestRayClusterLogValidate(t *testing.T) {
 			name: "Failed validation call with output directory not exist",
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   "randomPath-here",
-				args:        []string{"random_arg"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
+				configFlags:  fakeConfigFlags,
+				outputDir:    "randomPath-here",
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
 			},
 			expectError: "Directory does not exist. Failed with: stat randomPath-here: no such file or directory",
 		},
@@ -276,11 +243,11 @@ func TestRayClusterLogValidate(t *testing.T) {
 			name: "Failed validation call with output directory is file",
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
-				configFlags: fakeConfigFlags,
-				outputDir:   fakeFile,
-				args:        []string{"random_arg"},
-				nodeType:    "head",
-				ioStreams:   &testStreams,
+				configFlags:  fakeConfigFlags,
+				outputDir:    fakeFile,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
 			},
 			expectError: "Path is Not a directory. Please input a directory and try again",
 		},
@@ -293,7 +260,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				assert.Equal(t, tc.expectError, err.Error())
 			} else {
 				if tc.opts.outputDir == "" {
-					assert.Equal(t, tc.opts.args[0], tc.opts.outputDir)
+					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
 				}
 				assert.True(t, err == nil)
 			}
@@ -314,7 +281,7 @@ func TestRayClusterLogRun(t *testing.T) {
 	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
 	// Uses the mocked executor
 	fakeClusterLogOptions.Executor = &FakeRemoteExecutor{}
-	fakeClusterLogOptions.args = []string{"test-cluster"}
+	fakeClusterLogOptions.ResourceName = "test-cluster"
 	fakeClusterLogOptions.outputDir = fakeDir
 
 	// Create list of fake ray heads
@@ -434,7 +401,7 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
 
 	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
-	fakeClusterLogOptions.args = []string{"test-cluster"}
+	fakeClusterLogOptions.ResourceName = "test-cluster"
 	fakeClusterLogOptions.outputDir = fakeDir
 
 	// create fake tar files to test
