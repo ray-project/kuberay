@@ -198,12 +198,11 @@ func (options *SubmitJobOptions) Validate() error {
 		return fmt.Errorf("RayJob does not have `submissionMode` field set")
 	}
 	if submissionMode != nil {
-		// Currently using string since latest release does not have `rayv1api.UserMode` yet
-		if submissionMode != "UserMode" {
+		if submissionMode != "InteractiveMode" {
 			return fmt.Errorf("Submission mode of the Ray Job is not supported")
 		}
 	} else {
-		return fmt.Errorf("Submission mode must be set to rayv1api.UserMode or `UserMode`")
+		return fmt.Errorf("Submission mode must be set to 'InteractiveMode'")
 	}
 
 	runtimeEnvYaml, ok := options.RayJob.Object["spec"].(map[string]interface{})["runtimeEnvYAML"].(string)
