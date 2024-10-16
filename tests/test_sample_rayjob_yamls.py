@@ -33,12 +33,6 @@ if __name__ == '__main__':
                         {'path': filepath, 'name': filename, 'cr': k8s_object}
                     )
                     break
-
-    skip_tests = {
-        'ray-job.tpu-v6e-singlehost.yaml': 'Skip this test because it requires TPU resources.',
-        'ray-job.tpu-v6e-multihost.yaml': 'Skip this test because it requires TPU resources.',
-    }
-
     # NOTE: The Ray Job "SUCCEEDED" status is checked in the `RayJobAddCREvent` itself.
     # (The event is not considered "converged" until the job has succeeded.) The EasyJobRule
     # is only used to additionally check that the Ray Cluster remains alive and functional.
@@ -48,9 +42,6 @@ if __name__ == '__main__':
     logger.info("Building a test plan ...")
     test_cases = unittest.TestSuite()
     for index, new_cr in enumerate(sample_yaml_files):
-        if new_cr['name'] in skip_tests:
-            logger.info('[SKIP TEST %d] %s: %s', index, new_cr['name'], skip_tests[new_cr['name']])
-            continue
         logger.info('[TEST %d]: %s', index, new_cr['name'])
         addEvent = RayJobAddCREvent(new_cr['cr'], [rs], 300, NAMESPACE, new_cr['path'])
         test_cases.addTest(GeneralTestCase('runtest', addEvent))
