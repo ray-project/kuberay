@@ -768,6 +768,7 @@ func TestReconcileRayCluster(t *testing.T) {
 		enableZeroDowntime      bool
 		shouldPrepareNewCluster bool
 		updateKubeRayVersion    bool
+		zeroDowntimeSpecTrigger bool
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
@@ -815,12 +816,27 @@ func TestReconcileRayCluster(t *testing.T) {
 			updateKubeRayVersion:    true,
 			kubeRayVersion:          "new-version",
 		},
+		// Test 7: Zero downtime upgrade is enabled, but is enabled through the RayServiceSpec
+		"Zero-downtime upgrade enabled. The active cluster exist. Zero-downtime upgrade is triggered through RayServiceSpec.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: true,
+			zeroDowntimeSpecTrigger: true,
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			// Enable or disable zero-downtime upgrade.
 			defer os.Unsetenv(ENABLE_ZERO_DOWNTIME)
+			if tc.enableZeroDowntime {
+				if tc.zeroDowntimeSpecTrigger {
+					rayService.Spec.UpgradeStrategy = rayv1.BlueGreenUpgrade
+				} else {
+					os.Setenv(ENABLE_ZERO_DOWNTIME, "true")
+				}
+			}
 			if !tc.enableZeroDowntime {
 				os.Setenv(ENABLE_ZERO_DOWNTIME, "false")
 			}

@@ -424,10 +424,15 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if clusterAction == RolloutNew {
 		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+		zeroDowntimeEnvVar := os.Getenv(ENABLE_ZERO_DOWNTIME)
+		rayServiceSpecUpgradeStrategy := rayServiceInstance.Spec.UpgradeStrategy
 		enableZeroDowntime := true
-		if s := os.Getenv(ENABLE_ZERO_DOWNTIME); strings.ToLower(s) == "false" {
-			enableZeroDowntime = false
+		if rayServiceSpecUpgradeStrategy != "" {
+			enableZeroDowntime = rayServiceSpecUpgradeStrategy == rayv1.BlueGreenUpgrade
+		} else if zeroDowntimeEnvVar != "" {
+			enableZeroDowntime = strings.ToLower(zeroDowntimeEnvVar) != "false"
 		}
+
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
