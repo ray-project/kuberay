@@ -13,13 +13,12 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: kuberay
+      app.kubernetes.io/component: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: kuberay
         app.kubernetes.io/component: kuberay-operator
         {{- if .Values.labels }}
         {{- toYaml .Values.labels | nindent 8 }}
