@@ -7930,6 +7930,8 @@ spec:
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
+              upgradeStrategy:
+                type: string
             type: object
           status:
             properties:
