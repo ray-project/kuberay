@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -23,8 +26,7 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 15920,
   "graphTooltip": 0,
-  "id": 27,
-  "iteration": 1650108056351,
+  "id": 37,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -35,7 +37,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -72,7 +74,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -93,6 +95,7 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{job=\"$Service\",controller=~\"$Controller\"}[$__rate_interval])) by (job,le,controller))",
           "format": "time_series",
@@ -107,11 +110,13 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{job=~\"$Service\",}[$__rate_interval])) by (job,le,controller))",
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "{{job}} - {{controller}} - 95%",
+          "range": true,
           "refId": "B"
         },
         {
@@ -164,7 +169,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -201,7 +206,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -222,6 +227,7 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "ceil(sum(increase(controller_runtime_reconcile_total{job=\"$Service\"}[$__rate_interval])) by (job,controller,result))",
           "instant": false,
@@ -276,7 +282,22 @@
       "dataFormat": "timeseries",
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -291,6 +312,50 @@
       "legend": {
         "show": true
       },
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size",
+            "value": "1min"
+          }
+        },
+        "cellGap": 2,
+        "cellValues": {},
+        "color": {
+          "exponent": 0.5,
+          "fill": "#b4ff00",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Blues",
+          "steps": 128
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "never",
+        "tooltip": {
+          "show": true,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "decimals": 0,
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "pluginVersion": "10.0.2",
       "reverseYBuckets": false,
       "targets": [
         {
@@ -298,12 +363,14 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(controller_runtime_reconcile_time_seconds_bucket{job=~\"$Service\"}[$__rate_interval])) by (job,le,controller)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -328,6 +395,10 @@
     },
     {
       "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -336,13 +407,22 @@
       },
       "id": 26,
       "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "Ray Operator",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -350,6 +430,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -405,7 +487,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -418,10 +501,12 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "rate(ray_operator_clusters_created_total{service=\"$Service\"}[30m])",
           "interval": "",
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -431,7 +516,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -439,6 +524,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -494,7 +581,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -507,10 +595,12 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "rate(ray_operator_clusters_successful_total{service=\"$Service\"}[30m])",
           "interval": "",
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -520,7 +610,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -528,6 +618,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -583,7 +675,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -596,10 +689,12 @@
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(ray_operator_clusters_failed_total{service=\"$Service\"}[30m])",
+          "expr": "rate(ray_operator_clusters_created_total{service=\"$Service\"}[30m]) - rate(ray_operator_clusters_successful_total{service=\"$Service\"}[30m])",
           "interval": "",
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -608,7 +703,7 @@
     }
   ],
   "refresh": "5s",
-  "schemaVersion": 35,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -616,22 +711,22 @@
       {
         "current": {
           "selected": false,
-          "text": "ray-system",
-          "value": "ray-system"
+          "text": "default",
+          "value": "default"
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
+          "uid": "prometheus"
         },
-        "definition": "label_values(controller_runtime_active_workers, namespace)",
+        "definition": "label_values(controller_runtime_active_workers,namespace)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "Namespace",
         "options": [],
         "query": {
-          "query": "label_values(controller_runtime_active_workers, namespace)",
-          "refId": "StandardVariableQuery"
+          "query": "label_values(controller_runtime_active_workers,namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
         "regex": "",
@@ -647,7 +742,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
+          "uid": "prometheus"
         },
         "definition": "label_values(controller_runtime_active_workers{namespace=\"$Namespace\"}, service)",
         "hide": 0,
@@ -668,12 +763,12 @@
       {
         "current": {
           "selected": false,
-          "text": "kuberay-operator-56758d8596-c6c8d",
-          "value": "kuberay-operator-56758d8596-c6c8d"
+          "text": "kuberay-operator-5dd6779f94-dkgnh",
+          "value": "kuberay-operator-5dd6779f94-dkgnh"
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
+          "uid": "prometheus"
         },
         "definition": "label_values(controller_runtime_active_workers{namespace=\"$Namespace\", service=\"$Service\"},  pod)",
         "hide": 0,
@@ -693,13 +788,21 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "raycluster-controller",
-          "value": "raycluster-controller"
+          "selected": true,
+          "text": [
+            "raycluster",
+            "rayjob",
+            "rayservice"
+          ],
+          "value": [
+            "raycluster",
+            "rayjob",
+            "rayservice"
+          ]
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
+          "uid": "prometheus"
         },
         "definition": "label_values(controller_runtime_active_workers{namespace=\"$Namespace\", service=\"$Service\", pod=\"$Pod\"},  controller)",
         "hide": 0,
@@ -720,13 +823,13 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "KubeRay - Controller Runtime Controllers",
   "uid": "5J4pyKEnk",
-  "version": 11,
+  "version": 1,
   "weekStart": ""
 }
