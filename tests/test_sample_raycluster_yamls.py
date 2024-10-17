@@ -85,7 +85,7 @@ if __name__ == '__main__':
         test_cases.addTest(GeneralTestCase('runtest', addEvent))
 
     # Execute all tests
-    runner = unittest.TextTestRunner()
+    runner = unittest.TextTestRunner(failfast=True)
     test_result = runner.run(test_cases)
 
     # Without this line, the exit code will always be 0.
