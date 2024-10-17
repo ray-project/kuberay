@@ -80,15 +80,14 @@ func TestRayCluster(t *testing.T) {
 					desiredWorkerReplicas += *workerGroupSpec.Replicas
 				}
 			}
+			test.Eventually(GetWorkerPods(test, rayCluster), TestTimeoutShort).Should(gomega.HaveLen(int(desiredWorkerReplicas)))
 			test.Expect(rayCluster.Status.DesiredWorkerReplicas).To(gomega.Equal(desiredWorkerReplicas))
 
 			// Check if the head pod is ready
-			headPod := GetHeadPod(test, rayCluster)
-			test.Eventually(IsPodRunningAndReady(headPod), TestTimeoutShort).Should(gomega.BeTrue())
+			test.Eventually(GetHeadPod(test, rayCluster), TestTimeoutShort).Should(gomega.WithTransform(IsPodRunningAndReady, gomega.BeTrue()))
 
 			// Check if all worker pods are ready
-			workerPods := GetWorkerPods(test, rayCluster)
-			test.Eventually(AllPodsRunningAndReady(workerPods), TestTimeoutShort).Should(gomega.BeTrue())
+			test.Eventually(GetWorkerPods(test, rayCluster), TestTimeoutShort).Should(gomega.WithTransform(AllPodsRunningAndReady, gomega.BeTrue()))
 		})
 	}
 }
