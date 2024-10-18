@@ -9,6 +9,20 @@ Kubectl plugin/extension for Kuberay CLI that provides the ability to manage ray
 
 ## Installation
 
+### Download from GitHub releases
+
+Go to the [releases page](https://github.com/ray-project/kuberay/releases) and download the binary for your platform.
+
+For example, to install kubectl plugin version 1.2.2 on Linux amd64:
+
+```bash
+curl -LO https://github.com/ray-project/kuberay/releases/download/v1.2.2/kubectl-ray_v1.2.2_linux_amd64.tar.gz
+tar -xvf kubectl-ray_v1.2.2_linux_amd64.tar.gz
+cp kubectl-ray ~/.local/bin
+```
+
+Replace `~/.local/bin` with the directory in your `PATH`.
+
 ### Compiling from source
 
 1. Run `go build cmd/kubectl-ray.go`
