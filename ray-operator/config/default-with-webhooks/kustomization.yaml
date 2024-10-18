@@ -19,9 +19,6 @@ images:
   newName: quay.io/kuberay/operator
   newTag: nightly
 
-patchesStrategicMerge:
-- manager_webhook_patch.yaml
-- webhookcainjection_patch.yaml
 
 replacements:
 - source:
@@ -125,3 +122,6 @@ resources:
 - ../webhook
 - ../certmanager
 - namespace.yaml
+patches:
+- path: manager_webhook_patch.yaml
+- path: webhookcainjection_patch.yaml
