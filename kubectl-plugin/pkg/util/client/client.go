@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ type Client interface {
 	DynamicClient() dynamic.Interface
 	// GetRayHeadSvcName retrieves the name of RayHead service for the given RayCluster, RayJob, or RayService.
 	GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
+	GetKubeRayOperatorVersion(ctx context.Context) (string, error)
 }
 
 type k8sClient struct {
@@ -52,6 +54,32 @@ func (c *k8sClient) KubernetesClient() kubernetes.Interface {
 
 func (c *k8sClient) DynamicClient() dynamic.Interface {
 	return c.dynamicClient
+}
+
+func (c *k8sClient) GetKubeRayOperatorVersion(ctx context.Context) (string, error) {
+	deployment, err := c.kubeClient.AppsV1().Deployments("").List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/name in (kuberay-operator,kuberay)",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get KubeRay operator deployment: %w", err)
+	}
+
+	if len(deployment.Items) == 0 {
+		return "", fmt.Errorf("no KubeRay operator deployments found in any namespace")
+	}
+
+	containers := deployment.Items[0].Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return "", fmt.Errorf("no containers found in KubeRay operator deployment")
+	}
+
+	image := containers[0].Image
+	parts := strings.Split(image, ":")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unable to parse KubeRay operator version from image: %s", image)
+	}
+
+	return parts[len(parts)-1], nil
 }
 
 func (c *k8sClient) GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error) {
