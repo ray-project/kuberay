@@ -8,8 +8,16 @@ curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
 chmod +x ./kind
 mv ./kind /usr/local/bin/kind
 
+# Install python 3.11 and pip
+apt-get update
+apt-get install -y python3.11 python3.11-venv
+python3 -m venv .venv
+
+# Install sudo
+apt-get install -y sudo
+
 # Install Docker
-bash scripts/install-docker.sh
+sudo bash scripts/install-docker.sh --version 24.0
 
 # Delete dangling clusters
 kind delete clusters --all
@@ -27,10 +35,7 @@ mv linux-amd64/helm /usr/local/bin/helm
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 
-# Install python 3.11 and pip
-apt-get update
-apt-get install -y python3.11 python3.11-venv
-python3 -m venv .venv
+
 
 # Activate the virtual environment and then execute the subsequent commands
 # within the same sub-shell.
