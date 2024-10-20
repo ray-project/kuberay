@@ -30,6 +30,7 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd.AddCommand(session.NewSessionCommand(streams))
 	cmd.AddCommand(log.NewClusterLogCommand(streams))
 	cmd.AddCommand(job.NewJobCommand(streams))
-	cmd.AddCommand(version.NewVersionCommand())
+	cmd.AddCommand(version.NewVersionCommand(streams))
+
 	return cmd
 }

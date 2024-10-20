@@ -6,11 +6,103 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicFake "k8s.io/client-go/dynamic/fake"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
 )
+
+func TestGetKubeRayOperatorVersion(t *testing.T) {
+	helmKubeObjects := []runtime.Object{
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kuberay-operator-helm-chart",
+				Namespace: "default",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "kuberay-operator",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "kuberay/operator:v0.5.0",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	kustomizeObjects := []runtime.Object{
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kuberay-operator-kustomize",
+				Namespace: "test",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "kuberay",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "kuberay/operator:v0.6.0",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		expectedVersion string
+		expectedError   string
+		kubeObjects     []runtime.Object
+	}{
+		{
+			name:            "kubeRay operator not found",
+			expectedVersion: "",
+			expectedError:   "no KubeRay operator deployments found in any namespace",
+			kubeObjects:     nil,
+		},
+		{
+			name:            "find kubeRay operator version for helm chart",
+			expectedVersion: "v0.5.0",
+			expectedError:   "",
+			kubeObjects:     helmKubeObjects,
+		},
+		{
+			name:            "find kubeRay operator version for Kustomize",
+			expectedVersion: "v0.6.0",
+			expectedError:   "",
+			kubeObjects:     kustomizeObjects,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			kubeClientSet := kubeFake.NewSimpleClientset(tc.kubeObjects...)
+			client := NewClientForTesting(kubeClientSet, nil)
+
+			version, err := client.GetKubeRayOperatorVersion(context.Background())
+
+			if tc.expectedVersion != "" {
+				assert.Equal(t, version, tc.expectedVersion)
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedError)
+			}
+		})
+	}
+}
 
 func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 	kubeObjects := []runtime.Object{}
