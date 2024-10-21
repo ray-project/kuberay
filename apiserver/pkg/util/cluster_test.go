@@ -618,6 +618,12 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	assert.Equal(t, expectedToleration, podSpec.Spec.Tolerations[0], "failed to propagate tolerations")
 	assert.Equal(t, "bar", podSpec.Annotations["foo"], "failed to convert annotations")
 	assert.Equal(t, expectedLabels, podSpec.Labels, "failed to convert labels")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_REQUEST", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.cpu"}}), "failed to propagate environment variable: CPU_REQUEST")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.cpu"}}), "failed to propagate environment variable: CPU_LIMITS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_REQUESTS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.memory"}}), "failed to propagate environment variable: MEMORY_REQUESTS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.memory"}}), "failed to propagate environment variable: MEMORY_LIMITS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_NAME", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}), "failed to propagate environment variable: MY_POD_NAME")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_IP", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"}}), "failed to propagate environment variable: MY_POD_IP")
 
 	// Check Resources
 	container := podSpec.Spec.Containers[0]
@@ -639,6 +645,15 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 func containsEnv(envs []corev1.EnvVar, key string, val string) bool {
 	for _, env := range envs {
 		if env.Name == key && env.Value == val {
+			return true
+		}
+	}
+	return false
+}
+
+func containsEnvValueFrom(envs []corev1.EnvVar, key string, valFrom *corev1.EnvVarSource) bool {
+	for _, env := range envs {
+		if env.Name == key && reflect.DeepEqual(env.ValueFrom, valFrom) {
 			return true
 		}
 	}

@@ -484,7 +484,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "requests.cpu",
+									Resource:      "requests.memory",
 								},
 							},
 						},
@@ -493,7 +493,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "limits.cpu",
+									Resource:      "limits.memory",
 								},
 							},
 						},
