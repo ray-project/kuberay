@@ -9,6 +9,15 @@ Kubectl plugin/extension for Kuberay CLI that provides the ability to manage ray
 
 ## Installation
 
+You can install the Kuberay kubectl plugin using one of the following methods:
+
+### Install using Krew kubectl plugin manager (Recommended)
+
+1. Install [Krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/).
+2. Download the plugin list by running `kubectl krew update`.
+3. Install the plugin by running `kubectl krew install ray`.
+4. Run `kubectl ray --help` to verify the installation.
+
 ### Download from GitHub releases
 
 Go to the [releases page](https://github.com/ray-project/kuberay/releases) and download the binary for your platform.
@@ -27,11 +36,6 @@ Replace `~/.local/bin` with the directory in your `PATH`.
 
 1. Run `go build cmd/kubectl-ray.go`
 2. Move the binary, which will be named `kubectl-ray` to your `PATH`
-
-### Using Krew
-
-1. Install [Krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/).
-2. (TODO: Replace this step with the installation command).
 
 ## Shell Completion
 
