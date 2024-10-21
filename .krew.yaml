@@ -4,7 +4,7 @@ metadata:
   name: ray
 spec:
   version: {{ .TagName }}
-  homepage: https://github.com/ray-project/kuberay/kubectl-plugin
+  homepage: https://github.com/ray-project/kuberay/tree/master/kubectl-plugin
   platforms:
   - selector:
       matchLabels:
