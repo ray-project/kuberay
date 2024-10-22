@@ -38,6 +38,9 @@ spec:
     {{- end }}
     template:
       spec:
+        {{- if .Values.head.dnsConfig }}
+        dnsConfig: {{- toYaml .Values.head.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.head.serviceAccountName }}
         serviceAccountName: {{ .Values.head.serviceAccountName }}
@@ -135,6 +138,9 @@ spec:
     groupName: {{ $groupName }}
     template:
       spec:
+        {{- if $values.dnsConfig }}
+        dnsConfig: {{- toYaml $values.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml $.Values.imagePullSecrets | nindent 10 }}
         {{- if $values.serviceAccountName }}
         serviceAccountName: {{ $values.serviceAccountName }}
@@ -167,7 +173,9 @@ spec:
             {{- if $values.envFrom }}
             envFrom: {{- toYaml $values.envFrom | nindent 14 }}
             {{- end }}
+            {{- if $values.ports }}
             ports: {{- toYaml $values.ports | nindent 14}}
+            {{- end }}
             {{- if $values.lifecycle }}
             lifecycle:
             {{- toYaml $values.lifecycle | nindent 14 }}
@@ -230,6 +238,9 @@ spec:
     groupName: {{ .Values.worker.groupName }}
     template:
       spec:
+        {{- if .Values.worker.dnsConfig }}
+        dnsConfig: {{- toYaml .Values.worker.dnsConfig | nindent 10 }}
+        {{- end }}
         imagePullSecrets: {{- toYaml .Values.imagePullSecrets | nindent 10 }}
         {{- if .Values.worker.serviceAccountName }}
         serviceAccountName: {{ .Values.worker.serviceAccountName }}
@@ -262,7 +273,9 @@ spec:
             {{- with .Values.worker.envFrom }}
             envFrom: {{- toYaml . | nindent 14}}
             {{- end }}
+            {{- if .Values.worker.ports }}
             ports: {{- toYaml .Values.worker.ports | nindent 14}}
+            {{- end }}
             {{- if .Values.worker.lifecycle }}
             lifecycle:
             {{- toYaml .Values.worker.lifecycle | nindent 14 }}

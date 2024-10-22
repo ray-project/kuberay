@@ -217,7 +217,7 @@ var _ = Context("Inside the default namespace", func() {
 
 	myRayCluster := &rayv1.RayCluster{}
 
-	Describe("When creating a rayservice", func() {
+	Describe("When creating a rayservice", Ordered, func() {
 		It("should create a rayservice object", func() {
 			err := k8sClient.Create(ctx, myRayService)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayService resource")

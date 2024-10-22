@@ -60,7 +60,8 @@ steps:
       timeout: 30m
       command:
       - "bash"
-      - "100-rayjob/wait-for-rayjobs.sh"
+      - "common/wait-for-rayjobs.sh"
+      - "100"
 - name: Wait for pods to be running
   measurements:
   - Identifier: WaitForControlledPodsRunning

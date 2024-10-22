@@ -75,7 +75,7 @@ func GetRayCluster(t Test, namespace, name string) *rayv1.RayCluster {
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
-	return cluster.Status.State
+	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
 
 func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
@@ -91,6 +91,16 @@ func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) *corev1.Pod {
 	t.Expect(err).NotTo(gomega.HaveOccurred())
 	t.Expect(len(pods.Items)).To(gomega.Equal(1))
 	return &pods.Items[0]
+}
+
+func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) []corev1.Pod {
+	t.T().Helper()
+	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		t.Ctx(),
+		common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
+	)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+	return pods.Items
 }
 
 func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.Pod {

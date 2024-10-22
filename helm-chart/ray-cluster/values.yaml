@@ -116,6 +116,18 @@ head:
     #   annotations:
     #     prometheus.io/scrape: "true"
 
+  # Custom pod DNS configuration
+  # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+  # dnsConfig:
+  #   nameservers:
+  #     - 8.8.8.8
+  #   searches:
+  #     - example.local
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+  #     - name: edns0
+
 
 worker:
   # If you want to disable the default workergroup
@@ -179,6 +191,18 @@ worker:
   command: []
   args: []
 
+  # Custom pod DNS configuration
+  # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+  # dnsConfig:
+  #   nameservers:
+  #     - 8.8.8.8
+  #   searches:
+  #     - example.local
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+  #     - name: edns0
+
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
 # will be used as the groupName
@@ -240,6 +264,18 @@ additionalWorkerGroups:
     # container command for worker Pod.
     command: []
     args: []
+
+    # Custom pod DNS configuration
+    # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+    # dnsConfig:
+    #   nameservers:
+    #     - 8.8.8.8
+    #   searches:
+    #     - example.local
+    #   options:
+    #     - name: ndots
+    #       value: "2"
+    #     - name: edns0
 
 # Configuration for Head's Kubernetes Service
 service:

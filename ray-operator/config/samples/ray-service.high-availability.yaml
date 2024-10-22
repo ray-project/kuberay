@@ -85,7 +85,7 @@ spec:
         import_path: fruit.deployment_graph
         route_prefix: /fruit
         runtime_env:
-          working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
+          working_dir: "https://github.com/ray-project/test_dag/archive/4d2c9a59d9eabfd4c8a9e04a7aae44fc8f5b416f.zip"
         deployments:
           - name: MangoStand
             num_replicas: 2
@@ -109,11 +109,6 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
           - name: FruitMarket
-            num_replicas: 2
-            max_replicas_per_node: 1
-            ray_actor_options:
-              num_cpus: 0.1
-          - name: DAGDriver
             num_replicas: 2
             max_replicas_per_node: 1
             ray_actor_options:
@@ -144,10 +139,10 @@ spec:
               resources:
                 limits:
                   cpu: 1
-                  memory: 1Gi
+                  memory: 2Gi
                 requests:
                   cpu: 1
-                  memory: 1Gi
+                  memory: 2Gi
               ports:
                 - containerPort: 6379
                   name: gcs-server

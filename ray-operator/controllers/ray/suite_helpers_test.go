@@ -31,7 +31,7 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		count := 0
 		for _, aPod := range workerPods.Items {
-			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && aPod.DeletionTimestamp == nil {
+			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && (aPod.DeletionTimestamp == nil || len(aPod.Finalizers) != 0) {
 				count++
 			}
 		}
@@ -46,7 +46,7 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
 			log.Fatal(err)
 		}
-		return cluster.Status.State
+		return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 }
 
@@ -300,6 +300,17 @@ func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend
 			return err
 		}
 		rayJob.Spec.Suspend = suspend
+		return k8sClient.Update(ctx, rayJob)
+	})
+}
+
+func setJobIdOnRayJob(ctx context.Context, rayJob *rayv1.RayJob, jobId string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
+		if err != nil {
+			return err
+		}
+		rayJob.Spec.JobId = jobId
 		return k8sClient.Update(ctx, rayJob)
 	})
 }

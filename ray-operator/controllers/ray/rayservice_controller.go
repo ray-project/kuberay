@@ -2,7 +2,9 @@ package ray
 
 import (
 	"context"
+	errstd "errors"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -15,6 +17,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	cmap "github.com/orcaman/concurrent-map/v2"
 
@@ -22,15 +25,17 @@ import (
 	fmtErrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -119,6 +124,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
+
+	if err := validateRayServiceSpec(rayServiceInstance); err != nil {
+		logger.Error(err, "The RayService spec is invalid")
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceSpec),
+			"The RayService spec is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
 	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
@@ -180,7 +193,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !isReady {
-		logger.Info(fmt.Sprintf("Ray Serve applications are not ready to serve requests: checking again in %ss", ServiceDefaultRequeueDuration))
+		logger.Info("Ray Serve applications are not ready to serve requests", "requeue_duration", ServiceDefaultRequeueDuration.String())
 		r.Recorder.Eventf(rayServiceInstance, "Normal", "ServiceNotReady", "The service is not ready yet. Controller will perform a round of actions in %s.", ServiceDefaultRequeueDuration)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
@@ -231,6 +244,13 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
+func validateRayServiceSpec(rayService *rayv1.RayService) error {
+	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
+		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+	}
+	return nil
+}
+
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	serveEndPoints := &corev1.Endpoints{}
 	if err := r.Get(ctx, common.RayServiceServeServiceNamespacedName(rayServiceInstance), serveEndPoints); err != nil && !errors.IsNotFound(err) {
@@ -243,7 +263,10 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	for _, subset := range serveEndPoints.Subsets {
 		numServeEndpoints += len(subset.Addresses)
 	}
-	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints)
+	if numServeEndpoints > math.MaxInt32 {
+		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
+	}
+	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	return nil
 }
 
@@ -329,7 +352,7 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatuses(ctx context.Contex
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayService{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{},
@@ -340,6 +363,7 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
 		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
 				logger := ctrl.Log.WithName("controllers").WithName("RayService")
 				if request != nil {
@@ -527,7 +551,14 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return RolloutNew
 		}
 
-		// Case 1: If everything is identical except for the Replicas and WorkersToDelete of
+		// Case 1: If the KubeRay version has changed, update the RayCluster to get the cluster hash and new KubeRay version.
+		activeKubeRayVersion := activeRayCluster.ObjectMeta.Annotations[utils.KubeRayVersion]
+		if activeKubeRayVersion != utils.KUBERAY_VERSION {
+			logger.Info("Active RayCluster config doesn't match goal config due to mismatched KubeRay versions. Updating RayCluster.")
+			return Update
+		}
+
+		// Case 2: If everything is identical except for the Replicas and WorkersToDelete of
 		// each WorkerGroup, then do nothing.
 		activeClusterHash := activeRayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		goalClusterHash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
@@ -544,7 +575,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			return DoNothing
 		}
 
-		// Case 2: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
+		// Case 3: Otherwise, if everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
 		activeClusterNumWorkerGroups, err := strconv.Atoi(activeRayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey])
 		if err != nil {
@@ -572,7 +603,7 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 			}
 		}
 
-		// Case 3: Otherwise, rollout a new cluster.
+		// Case 4: Otherwise, rollout a new cluster.
 		logger.Info("Active RayCluster config doesn't match goal config. " +
 			"RayService operator should prepare a new Ray cluster.\n" +
 			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
@@ -728,6 +759,9 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 		return nil, err
 	}
 	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
+
+	// set the KubeRay version used to create the RayCluster
+	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -975,9 +1009,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
 		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
 		// with older versions of Kubernetes, we need to assign the ClusterIP here.
-		if newSvc.Spec.ClusterIP == "" {
-			newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
-		}
+		newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
 
 		// TODO (kevin85421): Consider not only the updates of the Spec but also the ObjectMeta.
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
@@ -1054,13 +1086,22 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	// after the head pod is running and ready. Hence, some requests to the Dashboard (e.g. `UpdateDeployments`) may fail.
 	// This is not an issue since `UpdateDeployments` is an idempotent operation.
 	logger.Info("Check the head Pod status of the pending RayCluster", "RayCluster name", rayClusterInstance.Name)
-	if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
-		if err != nil {
-			logger.Error(err, "Failed to check if head Pod is running and ready!")
-		} else {
-			logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
+
+	// check the latest condition of the head Pod to see if it is ready.
+	if features.Enabled(features.RayClusterStatusConditions) {
+		if !meta.IsStatusConditionTrue(rayClusterInstance.Status.Conditions, string(rayv1.HeadPodReady)) {
+			logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
 		}
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+	} else {
+		if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
+			if err != nil {
+				logger.Error(err, "Failed to check if head Pod is running and ready!")
+			} else {
+				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
+			}
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+		}
 	}
 
 	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, error.
@@ -1109,9 +1150,12 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 }
 
 func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
-	headPod, err := r.getHeadPod(ctx, rayClusterInstance)
+	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
+	}
+	if headPod == nil {
+		return fmt.Errorf("found 0 head. cluster name %s, namespace %v", rayClusterInstance.Name, rayClusterInstance.Namespace)
 	}
 
 	httpProxyClient := r.httpProxyClientFunc()
@@ -1209,27 +1253,16 @@ func compareRayClusterJsonHash(spec1 rayv1.RayClusterSpec, spec2 rayv1.RayCluste
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
 func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	headPod, err := r.getHeadPod(ctx, instance)
+	headPod, err := common.GetRayClusterHeadPod(ctx, r, instance)
 	if err != nil {
 		return false, err
+	}
+	if headPod == nil {
+		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
 }
 
 func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
 	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
-}
-
-// TODO: Move this function to util.go and always use this function to retrieve the head Pod.
-func (r *RayServiceReconciler) getHeadPod(ctx context.Context, instance *rayv1.RayCluster) (*corev1.Pod, error) {
-	podList := corev1.PodList{}
-	if err := r.List(ctx, &podList, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
-		return nil, err
-	}
-
-	if len(podList.Items) != 1 {
-		return nil, fmt.Errorf("Found %d head pods for RayCluster %s in the namespace %s", len(podList.Items), instance.Name, instance.Namespace)
-	}
-
-	return &podList.Items[0], nil
 }

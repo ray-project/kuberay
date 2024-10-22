@@ -42,7 +42,8 @@ steps:
       timeout: 30m
       command:
       - "bash"
-      - "100-raycluster/wait-for-rayclusters.sh"
+      - "common/wait-for-rayclusters.sh"
+      - "100"
 - name: Wait for pods to be running
   measurements:
   - Identifier: WaitForControlledPodsRunning

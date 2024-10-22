@@ -55,8 +55,37 @@ readinessProbe:
   periodSeconds: 5
   failureThreshold: 5
 
+# Enable customized Kubernetes scheduler integration. If enabled, Ray workloads will be scheduled
+# by the customized scheduler.
+#  * "enabled" is the legacy option and will be deprecated soon.
+#  * "name" is the standard option, expecting a scheduler name, supported values are
+#    "default", "volcano", and "yunikorn".
+#
+# Examples:
+#  1. Use volcano (deprecated)
+#       batchScheduler:
+#         enabled: true
+#
+#  2. Use volcano
+#       batchScheduler:
+#         name: volcano
+#
+#  3. Use yunikorn
+#       batchScheduler:
+#         name: yunikorn
+#
 batchScheduler:
+  # Deprecated. This option will be removed in the future.
+  # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
+  # Set the customized scheduler name, supported values are "volcano" or "yunikorn", do not set
+  # "batchScheduler.enabled=true" at the same time as it will override this option.
+  name: ""
+
+featureGates:
+  - name: RayClusterStatusConditions
+    enabled: false
+
 
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
@@ -73,6 +102,12 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+# if userKubernetesProxy is set to true, the KubeRay operator will be configured with the --use-kubernetes-proxy flag.
+# Using this option to configure kuberay-operator to comunitcate to Ray head pods by proxying through the Kubernetes API Server.
+# useKubernetesProxy: true
+
+# If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
+leaderElectionEnabled: true
 
 # If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
@@ -134,3 +169,6 @@ env:
 # Enabling this feature contributes to the robustness of Ray clusters.
 # - name: ENABLE_PROBES_INJECTION
 #   value: "true"
+# If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
+# - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
+#   value: "false"

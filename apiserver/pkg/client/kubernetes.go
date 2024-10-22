@@ -1,9 +1,7 @@
 package client
 
 import (
-	"time"
-
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -39,7 +37,7 @@ func (c *KubernetesClient) NamespaceClient() v1.NamespaceInterface {
 }
 
 // CreateKubernetesCoreOrFatal creates a new client for the Kubernetes pod.
-func CreateKubernetesCoreOrFatal(initConnectionTimeout time.Duration, options util.ClientOptions) KubernetesClientInterface {
+func CreateKubernetesCoreOrFatal(options util.ClientOptions) KubernetesClientInterface {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		klog.Fatalf("Failed to create TokenReview client. Error: %v", err)

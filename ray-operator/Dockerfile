@@ -13,12 +13,13 @@ RUN go mod download
 COPY main.go main.go
 COPY apis/ apis/
 COPY controllers/ controllers/
+COPY pkg/features pkg/features
 
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
 
-FROM gcr.io/distroless/base-debian11:nonroot
+FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532

@@ -49,7 +49,6 @@ metadata:
     # $IP/$CLUSTER_NAME/#/actors rewrites to $IP/#/actors ($1 maps to #/actors)
     # $IP/$CLUSTER_NAME/#/node rewrites to $IP/#/node ($1 maps to #/node)
   name: raycluster-ingress-head-ingress
-  namespace: default
 spec:
   ingressClassName: nginx # This should be aligned with the ingress-class of the ingress controller
   rules:

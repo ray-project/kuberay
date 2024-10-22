@@ -17,7 +17,9 @@ package ray
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
@@ -34,6 +37,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -47,6 +51,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -66,6 +71,7 @@ var (
 	testRayCluster          *rayv1.RayCluster
 	headSelector            labels.Selector
 	headNodeIP              string
+	headNodeName            string
 	testServices            []runtime.Object
 	workerSelector          labels.Selector
 	workersToDelete         []string
@@ -82,10 +88,11 @@ func setupTest(t *testing.T) {
 	expectNumOfHostNum = 1
 	workersToDelete = []string{"pod1", "pod2"}
 	headNodeIP = "1.2.3.4"
+	headNodeName = "headNode"
 	testPods = []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "headNode",
+				Name:      headNodeName,
 				Namespace: namespaceStr,
 				Labels: map[string]string{
 					utils.RayNodeLabelKey:      "yes",
@@ -269,7 +276,7 @@ func setupTest(t *testing.T) {
 	testPodsNoHeadIP = []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "headNode",
+				Name:      headNodeName,
 				Namespace: namespaceStr,
 				Labels: map[string]string{
 					utils.RayNodeLabelKey:      "yes",
@@ -924,45 +931,61 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
-	fakeClient := clientFake.NewClientBuilder().
-		WithRuntimeObjects(testPods...).
-		Build()
-	ctx := context.Background()
-
-	podList := corev1.PodList{}
-	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-
-	assert.Nil(t, err, "Fail to get pod list")
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
-
-	// Simulate head pod get evicted.
-	podList.Items[0].Status.Phase = corev1.PodFailed
-	podList.Items[0].Status.Reason = "Evicted"
-	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err, "Fail to update head Pod status")
-
-	rayClusterExpectation = expectations.NewRayClusterExpectations(fakeClient)
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+	tests := map[string]struct {
+		restartPolicy corev1.RestartPolicy
+	}{
+		"Pod with RestartPolicyAlways": {
+			restartPolicy: corev1.RestartPolicyAlways,
+		},
+		"Pod with RestartPolicyOnFailure": {
+			restartPolicy: corev1.RestartPolicyOnFailure,
+		},
 	}
 
-	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	// The head Pod with the status `Failed` will be deleted, and the function will return an
-	// error to requeue the request with a short delay. If the function returns nil, the controller
-	// will requeue the request after RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV (default: 300) seconds.
-	assert.NotNil(t, err)
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().
+				WithRuntimeObjects(testPods...).
+				Build()
+			ctx := context.Background()
+			rayClusterExpectation = expectations.NewRayClusterExpectations(fakeClient)
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
-	// Filter head pod
-	err = fakeClient.List(ctx, &podList, &client.ListOptions{
-		LabelSelector: headSelector,
-		Namespace:     namespaceStr,
-	})
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
-	assert.Equal(t, 0, len(podList.Items),
-		"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+			// Simulate head pod get evicted.
+			podList.Items[0].Spec.RestartPolicy = tc.restartPolicy
+			err = fakeClient.Update(ctx, &podList.Items[0])
+			assert.Nil(t, err, "Fail to update head Pod restart policy")
+			podList.Items[0].Status.Phase = corev1.PodFailed
+			err = fakeClient.Status().Update(ctx, &podList.Items[0])
+			assert.Nil(t, err, "Fail to update head Pod status")
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   scheme.Scheme,
+			}
+
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			// The head Pod with the status `Failed` will be deleted, and the function will return an
+			// error to requeue the request with a short delay. If the function returns nil, the controller
+			// will requeue the request after RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV (default: 300) seconds.
+			assert.NotNil(t, err)
+
+			// Filter head pod
+			err = fakeClient.List(ctx, &podList, &client.ListOptions{
+				LabelSelector: headSelector,
+				Namespace:     namespaceStr,
+			})
+
+			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.Equal(t, 0, len(podList.Items),
+				"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+		})
+	}
 }
 
 func TestReconcileHeadService(t *testing.T) {
@@ -1269,8 +1292,11 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	}
 	reason := "test reason"
 
-	err = testRayClusterReconciler.updateClusterReason(ctx, testRayCluster, reason)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.Reason = reason
+	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster reason")
+	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster after updating reason")
@@ -1302,7 +1328,7 @@ func TestUpdateEndpoints(t *testing.T) {
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }
 
-func TestGetHeadPodIP(t *testing.T) {
+func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 	setupTest(t)
 
 	extraHeadPod := &corev1.Pod{
@@ -1319,12 +1345,14 @@ func TestGetHeadPodIP(t *testing.T) {
 
 	tests := map[string]struct {
 		expectedIP   string
+		expectedName string
 		pods         []runtime.Object
 		returnsError bool
 	}{
 		"get expected Pod IP if there's one head node": {
 			pods:         testPods,
 			expectedIP:   headNodeIP,
+			expectedName: headNodeName,
 			returnsError: false,
 		},
 		"no error if there's no head node": {
@@ -1335,11 +1363,12 @@ func TestGetHeadPodIP(t *testing.T) {
 		"no error if there's more than one head node": {
 			pods:         append(testPods, extraHeadPod),
 			expectedIP:   "",
-			returnsError: false,
+			returnsError: true,
 		},
 		"no error if head pod ip is not yet set": {
 			pods:         testPodsNoHeadIP,
 			expectedIP:   "",
+			expectedName: headNodeName,
 			returnsError: false,
 		},
 	}
@@ -1348,21 +1377,21 @@ func TestGetHeadPodIP(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
 
-			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+			ip, name := "", ""
+			headPod, err := common.GetRayClusterHeadPod(context.TODO(), fakeClient, testRayCluster)
+			if headPod != nil {
+				ip = headPod.Status.PodIP
+				name = headPod.Name
 			}
-
-			ip, err := testRayClusterReconciler.getHeadPodIP(context.TODO(), testRayCluster)
 
 			if tc.returnsError {
-				assert.NotNil(t, err, "getHeadPodIP should return error")
+				assert.NotNil(t, err, "GetRayClusterHeadPod should return error")
 			} else {
-				assert.Nil(t, err, "getHeadPodIP should not return error")
+				assert.Nil(t, err, "GetRayClusterHeadPod should not return error")
 			}
 
-			assert.Equal(t, tc.expectedIP, ip, "getHeadPodIP returned unexpected IP")
+			assert.Equal(t, tc.expectedIP, ip, "GetRayClusterHeadPod returned unexpected IP")
+			assert.Equal(t, tc.expectedName, name, "GetRayClusterHeadPod returned unexpected name")
 		})
 	}
 }
@@ -1509,7 +1538,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
-	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster)
+	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err)
@@ -1536,7 +1565,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster")
-	assert.Empty(t, cluster.Status.State, "Cluster state should be empty")
+	assert.Empty(t, cluster.Status.State, "Cluster state should be empty") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 	rayClusterExpectation = expectations.NewRayClusterExpectations(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -1546,12 +1575,15 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	}
 
 	state := rayv1.Ready
-	err = testRayClusterReconciler.updateClusterState(ctx, testRayCluster, state)
+	newTestRayCluster := testRayCluster.DeepCopy()
+	newTestRayCluster.Status.State = state //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	assert.Nil(t, err, "Fail to update cluster state")
+	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	assert.Nil(t, err, "Fail to get RayCluster after updating state")
-	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated")
+	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
 
 func TestInconsistentRayClusterStatus(t *testing.T) {
@@ -1595,7 +1627,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// Case 1: `State` is different => return true
 	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Failed
+	newStatus.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 
 	// Case 2: `Reason` is different => return true
@@ -1647,6 +1679,11 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	newStatus = oldStatus.DeepCopy()
 	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+
+	// Case 12: `Conditions` is different => return true
+	newStatus = oldStatus.DeepCopy()
+	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestCalculateStatus(t *testing.T) {
@@ -1674,6 +1711,12 @@ func TestCalculateStatus(t *testing.T) {
 		Status: corev1.PodStatus{
 			PodIP: headNodeIP,
 			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
 		},
 	}
 	runtimeObjects := []runtime.Object{headPod, headService}
@@ -1690,13 +1733,149 @@ func TestCalculateStatus(t *testing.T) {
 	}
 
 	// Test head information
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
 	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+
+	// Test reconcilePodsErr with the feature gate disabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
+	assert.Nil(t, err)
+	assert.Empty(t, newInstance.Status.Conditions)
+
+	// enable feature gate for the following tests
+	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+
+	// Test CheckRayHeadRunningAndReady with head pod running and ready
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+
+	// Test CheckRayHeadRunningAndReady with head pod not ready
+	headPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+
+	// Test CheckRayHeadRunningAndReady with head pod not running
+	headPod.Status.Phase = corev1.PodFailed
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+
+	// Test reconcilePodsErr with the feature gate enabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
+	assert.Nil(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
+}
+
+func TestRayClusterProvisionedCondition(t *testing.T) {
+	setupTest(t)
+	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	ReadyStatus := corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+
+	UnReadyStatus := corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionFalse,
+			},
+		},
+	}
+
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+	}
+
+	workerPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workerNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:   instanceName,
+				utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				utils.RayNodeGroupLabelKey: groupNameStr,
+			},
+		},
+	}
+
+	runtimeObjects := append([]runtime.Object{headPod, workerPod}, testServices...)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	// Initially, neither head Pod nor worker Pod are ready. The RayClusterProvisioned condition should not be present.
+	headPod.Status = UnReadyStatus
+	workerPod.Status = UnReadyStatus
+	_ = fakeClient.Status().Update(ctx, headPod)
+	_ = fakeClient.Status().Update(ctx, workerPod)
+	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	rayClusterProvisionedCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionFalse)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.RayClusterPodsProvisioning)
+
+	// After a while, all Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
+	headPod.Status = ReadyStatus
+	workerPod.Status = ReadyStatus
+	_ = fakeClient.Status().Update(ctx, headPod)
+	_ = fakeClient.Status().Update(ctx, workerPod)
+	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
+
+	// After a while, worker Pod fails readiness, but since RayClusterProvisioned focuses solely on whether all Ray Pods are ready for the first time,
+	// RayClusterProvisioned condition should still be True.
+	workerPod.Status = UnReadyStatus
+	_ = fakeClient.Status().Update(ctx, workerPod)
+	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
+
+	// After a while, head Pod also fails readiness, RayClusterProvisioned condition should still be true.
+	headPod.Status = UnReadyStatus
+	_ = fakeClient.Status().Update(ctx, headPod)
+	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
+	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
@@ -1741,9 +1920,9 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	}
 
 	preUpdateTime := metav1.Now()
-	testRayCluster.Status.State = rayv1.Ready
+	testRayCluster.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
-	newInstance, err := r.calculateStatus(ctx, testRayCluster)
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
@@ -1921,18 +2100,32 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 		Scheme:   newScheme,
 	}
 
-	// The head Pod will not be deleted because the restart policy is `Always`.
+	// The head Pod will be deleted regardless restart policy.
+	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
+	assert.NotNil(t, err)
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	assert.Nil(t, err, "Fail to get pod list")
+	assert.Equal(t, 0, len(podList.Items))
+
+	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
 	assert.Nil(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 
-	// Make sure the head Pod's restart policy is `Never` and status is `Failed`.
+	// Make sure the head Pod's restart policy is `Never` and status is `Running`.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
 	err = fakeClient.Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
-	podList.Items[0].Status.Phase = corev1.PodFailed
+	podList.Items[0].Status.Phase = corev1.PodRunning
+	podList.Items[0].Status.ContainerStatuses = append(podList.Items[0].Status.ContainerStatuses,
+		corev1.ContainerStatus{
+			Name: podList.Items[0].Spec.Containers[utils.RayContainerIndex].Name,
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{},
+			},
+		})
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
@@ -2040,12 +2233,11 @@ func Test_ShouldDeletePod(t *testing.T) {
 	}{
 		{
 			// The restart policy is `Always` and the Pod is in a terminate state.
-			// The expected behavior is that the controller will not delete the Pod because
-			// the restart policy is `Always`.
-			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=false",
+			// The expected behavior is that the controller will delete the Pod regardless of the restart policy.
+			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=true",
 			restartPolicy: corev1.RestartPolicyAlways,
 			phase:         corev1.PodFailed,
-			shouldDelete:  false,
+			shouldDelete:  true,
 		},
 		{
 			// The restart policy is `Always`, the Pod is not in a terminate state,
@@ -2251,6 +2443,93 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				assert.Nil(t, err, "Fail to get Pod list")
 				assert.NotEqual(t, 0, len(podList.Items))
 			}
+		})
+	}
+}
+
+func TestEvents_RedisCleanup(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
+
+	// Add the Redis cleanup finalizer to the RayCluster and modify the RayCluster's DeleteTimestamp to trigger the Redis cleanup.
+	controllerutil.AddFinalizer(gcsFTEnabledCluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	gcsFTEnabledCluster.DeletionTimestamp = &now
+	errInjected := errors.New("random error")
+
+	tests := map[string]struct {
+		fakeClientFn func(client.Object) client.Client
+		errInjected  error
+	}{
+		"Created Redis cleanup Job": {
+			fakeClientFn: func(obj client.Object) client.Client {
+				return clientFake.NewClientBuilder().
+					WithScheme(newScheme).
+					WithRuntimeObjects([]runtime.Object{obj}...).
+					Build()
+			},
+			errInjected: nil,
+		},
+		"Failed to create Redis cleanup Job": {
+			fakeClientFn: func(obj client.Object) client.Client {
+				return clientFake.NewClientBuilder().
+					WithScheme(newScheme).
+					WithRuntimeObjects([]runtime.Object{obj}...).
+					WithInterceptorFuncs(interceptor.Funcs{
+						Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+							return errInjected
+						},
+					}).
+					Build()
+			},
+			errInjected: errInjected,
+		},
+	}
+
+	for message, tc := range tests {
+		t.Run(message, func(t *testing.T) {
+			cluster := gcsFTEnabledCluster.DeepCopy()
+			ctx := context.Background()
+
+			fakeClient := tc.fakeClientFn(cluster)
+
+			// Buffer length of 100 is arbitrary here. We should have only 1 event generated, but we keep 100
+			// if that isn't the case in the future. If this test starts timing out because of a full
+			// channel, this is probably the reason, and we should change our approach or increase buffer length.
+			recorder := record.NewFakeRecorder(100)
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+
+			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
+			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			assert.ErrorIs(t, err, tc.errInjected)
+
+			var foundEvent bool
+			var events []string
+			for len(recorder.Events) > 0 {
+				event := <-recorder.Events
+				if strings.Contains(event, message) {
+					foundEvent = true
+					break
+				}
+				events = append(events, event)
+			}
+			assert.Truef(t, foundEvent, "Expected event to be generated for redis cleanup job creation, got events: %s", strings.Join(events, "\n"))
 		})
 	}
 }
@@ -2770,4 +3049,115 @@ func TestDeleteAllPods(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"deleted", "other"}, []string{pods.Items[0].Name, pods.Items[1].Name})
+}
+
+func TestEvents_FailedPodCreation(t *testing.T) {
+	tests := []struct {
+		errInject error
+		// simulate is responsible for simulating pod deletions in different scenarios.
+		simulate   func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch)
+		name       string
+		failureMsg string
+		podType    string
+	}{
+		{
+			errInject: utils.ErrFailedCreateWorkerPod,
+			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
+				// Simulate the deletion of 3 worker Pods. After the deletion, the number of worker Pods should be 3.
+				err := client.Delete(ctx, &podList.Items[2])
+				assert.Nil(t, err, "Fail to delete pod")
+				err = client.Delete(ctx, &podList.Items[3])
+				assert.Nil(t, err, "Fail to delete pod")
+				err = client.Delete(ctx, &podList.Items[4])
+				assert.Nil(t, err, "Fail to delete pod")
+			},
+			name:       "failure event for failed worker pod creation",
+			failureMsg: "Failed to create worker Pod",
+			podType:    "worker",
+		},
+		{
+			errInject: utils.ErrFailedCreateHeadPod,
+			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
+				// Simulate the deletion of head pod
+				err := client.Delete(ctx, &podList.Items[0])
+				assert.Nil(t, err, "Fail to delete pod")
+			},
+			name:       "failure event for failed head pod creation",
+			failureMsg: "Failed to create head Pod",
+			podType:    "head",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			setupTest(t)
+
+			// TODO (kevin85421): The tests in this file are not independent. As a workaround,
+			// I added the assertion to prevent the test logic from being affected by other changes.
+			// However, we should refactor the tests in the future.
+
+			// This test makes some assumptions about the testRayCluster object.
+			// (1) 1 workerGroup (2) The goal state of the workerGroup is 3 replicas. (3) Set the workersToDelete to empty.
+			assert.Equal(t, 1, len(testRayCluster.Spec.WorkerGroupSpecs), "This test assumes only one worker group.")
+			testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
+			expectedNumWorkerPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
+			assert.Equal(t, 3, expectedNumWorkerPods, "This test assumes the expected number of worker pods is 3.")
+
+			// This test makes some assumptions about the testPods object.
+			// `testPods` contains 6 pods, including 1 head pod and 5 worker pods.
+			assert.Equal(t, 6, len(testPods), "This test assumes the testPods object contains 6 pods.")
+			numHeadPods := 1
+			oldNumWorkerPods := len(testPods) - numHeadPods
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			// We create a fake client with an interceptor for Create() in order to simulate a failure for pod creation.
+			// We return utils.ErrFailedCreateWorkerPod here because we deleted a worker pod in the previous step, so
+			// an attempt to reconcile that will take place.
+			fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+				Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+					return test.errInject
+				},
+			}).WithRuntimeObjects(testPods...).Build()
+			ctx := context.Background()
+
+			// Get the pod list from the fake client.
+			podList := corev1.PodList{}
+			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			assert.Nil(t, err, "Fail to get pod list")
+			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
+
+			test.simulate(ctx, t, podList, fakeClient)
+
+			// Buffer length of 100 is arbitrary here. We should have only 1 event genereated, but we keep 100
+			// if that isn't the case in the future. If this test starts timining out because of a full
+			// channel, this is probably the reason and we should change our approach or increase buffer length.
+			recorder := record.NewFakeRecorder(100)
+
+			// Initialize a new RayClusterReconciler.
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   scheme.Scheme,
+			}
+
+			// Since the desired state of the workerGroup is 3 replicas,
+			// the controller will try to create one worker pod.
+			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+			// We should get an error here because of simulating a pod creation failure.
+			assert.NotNil(t, err, "unexpected error")
+
+			var foundFailureEvent bool
+			events := []string{}
+			for len(recorder.Events) > 0 {
+				event := <-recorder.Events
+				if strings.Contains(event, test.failureMsg) {
+					foundFailureEvent = true
+					break
+				}
+				events = append(events, event)
+			}
+
+			assert.Truef(t, foundFailureEvent, "Expected event to be generated for %s pod creation failure, got events: %s", test.podType, strings.Join(events, "\n"))
+		})
+	}
 }

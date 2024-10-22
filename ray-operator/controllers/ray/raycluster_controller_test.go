@@ -17,6 +17,7 @@ package ray
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +37,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -82,7 +85,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 }
 
 var _ = Context("Inside the default namespace", func() {
-	Describe("Static RayCluster", func() {
+	Describe("Static RayCluster", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-static", namespace)
@@ -221,7 +224,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with overridden app.kubernetes.io labels", func() {
+	Describe("RayCluster with overridden app.kubernetes.io labels", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-overridden-k8s-labels", namespace)
@@ -315,7 +318,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with autoscaling enabled", func() {
+	Describe("RayCluster with autoscaling enabled", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-autoscaler", namespace)
@@ -408,7 +411,33 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("Suspend RayCluster", func() {
+	updateRayClusterSuspendField := func(ctx context.Context, rayCluster *rayv1.RayCluster, suspend bool) error {
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
+			rayCluster.Spec.Suspend = &suspend
+			return k8sClient.Update(ctx, rayCluster)
+		})
+	}
+
+	findRayClusterSuspendStatus := func(ctx context.Context, rayCluster *rayv1.RayCluster) (rayv1.RayClusterConditionType, error) {
+		if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster)(); err != nil {
+			return "", err
+		}
+		suspending := meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterSuspending))
+		suspended := meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterSuspended))
+		if suspending && suspended {
+			return "invalid", errors.New("invalid: rayv1.RayClusterSuspending and rayv1.RayClusterSuspended should not be both true")
+		} else if suspending {
+			return rayv1.RayClusterSuspending, nil
+		} else if suspended {
+			return rayv1.RayClusterSuspended, nil
+		}
+		return "", nil
+	}
+
+	testSuspendRayCluster := func(withConditionEnabled bool) {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-suspend", namespace)
@@ -418,6 +447,13 @@ var _ = Context("Inside the default namespace", func() {
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+
+		BeforeAll(func() {
+			if withConditionEnabled {
+				cleanUpFunc := features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterStatusConditions, true)
+				DeferCleanup(cleanUpFunc)
+			}
+		})
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -447,14 +483,7 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("Should delete all head and worker Pods if suspended", func() {
 			// suspend a Raycluster and check that all Pods are deleted.
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster: %v", rayCluster)
-				suspend := true
-				rayCluster.Spec.Suspend = &suspend
-				return k8sClient.Update(ctx, rayCluster)
-			})
+			err := updateRayClusterSuspendField(ctx, rayCluster, true)
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
 
 			// Check that all Pods are deleted
@@ -473,18 +502,19 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Suspended))
+			if withConditionEnabled {
+				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+					WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
+				Expect(meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))).To(BeFalse())
+				// rayCluster.Status.Head.PodName will be cleared.
+				// rayCluster.Status.Head.PodIP will also be cleared, but we don't test it here since we don't have IPs in tests.
+				Expect(rayCluster.Status.Head.PodName).To(BeEmpty())
+			}
 		})
 
 		It("Set suspend to false and then revert it to true before all Pods are running", func() {
 			// set suspend to false
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
-				suspend := false
-				rayCluster.Spec.Suspend = &suspend
-				return k8sClient.Update(ctx, rayCluster)
-			})
+			err := updateRayClusterSuspendField(ctx, rayCluster, false)
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
 
 			// check that all Pods are created
@@ -503,14 +533,7 @@ var _ = Context("Inside the default namespace", func() {
 			}
 
 			// change suspend to true before all Pods are Running.
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
-				suspend := true
-				rayCluster.Spec.Suspend = &suspend
-				return k8sClient.Update(ctx, rayCluster)
-			})
+			err = updateRayClusterSuspendField(ctx, rayCluster, true)
 			Expect(err).NotTo(HaveOccurred(), "Failed to update test RayCluster resource")
 
 			// check that all Pods are deleted
@@ -528,18 +551,16 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Suspended))
+
+			if withConditionEnabled {
+				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+					WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
+			}
 		})
 
 		It("Should run all head and worker pods if un-suspended", func() {
 			// Resume the suspended RayCluster
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
-				suspend := false
-				rayCluster.Spec.Suspend = &suspend
-				return k8sClient.Update(ctx, rayCluster)
-			})
+			err := updateRayClusterSuspendField(ctx, rayCluster, false)
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
 
 			// check that all pods are created
@@ -567,10 +588,130 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			if withConditionEnabled {
+				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+					WithArguments(ctx, rayCluster).Should(BeEmpty())
+				Expect(meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))).To(BeTrue())
+				// rayCluster.Status.Head.PodName should have a value now.
+				// rayCluster.Status.Head.PodIP should also have a value now, but we don't test it here since we don't have IPs in tests.
+				Expect(rayCluster.Status.Head.PodName).NotTo(BeEmpty())
+			}
+		})
+
+		It("Delete the cluster", func() {
+			err := k8sClient.Delete(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	}
+
+	Describe("Suspend RayCluster", Ordered, func() {
+		testSuspendRayCluster(false)
+	})
+
+	Describe("Suspend RayCluster with Condition", Ordered, func() {
+		testSuspendRayCluster(true)
+	})
+
+	Describe("Suspend RayCluster atomically with Condition", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-suspend-atomically", namespace)
+		allPods := corev1.PodList{}
+		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+		numPods := 4 // 1 Head + 3 Workers
+
+		BeforeAll(func() {
+			cleanUpFunc := features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterStatusConditions, true)
+			DeferCleanup(cleanUpFunc)
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of Pods and add finalizers", func() {
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(numPods), fmt.Sprintf("all pods %v", allPods.Items))
+			// Add finalizers to worker Pods to prevent it from being deleted so that we can test if the status condition makes the suspending process atomic.
+			for _, pod := range allPods.Items {
+				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					pod.Finalizers = append(pod.Finalizers, "ray.io/deletion-blocker")
+					return k8sClient.Update(ctx, &pod)
+				})
+				Expect(err).NotTo(HaveOccurred(), "Failed to update Pods")
+			}
+		})
+
+		It("Should turn on the RayClusterSuspending if we set `.Spec.Suspend` back to true", func() {
+			// suspend a Raycluster.
+			err := updateRayClusterSuspendField(ctx, rayCluster, true)
+			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
+
+			Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspending))
+		})
+
+		It("Should keep RayClusterSuspending consistently if we set `.Spec.Suspend` back to false", func() {
+			err := updateRayClusterSuspendField(ctx, rayCluster, false)
+			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
+
+			Consistently(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspending))
+		})
+
+		It("Pods should be deleted and new Pods should created back after we remove those finalizers", func() {
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(numPods), fmt.Sprintf("all pods %v", allPods.Items))
+
+			var oldNames []string
+			for _, pod := range allPods.Items {
+				oldNames = append(oldNames, pod.Name)
+				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					pod.Finalizers = nil
+					return k8sClient.Update(ctx, &pod)
+				})
+				Expect(err).NotTo(HaveOccurred(), "Failed to update Pods")
+			}
+			// RayClusterSuspending and RayClusterSuspended should be both false.
+			Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(BeEmpty())
+			Consistently(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(BeEmpty())
+
+			// New Pods should be created.
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(numPods), fmt.Sprintf("all pods %v", allPods.Items))
+
+			var newNames []string
+			for _, pod := range allPods.Items {
+				newNames = append(newNames, pod.Name)
+			}
+			Expect(newNames).NotTo(ConsistOf(oldNames))
+		})
+
+		It("Set suspend to true and all Pods should be deleted again", func() {
+			err := updateRayClusterSuspendField(ctx, rayCluster, true)
+			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
+
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(0), fmt.Sprintf("all pods %v", allPods.Items))
+
+			Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
+			Consistently(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
+				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
+		})
+
+		It("Delete the cluster", func() {
+			err := k8sClient.Delete(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
-	Describe("RayCluster with a multi-host worker group", func() {
+	Describe("RayCluster with a multi-host worker group", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
@@ -664,7 +805,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with PodTemplate referencing a different namespace", func() {
+	Describe("RayCluster with PodTemplate referencing a different namespace", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-podtemplate-namespace", namespace)
@@ -698,7 +839,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster without resource request", func() {
+	Describe("RayCluster without resource request", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("no-resource-req", namespace)
@@ -783,7 +924,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
-	Describe("RayCluster with invalid NumOfHosts", func() {
+	Describe("RayCluster with invalid NumOfHosts", Ordered, func() {
 		// Some users only upgrade the KubeRay image without upgrading the CRD. For example, when a
 		// user upgrades the KubeRay operator from v1.0.0 to v1.1.0 without upgrading the CRD, the
 		// KubeRay operator will use the zero value of `NumOfHosts` in the CRD. Hence, all worker
@@ -819,6 +960,184 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+	})
+
+	Describe("RayCluster with RayClusterStatusConditions feature gate enabled", func() {
+		BeforeEach(func() {
+			cleanUpFunc := features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterStatusConditions, true)
+			DeferCleanup(cleanUpFunc)
+		})
+
+		It("Should handle HeadPodReady and RayClusterProvisioned conditions correctly", func(ctx SpecContext) {
+			namespace := "default"
+			rayCluster := rayClusterTemplate("raycluster-status-conditions-enabled", namespace)
+			rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
+			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](1)
+			var headPod corev1.Pod
+			var workerPod corev1.Pod
+			headPods := corev1.PodList{}
+			workerPods := corev1.PodList{}
+			workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+			headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+			By("Verify RayCluster spec")
+			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](1)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(ptr.To[int32](1)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
+
+			By("Create a RayCluster custom resource")
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+
+			By("Check the number of worker Pods")
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("workerGroup %v", workerPods.Items))
+			workerPod = workerPods.Items[0]
+
+			By("Get the head pod")
+			err = k8sClient.List(ctx, &headPods, headFilters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(headPods.Items).Should(HaveLen(1), "headPods: %v", headPods.Items)
+			headPod = headPods.Items[0]
+
+			By("Check RayCluster conditions empty initially")
+			// Initially, neither head Pod nor worker Pod are ready. The RayClusterProvisioned condition should not be present.
+			Expect(testRayCluster.Status.Conditions).To(BeEmpty())
+
+			By("Update the head pod to Running and Ready")
+			headPod.Status.Phase = corev1.PodRunning
+			headPod.Status.Conditions = []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+
+			By("Check RayCluster HeadPodReady condition is true")
+			// The head pod is ready, so HeadPodReady condition should be added and set to True.
+			Eventually(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+
+			By("Check RayCluster RayClusterProvisioned condition is false")
+			// But the worker pod is not ready yet, RayClusterProvisioned condition should be false.
+			Consistently(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionFalse(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+
+			By("Update the worker pod to Running")
+			workerPod.Status.Phase = corev1.PodRunning
+			workerPod.Status.Conditions = []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+
+			By("Check RayCluster RayClusterProvisioned condition is true")
+			// All Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
+			Eventually(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+
+			By("Update the worker pod to NotReady")
+			workerPod.Status.Conditions = []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionFalse,
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+
+			By("Check RayCluster RayClusterProvisioned condition is true")
+			// The worker pod fails readiness, but since RayClusterProvisioned focuses solely on whether all Ray Pods are ready for the first time,
+			// RayClusterProvisioned condition should still be True.
+			Consistently(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+
+			By("Update the head pod to NotReady")
+			headPod.Status.Conditions = []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionFalse,
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+
+			By("Check RayCluster HeadPodReady condition is false")
+			// The head pod is not ready, so HeadPodReady should be false.
+			Eventually(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+
+			By("Check RayCluster RayClusterProvisioned condition is still true")
+			// The head pod also fails readiness, RayClusterProvisioned condition not changed.
+			Eventually(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned), metav1.ConditionTrue)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+		})
+
+		It("Should handle RayClusterReplicaFailure condition correctly", func(ctx SpecContext) {
+			namespace := "default"
+			rayCluster := rayClusterTemplate("raycluster-status-conditions-enabled-invalid", namespace)
+			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].ImagePullPolicy = "!invalid!"
+
+			By("Create an invalid RayCluster custom resource")
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+
+			By("Check RayCluster RayClusterReplicaFailure condition is true")
+			Eventually(
+				func() bool {
+					if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)(); err != nil {
+						return false
+					}
+					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
 		})
 	})
 })

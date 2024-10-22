@@ -42,6 +42,7 @@ const (
 	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
+	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -56,8 +57,9 @@ const (
 type JobSubmissionMode string
 
 const (
-	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
-	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
+	K8sJobMode      JobSubmissionMode = "K8sJobMode"      // Submit job via Kubernetes Job
+	HTTPMode        JobSubmissionMode = "HTTPMode"        // Submit job via HTTP request
+	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
 type SubmitterConfig struct {
@@ -86,7 +88,7 @@ type RayJobSpec struct {
 	SubmitterConfig *SubmitterConfig `json:"submitterConfig,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Entrypoint string `json:"entrypoint"`
+	Entrypoint string `json:"entrypoint,omitempty"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.
 	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
@@ -95,6 +97,7 @@ type RayJobSpec struct {
 	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
 	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
 	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
+	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
 	// +kubebuilder:default:=K8sJobMode
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
 	// EntrypointResources specifies the custom resources and quantities to reserve for the

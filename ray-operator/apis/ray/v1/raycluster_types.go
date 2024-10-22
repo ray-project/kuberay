@@ -110,7 +110,8 @@ type UpscalingMode string
 type ClusterState string
 
 const (
-	Ready     ClusterState = "ready"
+	Ready ClusterState = "ready"
+	// Failed is deprecated, but we keep it to avoid compilation errors in projects that import the KubeRay Golang module.
 	Failed    ClusterState = "failed"
 	Suspended ClusterState = "suspended"
 )
@@ -120,6 +121,8 @@ type RayClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// Status reflects the status of the cluster
+	//
+	// Deprecated: the State field is replaced by the Conditions field.
 	State ClusterState `json:"state,omitempty"`
 	// DesiredCPU indicates total desired CPUs for the cluster
 	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
@@ -140,6 +143,14 @@ type RayClusterStatus struct {
 	Head HeadInfo `json:"head,omitempty"`
 	// Reason provides more information about current State
 	Reason string `json:"reason,omitempty"`
+
+	// Represents the latest available observations of a RayCluster's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
 	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
@@ -155,10 +166,37 @@ type RayClusterStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
+type RayClusterConditionType string
+
+// Custom Reason for RayClusterCondition
+const (
+	AllPodRunningAndReadyFirstTime = "AllPodRunningAndReadyFirstTime"
+	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
+	HeadPodNotFound                = "HeadPodNotFound"
+	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
+	// UnknownReason says that the reason for the condition is unknown.
+	UnknownReason = "Unknown"
+)
+
+const (
+	// RayClusterProvisioned indicates whether all Ray Pods are ready for the first time.
+	// After RayClusterProvisioned is set to true for the first time, it will not change anymore.
+	RayClusterProvisioned RayClusterConditionType = "RayClusterProvisioned"
+	// HeadPodReady indicates whether RayCluster's head Pod is ready for requests.
+	HeadPodReady RayClusterConditionType = "HeadPodReady"
+	// RayClusterReplicaFailure is added in a RayCluster when one of its pods fails to be created or deleted.
+	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
+	// RayClusterSuspending is set to true when a user sets .Spec.Suspend to true, ensuring the atomicity of the suspend operation.
+	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
+	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
+	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+)
+
 // HeadInfo gives info about head
 type HeadInfo struct {
 	PodIP       string `json:"podIP,omitempty"`
 	ServiceIP   string `json:"serviceIP,omitempty"`
+	PodName     string `json:"podName,omitempty"`
 	ServiceName string `json:"serviceName,omitempty"`
 }
 

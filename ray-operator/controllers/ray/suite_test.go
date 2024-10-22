@@ -22,6 +22,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
@@ -120,14 +121,15 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			},
 		},
 	}
-	err = NewReconciler(ctx, mgr, options).SetupWithManager(mgr, 1)
+	configs := configapi.Configuration{}
+	err = NewReconciler(ctx, mgr, options, configs).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	testClientProvider := TestClientProvider{}
-	err = NewRayServiceReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr)
+	err = NewRayServiceReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
-	err = NewRayJobReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr)
+	err = NewRayJobReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {

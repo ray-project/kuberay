@@ -43,7 +43,7 @@ def test_templates():
     _, _ = apis.delete_compute_template(ns="default", name="default-template")
     # create
     toleration = Toleration(key="blah1", operator=TolerationOperation.Exists, effect=TolerationEffect.NoExecute)
-    template = Template(name="default-template", namespace="default", cpu=2, memory=8, tolerations=[toleration])
+    template = Template(name="default-template", namespace="default", cpu=2, memory=8, gpu=1, extended_resources={"vpc.amazonaws.com/efa": 32}, tolerations=[toleration])
     status, error = apis.create_compute_template(template)
     assert status == 200
     assert error is None

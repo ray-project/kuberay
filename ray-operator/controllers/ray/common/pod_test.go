@@ -70,8 +70,7 @@ var instance = rayv1.RayCluster{
 				MaxReplicas: ptr.To[int32](10000),
 				GroupName:   "small-group",
 				RayStartParams: map[string]string{
-					"port":     "6379",
-					"num-cpus": "1",
+					"port": "6379",
 				},
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
@@ -192,14 +191,12 @@ var autoscalerContainer = corev1.Container{
 		},
 	},
 	Command: []string{
-		"ray",
+		"/bin/bash",
+		"-lc",
+		"--",
 	},
 	Args: []string{
-		"kuberay-autoscaler",
-		"--cluster-name",
-		"$(RAY_CLUSTER_NAME)",
-		"--cluster-namespace",
-		"$(RAY_CLUSTER_NAMESPACE)",
+		"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 	},
 	Resources: corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
@@ -365,6 +362,17 @@ func TestBuildPod(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
 
+	// Check resources
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	expectedResources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: testMemoryLimit,
+			"nvidia.com/gpu":      resource.MustParse("3"),
+		},
+	}
+	assert.Equal(t, expectedResources.Limits, rayContainer.Resources.Limits, "Resource limits do not match")
+
 	// Check environment variables
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, utils.RAY_ADDRESS, "raycluster-sample-head-svc.default.svc.cluster.local:6379")
@@ -385,6 +393,54 @@ func TestBuildPod(t *testing.T) {
 	// Check Envs
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, "TEST_ENV_NAME", "TEST_ENV_VALUE")
+}
+
+func TestBuildPod_WithNoCPULimits(t *testing.T) {
+	cluster := instance.DeepCopy()
+	ctx := context.Background()
+
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: testMemoryLimit,
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: testMemoryLimit,
+		},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: testMemoryLimit,
+		},
+
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: testMemoryLimit,
+			"nvidia.com/gpu":      resource.MustParse("3"),
+		},
+	}
+
+	// Test head pod
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
+	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
+	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
+	}
+
+	// testing worker pod
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
+	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
+	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
+	}
 }
 
 func TestBuildPod_WithOverwriteCommand(t *testing.T) {
@@ -1130,7 +1186,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
-	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe.
+	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe for worker pod.
 	// Here we test the case where the Ray Pod originates from RayServiceCRD,
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
@@ -1140,4 +1196,145 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
 	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
+
+	// Test 3: User does not define a custom probe. KubeRay will inject Exec probe for head pod.
+	// Here we test the case where the Ray Pod originates from RayServiceCRD,
+	// implying that an additional serve health check will be added to the readiness probe.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	// head pod should not have Ray Serve proxy health probes
+	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.False(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
+}
+
+func TestGenerateRayStartCommand(t *testing.T) {
+	tests := []struct {
+		rayStartParams                        map[string]string
+		mockCustomAcceleratorToRayResourceMap map[string]string
+		name                                  string
+		expected                              string
+		nodeType                              rayv1.RayNodeType
+		resource                              corev1.ResourceRequirements
+	}{
+		{
+			name:           "WorkerNode with GPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"nvidia.com/gpu": resource.MustParse("1"),
+				},
+			},
+			expected: "ray start  --num-gpus=1 ",
+		},
+		{
+			name:           "HeadNode with Neuron Cores",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources='{"neuron_cores":4}' `,
+		},
+		{
+			name:           "HeadNode with multiple accelerators",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+					"nvidia.com/gpu":            resource.MustParse("1"),
+				},
+			},
+			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
+		},
+		{
+			name:           "HeadNode with multiple custom accelerators",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"cloud-tpus.google.com/v3":  resource.MustParse("8"),
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+					"nvidia.com/gpu":            resource.MustParse("1"),
+				},
+			},
+			mockCustomAcceleratorToRayResourceMap: map[string]string{
+				NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
+				"cloud-tpus.google.com/v3":      "tpu",
+			},
+			expected: `ray start --head  --num-gpus=1  --resources='{"tpu":8}' `,
+		},
+		{
+			name:     "HeadNode with existing resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `"{"custom_resource":2}"`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources='{"custom_resource":2,"neuron_cores":4}' `,
+		},
+		{
+			name:     "HeadNode with existing neuron_cores resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `'{"custom_resource":2,"neuron_cores":3}'`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start --head  --resources='{"custom_resource":2,"neuron_cores":3}' `,
+		},
+		{
+			name:     "HeadNode with invalid resources string",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": "{",
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+				},
+			},
+			expected: "ray start --head  --resources={ ",
+		},
+		{
+			name:           "Invalid node type",
+			nodeType:       "InvalidType",
+			rayStartParams: map[string]string{},
+			resource:       corev1.ResourceRequirements{},
+			expected:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock the customAcceleratorToRayResourceMap with the value specified in the test
+			if tt.mockCustomAcceleratorToRayResourceMap != nil {
+				originalCustomAcceleratorToRayResourceMap := customAcceleratorToRayResourceMap
+				customAcceleratorToRayResourceMap = tt.mockCustomAcceleratorToRayResourceMap
+				defer func() {
+					customAcceleratorToRayResourceMap = originalCustomAcceleratorToRayResourceMap
+				}()
+			}
+
+			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
