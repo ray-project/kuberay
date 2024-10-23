@@ -74,8 +74,8 @@ func AllPodsRunningAndReady(pods []corev1.Pod) bool {
 	return true
 }
 
-func SubmitJobsToAllPods(t Test, pods []corev1.Pod) func(g gomega.Gomega) {
-	return func(g gomega.Gomega) {
+func SubmitJobsToAllPods(t Test, pods []corev1.Pod) func(gomega.Gomega) {
+	return func(gomega.Gomega) {
 		cmd := []string{
 			"python",
 			"-c",
