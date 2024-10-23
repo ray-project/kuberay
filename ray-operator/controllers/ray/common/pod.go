@@ -795,8 +795,12 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 	// Flag to track if any custom accelerator resource are present/added in rayStartParams resources.
 	isCustomAcceleratorResourceAdded := isCustomAcceleratorPresentInResources(resourcesMap)
 
-	for resourceKey, resourceValue := range resourceLimits {
-		resourceKeyString := string(resourceKey)
+	// Create a sorted slice of resource keys
+	// Needed for consistent looping and adding first found custom accelerator resource to ray start params
+	sortedResourceKeys := getSortedResourceKeys(resourceLimits)
+
+	for _, resourceKeyString := range sortedResourceKeys {
+		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
 		if _, ok := rayStartParams["num-gpus"]; !ok {
@@ -809,7 +813,7 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 		if !isCustomAcceleratorResourceAdded {
 			if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resourceValue.IsZero() {
 				if _, exists := resourcesMap[rayResourceName]; !exists {
-					resourcesMap[rayResourceName] = float64(resourceValue.Value())
+					resourcesMap[rayResourceName] = resourceValue.AsApproximateFloat64()
 
 					// Update the resources map in the rayStartParams
 					updatedResourcesStr, err := json.Marshal(resourcesMap)
@@ -853,6 +857,15 @@ func getResourcesMap(rayStartParams map[string]string) (map[string]float64, erro
 		}
 	}
 	return resources, nil
+}
+
+func getSortedResourceKeys(resourceLimits corev1.ResourceList) []string {
+	sortedResourceKeys := make([]string, 0, len(resourceLimits))
+	for resourceKey := range resourceLimits {
+		sortedResourceKeys = append(sortedResourceKeys, string(resourceKey))
+	}
+	sort.Strings(sortedResourceKeys)
+	return sortedResourceKeys
 }
 
 func convertParamMap(rayStartParams map[string]string) (s string) {

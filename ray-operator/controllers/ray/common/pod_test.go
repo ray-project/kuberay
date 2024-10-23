@@ -1272,7 +1272,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 				NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
 				"cloud-tpus.google.com/v3":      "tpu",
 			},
-			expected: `ray start --head  --num-gpus=1  --resources='{"tpu":8}' `,
+			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
 		},
 		{
 			name:     "HeadNode with existing resources",
