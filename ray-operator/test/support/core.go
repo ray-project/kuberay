@@ -1,10 +1,12 @@
 package support
 
 import (
+	"bytes"
 	"io"
-	"os/exec"
 
 	"github.com/onsi/gomega"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,11 +63,36 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 }
 
 func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
-	kubectlCmd := []string{"exec", pod.Name, "-n", pod.Namespace, "-c", containerName, "--"}
-	kubectlCmd = append(kubectlCmd, cmd...)
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: containerName,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, clientgoscheme.ParameterCodec)
 
-	t.T().Logf("Executing command: kubectl %s", kubectlCmd)
-	output, err := exec.Command("kubectl", kubectlCmd...).CombinedOutput()
-	t.T().Logf("Command output: %s", output)
+	t.T().Logf("Executing command: %s", cmd)
+	cfg := t.Client().Config()
+	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
 	t.Expect(err).NotTo(gomega.HaveOccurred())
+	// Capture the output streams
+	var stdout, stderr bytes.Buffer
+	// Execute the command in the pod
+	err = exec.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+	t.T().Logf("Command stdout: %s", stdout.String())
+	t.T().Logf("Command stderr: %s", stderr.String())
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+
 }
