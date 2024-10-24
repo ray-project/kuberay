@@ -61,6 +61,8 @@ readinessProbe:
 #  * "name" is the standard option, expecting a scheduler name, supported values are
 #    "default", "volcano", and "yunikorn".
 #
+# Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
+#
 # Examples:
 #  1. Use volcano (deprecated)
 #       batchScheduler:

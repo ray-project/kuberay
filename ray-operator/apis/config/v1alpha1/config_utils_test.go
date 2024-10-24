@@ -82,6 +82,17 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "both enable-batch-scheduler and batch-scheduler are set",
+			args: args{
+				logger: testr.New(t),
+				config: Configuration{
+					EnableBatchScheduler: true,
+					BatchScheduler:       "volcano",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

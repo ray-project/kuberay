@@ -10,6 +10,10 @@ import (
 )
 
 func ValidateBatchSchedulerConfig(logger logr.Logger, config Configuration) error {
+	if config.EnableBatchScheduler && len(config.BatchScheduler) > 0 {
+		return fmt.Errorf("both feature flags enable-batch-scheduler (deprecated) and batch-scheduler are set. Please use batch-scheduler only")
+	}
+
 	if config.EnableBatchScheduler {
 		logger.Info("Feature flag enable-batch-scheduler is deprecated and will not be supported soon. " +
 			"Use batch-scheduler instead. ")
