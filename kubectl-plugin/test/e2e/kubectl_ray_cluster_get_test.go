@@ -4,18 +4,12 @@ import (
 	"bytes"
 	"os/exec"
 	"strings"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/printers"
 )
-
-func TestKubectlRayGet(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Kubectl Ray Get")
-}
 
 var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 	It("succeed in getting ray cluster information", func() {
