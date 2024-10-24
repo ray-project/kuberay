@@ -13,9 +13,7 @@ import (
 
 	"k8s.io/client-go/rest"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type SchedulerManager struct {
@@ -71,7 +69,7 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface
 	}
 
 	// legacy option, if this is enabled, register volcano
-	// this is for backwards compatibility
+	// this is for backward compatibility
 	if rayConfigs.EnableBatchScheduler {
 		factory = &volcano.VolcanoBatchSchedulerFactory{}
 	}
@@ -79,16 +77,7 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface
 	return factory, nil
 }
 
-func (batch *SchedulerManager) GetSchedulerForCluster(app *rayv1.RayCluster) (schedulerinterface.BatchScheduler, error) {
-	// for backwards compatibility
-	if batch.rayConfigs.EnableBatchScheduler {
-		if schedulerName, ok := app.ObjectMeta.Labels[utils.RaySchedulerName]; ok {
-			if schedulerName == volcano.GetPluginName() {
-				return batch.scheduler, nil
-			}
-		}
-	}
-
+func (batch *SchedulerManager) GetSchedulerForCluster() (schedulerinterface.BatchScheduler, error) {
 	return batch.scheduler, nil
 }
 
