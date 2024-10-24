@@ -11,6 +11,6 @@ def tpu_cores():
     return "TPU Worker: " + os.environ.get("TPU_WORKER_ID") + "TPU cores:" + str(jax.device_count())
 
 num_workers = int(ray.available_resources()["TPU"]) // 4
-printf("Number of TPU Workers: %d" + num_workers)
+print(f"Number of TPU Workers: {num_workers}")
 result = [tpu_cores.remote() for _ in range(num_workers)]
 print(ray.get(result))
