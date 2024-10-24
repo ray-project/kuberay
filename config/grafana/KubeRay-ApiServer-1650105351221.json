@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -23,15 +26,14 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 14765,
   "graphTooltip": 0,
-  "id": 26,
-  "iteration": 1650105328668,
+  "id": 31,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -94,9 +96,14 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "expr": "sum(up{job=\"$job\"})",
           "format": "time_series",
           "instant": false,
@@ -112,7 +119,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -169,15 +176,21 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "1 - ((sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Internal\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unknown\"}[$interval])) +\nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unavailable\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unimplemented\"}[$interval]))\n) / sum(rate(grpc_server_started_total{job=\"$job\",grpc_type=\"unary\"}[$interval])))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -187,7 +200,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -230,15 +243,21 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_started_total{job=\"$job\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -248,7 +267,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -304,19 +323,21 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.5",
+      "pluginVersion": "10.0.2",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "P1809F7CD0C75ACF3"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "histogram_quantile(0.95, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "95%",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -325,6 +346,10 @@
     },
     {
       "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -333,13 +358,22 @@
       },
       "id": 72,
       "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "Go Stats",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -347,6 +381,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -399,8 +435,9 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "hidden",
-          "placement": "bottom"
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
         },
         "tooltip": {
           "mode": "multi",
@@ -410,6 +447,11 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "avg(go_goroutines{job=\"$job\"})",
           "format": "time_series",
@@ -417,6 +459,7 @@
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",
           "metric": "go_goroutines",
+          "range": true,
           "refId": "A",
           "step": 4
         }
@@ -425,16 +468,15 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -488,7 +530,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -498,6 +541,11 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "avg(go_gc_duration_seconds{job=\"$job\"}) by (quantile)",
           "format": "time_series",
@@ -505,6 +553,7 @@
           "intervalFactor": 2,
           "legendFormat": "{{quantile}}",
           "metric": "go_gc_duration_seconds",
+          "range": true,
           "refId": "A",
           "step": 4
         }
@@ -515,7 +564,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -524,6 +573,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -590,7 +641,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -600,16 +652,26 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "avg(go_memstats_alloc_bytes{job=\"$job\"})",
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "bytes allocated",
           "metric": "go_memstats_alloc_bytes",
+          "range": true,
           "refId": "A",
           "step": 4
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "avg(rate(go_memstats_alloc_bytes_total{job=\"$job\"}[$interval]))",
           "interval": "",
@@ -620,6 +682,10 @@
           "step": 4
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "avg(go_memstats_stack_inuse_bytes{job=\"$job\"})",
           "interval": "",
@@ -630,6 +696,10 @@
           "step": 4
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "avg(go_memstats_heap_inuse_bytes{job=\"$job\"})",
           "hide": false,
@@ -646,6 +716,10 @@
     },
     {
       "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -654,13 +728,22 @@
       },
       "id": 74,
       "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "gRPC Stats",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -668,6 +751,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -723,7 +808,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -733,15 +819,25 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"OK\"}[$interval]))\n/ sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "OK",
+          "range": true,
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "(sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"InvalidArgument\"}[$interval])) +\nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"NotFound\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"AlreadyExists\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unauthenticated\"}[$interval])) +\nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"PermissionDenied\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"FailedPrecondition\"}[$interval]))\n)/ sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\"}[$interval]))",
           "format": "time_series",
@@ -752,6 +848,10 @@
           "refId": "B"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "(sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Internal\"}[$interval])) +\nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unknown\"}[$interval])) + \nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unavailable\"}[$interval])) +\nsum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\",grpc_code=\"Unimplemented\"}[$interval]))\n)/ sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\"}[$interval]))",
           "format": "time_series",
@@ -768,7 +868,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -776,6 +876,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -831,7 +933,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -841,12 +944,18 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (grpc_code)\n/ ignoring(grpc_code) group_left sum(rate(grpc_server_handled_total{job=\"$job\",grpc_type=\"unary\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{grpc_code}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -856,7 +965,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -864,6 +973,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -917,7 +1028,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -927,12 +1039,18 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_started_total{job=\"$job\"}[$interval])) by (grpc_service)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{grpc_service}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -940,16 +1058,15 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1005,7 +1122,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1015,12 +1133,18 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_started_total{job=\"$job\"}[$interval])) by (grpc_service) \n/ ignoring(grpc_service) group_left sum(rate(grpc_server_started_total{job=\"$job\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{grpc_service}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -1030,7 +1154,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1038,6 +1162,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1091,7 +1217,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1101,12 +1228,18 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "histogram_quantile(0.95, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (grpc_service,le)\n)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{grpc_service}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -1114,16 +1247,15 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1180,7 +1312,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1190,15 +1323,25 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "histogram_quantile(0.99, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "99%",
+          "range": true,
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.95, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1209,6 +1352,10 @@
           "refId": "B"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.90, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1219,6 +1366,10 @@
           "refId": "E"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.75, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1229,6 +1380,10 @@
           "refId": "C"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.50, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1239,6 +1394,10 @@
           "refId": "D"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.25, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1249,6 +1408,10 @@
           "refId": "F"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "histogram_quantile(0.10, \n  sum(rate(grpc_server_handling_seconds_bucket{job=\"$job\",grpc_type=\"unary\"}[$interval])) by (le)\n)",
           "format": "time_series",
@@ -1263,16 +1426,15 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1305,8 +1467,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1326,7 +1487,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1336,15 +1498,25 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_msg_sent_total{job=\"$job\",grpc_type!=\"unary\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "sent",
+          "range": true,
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "exemplar": true,
           "expr": "sum(rate(grpc_server_msg_received_total{job=\"$job\",grpc_type!=\"unary\"}[$interval]))",
           "format": "time_series",
@@ -1359,16 +1531,15 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -1403,8 +1574,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1424,7 +1594,8 @@
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1434,12 +1605,18 @@
       "pluginVersion": "8.0.6",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "sum(rate(grpc_server_handled_total{job=\"$job\"}[$interval])) by (grpc_type)\n/ ignoring(grpc_type) group_left sum(rate(grpc_server_handled_total{job=\"$job\"}[$interval]))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
           "legendFormat": "{{grpc_type}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -1447,8 +1624,8 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 35,
+  "refresh": "",
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [
     "KubeRay"
@@ -1457,15 +1634,11 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "alertmanager-main",
-          "value": "alertmanager-main"
+          "selected": true,
+          "text": "kuberay-apiserver",
+          "value": "kuberay-apiserver"
         },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
-        },
-        "definition": "",
+        "definition": "label_values(go_memstats_alloc_bytes,job)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
@@ -1473,7 +1646,7 @@
         "options": [],
         "query": {
           "query": "label_values(go_memstats_alloc_bytes,job)",
-          "refId": "Prometheus-job-Variable-Query"
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
@@ -1489,7 +1662,7 @@
         "auto_count": 30,
         "auto_min": "10s",
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "1m",
           "value": "1m"
         },
@@ -1565,6 +1738,6 @@
   "timezone": "",
   "title": "KubeRay-ApiServer",
   "uid": "gn38yKZnk",
-  "version": 3,
+  "version": 5,
   "weekStart": ""
 }
