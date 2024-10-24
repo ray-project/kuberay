@@ -3,7 +3,7 @@ package e2e
 import (
 	"embed"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -19,7 +19,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return file
 }
 

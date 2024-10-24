@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
@@ -39,12 +39,12 @@ func storeEvents(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
 	events, err := t.Client().Core().EventsV1().Events(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
-	bytes, err := renderEventContent(eventKeys, mapEventsToKeys(events))
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	eventContent, err := renderEventContent(eventKeys, mapEventsToKeys(events))
+	assert.NoError(t.T(), err)
 
-	WriteToOutputDir(t, eventLogFileName, Log, bytes)
+	WriteToOutputDir(t, eventLogFileName, Log, eventContent)
 }
 
 func mapEventsToKeys(eventList *eventsv1.EventList) []map[string]string {

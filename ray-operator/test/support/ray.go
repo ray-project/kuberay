@@ -1,7 +1,10 @@
 package support
 
 import (
+	"errors"
+
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -10,17 +13,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func RayJob(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayJob {
-	return func(g gomega.Gomega) *rayv1.RayJob {
-		job, err := t.Client().Ray().RayV1().RayJobs(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		return job
+func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
+	return func() (*rayv1.RayJob, error) {
+		return GetRayJob(t, namespace, name)
 	}
 }
 
-func GetRayJob(t Test, namespace, name string) *rayv1.RayJob {
-	t.T().Helper()
-	return RayJob(t, namespace, name)(t)
+func GetRayJob(t Test, namespace, name string) (*rayv1.RayJob, error) {
+	return t.Client().Ray().RayV1().RayJobs(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
 
 func RayJobStatus(job *rayv1.RayJob) rayv1.JobStatus {
@@ -49,29 +49,14 @@ func RayJobSucceeded(job *rayv1.RayJob) int32 {
 	return *job.Status.Succeeded
 }
 
-func GetRayJobId(t Test, namespace, name string) string {
-	t.T().Helper()
-	job := RayJob(t, namespace, name)(t)
-	return job.Status.JobId
-}
-
-func RayCluster(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayCluster {
-	return func(g gomega.Gomega) *rayv1.RayCluster {
-		cluster, err := t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		return cluster
+func RayCluster(t Test, namespace, name string) func() (*rayv1.RayCluster, error) {
+	return func() (*rayv1.RayCluster, error) {
+		return GetRayCluster(t, namespace, name)
 	}
 }
 
-func RayClusterOrError(t Test, namespace, name string) func(g gomega.Gomega) (*rayv1.RayCluster, error) {
-	return func(_ gomega.Gomega) (*rayv1.RayCluster, error) {
-		return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-	}
-}
-
-func GetRayCluster(t Test, namespace, name string) *rayv1.RayCluster {
-	t.T().Helper()
-	return RayCluster(t, namespace, name)(t)
+func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
+	return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
@@ -82,35 +67,52 @@ func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
 	return cluster.Status.DesiredWorkerReplicas
 }
 
-func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) *corev1.Pod {
-	t.T().Helper()
+func HeadPod(t Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {
+	return func() (*corev1.Pod, error) {
+		return GetHeadPod(t, rayCluster)
+	}
+}
+
+func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) (*corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
 		common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
 	)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
-	t.Expect(len(pods.Items)).To(gomega.Equal(1))
-	return &pods.Items[0]
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) != 1 {
+		return nil, errors.New("number of head pods is not 1")
+	}
+	return &pods.Items[0], nil
 }
 
-func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) []corev1.Pod {
-	t.T().Helper()
+func WorkerPods(t Test, rayCluster *rayv1.RayCluster) func() ([]corev1.Pod, error) {
+	return func() ([]corev1.Pod, error) {
+		return GetWorkerPods(t, rayCluster)
+	}
+}
+
+func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
 		common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
 	)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
-	return pods.Items
+	if pods == nil {
+		return nil, err
+	}
+	return pods.Items, err
 }
 
-func GetAllPods(t Test, rayCluster *rayv1.RayCluster) []corev1.Pod {
-	t.T().Helper()
+func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
 		common.RayClusterAllPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
 	)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
-	return pods.Items
+	if pods == nil {
+		return nil, err
+	}
+	return pods.Items, err
 }
 
 func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.Pod {
@@ -119,7 +121,7 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 		t.Ctx(),
 		common.RayClusterGroupPodsAssociationOptions(rayCluster, group).ToMetaV1ListOptions(),
 	)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return pods.Items
 }
 
