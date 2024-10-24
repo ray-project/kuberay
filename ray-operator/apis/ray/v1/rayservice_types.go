@@ -20,6 +20,13 @@ const (
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
+type UpgradeStrategy string
+
+const (
+	BlueGreenUpgrade      UpgradeStrategy = "BlueGreenUpgrade"
+	NoZeroDowntimeUpgrade UpgradeStrategy = "NoZeroDowntimeUpgrade"
+)
+
 // These statuses should match Ray Serve's application statuses
 // See `enum ApplicationStatus` in https://sourcegraph.com/github.com/ray-project/ray/-/blob/src/ray/protobuf/serve.proto for more details.
 var ApplicationStatusEnum = struct {
@@ -57,6 +64,8 @@ type RayServiceSpec struct {
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *corev1.Service `json:"serveService,omitempty"`
+	// UpgradeStrategy represents the strategy used when upgrading the RayService. Currently supports `BlueGreenUpgrade` and `NoZeroDowntimeUpgrade`
+	UpgradeStrategy UpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`

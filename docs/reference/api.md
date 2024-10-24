@@ -207,6 +207,7 @@ _Appears in:_
 | `serviceUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `deploymentUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `serveService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics. |  |  |
+| `upgradeStrategy` _[UpgradeStrategy](#upgradestrategy)_ | UpgradeStrategy represents the strategy used when upgrading the RayService. Currently supports `BlueGreenUpgrade` and `NoZeroDowntimeUpgrade` |  |  |
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 
@@ -243,6 +244,19 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `backoffLimit` _integer_ | BackoffLimit of the submitter k8s job. |  |  |
+
+
+#### UpgradeStrategy
+
+_Underlying type:_ _string_
+
+
+
+
+
+_Appears in:_
+- [RayServiceSpec](#rayservicespec)
+
 
 
 #### UpscalingMode
