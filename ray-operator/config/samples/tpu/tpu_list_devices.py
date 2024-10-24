@@ -1,6 +1,8 @@
 import ray
 import jax
 
+from jax.experimental import multihost_utils
+
 ray.init()
 
 @ray.remote(resources={"TPU": 4})
