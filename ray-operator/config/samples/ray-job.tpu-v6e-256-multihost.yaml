@@ -59,19 +59,8 @@ spec:
                     google.com/tpu: "4"
                     memory: 200G
                 env:
-                - name: NODE_IP
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: status.hostIP
-                - name: VBAR_CONTROL_SERVICE_URL
-                  value: $(NODE_IP):8353
                 - name: JAX_PLATFORMS
                   value: tpu,cpu
-                - name: ENABLE_PJRT_COMPATIBILITY
-                  value: "true"
-                ports:
-                - containerPort: 8081
-                  name: mxla
                 securityContext:
                   privileged: true
             nodeSelector:
