@@ -7,8 +7,10 @@ ray.init()
 
 @ray.remote(resources={"TPU": 4})
 def tpu_cores():
+    cores = "TPU cores:" + str(jax.device_count())
+    print("TPU Worker: " + os.environ.get("TPU_WORKER_ID"))
     multihost_utils.sync_global_devices("sync")
-    return "TPU Worker: " + os.environ.get("TPU_WORKER_ID") + "TPU cores:" + str(jax.device_count())
+    return cores
 
 num_workers = int(ray.available_resources()["TPU"]) // 4
 print(f"Number of TPU Workers: {num_workers}")
