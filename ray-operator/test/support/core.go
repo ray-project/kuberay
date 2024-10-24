@@ -94,5 +94,4 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
 	t.Expect(err).NotTo(gomega.HaveOccurred())
-
 }
