@@ -88,6 +88,9 @@ func TestRayCluster(t *testing.T) {
 
 			// Check if all worker pods are ready
 			test.Eventually(GetWorkerPods(test, rayCluster), TestTimeoutShort).Should(gomega.WithTransform(AllPodsRunningAndReady, gomega.BeTrue()))
+
+			// Check that all pods can submit jobs
+			test.Eventually(SubmitJobsToAllPods(test, GetAllPods(test, rayCluster)), TestTimeoutShort).Should(gomega.Succeed())
 		})
 	}
 }

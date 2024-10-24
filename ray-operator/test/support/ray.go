@@ -103,6 +103,16 @@ func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) []corev1.Pod {
 	return pods.Items
 }
 
+func GetAllPods(t Test, rayCluster *rayv1.RayCluster) []corev1.Pod {
+	t.T().Helper()
+	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		t.Ctx(),
+		common.RayClusterAllPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
+	)
+	t.Expect(err).NotTo(gomega.HaveOccurred())
+	return pods.Items
+}
+
 func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.Pod {
 	t.T().Helper()
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(

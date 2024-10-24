@@ -7,7 +7,6 @@ import (
 	"runtime"
 
 	"github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -73,4 +72,19 @@ func AllPodsRunningAndReady(pods []corev1.Pod) bool {
 		}
 	}
 	return true
+}
+
+func SubmitJobsToAllPods(t Test, pods []corev1.Pod) func(gomega.Gomega) {
+	return func(gomega.Gomega) {
+		cmd := []string{
+			"python",
+			"-c",
+			"import ray; ray.init(); print(ray.cluster_resources())",
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				ExecPodCmd(t, &pod, container.Name, cmd)
+			}
+		}
+	}
 }
