@@ -59,6 +59,9 @@ var (
 		# Download all (worker node and head node) the logs from a RayCluster
 		kubectl ray log my-raycluster --node-type all
 	`)
+
+	// flag to check if output directory is generated and needs to be deleted
+	deleteOutputDir = false
 )
 
 func NewClusterLogOptions(streams genericclioptions.IOStreams) *ClusterLogOptions {
@@ -123,12 +126,13 @@ func (options *ClusterLogOptions) Validate() error {
 	}
 
 	if options.outputDir == "" {
-		fmt.Fprintln(options.ioStreams.Out, "No output directory specified, creating dir under current directory using cluster name.")
+		fmt.Fprintln(options.ioStreams.Out, "No output directory specified, creating dir under current directory using resource name.")
 		options.outputDir = options.ResourceName
 		err := os.MkdirAll(options.outputDir, 0o755)
 		if err != nil {
 			return fmt.Errorf("could not create directory with cluster name %s: %w", options.outputDir, err)
 		}
+		deleteOutputDir = true
 	}
 
 	switch options.nodeType {
@@ -179,6 +183,13 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 	rayNodes, err := kubeClientSet.CoreV1().Pods(*options.configFlags.Namespace).List(ctx, listopts)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve head node for RayCluster %s: %w", options.ResourceName, err)
+	}
+	if len(rayNodes.Items) == 0 {
+		// Clean up the empty directory if the directory was generated. Since it will always be in current dir, only Remove() is used.
+		if deleteOutputDir {
+			os.Remove(options.outputDir)
+		}
+		return fmt.Errorf("No ray nodes found for resource %s", options.ResourceName)
 	}
 
 	// Get a list of logs of the ray nodes.
