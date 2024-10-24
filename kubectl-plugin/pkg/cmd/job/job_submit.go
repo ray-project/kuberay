@@ -417,13 +417,10 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Failed to get latest version of Ray Job")
 	}
 
-	rayJobAnnotations := options.RayJob.GetAnnotations()
-	if rayJobAnnotations == nil {
-		rayJobAnnotations = make(map[string]string)
+	err = unstructured.SetNestedField(options.RayJob.Object, rayJobID, "spec", "jobId")
+	if err != nil {
+		return fmt.Errorf("Error occurred while trying to set RayJob ID in RayJob Spec: %w", err)
 	}
-
-	rayJobAnnotations["ray.io/ray-job-submission-id"] = rayJobID
-	options.RayJob.SetAnnotations(rayJobAnnotations)
 
 	_, err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
 	if err != nil {
