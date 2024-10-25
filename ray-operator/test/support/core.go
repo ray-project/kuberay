@@ -83,7 +83,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Executing command: %s", cmd)
 	cfg := t.Client().Config()
 	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	// Capture the output streams
 	var stdout, stderr bytes.Buffer
 	// Execute the command in the pod
@@ -95,5 +95,5 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	})
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 }
