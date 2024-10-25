@@ -67,6 +67,8 @@ spec:
             ports:
             - containerPort: 8081
               name: mxla
+            securityContext:
+              privileged: true
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
           cloud.google.com/gke-tpu-topology: 16x16
