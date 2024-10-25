@@ -4,6 +4,8 @@ import (
 	"io"
 	"os/exec"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,7 +17,7 @@ func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func
 		listOptions := &metav1.ListOptions{}
 
 		for _, option := range options {
-			t.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
+			g.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
 		}
 
 		pods, err := t.Client().Core().CoreV1().Pods(namespace).List(t.Ctx(), *listOptions)
@@ -28,7 +30,7 @@ func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
 	pods, err := t.Client().Core().CoreV1().Pods(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
@@ -47,14 +49,14 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 		t.T().Logf("Error getting logs from container %s/%s/%s", namespace.Name, podName, containerName)
 		return
 	}
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	defer func() {
-		t.Expect(stream.Close()).To(gomega.Succeed())
+		assert.NoError(t.T(), stream.Close())
 	}()
 
 	bytes, err := io.ReadAll(stream)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	containerLogFileName := "pod-" + podName + "-" + containerName
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
@@ -67,5 +69,5 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Executing command: kubectl %s", kubectlCmd)
 	output, err := exec.Command("kubectl", kubectlCmd...).CombinedOutput()
 	t.T().Logf("Command output: %s", output)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 }
