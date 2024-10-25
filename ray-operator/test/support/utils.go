@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 )
 
 func Ptr[T any](v T) *T {
@@ -20,6 +20,6 @@ const (
 
 func WriteToOutputDir(t Test, fileName string, fileType OutputType, data []byte) {
 	t.T().Helper()
-	t.Expect(os.WriteFile(path.Join(t.OutputDir(), fileName+"."+string(fileType)), data, fs.ModePerm)).
-		To(gomega.Succeed())
+	err := os.WriteFile(path.Join(t.OutputDir(), fileName+"."+string(fileType)), data, fs.ModePerm)
+	assert.NoError(t.T(), err)
 }

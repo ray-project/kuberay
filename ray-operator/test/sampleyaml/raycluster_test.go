@@ -3,7 +3,7 @@ package sampleyaml
 import (
 	"testing"
 
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -60,18 +60,22 @@ func TestRayCluster(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			test := With(t)
+			g := NewWithT(t)
+
 			namespace := test.NewTestNamespace()
 			test.StreamKubeRayOperatorLogs()
 			rayClusterFromYaml := DeserializeRayClusterSampleYAML(test, tt.name)
 			KubectlApplyYAML(test, tt.name, namespace.Name)
 
-			rayCluster := GetRayCluster(test, namespace.Name, rayClusterFromYaml.Name)
-			test.Expect(rayCluster).NotTo(gomega.BeNil())
+			rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterFromYaml.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(rayCluster).NotTo(BeNil())
 
 			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
-			test.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-			rayCluster = GetRayCluster(test, namespace.Name, rayCluster.Name)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+			rayCluster, err = GetRayCluster(test, namespace.Name, rayCluster.Name)
+			g.Expect(err).NotTo(HaveOccurred())
 
 			// Check if the RayCluster created correct number of pods
 			var desiredWorkerReplicas int32
@@ -80,14 +84,17 @@ func TestRayCluster(t *testing.T) {
 					desiredWorkerReplicas += *workerGroupSpec.Replicas
 				}
 			}
-			test.Eventually(GetWorkerPods(test, rayCluster), TestTimeoutShort).Should(gomega.HaveLen(int(desiredWorkerReplicas)))
-			test.Expect(rayCluster.Status.DesiredWorkerReplicas).To(gomega.Equal(desiredWorkerReplicas))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerReplicas)))
+			g.Expect(rayCluster.Status.DesiredWorkerReplicas).To(Equal(desiredWorkerReplicas))
 
 			// Check if the head pod is ready
-			test.Eventually(GetHeadPod(test, rayCluster), TestTimeoutShort).Should(gomega.WithTransform(IsPodRunningAndReady, gomega.BeTrue()))
+			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 			// Check if all worker pods are ready
-			test.Eventually(GetWorkerPods(test, rayCluster), TestTimeoutShort).Should(gomega.WithTransform(AllPodsRunningAndReady, gomega.BeTrue()))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
+
+			// Check that all pods can submit jobs
+			g.Eventually(SubmitJobsToAllPods(test, rayCluster), TestTimeoutShort).Should(Succeed())
 		})
 	}
 }

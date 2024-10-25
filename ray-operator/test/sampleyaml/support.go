@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/onsi/gomega"
-
+	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -20,8 +20,8 @@ func getSampleYAMLDir(t Test) string {
 	_, b, _, _ := runtime.Caller(0)
 	sampleYAMLDir := filepath.Join(filepath.Dir(b), "../../config/samples")
 	info, err := os.Stat(sampleYAMLDir)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
-	t.Expect(info.IsDir()).To(gomega.BeTrue())
+	assert.NoError(t.T(), err)
+	assert.True(t.T(), info.IsDir())
 	return sampleYAMLDir
 }
 
@@ -30,7 +30,7 @@ func readYAML(t Test, filename string) []byte {
 	sampleYAMLDir := getSampleYAMLDir(t)
 	yamlFile := filepath.Join(sampleYAMLDir, filename)
 	yamlFileContent, err := os.ReadFile(yamlFile)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return yamlFileContent
 }
 
@@ -40,7 +40,7 @@ func DeserializeRayClusterSampleYAML(t Test, filename string) *rayv1.RayCluster 
 	decoder := rayscheme.Codecs.UniversalDecoder()
 	rayCluster := &rayv1.RayCluster{}
 	_, _, err := decoder.Decode(yamlFileContent, nil, rayCluster)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return rayCluster
 }
 
@@ -50,7 +50,7 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	sampleYAMLPath := filepath.Join(sampleYAMLDir, filename)
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "apply", "-f", sampleYAMLPath, "-n", namespace)
 	err := kubectlCmd.Run()
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	t.T().Logf("Successfully applied %s", filename)
 }
 
@@ -73,4 +73,21 @@ func AllPodsRunningAndReady(pods []corev1.Pod) bool {
 		}
 	}
 	return true
+}
+
+func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
+	return func(g Gomega) {
+		pods, err := GetAllPods(t, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		cmd := []string{
+			"python",
+			"-c",
+			"import ray; ray.init(); print(ray.cluster_resources())",
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				ExecPodCmd(t, &pod, container.Name, cmd)
+			}
+		}
+	}
 }

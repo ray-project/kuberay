@@ -15,6 +15,7 @@ import (
 
 func TestRayService(t *testing.T) {
 	test := With(t)
+	g := NewWithT(t)
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
@@ -23,7 +24,7 @@ func TestRayService(t *testing.T) {
 	// Scripts for creating and terminating detached actors to trigger autoscaling
 	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "locustfile.py", "locust_runner.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
-	test.Expect(err).NotTo(HaveOccurred())
+	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 	test.T().Run("Static RayService", func(_ *testing.T) {
@@ -49,11 +50,11 @@ applications:
 				WithRayClusterSpec(newRayClusterSpec()))
 
 		rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
-		test.Expect(err).NotTo(HaveOccurred())
+		g.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
 		test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
-		test.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 			Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
 		locustClusterAC := rayv1ac.RayCluster("locust-cluster", namespace.Name).
@@ -63,16 +64,16 @@ applications:
 					WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 					WithTemplate(apply(headPodTemplateApplyConfiguration(), mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))))
 		locustCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), locustClusterAC, TestApplyOptions)
-		test.Expect(err).NotTo(HaveOccurred())
+		g.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created Locust RayCluster %s/%s successfully", locustCluster.Namespace, locustCluster.Name)
 
 		// Wait for RayCluster to become ready and verify the number of available worker replicas.
-		test.Eventually(RayCluster(test, locustCluster.Namespace, locustCluster.Name), TestTimeoutMedium).
+		g.Eventually(RayCluster(test, locustCluster.Namespace, locustCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-		locustCluster = GetRayCluster(test, locustCluster.Namespace, locustCluster.Name)
-		test.Expect(locustCluster.Status.DesiredWorkerReplicas).To(Equal(int32(0)))
+		g.Expect(GetRayCluster(test, locustCluster.Namespace, locustCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
 
-		headPod := GetHeadPod(test, locustCluster)
+		headPod, err := GetHeadPod(test, locustCluster)
+		g.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 		// Install Locust in the head Pod
