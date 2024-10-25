@@ -332,7 +332,7 @@ rules:
   - patch
   - update
   - watch
-{{- if .batchSchedulerEnabled }}
+{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh
   resources:

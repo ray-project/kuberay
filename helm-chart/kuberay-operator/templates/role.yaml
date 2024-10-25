@@ -6,5 +6,5 @@ metadata:
   labels:
 {{ include "kuberay-operator.labels" . | indent 4 }}
   name: {{ include "kuberay-operator.fullname" . }}
-{{ include "role.consistentRules" (dict "batchSchedulerEnabled" .Values.batchScheduler.enabled) }}
+{{ include "role.consistentRules" (dict "batchSchedulerEnabled" .Values.batchScheduler.enabled "batchSchedulerName" .Values.batchScheduler.name) }}
 {{- end }}
