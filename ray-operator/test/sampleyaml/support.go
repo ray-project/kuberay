@@ -44,6 +44,16 @@ func DeserializeRayClusterSampleYAML(t Test, filename string) *rayv1.RayCluster 
 	return rayCluster
 }
 
+func DeserializeRayServiceSampleYAML(t Test, filename string) *rayv1.RayService {
+	t.T().Helper()
+	yamlFileContent := readYAML(t, filename)
+	decoder := rayscheme.Codecs.UniversalDecoder()
+	rayService := &rayv1.RayService{}
+	_, _, err := decoder.Decode(yamlFileContent, nil, rayService)
+	assert.NoError(t.T(), err)
+	return rayService
+}
+
 func KubectlApplyYAML(t Test, filename string, namespace string) {
 	t.T().Helper()
 	sampleYAMLDir := getSampleYAMLDir(t)
