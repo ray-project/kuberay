@@ -41,7 +41,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	controller "sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -1619,8 +1619,16 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quantity {
 	totalGPUs := resource.Quantity{}
 
+	var customKeys []string
+	if accelerators := os.Getenv(utils.CUSTOM_GPU_ACCELERATOR); accelerators != "" {
+		customKeys = strings.Split(accelerators, ",")
+	}
+
 	for key, val := range resources {
 		if strings.HasSuffix(string(key), "gpu") && !val.IsZero() {
+			totalGPUs.Add(val)
+		}
+		if utils.Contains(customKeys, string(key)) && !val.IsZero() {
 			totalGPUs.Add(val)
 		}
 	}

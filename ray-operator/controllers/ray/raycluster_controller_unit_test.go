@@ -2935,13 +2935,15 @@ func TestSumGPUs(t *testing.T) {
 	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
 
 	tests := map[string]struct {
-		input    map[corev1.ResourceName]resource.Quantity
-		expected resource.Quantity
+		input                        map[corev1.ResourceName]resource.Quantity
+		customGPUAcceleratorEnvInput string
+		expected                     resource.Quantity
 	}{
 		"no GPUs specified": {
 			map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU: resource.MustParse("1"),
 			},
+			"",
 			resource.MustParse("0"),
 		},
 		"one GPU type specified": {
@@ -2950,6 +2952,7 @@ func TestSumGPUs(t *testing.T) {
 				nvidiaGPUResourceName: resource.MustParse("1"),
 				googleTPUResourceName: resource.MustParse("1"),
 			},
+			"",
 			resource.MustParse("1"),
 		},
 		"multiple GPUs specified": {
@@ -2959,12 +2962,25 @@ func TestSumGPUs(t *testing.T) {
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
 				googleTPUResourceName:              resource.MustParse("1"),
 			},
+			"",
 			resource.MustParse("5"),
+		},
+		"custom GPUs specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU:                        resource.MustParse("1"),
+				nvidiaGPUResourceName:                     resource.MustParse("3"),
+				corev1.ResourceName("foo.bar/gpu"):        resource.MustParse("2"),
+				corev1.ResourceName("gpu.intel.com/i915"): resource.MustParse("4"),
+				googleTPUResourceName:                     resource.MustParse("1"),
+			},
+			"gpu.intel.com/i915",
+			resource.MustParse("9"),
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Setenv(utils.CUSTOM_GPU_ACCELERATOR, tc.customGPUAcceleratorEnvInput)
 			result := sumGPUs(tc.input)
 			assert.True(t, tc.expected.Equal(result), "GPU number is wrong")
 		})
