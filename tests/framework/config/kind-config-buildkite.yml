@@ -15,3 +15,5 @@ nodes:
     apiServer:
       certSANs:
         - "docker"
+- role: worker
+- role: worker

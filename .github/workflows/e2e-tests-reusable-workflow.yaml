@@ -55,14 +55,6 @@ jobs:
             make deploy -e IMG="${IMG}"
             kubectl wait --timeout=90s --for=condition=Available=true deployment -n ray-system kuberay-operator
 
-        - name: Deploy Kuberay Cluster with Topology spread constraints
-          if: inputs.plugin-test
-          run: |
-            echo Deploying Kuberay cluster with Topology spread constraints
-
-            kubectl apply -f ./ray-operator/config/samples/ray-cluster.TopoSpreadConst.yaml
-            sh ./scripts/validate_topologySC.sh
-
         - name: Deploy Kuberay Cluster
           if: inputs.plugin-test
           run: |
