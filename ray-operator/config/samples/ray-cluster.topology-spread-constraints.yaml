@@ -2,6 +2,7 @@ apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: raycluster-topology-test
+  namespace: default
 spec:
   rayVersion: '2.9.0'
   enableInTreeAutoscaling: true
@@ -51,7 +52,7 @@ spec:
               ray.io/node-type: head
   workerGroupSpecs:
     - groupName: worker-group-1
-    - replicas: 2
+      replicas: 2
       minReplicas: 2
       maxReplicas: 5
       rayStartParams: {}
