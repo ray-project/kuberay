@@ -58,6 +58,9 @@ func TestRayCluster(t *testing.T) {
 		{
 			name: "ray-cluster.tls.yaml",
 		},
+		{
+			name: "ray-cluster.topology-spread-constraints.yaml",
+		},
 	}
 
 	for _, tt := range tests {
