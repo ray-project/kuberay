@@ -1,4 +1,4 @@
-code apiVersion: ray.io/v1
+apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: raycluster-topology-test
