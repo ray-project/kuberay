@@ -1,8 +1,7 @@
-apiVersion: ray.io/v1
+code apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: raycluster-topology-test
-  namespace: default
 spec:
   rayVersion: '2.9.0'
   enableInTreeAutoscaling: true
