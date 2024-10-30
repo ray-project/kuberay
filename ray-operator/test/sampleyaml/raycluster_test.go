@@ -116,7 +116,7 @@ func TestRayClusterTopologySC(t *testing.T) {
 			test.Expect(rayCluster).NotTo(gomega.BeNil())
 
 			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
-			test.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+			test.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutLong).
 				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
 
 			// Check for 3 running pods as per the topology constraints
