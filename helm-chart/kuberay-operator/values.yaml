@@ -88,6 +88,8 @@ featureGates:
   - name: RayClusterStatusConditions
     enabled: false
 
+# Path to the operator binary
+operatorComand: /manager
 
 # Set up `securityContext` to improve Pod security.
 # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
