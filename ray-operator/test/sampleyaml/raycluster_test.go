@@ -124,9 +124,9 @@ func TestRayClusterTopologySC(t *testing.T) {
 			runningPods := GetWorkerPods(test, rayCluster)
 			test.Expect(len(runningPods)).To(gomega.Equal(3))
 
-			// Consistently check that there are 6 pending pods due to topology constraints
+			// Consistently check that there are 2 pending pods due to topology constraints
 			test.Consistently(GetWorkerPods(test, rayCluster), TestTimeoutShort, time.Second).
-				Should(gomega.WithTransform(AllPodsPending, gomega.Equal(6)))
+				Should(gomega.WithTransform(AllPodsPending, gomega.Equal(2)))
 		})
 	}
 }

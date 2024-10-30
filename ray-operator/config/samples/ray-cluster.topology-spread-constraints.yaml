@@ -51,8 +51,8 @@ spec:
               ray.io/node-type: head
   workerGroupSpecs:
     - groupName: worker-group-1
-      replicas: 4
-      minReplicas: 4
+    - replicas: 2
+      minReplicas: 2
       maxReplicas: 5
       rayStartParams: {}
       template:
@@ -80,8 +80,8 @@ spec:
                 ray.io/node-type: worker
 
     - groupName: worker-group-2
-      replicas: 4
-      minReplicas: 4
+      replicas: 2
+      minReplicas: 2
       maxReplicas: 5
       rayStartParams: {}
       template:
