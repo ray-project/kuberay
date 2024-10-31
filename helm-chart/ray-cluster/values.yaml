@@ -127,11 +127,7 @@ head:
   #     - name: ndots
   #       value: "2"
   #     - name: edns0
-  topologySpreadConstraints:
-    enabled: true
-    maxSkew: 1
-    topologyKey: "kubernetes.io/hostname"
-    whenUnsatisfiable: "DoNotSchedule"
+  topologySpreadConstraints: {}
 
 
 worker:
@@ -195,11 +191,7 @@ worker:
   # container command for worker Pod.
   command: []
   args: []
-  topologySpreadConstraints:
-    enabled: true
-    maxSkew: 1
-    topologyKey: "kubernetes.io/hostname"
-    whenUnsatisfiable: "DoNotSchedule"
+  topologySpreadConstraints: {}
 
 
   # Custom pod DNS configuration

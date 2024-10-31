@@ -104,11 +104,6 @@
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
-    # Check all nodes are ready
-    - |
-      kubectl wait --for=condition=Ready nodes --all --timeout=120s || {
-        echo "Error: Not all nodes are ready"; exit 1;
-      }
     # Deploy KubeRay operator
     - pushd ray-operator
     - IMG=quay.io/kuberay/operator:v1.2.2 make deploy
