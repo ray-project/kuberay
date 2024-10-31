@@ -15,12 +15,12 @@ spec:
           - name: ray-head
             image: rayproject/ray:2.9.0
             resources:
-              limits:
-                cpu: 3
-                memory: 4Gi
               requests:
-                cpu: 3
-                memory: 4Gi
+                cpu: 300m
+                memory: 1G
+              limits:
+                cpu: 500m
+                memory: 2G
             ports:
               - containerPort: 6379
                 name: gcs-server

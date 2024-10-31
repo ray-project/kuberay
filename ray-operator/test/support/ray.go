@@ -62,10 +62,6 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 	return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
 
-func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
-	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-}
-
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
 	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
