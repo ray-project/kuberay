@@ -5,8 +5,6 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
@@ -21,12 +19,13 @@ func TestRayService(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	test.StreamKubeRayOperatorLogs()
 
-	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "locustfile.py", "locust_runner.py"))
-	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+	// Create a ConfigMap with Locust runner script
+	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
+	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+	test.T().Logf("Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
+	// Create the RayService for testing
 	test.T().Run("Static RayService", func(_ *testing.T) {
 		rayServiceAC := rayv1ac.RayService("static-raysvc", namespace.Name).
 			WithSpec(rayv1ac.RayServiceSpec().
@@ -57,13 +56,8 @@ applications:
 		g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 			Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
-		locustClusterAC := rayv1ac.RayCluster("locust-cluster", namespace.Name).
-			WithSpec(rayv1ac.RayClusterSpec().
-				WithRayVersion(GetRayVersion()).
-				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-					WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
-					WithTemplate(apply(headPodTemplateApplyConfiguration(), mountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))))
-		locustCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), locustClusterAC, TestApplyOptions)
+		KubectlApplyYAML(test, "testdata/locust-cluster.const-rate.yaml", namespace.Name)
+		locustCluster, err := GetRayCluster(test, namespace.Name, "locust-cluster")
 		g.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created Locust RayCluster %s/%s successfully", locustCluster.Namespace, locustCluster.Name)
 
@@ -81,7 +75,7 @@ applications:
 
 		// Run Locust test
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
-			"python", "/home/ray/test_scripts/locust_runner.py", "-f", "/home/ray/test_scripts/locustfile.py", "--host", "http://static-raysvc-serve-svc:8000",
+			"python", "/locust-runner/locust_runner.py", "-f", "/locustfile/locustfile.py", "--host", "http://static-raysvc-serve-svc:8000",
 		})
 	})
 }
