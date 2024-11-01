@@ -165,6 +165,26 @@ func RayJobRayClusterNamespacedName(rayJob *rayv1.RayJob) types.NamespacedName {
 	}
 }
 
+func RayJobHeadPodsAssociationOptions(instance *rayv1.RayJob) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Status.RayClusterName,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	}
+}
+
+func RayJobWorkerPodsAssociationOptions(instance *rayv1.RayJob) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  instance.Status.RayClusterName,
+			utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+		},
+	}
+}
+
 // GetRayClusterHeadPod gets a *corev1.Pod from a *rayv1.RayCluster. Note that it returns (nil, nil) in the case of no head pod exists.
 func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *rayv1.RayCluster) (*corev1.Pod, error) {
 	logger := ctrl.LoggerFrom(ctx)

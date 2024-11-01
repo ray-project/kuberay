@@ -49,6 +49,26 @@ func RayJobSucceeded(job *rayv1.RayJob) int32 {
 	return *job.Status.Succeeded
 }
 
+func GetRayJobStatus(t Test, rayJob *rayv1.RayJob) func() (rayv1.JobStatus, error) {
+	return func() (rayv1.JobStatus, error) {
+		upToDateRayJob, err := GetRayJob(t, rayJob.Namespace, rayJob.Name)
+		if err != nil {
+			return rayv1.JobStatusNew, err
+		}
+		return RayJobStatus(upToDateRayJob), nil
+	}
+}
+
+func GetRayJobDeploymentStatus(t Test, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
+	return func() (rayv1.JobDeploymentStatus, error) {
+		upToDateRayJob, err := GetRayJob(t, rayJob.Namespace, rayJob.Name)
+		if err != nil {
+			return rayv1.JobDeploymentStatusNew, err
+		}
+		return RayJobDeploymentStatus(upToDateRayJob), nil
+	}
+}
+
 func RayCluster(t Test, namespace, name string) func() (*rayv1.RayCluster, error) {
 	return func() (*rayv1.RayCluster, error) {
 		return GetRayCluster(t, namespace, name)
