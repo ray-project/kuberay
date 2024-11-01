@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1619,8 +1620,12 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quantity {
 	totalGPUs := resource.Quantity{}
 
+	// Define a regular expression to match valid GPU resource names
+	gpuPattern := regexp.MustCompile(`^(.*?/)?(gpu(-count)?|gpu-core\.percentage)$`)
+
 	for key, val := range resources {
-		if strings.HasSuffix(string(key), "gpu") && !val.IsZero() {
+		// Check if the resource name matches the GPU pattern and if the quantity is non-zero
+		if gpuPattern.MatchString(string(key)) && !val.IsZero() {
 			totalGPUs.Add(val)
 		}
 	}

@@ -2933,6 +2933,8 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 func TestSumGPUs(t *testing.T) {
 	nvidiaGPUResourceName := corev1.ResourceName("nvidia.com/gpu")
 	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
+	volcanoGPUCorePercentageResourceName := corev1.ResourceName("volcano.sh/gpu-core.percentage")
+	aliyunGPUCountResourceName := corev1.ResourceName("aliyun.com/gpu-count")
 
 	tests := map[string]struct {
 		input    map[corev1.ResourceName]resource.Quantity
@@ -2958,6 +2960,18 @@ func TestSumGPUs(t *testing.T) {
 				nvidiaGPUResourceName:              resource.MustParse("3"),
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
 				googleTPUResourceName:              resource.MustParse("1"),
+			},
+			resource.MustParse("5"),
+		},
+		"volcano GPU type specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				volcanoGPUCorePercentageResourceName: resource.MustParse("5"),
+			},
+			resource.MustParse("5"),
+		},
+		"aliyun GPU type specified": {
+			map[corev1.ResourceName]resource.Quantity{
+				aliyunGPUCountResourceName: resource.MustParse("5"),
 			},
 			resource.MustParse("5"),
 		},
