@@ -11,8 +11,6 @@ ray.init()
 def tpu_cores():
     cores = "TPU cores:" + str(jax.device_count())
     print("TPU Worker: " + os.environ.get("TPU_WORKER_ID"))
-    time.sleep(10)
-    # multihost_utils.sync_global_devices("sync")
     return cores
 
 num_workers = int(ray.available_resources()["TPU"]) // 4
