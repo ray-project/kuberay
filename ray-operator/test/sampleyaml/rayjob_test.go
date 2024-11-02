@@ -71,9 +71,9 @@ func TestRayJob(t *testing.T) {
 			// Check if all worker pods are ready
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 
-			g.Eventually(GetRayJobDeploymentStatus(test, rayJob), TestTimeoutMedium).Should(Equal(rayv1.JobDeploymentStatusComplete))
+			g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
 
-			g.Eventually(GetRayJobStatus(test, rayJob), TestTimeoutMedium).Should(Equal(rayv1.JobStatusSucceeded))
+			g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 		})
 	}
 }
