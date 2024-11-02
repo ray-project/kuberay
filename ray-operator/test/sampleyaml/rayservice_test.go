@@ -65,6 +65,13 @@ func TestRayService(t *testing.T) {
 
 			// Check if all worker pods are ready
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
+
+			// Check if .status.numServeEndpoints is greater than zero
+			g.Eventually(func(g Gomega) int32 {
+				rs, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				return rs.Status.NumServeEndpoints
+			}, TestTimeoutShort).Should(BeNumerically(">", 0))
 		})
 	}
 }
