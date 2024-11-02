@@ -69,6 +69,14 @@ func GetRayJobDeploymentStatus(t Test, rayJob *rayv1.RayJob) func() (rayv1.JobDe
 	}
 }
 
+func RayJobWaitForRayClusterNamePopulated(t Test, rayJob *rayv1.RayJob) func(g gomega.Gomega) {
+	return func(g gomega.Gomega) {
+		upToDateRayJob, err := GetRayJob(t, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(upToDateRayJob.Status.RayClusterName).NotTo(gomega.BeEmpty())
+	}
+}
+
 func RayCluster(t Test, namespace, name string) func() (*rayv1.RayCluster, error) {
 	return func() (*rayv1.RayCluster, error) {
 		return GetRayCluster(t, namespace, name)
