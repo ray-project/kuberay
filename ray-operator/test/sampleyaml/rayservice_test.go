@@ -77,6 +77,8 @@ func TestRayService(t *testing.T) {
 
 			// Check if all applications are running
 			g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutMedium).Should(WithTransform(AllAppsRunning, BeTrue()))
+			// Query dashboard to get the serve application status in head pod
+			g.Eventually(QueryDashboardGetAppStatus(test, rayCluster), TestTimeoutShort).Should(Succeed())
 		})
 	}
 }
