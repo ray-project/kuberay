@@ -109,6 +109,8 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 				BindAddress: "0",
 			},
 		})
+		g.Expect(err).NotTo(HaveOccurred())
+		
 		dashboardClientFunc := GetInitedDashboardClient(t, provider, mgr, rayCluster)
 		_, err = dashboardClientFunc().GetMultiApplicationStatus(t.Ctx())
 		g.Expect(err).NotTo(HaveOccurred())
