@@ -10,13 +10,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 func GetSampleYAMLDir(t Test) string {
@@ -90,28 +91,32 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 }
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
-		cfg := t.Client().Config()
+		clientCfg := t.Client().Config()
 		// source: ray-operator/main_test.go
-		provider := configapi.Configuration{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Configuration",
-				APIVersion: "config.ray.io/v1alpha1",
-			},
-			MetricsAddr:          ":8080",
-			ProbeAddr:            ":8082",
-			EnableLeaderElection: ptr.To(true),
-			ReconcileConcurrency: 1,
+		apiCfg := configapi.Configuration{
+			MetricsAddr:          configapi.DefaultMetricsAddr,
+			ProbeAddr:            configapi.DefaultProbeAddr,
+			EnableLeaderElection: ptr.To(configapi.DefaultEnableLeaderElection),
+			ReconcileConcurrency: configapi.DefaultReconcileConcurrency,
 		}
-		// source: ray-operator/controllers/ray/suite_test.go
-		mgr, err := ctrl.NewManager(&cfg, ctrl.Options{
+		options := ctrl.Options{
+			Cache: cache.Options{
+				DefaultNamespaces: map[string]cache.Config{},
+			},
 			Scheme: scheme.Scheme,
 			Metrics: metricsserver.Options{
-				BindAddress: "0",
+				BindAddress: apiCfg.MetricsAddr,
 			},
-		})
+			HealthProbeBindAddress:  apiCfg.ProbeAddr,
+			LeaderElection:          *apiCfg.EnableLeaderElection,
+			LeaderElectionID:        "ray-operator-leader",
+			LeaderElectionNamespace: apiCfg.LeaderElectionNamespace,
+		}
+
+		mgr, err := ctrl.NewManager(&clientCfg, options)
 		g.Expect(err).NotTo(HaveOccurred())
-		
-		dashboardClientFunc := GetInitedDashboardClient(t, provider, mgr, rayCluster)
+
+		dashboardClientFunc := GetInitedDashboardClient(t, apiCfg, mgr, rayCluster)
 		_, err = dashboardClientFunc().GetMultiApplicationStatus(t.Ctx())
 		g.Expect(err).NotTo(HaveOccurred())
 	}
