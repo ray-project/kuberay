@@ -98,7 +98,7 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 			ProbeAddr:            configapi.DefaultProbeAddr,
 			EnableLeaderElection: ptr.To(configapi.DefaultEnableLeaderElection),
 			ReconcileConcurrency: configapi.DefaultReconcileConcurrency,
-			WatchNamespace:       "",
+			WatchNamespace:       rayCluster.Namespace,
 		}
 		options := ctrl.Options{
 			Cache: cache.Options{
@@ -111,12 +111,13 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 			HealthProbeBindAddress:  apiCfg.ProbeAddr,
 			LeaderElection:          *apiCfg.EnableLeaderElection,
 			LeaderElectionID:        "ray-operator-leader",
-			LeaderElectionNamespace: "default",
+			LeaderElectionNamespace: rayCluster.Namespace,
 		}
 
 		selectorsByObject, err := CacheSelectors()
 		g.Expect(err).NotTo(HaveOccurred())
 		options.Cache.ByObject = selectorsByObject
+		options.Cache.DefaultNamespaces[rayCluster.Namespace] = cache.Config{}
 
 		mgr, err := ctrl.NewManager(&clientCfg, options)
 		g.Expect(err).NotTo(HaveOccurred())
