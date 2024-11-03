@@ -110,7 +110,8 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 			HealthProbeBindAddress:  apiCfg.ProbeAddr,
 			LeaderElection:          *apiCfg.EnableLeaderElection,
 			LeaderElectionID:        "ray-operator-leader",
-			LeaderElectionNamespace: apiCfg.LeaderElectionNamespace,
+			// use pod default namespace
+			LeaderElectionNamespace: "",
 		}
 
 		mgr, err := ctrl.NewManager(&clientCfg, options)
