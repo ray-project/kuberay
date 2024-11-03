@@ -14,18 +14,18 @@ func TestRayService(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
-		{
-			name: "ray-service.custom-serve-service.yaml",
-		},
+		// {
+		// 	name: "ray-service.custom-serve-service.yaml",
+		// },
 		// {
 		// 	name: "ray-service.different-port.yaml",
 		// },
 		// {
 		// 	name: "ray-service.high-availability.yaml",
 		// },
-		// {
-		// 	name: "ray-service.sample.yaml",
-		// },
+		{
+			name: "ray-service.sample.yaml",
+		},
 	}
 
 	for _, tt := range tests {

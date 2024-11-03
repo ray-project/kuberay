@@ -96,7 +96,7 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 		apiCfg := configapi.Configuration{
 			MetricsAddr:          configapi.DefaultMetricsAddr,
 			ProbeAddr:            configapi.DefaultProbeAddr,
-			EnableLeaderElection: ptr.To(configapi.DefaultEnableLeaderElection),
+			EnableLeaderElection: ptr.To(false),
 			ReconcileConcurrency: configapi.DefaultReconcileConcurrency,
 			WatchNamespace:       rayCluster.Namespace,
 		}
