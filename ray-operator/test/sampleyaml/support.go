@@ -92,7 +92,7 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
 		clientCfg := t.Client().Config()
-		// source: ray-operator/main_test.go
+
 		apiCfg := configapi.Configuration{
 			MetricsAddr:          configapi.DefaultMetricsAddr,
 			ProbeAddr:            configapi.DefaultProbeAddr,
@@ -110,8 +110,7 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 			HealthProbeBindAddress:  apiCfg.ProbeAddr,
 			LeaderElection:          *apiCfg.EnableLeaderElection,
 			LeaderElectionID:        "ray-operator-leader",
-			// use pod default namespace
-			LeaderElectionNamespace: "",
+			LeaderElectionNamespace: "default",
 		}
 
 		mgr, err := ctrl.NewManager(&clientCfg, options)
