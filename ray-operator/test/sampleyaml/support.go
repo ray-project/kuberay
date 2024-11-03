@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -94,9 +95,13 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 		clientCfg := t.Client().Config()
 
 		apiCfg := configapi.Configuration{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Configuration",
+				APIVersion: "config.ray.io/v1alpha1",
+			},
 			MetricsAddr:          configapi.DefaultMetricsAddr,
 			ProbeAddr:            configapi.DefaultProbeAddr,
-			EnableLeaderElection: ptr.To(false),
+			EnableLeaderElection: ptr.To(configapi.DefaultEnableLeaderElection),
 			ReconcileConcurrency: configapi.DefaultReconcileConcurrency,
 			WatchNamespace:       rayCluster.Namespace,
 		}
