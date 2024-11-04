@@ -1,6 +1,7 @@
 package sampleyaml
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -124,10 +125,13 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		mgr, err := ctrl.NewManager(&clientCfg, options)
 		assert.NoError(t.T(), err)
+		// Ensure the manager goroutine is stopped after the function ends by using context cancellation.
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		go func() {
 			defer GinkgoRecover()
-			err = mgr.Start(ctrl.SetupSignalHandler())
+			err = mgr.Start(ctx)
 			g.Expect(err).NotTo(HaveOccurred())
 		}()
 
