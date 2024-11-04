@@ -49,7 +49,8 @@ func TestRayJob(t *testing.T) {
 			g.Expect(rayJob).NotTo(BeNil())
 
 			// Wait for RayCluster name to be populated
-			g.Eventually(RayJobWaitForRayClusterNamePopulated(test, rayJob), TestTimeoutShort).Should(Succeed())
+			g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+				Should(WithTransform(RayJobClusterName, Not(BeEmpty())))
 
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
 			g.Expect(err).NotTo(HaveOccurred())
