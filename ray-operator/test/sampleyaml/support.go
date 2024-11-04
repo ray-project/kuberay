@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"runtime"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -95,15 +95,12 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 		clientCfg := t.Client().Config()
 
 		apiCfg := configapi.Configuration{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Configuration",
-				APIVersion: "config.ray.io/v1alpha1",
-			},
 			MetricsAddr:          configapi.DefaultMetricsAddr,
 			ProbeAddr:            configapi.DefaultProbeAddr,
 			EnableLeaderElection: ptr.To(configapi.DefaultEnableLeaderElection),
 			ReconcileConcurrency: configapi.DefaultReconcileConcurrency,
 			WatchNamespace:       rayCluster.Namespace,
+			UseKubernetesProxy:   true,
 		}
 		options := ctrl.Options{
 			Cache: cache.Options{
@@ -120,15 +117,22 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 		}
 
 		selectorsByObject, err := CacheSelectors()
-		g.Expect(err).NotTo(HaveOccurred())
+		assert.NoError(t.T(), err)
+
 		options.Cache.ByObject = selectorsByObject
 		options.Cache.DefaultNamespaces[rayCluster.Namespace] = cache.Config{}
 
 		mgr, err := ctrl.NewManager(&clientCfg, options)
-		g.Expect(err).NotTo(HaveOccurred())
+		assert.NoError(t.T(), err)
 
-		dashboardClientFunc := GetInitedDashboardClient(t, apiCfg, mgr, rayCluster)
-		_, err = dashboardClientFunc().GetMultiApplicationStatus(t.Ctx())
+		go func() {
+			defer GinkgoRecover()
+			err = mgr.Start(ctrl.SetupSignalHandler())
+			g.Expect(err).NotTo(HaveOccurred())
+		}()
+
+		dashboardClientFunc := GetInitRayDashboardClient(t, &apiCfg, &mgr, rayCluster)
+		_, err = (*dashboardClientFunc).GetMultiApplicationStatus(t.Ctx())
 		g.Expect(err).NotTo(HaveOccurred())
 	}
 }

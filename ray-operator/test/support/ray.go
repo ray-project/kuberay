@@ -136,27 +136,27 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	return pods.Items
 }
 
-func GetInitedDashboardClient(
+func GetInitRayDashboardClient(
 	t Test,
-	provider configapi.Configuration,
-	mgr manager.Manager,
+	provider *configapi.Configuration,
+	mgr *manager.Manager,
 	rayClusterInstance *rayv1.RayCluster,
-) func() utils.RayDashboardClientInterface {
+) *utils.RayDashboardClientInterface {
 	t.T().Helper()
 	clientURL, err := utils.FetchHeadServiceURL(
 		t.Ctx(),
-		mgr.GetClient(),
+		(*mgr).GetClient(),
 		rayClusterInstance,
 		utils.DashboardPortName,
 	)
 	assert.NoError(t.T(), err)
 	assert.NotEmpty(t.T(), clientURL)
 
-	dashboardClientFunc := provider.GetDashboardClient(mgr)
-	err = dashboardClientFunc().InitClient(t.Ctx(), clientURL, rayClusterInstance)
+	dashboardClientFunc := (*provider).GetDashboardClient(*mgr)()
+	err = dashboardClientFunc.InitClient(t.Ctx(), clientURL, rayClusterInstance)
 	assert.NoError(t.T(), err)
 
-	return dashboardClientFunc
+	return &dashboardClientFunc
 }
 
 func RayService(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayService {
