@@ -1,6 +1,7 @@
 package sampleyaml
 
 import (
+	"path"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -62,10 +63,11 @@ func TestRayCluster(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
 
+			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
 			test.StreamKubeRayOperatorLogs()
-			rayClusterFromYaml := DeserializeRayClusterSampleYAML(test, tt.name)
-			KubectlApplyYAML(test, tt.name, namespace.Name)
+			rayClusterFromYaml := DeserializeRayClusterYAML(test, yamlFilePath)
+			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -85,7 +87,7 @@ func TestRayCluster(t *testing.T) {
 				}
 			}
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerReplicas)))
-			g.Expect(rayCluster.Status.DesiredWorkerReplicas).To(Equal(desiredWorkerReplicas))
+			g.Expect(GetRayCluster(test, namespace.Name, rayCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(desiredWorkerReplicas)))
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
