@@ -74,11 +74,7 @@ func TestRayService(t *testing.T) {
 			}, TestTimeoutShort).Should(BeNumerically(">", 0))
 
 			// Check if all applications are running
-			g.Eventually(func() (*rayv1.RayService, error) {
-				return GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
-			}, TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) bool {
-				return AllAppsRunning(test, rayService)
-			}, BeTrue()))
+			g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutMedium).Should(WithTransform(AllAppsRunning, BeTrue()))
 		})
 	}
 }

@@ -102,26 +102,21 @@ func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	}
 }
 
-func GetApps(rayService *rayv1.RayService) map[string]rayv1.AppStatus {
+func getApps(rayService *rayv1.RayService) map[string]rayv1.AppStatus {
 	apps := make(map[string]rayv1.AppStatus)
-	for k, v := range rayService.Status.PendingServiceStatus.Applications {
-		apps[k] = v
-	}
 	for k, v := range rayService.Status.ActiveServiceStatus.Applications {
 		apps[k] = v
 	}
 	return apps
 }
 
-func AllAppsRunning(t Test, rayService *rayv1.RayService) bool {
-	appStatuses := GetApps(rayService)
+func AllAppsRunning(rayService *rayv1.RayService) bool {
+	appStatuses := getApps(rayService)
 	if len(appStatuses) == 0 {
-		t.T().Logf("No applications found")
 		return false
 	}
 
-	for appName, appStatus := range appStatuses {
-		t.T().Logf("Application %s status: %s", appName, appStatus.Status)
+	for _, appStatus := range appStatuses {
 		if appStatus.Status != rayv1.ApplicationStatusEnum.RUNNING {
 			return false
 		}
