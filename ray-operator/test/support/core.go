@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	. "github.com/onsi/ginkgo/v2"
-	"github.com/stretchr/testify/assert"
 
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 
