@@ -40,10 +40,6 @@ func TestRayJob(t *testing.T) {
 			rayJobFromYaml := DeserializeRayJobSampleYAML(test, tt.name)
 			KubectlApplyYAML(test, tt.name, namespace.Name)
 
-			test.T().Logf("Waiting for RayJob %s/%s to be running", namespace.Name, rayJobFromYaml.Name)
-			g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).
-				Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
-
 			rayJob, err := GetRayJob(test, namespace.Name, rayJobFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayJob).NotTo(BeNil())
@@ -56,6 +52,9 @@ func TestRayJob(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayJob).NotTo(BeNil())
 
+			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
+			g.Eventually(RayCluster(test, namespace.Name, rayJob.Status.RayClusterName), TestTimeoutMedium).
+				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
 			g.Expect(err).NotTo(HaveOccurred())
 
