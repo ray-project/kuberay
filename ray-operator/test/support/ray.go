@@ -49,6 +49,10 @@ func RayJobSucceeded(job *rayv1.RayJob) int32 {
 	return *job.Status.Succeeded
 }
 
+func RayJobClusterName(job *rayv1.RayJob) string {
+	return job.Status.RayClusterName
+}
+
 func RayCluster(t Test, namespace, name string) func() (*rayv1.RayCluster, error) {
 	return func() (*rayv1.RayCluster, error) {
 		return GetRayCluster(t, namespace, name)
