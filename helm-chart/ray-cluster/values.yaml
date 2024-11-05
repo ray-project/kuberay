@@ -127,6 +127,7 @@ head:
   #     - name: ndots
   #       value: "2"
   #     - name: edns0
+  topologySpreadConstraints: {}
 
 
 worker:
@@ -190,6 +191,8 @@ worker:
   # container command for worker Pod.
   command: []
   args: []
+  topologySpreadConstraints: {}
+
 
   # Custom pod DNS configuration
   # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
