@@ -8,12 +8,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
@@ -134,29 +131,6 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	)
 	assert.NoError(t.T(), err)
 	return pods.Items
-}
-
-func GetInitRayDashboardClient(
-	t Test,
-	provider *configapi.Configuration,
-	mgr *manager.Manager,
-	rayClusterInstance *rayv1.RayCluster,
-) *utils.RayDashboardClientInterface {
-	t.T().Helper()
-	clientURL, err := utils.FetchHeadServiceURL(
-		t.Ctx(),
-		(*mgr).GetClient(),
-		rayClusterInstance,
-		utils.DashboardPortName,
-	)
-	assert.NoError(t.T(), err)
-	assert.NotEmpty(t.T(), clientURL)
-
-	dashboardClientFunc := (*provider).GetDashboardClient(*mgr)()
-	err = dashboardClientFunc.InitClient(t.Ctx(), clientURL, rayClusterInstance)
-	assert.NoError(t.T(), err)
-
-	return &dashboardClientFunc
 }
 
 func RayService(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayService {
