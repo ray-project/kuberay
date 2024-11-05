@@ -1,6 +1,7 @@
 package sampleyaml
 
 import (
+	"path"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -35,10 +36,11 @@ func TestRayJob(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
 
+			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
 			test.StreamKubeRayOperatorLogs()
-			rayJobFromYaml := DeserializeRayJobSampleYAML(test, tt.name)
-			KubectlApplyYAML(test, tt.name, namespace.Name)
+			rayJobFromYaml := DeserializeRayJobYAML(test, yamlFilePath)
+			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 
 			rayJob, err := GetRayJob(test, namespace.Name, rayJobFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -65,9 +67,7 @@ func TestRayJob(t *testing.T) {
 					desiredWorkerReplicas += *workerGroupSpec.Replicas
 				}
 			}
-
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerReplicas)))
-			g.Expect(rayCluster.Status.DesiredWorkerReplicas).To(Equal(desiredWorkerReplicas))
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))

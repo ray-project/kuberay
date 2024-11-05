@@ -1,6 +1,7 @@
 package sampleyaml
 
 import (
+	"path"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -32,10 +33,11 @@ func TestRayService(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
 
+			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
 			test.StreamKubeRayOperatorLogs()
-			rayServiceFromYaml := DeserializeRayServiceSampleYAML(test, tt.name)
-			KubectlApplyYAML(test, tt.name, namespace.Name)
+			rayServiceFromYaml := DeserializeRayServiceYAML(test, yamlFilePath)
+			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 
 			rayService, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
