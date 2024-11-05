@@ -72,6 +72,9 @@ func TestRayService(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 				return rs.Status.NumServeEndpoints
 			}, TestTimeoutShort).Should(BeNumerically(">", 0))
+
+			// Check if all applications are running
+			g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutMedium).Should(WithTransform(AllAppsRunning, BeTrue()))
 		})
 	}
 }
