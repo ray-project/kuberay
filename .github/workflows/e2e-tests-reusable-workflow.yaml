@@ -9,6 +9,9 @@ on:
       dir-to-test:
         required: true
         type: string
+      ray-version:
+        required: false
+        type: string
 
 jobs:
   build:
@@ -31,6 +34,18 @@ jobs:
 
         - name: Setup and start KinD cluster
           uses: ./.github/workflows/actions/kind
+
+        - name: Set up Python
+          if: inputs.plugin-test
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.12'
+
+        - name: Install Ray
+          if: inputs.plugin-test
+          run: |
+            python --version
+            pip install -U "ray[default]==${{ inputs.ray-version }}"
 
         - name: Build CLI and Add to PATH
           if: inputs.plugin-test
