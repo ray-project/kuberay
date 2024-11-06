@@ -2,16 +2,21 @@ package support
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"net/http"
+	"strings"
 
-	"github.com/stretchr/testify/assert"
-
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 )
 
 func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func(g gomega.Gomega) []corev1.Pod {
@@ -96,4 +101,48 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
 	assert.NoError(t.T(), err)
+}
+
+func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {
+	cfg := t.Client().Config()
+
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward")
+
+	transport, upgrader, err := spdy.RoundTripperFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{}, 1)
+	out := new(strings.Builder)
+	errOut := new(strings.Builder)
+
+	// create port forward
+	forwarder, err := portforward.New(
+		spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, req.URL()),
+		[]string{fmt.Sprintf("%d:%d", localPort, remotePort)},
+		stopChan,
+		readyChan,
+		out,
+		errOut,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// launch Port Forward
+	go func() {
+		defer GinkgoRecover()
+		err := forwarder.ForwardPorts()
+		assert.NoError(t.T(), err)
+	}()
+	<-readyChan // wait for port forward to finish
+
+	return stopChan, nil
 }

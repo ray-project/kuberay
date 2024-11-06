@@ -6,11 +6,11 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {

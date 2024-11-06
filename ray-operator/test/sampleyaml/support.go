@@ -1,6 +1,7 @@
 package sampleyaml
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -81,4 +83,29 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 		}
 	}
 	return true
+}
+
+func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
+	return func(g Gomega) {
+		rayDashboardClient := &utils.RayDashboardClient{}
+		pod, err := GetHeadPod(t, rayCluster)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		localPort := 8265
+		remotePort := 8265
+		stopChan, err := SetupPortForward(t, pod.Name, pod.Namespace, localPort, remotePort)
+		defer close(stopChan)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		url := fmt.Sprintf("127.0.0.1:%d", localPort)
+
+		err = rayDashboardClient.InitClient(t.Ctx(), url, rayCluster)
+		g.Expect(err).ToNot(HaveOccurred())
+		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())
+		g.Expect(err).ToNot(HaveOccurred())
+
+		for _, value := range serveDetails.Applications {
+			g.Expect(value.ServeApplicationStatus.Status).To(Equal(rayv1.ApplicationStatusEnum.RUNNING))
+		}
+	}
 }
