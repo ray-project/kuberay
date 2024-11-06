@@ -1216,12 +1216,11 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 func TestGenerateRayStartCommand(t *testing.T) {
 	tests := []struct {
-		rayStartParams                        map[string]string
-		mockCustomAcceleratorToRayResourceMap map[string]string
-		name                                  string
-		expected                              string
-		nodeType                              rayv1.RayNodeType
-		resource                              corev1.ResourceRequirements
+		rayStartParams map[string]string
+		name           string
+		expected       string
+		nodeType       rayv1.RayNodeType
+		resource       corev1.ResourceRequirements
 	}{
 		{
 			name:           "WorkerNode with GPU",
@@ -1233,6 +1232,17 @@ func TestGenerateRayStartCommand(t *testing.T) {
 				},
 			},
 			expected: "ray start  --num-gpus=1 ",
+		},
+		{
+			name:           "WorkerNode with TPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"google.com/tpu": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start  --resources='{"TPU":4}' `,
 		},
 		{
 			name:           "HeadNode with Neuron Cores",
@@ -1263,14 +1273,10 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					"cloud-tpus.google.com/v3":  resource.MustParse("8"),
+					"google.com/tpu":            resource.MustParse("8"),
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
 					"nvidia.com/gpu":            resource.MustParse("1"),
 				},
-			},
-			mockCustomAcceleratorToRayResourceMap: map[string]string{
-				NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
-				"cloud-tpus.google.com/v3":      "tpu",
 			},
 			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
 		},
@@ -1301,6 +1307,19 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			expected: `ray start --head  --resources='{"custom_resource":2,"neuron_cores":3}' `,
 		},
 		{
+			name:     "HeadNode with existing TPU resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `'{"custom_resource":2,"TPU":4}'`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"google.com/tpu": resource.MustParse("8"),
+				},
+			},
+			expected: `ray start --head  --resources='{"custom_resource":2,"TPU":4}' `,
+		},
+		{
 			name:     "HeadNode with invalid resources string",
 			nodeType: rayv1.HeadNode,
 			rayStartParams: map[string]string{
@@ -1324,15 +1343,6 @@ func TestGenerateRayStartCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock the customAcceleratorToRayResourceMap with the value specified in the test
-			if tt.mockCustomAcceleratorToRayResourceMap != nil {
-				originalCustomAcceleratorToRayResourceMap := customAcceleratorToRayResourceMap
-				customAcceleratorToRayResourceMap = tt.mockCustomAcceleratorToRayResourceMap
-				defer func() {
-					customAcceleratorToRayResourceMap = originalCustomAcceleratorToRayResourceMap
-				}()
-			}
-
 			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
 			assert.Equal(t, tt.expected, result)
 		})
