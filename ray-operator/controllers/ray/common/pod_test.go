@@ -1235,6 +1235,17 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			expected: "ray start  --num-gpus=1 ",
 		},
 		{
+			name:           "WorkerNode with TPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"google.com/tpu": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start  --resources='{"TPU":4}' `,
+		},
+		{
 			name:           "HeadNode with Neuron Cores",
 			nodeType:       rayv1.HeadNode,
 			rayStartParams: map[string]string{},
@@ -1299,6 +1310,19 @@ func TestGenerateRayStartCommand(t *testing.T) {
 				},
 			},
 			expected: `ray start --head  --resources='{"custom_resource":2,"neuron_cores":3}' `,
+		},
+		{
+			name:     "HeadNode with existing TPU resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `'{"custom_resource":2,"TPU":4}'`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"google.com/tpu": resource.MustParse("8"),
+				},
+			},
+			expected: `ray start --head  --resources='{"custom_resource":2,"TPU":4}' `,
 		},
 		{
 			name:     "HeadNode with invalid resources string",
