@@ -84,6 +84,7 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 	}
 	return true
 }
+
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
 		rayDashboardClient := &utils.RayDashboardClient{}
@@ -100,7 +101,11 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		err = rayDashboardClient.InitClient(t.Ctx(), url, rayCluster)
 		g.Expect(err).ToNot(HaveOccurred())
-		_, err = rayDashboardClient.GetServeDetails(t.Ctx())
+		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())
 		g.Expect(err).ToNot(HaveOccurred())
+
+		for _, value := range serveDetails.Applications {
+			g.Expect(value.ServeApplicationStatus.Status).To(Equal(rayv1.ApplicationStatusEnum.RUNNING))
+		}
 	}
 }
