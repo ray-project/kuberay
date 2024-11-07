@@ -277,7 +277,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 func (r *RayServiceReconciler) inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
 	logger := ctrl.LoggerFrom(ctx)
 	if oldStatus.RayClusterName != newStatus.RayClusterName {
-		logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService RayClusterName changed from %s to %s", oldStatus.RayClusterName, newStatus.RayClusterName))
+		logger.Info("inconsistentRayServiceStatus RayService RayClusterName", "oldRayClusterName", oldStatus.RayClusterName, "newRayClusterName", newStatus.RayClusterName)
 		return true
 	}
 
@@ -289,15 +289,15 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(ctx context.Context,
 	for appName, newAppStatus := range newStatus.Applications {
 		var oldAppStatus rayv1.AppStatus
 		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
-			logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new application %s found", appName))
+			logger.Info("inconsistentRayServiceStatus RayService new application found", "appName", appName)
 			return true
 		}
 
 		if oldAppStatus.Status != newAppStatus.Status {
-			logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status changed from %v to %v", appName, oldAppStatus.Status, newAppStatus.Status))
+			logger.Info("inconsistentRayServiceStatus RayService application status changed", "appName", appName, "oldStatus", oldAppStatus.Status, "newStatus", newAppStatus.Status)
 			return true
 		} else if oldAppStatus.Message != newAppStatus.Message {
-			logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService application %s status message changed from %v to %v", appName, oldAppStatus.Message, newAppStatus.Message))
+			logger.Info("inconsistentRayServiceStatus RayService application status message changed", "appName", appName, "oldStatus", oldAppStatus.Message, "newStatus", newAppStatus.Message)
 			return true
 		}
 
@@ -308,15 +308,15 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(ctx context.Context,
 		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
 			var oldDeploymentStatus rayv1.ServeDeploymentStatus
 			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
-				logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService new deployment %s found in application %s", deploymentName, appName))
+				logger.Info("inconsistentRayServiceStatus RayService new deployment found in application", "deploymentName", deploymentName, "appName", appName)
 				return true
 			}
 
 			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
-				logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService DeploymentStatus changed from %v to %v", oldDeploymentStatus.Status, newDeploymentStatus.Status))
+				logger.Info("inconsistentRayServiceStatus RayService DeploymentStatus changed", "oldDeploymentStatus", oldDeploymentStatus.Status, "newDeploymentStatus", newDeploymentStatus.Status)
 				return true
 			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
-				logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService deployment status message changed from %v to %v", oldDeploymentStatus.Message, newDeploymentStatus.Message))
+				logger.Info("inconsistentRayServiceStatus RayService deployment status message changed", "oldDeploymentStatus", oldDeploymentStatus.Message, "newDeploymentStatus", newDeploymentStatus.Message)
 				return true
 			}
 		}
@@ -329,12 +329,12 @@ func (r *RayServiceReconciler) inconsistentRayServiceStatus(ctx context.Context,
 func (r *RayServiceReconciler) inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
 	logger := ctrl.LoggerFrom(ctx)
 	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
-		logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService ServiceStatus changed from %s to %s", oldStatus.ServiceStatus, newStatus.ServiceStatus))
+		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
 		return true
 	}
 
 	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
-		logger.Info(fmt.Sprintf("inconsistentRayServiceStatus RayService NumServeEndpoints changed from %d to %d", oldStatus.NumServeEndpoints, newStatus.NumServeEndpoints))
+		logger.Info("inconsistentRayServiceStatus RayService NumServeEndpoints changed", "oldNumServeEndpoints", oldStatus.NumServeEndpoints, "newNumServeEndpoints", newStatus.NumServeEndpoints)
 		return true
 	}
 
@@ -473,8 +473,11 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 			if !exists {
 				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
 				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
-				logger.Info(fmt.Sprintf("Scheduled dangling RayCluster "+
-					"%s for deletion at %s", rayClusterInstance.Name, deletionTimestamp))
+				logger.Info(
+					"Scheduled dangling RayCluster for deletion",
+					"rayClusterName", rayClusterInstance.Name,
+					"deletionTimestamp", deletionTimestamp,
+				)
 			} else {
 				reasonForDeletion := ""
 				if time.Since(cachedTimestamp) > 0*time.Second {
@@ -604,10 +607,12 @@ func (r *RayServiceReconciler) shouldPrepareNewRayCluster(ctx context.Context, r
 		}
 
 		// Case 4: Otherwise, rollout a new cluster.
-		logger.Info("Active RayCluster config doesn't match goal config. " +
-			"RayService operator should prepare a new Ray cluster.\n" +
-			"* Active RayCluster config hash: " + activeClusterHash + "\n" +
-			"* Goal RayCluster config hash: " + goalClusterHash)
+		logger.Info(
+			"Active RayCluster config doesn't match goal config. "+
+				"RayService operator should prepare a new Ray cluster.",
+			"activeClusterConfigHash", activeClusterHash,
+			"goalClusterConfigHash", goalClusterHash,
+		)
 		return RolloutNew
 	}
 
@@ -789,28 +794,27 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 	cachedServeConfigV2, exist := r.ServeConfigs.Get(cacheKey)
 
 	if !exist {
-		logger.Info("shouldUpdate",
-			"shouldUpdateServe",
-			true,
-			"reason",
-			fmt.Sprintf(
-				"Nothing has been cached for cluster %s with key %s",
-				rayClusterInstance.Name,
-				cacheKey,
-			),
+		logger.Info(
+			"shouldUpdate",
+			"shouldUpdateServe", true,
+			"reason", "Nothing has been cached for the cluster with the key",
+			"rayClusterName", rayClusterInstance.Name,
+			"cacheKey", cacheKey,
 		)
 		return true
 	}
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
 	if len(serveStatus.Applications) == 0 {
-		logger.Info("shouldUpdate", "should create Serve applications", true,
+		logger.Info(
+			"shouldUpdate",
+			"should create Serve applications", true,
 			"reason",
-			fmt.Sprintf(
-				"No Serve application found in RayCluster %s, need to create serve applications. "+
-					"A possible reason is the head Pod has crashed and GCS FT is not enabled. "+
-					"Hence, the RayService CR's Serve application status is set to empty in the previous reconcile.",
-				rayClusterInstance.Name))
+			"No Serve application found in the RayCluster, need to create serve applications. "+
+				"A possible reason is the head Pod has crashed and GCS FT is not enabled. "+
+				"Hence, the RayService CR's Serve application status is set to empty in the previous reconcile.",
+			"rayClusterName", rayClusterInstance.Name,
+		)
 		return true
 	}
 
@@ -853,7 +857,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 	cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
 	r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
-	logger.Info("updateServeDeployment", "message", fmt.Sprintf("Cached Serve config for Ray cluster %s with key %s", clusterName, cacheKey))
+	logger.Info("updateServeDeployment", "message", "Cached Serve config for Ray cluster with the key", "rayClusterName", clusterName, "cacheKey", cacheKey)
 	return nil
 }
 
@@ -900,9 +904,9 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 				if prevApplicationStatus.HealthLastUpdateTime != nil {
 					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
 					logger.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
-						fmt.Sprintf(
-							"The status of the serve application %s has been UNHEALTHY or DEPLOY_FAILED since %v. ",
-							appName, prevApplicationStatus.HealthLastUpdateTime))
+						"The status of the serve application has been UNHEALTHY or DEPLOY_FAILED since last updated.",
+						"appName", appName,
+						"healthLastUpdateTime", prevApplicationStatus.HealthLastUpdateTime)
 				}
 			}
 		}
@@ -1002,7 +1006,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	if err == nil {
 		// Only update the service if the RayCluster switches.
 		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
-			logger.Info(fmt.Sprintf("RayCluster %v's %v has already exists, skip Update", newSvc.Spec.Selector[utils.RayClusterLabelKey], serviceType))
+			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster", newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", serviceType)
 			return nil
 		}
 
@@ -1013,12 +1017,12 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 		// TODO (kevin85421): Consider not only the updates of the Spec but also the ObjectMeta.
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
-		logger.Info(fmt.Sprintf("Update Kubernetes Service serviceType %v", serviceType))
+		logger.Info("Update Kubernetes Service", "serviceType", serviceType)
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
 			return updateErr
 		}
 	} else if errors.IsNotFound(err) {
-		logger.Info(fmt.Sprintf("Create a Kubernetes Service for RayService serviceType %v", serviceType))
+		logger.Info("Create a Kubernetes Service", "serviceType", serviceType)
 		if err := ctrl.SetControllerReference(rayServiceInstance, newSvc, r.Scheme); err != nil {
 			return err
 		}

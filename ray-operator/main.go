@@ -202,11 +202,11 @@ func main() {
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
 		} else {
-			setupLog.Info(fmt.Sprintf("Only watch custom resources in the namespace: %s", watchNamespaces[0]))
+			setupLog.Info("Only watch custom resources in the namespace.", "namespace", watchNamespaces[0])
 			options.Cache.DefaultNamespaces[watchNamespaces[0]] = cache.Config{}
 		}
 	} else {
-		setupLog.Info(fmt.Sprintf("Only watch custom resources in multiple namespaces: %v", watchNamespaces))
+		setupLog.Info("Only watch custom resources in multiple namespaces.", "namespaces", watchNamespaces)
 		for _, namespace := range watchNamespaces {
 			options.Cache.DefaultNamespaces[namespace] = cache.Config{}
 		}

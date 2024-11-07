@@ -347,7 +347,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			nowTime := time.Now()
 			shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
 			logger.Info(
-				fmt.Sprintf("RayJob is %s", rayJobInstance.Status.JobDeploymentStatus),
+				"RayJob deployment status",
+				"jobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus,
 				"shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
 				"ttlSecondsAfterFinished", ttlSeconds,
 				"Status.endTime", rayJobInstance.Status.EndTime,
@@ -355,7 +356,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				"ShutdownTime", shutdownTime)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
-				logger.Info(fmt.Sprintf("shutdownTime not reached, requeue this RayJob for %d seconds", delta))
+				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
 			if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
@@ -775,7 +776,7 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 		logger.Info("The current status is not allowed to transition to `Suspending`", "RayJob", rayJob.Name, "JobDeploymentStatus", rayJob.Status.JobDeploymentStatus)
 		return false
 	}
-	logger.Info(fmt.Sprintf("Try to transition the status from `%s` to `Suspending`", rayJob.Status.JobDeploymentStatus), "RayJob", rayJob.Name)
+	logger.Info("Try to transition the status to `Suspending`", "oldStatus", rayJob.Status.JobDeploymentStatus, "RayJob", rayJob.Name)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
 	return true
 }

@@ -255,9 +255,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			}
 		} else {
 			logger.Info(
-				fmt.Sprintf("The RayCluster with GCS enabled, %s, is being deleted. Start to handle the Redis cleanup finalizer %s.",
-					instance.Name, utils.GCSFaultToleranceRedisCleanupFinalizer),
-				"DeletionTimestamp", instance.ObjectMeta.DeletionTimestamp)
+				"The RayCluster with GCS enabled is being deleted. Start to handle the Redis cleanup finalizer.",
+				"rayClusterName", instance.Name,
+				"redisCleanupFinalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
+				"deletionTimestamp", instance.ObjectMeta.DeletionTimestamp,
+			)
 
 			// Delete the head Pod if it exists.
 			headPods, err := r.deleteAllPods(ctx, common.RayClusterHeadPodsAssociationOptions(instance))
@@ -269,10 +271,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 			if len(headPods.Items) > 0 {
-				logger.Info(fmt.Sprintf(
-					"Wait for the head Pod %s to be terminated before initiating the Redis cleanup process. "+
-						"The storage namespace %s in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
-					headPods.Items[0].Name, headPods.Items[0].Annotations[utils.RayExternalStorageNSAnnotationKey]))
+				logger.Info(
+					"Wait for the head Pod to be terminated before initiating the Redis cleanup process. "+"The storage namespace in Redis cannot be fully deleted if the GCS process on the head Pod is still writing to it.",
+					"headPodName", headPods.Items[0].Name,
+					"redisStorageNamespace", headPods.Items[0].Annotations[utils.RayExternalStorageNSAnnotationKey],
+				)
 				// Requeue after 10 seconds because it takes much longer than DefaultRequeueDuration (2 seconds) for the head Pod to be terminated.
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
@@ -296,16 +299,20 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					}
 					switch condition {
 					case batchv1.JobComplete:
-						logger.Info(fmt.Sprintf(
-							"The Redis cleanup Job %s has been completed. "+
-								"The storage namespace %s in Redis has been fully deleted.",
-							redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
+						logger.Info(
+							"The Redis cleanup Job has been completed. "+
+								"The storage namespace in Redis has been fully deleted.",
+							"redisCleanupJobName", redisCleanupJob.Name,
+							"redisStorageNamespace", redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey],
+						)
 					case batchv1.JobFailed:
-						logger.Info(fmt.Sprintf(
-							"The Redis cleanup Job %s has failed, requeue the RayCluster CR after 5 minute. "+
-								"You should manually delete the storage namespace %s in Redis and remove the RayCluster's finalizer. "+
+						logger.Info(
+							"The Redis cleanup Job has failed, requeue the RayCluster CR after 5 minute. "+
+								"You should manually delete the storage namespace in Redis and remove the RayCluster's finalizer. "+
 								"Please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.",
-							redisCleanupJob.Name, redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey]))
+							"redisCleanupJobName", redisCleanupJob.Name,
+							"redisStorageNamespace", redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey],
+						)
 					}
 					return ctrl.Result{}, nil
 				}
@@ -384,7 +391,12 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	// environment variable is not set, requeue after the default value.
 	requeueAfterSeconds, err := strconv.Atoi(os.Getenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV))
 	if err != nil {
-		logger.Info(fmt.Sprintf("Environment variable %s is not set, using default value of %d seconds", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS), "cluster name", request.Name)
+		logger.Info(
+			"Environment variable is not set, using default value of seconds",
+			"environmentVariable", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV,
+			"defaultValue", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS,
+			"clusterName", request.Name,
+		)
 		requeueAfterSeconds = utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
 	}
 	logger.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
@@ -401,9 +413,13 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 	logger := ctrl.LoggerFrom(ctx)
 
 	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old State: %s, new State: %s, old Reason: %s, new Reason: %s",
-			oldStatus.State, newStatus.State, oldStatus.Reason, newStatus.Reason)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		logger.Info(
+			"inconsistentRayClusterStatus",
+			"oldState", oldStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			"newState", newStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			"oldReason", oldStatus.Reason,
+			"newReason", newStatus.Reason,
+		)
 		return true
 	}
 	if oldStatus.ReadyWorkerReplicas != newStatus.ReadyWorkerReplicas ||
@@ -411,23 +427,29 @@ func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context,
 		oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
 		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas ||
 		oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
-		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old ReadyWorkerReplicas: %d, new ReadyWorkerReplicas: %d, "+
-				"old AvailableWorkerReplicas: %d, new AvailableWorkerReplicas: %d, "+
-				"old DesiredWorkerReplicas: %d, new DesiredWorkerReplicas: %d, "+
-				"old MinWorkerReplicas: %d, new MinWorkerReplicas: %d, "+
-				"old MaxWorkerReplicas: %d, new MaxWorkerReplicas: %d",
-			oldStatus.ReadyWorkerReplicas, newStatus.ReadyWorkerReplicas,
-			oldStatus.AvailableWorkerReplicas, newStatus.AvailableWorkerReplicas,
-			oldStatus.DesiredWorkerReplicas, newStatus.DesiredWorkerReplicas,
-			oldStatus.MinWorkerReplicas, newStatus.MinWorkerReplicas,
-			oldStatus.MaxWorkerReplicas, newStatus.MaxWorkerReplicas))
+		logger.Info(
+			"inconsistentRayClusterStatus",
+			"oldReadyWorkerReplicas", oldStatus.ReadyWorkerReplicas,
+			"newReadyWorkerReplicas", newStatus.ReadyWorkerReplicas,
+			"oldAvailableWorkerReplicas", oldStatus.AvailableWorkerReplicas,
+			"newAvailableWorkerReplicas", newStatus.AvailableWorkerReplicas,
+			"oldDesiredWorkerReplicas", oldStatus.DesiredWorkerReplicas,
+			"newDesiredWorkerReplicas", newStatus.DesiredWorkerReplicas,
+			"oldMinWorkerReplicas", oldStatus.MinWorkerReplicas,
+			"newMinWorkerReplicas", newStatus.MinWorkerReplicas,
+			"oldMaxWorkerReplicas", oldStatus.MaxWorkerReplicas,
+			"newMaxWorkerReplicas", newStatus.MaxWorkerReplicas,
+		)
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
-		logger.Info("inconsistentRayClusterStatus", "detect inconsistency", fmt.Sprintf(
-			"old Endpoints: %v, new Endpoints: %v, old Head: %v, new Head: %v",
-			oldStatus.Endpoints, newStatus.Endpoints, oldStatus.Head, newStatus.Head))
+		logger.Info(
+			"inconsistentRayClusterStatus",
+			"oldEndpoints", oldStatus.Endpoints,
+			"newEndpoints", newStatus.Endpoints,
+			"oldHead", oldStatus.Head,
+			"newHead", newStatus.Head,
+		)
 		return true
 	}
 	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
@@ -552,7 +574,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
-			logger.Info("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
+			logger.Info("Ray head service does not have any ports set up.", "serviceSpecification", headSvc.Spec)
 			return fmt.Errorf("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
 		}
 
@@ -703,7 +725,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
-		logger.Info("reconcilePods", "Found 0 head Pods; creating a head Pod for the RayCluster.", instance.Name)
+		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.", "rayClusterName", instance.Name)
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
@@ -711,7 +733,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods", fmt.Sprintf("Found %d head Pods; deleting extra head Pods.", len(headPods.Items)), instance.Name)
+		logger.Info("reconcilePods: Found more than one head Pods; deleting extra head Pods.", "nHeadPods", len(headPods.Items), "rayClusterName", instance.Name)
 		// TODO (kevin85421): In-place update may not be a good idea.
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
@@ -812,7 +834,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
 			// create all workers of this group
 			for i := 0; i < diff; i++ {
-				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, fmt.Sprintf("index %d", i), fmt.Sprintf("in total %d", diff))
+				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
 				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
 					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 				}
@@ -855,7 +877,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
 				}
 			} else {
-				logger.Info(fmt.Sprintf("Random Pod deletion is disabled for cluster %s. The only decision-maker for Pod deletions is Autoscaler.", instance.Name))
+				logger.Info("Random Pod deletion is disabled for the cluster. The only decision-maker for Pod deletions is Autoscaler.", "rayClusterName", instance.Name)
 			}
 		}
 	}
@@ -1413,7 +1435,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 		}
 		for _, port := range svc.Spec.Ports {
 			if len(port.Name) == 0 {
-				logger.Info("updateStatus", "service port's name is empty. Not adding it to RayCluster status.endpoints", port)
+				logger.Info("updateStatus: Service port's name is empty. Not adding it to RayCluster status.endpoints", "port", port)
 				continue
 			}
 			if port.NodePort != 0 {
@@ -1423,11 +1445,11 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 			} else if port.TargetPort.StrVal != "" {
 				instance.Status.Endpoints[port.Name] = port.TargetPort.StrVal
 			} else {
-				logger.Info("updateStatus", "service port's targetPort is empty. Not adding it to RayCluster status.endpoints", port)
+				logger.Info("updateStatus: Service port's targetPort is empty. Not adding it to RayCluster status.endpoints", "port", port)
 			}
 		}
 	} else {
-		logger.Info("updateEndpoints", "unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", instance.Name, "Service selectors", filterLabels)
+		logger.Info("updateEndpoints: Unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", "rayClusterName", instance.Name, "serviceSelectors", filterLabels)
 	}
 
 	return nil

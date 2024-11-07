@@ -157,7 +157,7 @@ func CheckRouteName(ctx context.Context, s string, n string) string {
 
 	if len(s) > maxLength {
 		// shorten the name
-		log.Info(fmt.Sprintf("route name is too long: len = %v, we will shorten it to = %v\n", len(s), maxLength))
+		log.Info("Route name is too long, we will shorten it to the max length", "nameLength", len(s), "maxLength", maxLength)
 		s = s[:maxLength]
 	}
 
@@ -323,8 +323,8 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		log.Info(fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
-			"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
+			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
 		workerReplicas = *workerGroupSpec.MaxReplicas
 	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
@@ -503,12 +503,12 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 	}
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
-			log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+			log.Info("CheckAllPodsRunning: Pod is not running.", "podName", pod.Name, "pod Status.Phase", pod.Status.Phase)
 			return false
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
-				log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+				log.Info("CheckAllPodsRunning: Pod is not ready.", "podName", pod.Name, "pod Status.Conditions[PodReady]", cond)
 				return false
 			}
 		}
