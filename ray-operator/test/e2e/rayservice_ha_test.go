@@ -63,6 +63,7 @@ func TestStaticRayService(t *testing.T) {
 func TestAutoscalingRayService(t *testing.T) {
 	rayserviceYamlFile := "testdata/rayservice.autoscaling.yaml"
 	locustYamlFile := "testdata/locust-cluster.burst.yaml"
+	numberOfPodsWhenSteady := 1
 
 	test := With(t)
 	g := NewWithT(t)
@@ -87,6 +88,15 @@ func TestAutoscalingRayService(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
+	// Get the underlying RayCluster of the RayService
+	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayServiceUnderlyingRayCluster, err := GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Check the number of worker pods is correct when RayService is steady
+	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(HaveLen(numberOfPodsWhenSteady))
+
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
 	locustCluster, err := GetRayCluster(test, namespace.Name, "locust-cluster")
@@ -108,4 +118,12 @@ func TestAutoscalingRayService(t *testing.T) {
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
 		"python", "/locust-runner/locust_runner.py", "-f", "/locustfile/locustfile.py", "--host", "http://test-rayservice-serve-svc:8000",
 	})
+
+	// Check the number of worker pods is more when RayService right after the burst
+	pods, err := GetWorkerPods(test, rayServiceUnderlyingRayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(len(pods)).Should(BeNumerically(">", numberOfPodsWhenSteady))
+
+	// Check the number of worker pods is correct when RayService is steady
+	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutLong).Should(HaveLen(numberOfPodsWhenSteady))
 }

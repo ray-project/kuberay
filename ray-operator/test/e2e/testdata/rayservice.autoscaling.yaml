@@ -30,7 +30,7 @@ spec:
     rayVersion: '2.9.0'
     enableInTreeAutoscaling: true
     autoscalerOptions:
-      idleTimeoutSeconds: 1
+      idleTimeoutSeconds: 60
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"

@@ -60,7 +60,6 @@ data:
         stages = [
             {"duration": 30, "users": 10, "spawn_rate": 10},
             {"duration": 60, "users": 120, "spawn_rate": 10},
-            {"duration": 60, "users": 10, "spawn_rate": 10},
         ]
 
         def tick(self):
