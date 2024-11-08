@@ -1598,6 +1598,12 @@
             "format": "int64"
           },
           "title": "Optional. Name and number of the extended resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc",
