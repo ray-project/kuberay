@@ -641,9 +641,6 @@ func TestPopulateTemplate(t *testing.T) {
 	if len(template.NodeSelector) != 0 {
 		t.Errorf("failed to convert config map, expected no node selector, got %d", len(template.NodeSelector))
 	}
-	if len(template.NodeSelector) != 0 {
-		t.Errorf("failed to convert config map, expected no node selector, got %d", len(template.NodeSelector))
-	}
 	if len(template.Tolerations) != 1 {
 		t.Errorf("failed to convert config map, expected 1 toleration, got %d", len(template.Tolerations))
 	}
