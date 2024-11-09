@@ -420,7 +420,7 @@ def delete_all_cr(crd_name, namespace, check=True):
 
 def start_curl_pod(name: str, namespace: str, timeout_s: int = -1):
     shell_subprocess_run(
-        f"kubectl run {name} --image=radial/busyboxplus:curl -n {namespace} "
+        f"kubectl run {name} --image=rancher/curl -n {namespace} "
         '--command -- /bin/sh -c "while true; do sleep 10;done"'
     )
 
