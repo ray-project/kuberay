@@ -107,7 +107,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	isOpenShift := getClusterType(ctx)
 
 	// init the batch scheduler manager
-	schedulerMgr, err := batchscheduler.NewSchedulerManager(rayConfigs, mgr.GetConfig())
+	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig())
 	if err != nil {
 		// fail fast if the scheduler plugin fails to init
 		// prevent running the controller in an undefined state
@@ -1029,7 +1029,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	// call the scheduler plugin if so
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
-			scheduler.AddMetadataToPod(&instance, utils.RayNodeHeadGroupLabelValue, &pod)
+			scheduler.AddMetadataToPod(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
 			return err
 		}
@@ -1051,7 +1051,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	pod := r.buildWorkerPod(ctx, instance, worker)
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
-			scheduler.AddMetadataToPod(&instance, worker.GroupName, &pod)
+			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
 		} else {
 			return err
 		}

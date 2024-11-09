@@ -23,14 +23,14 @@ type BatchScheduler interface {
 
 	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToPod(app *rayv1.RayCluster, groupName string, pod *corev1.Pod)
+	AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
 // necessary callbacks with the operator, and the creation of the BatchScheduler itself.
 type BatchSchedulerFactory interface {
 	// New creates a new BatchScheduler for the scheduler plugin.
-	New(config *rest.Config) (BatchScheduler, error)
+	New(ctx context.Context, config *rest.Config) (BatchScheduler, error)
 
 	// AddToScheme adds the types in this scheduler to the given scheme (runs during init).
 	AddToScheme(scheme *runtime.Scheme)
@@ -56,10 +56,10 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 	return nil
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToPod(_ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
+func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (df *DefaultBatchSchedulerFactory) New(_ *rest.Config) (BatchScheduler, error) {
+func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config) (BatchScheduler, error) {
 	return &DefaultBatchScheduler{}, nil
 }
 
