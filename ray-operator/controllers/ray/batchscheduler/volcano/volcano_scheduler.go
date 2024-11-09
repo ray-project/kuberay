@@ -146,7 +146,7 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.R
 	pod.Spec.SchedulerName = v.Name()
 }
 
-func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, config *rest.Config) (schedulerinterface.BatchScheduler, error) {
+func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
 	vkClient, err := volcanoclient.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize volcano client with error %w", err)
