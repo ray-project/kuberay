@@ -140,3 +140,26 @@ func SetupPortForward(t Test, req *rest.Request, localPort, remotePort int) (cha
 
 	return stopChan, nil
 }
+
+func CreateCurlPod(t Test, podName, containerName, namespace string) *corev1.Pod {
+	// Define the podSpec spec
+	podSpec := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    containerName,
+					Image:   "rancher/curl",
+					Command: []string{"/bin/sh", "-c", "while true; do sleep 10; done"},
+				},
+			},
+		},
+	}
+	// Create the pod
+	pod, err := t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
+	assert.NoError(t.T(), err)
+	return pod
+}
