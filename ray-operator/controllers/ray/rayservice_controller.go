@@ -635,7 +635,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	} else {
 		clusterAction, err = getClusterAction(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
-			err = fmt.Errorf("Fail to generate hash for RayClusterSpec: %w", err)
+			err = fmt.Errorf("fail to generate hash for RayClusterSpec: %w", err)
 			return nil, err
 		}
 	}
@@ -672,7 +672,7 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 		Name:      rayClusterInstance.Name,
 	})
 	if err != nil {
-		err = fmt.Errorf("Failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+		err = fmt.Errorf("failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 		return err
 	}
 
@@ -843,12 +843,12 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 	configJson, err := json.Marshal(serveConfig)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal converted serve config into bytes: %w", err)
+		return fmt.Errorf("failed to marshal converted serve config into bytes: %w", err)
 	}
 	logger.Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
 	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
 		err = fmt.Errorf(
-			"Fail to create / update Serve applications. If you observe this error consistently, "+
+			"fail to create / update Serve applications. If you observe this error consistently, "+
 				"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
 				"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
 				"err: %v", err)
@@ -873,7 +873,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	var err error
 	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 		err = fmt.Errorf(
-			"Failed to get Serve application statuses from the dashboard. "+
+			"failed to get Serve application statuses from the dashboard. "+
 				"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 				"err: %v", err)
 		return false, err
@@ -979,7 +979,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info(
 		"reconcileServices", "serviceType", serviceType,
-		"RayService name", rayServiceInstance.Name, "RayService namespace", rayServiceInstance.Namespace,
 	)
 
 	var newSvc *corev1.Service

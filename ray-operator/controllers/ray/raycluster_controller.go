@@ -247,7 +247,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 					"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
 				controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
 				if err := r.Update(ctx, instance); err != nil {
-					err = fmt.Errorf("Failed to add the finalizer %s to the RayCluster: %w", utils.GCSFaultToleranceRedisCleanupFinalizer, err)
+					err = fmt.Errorf("failed to add the finalizer %s to the RayCluster: %w", utils.GCSFaultToleranceRedisCleanupFinalizer, err)
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
 				// Only start the RayCluster reconciliation after the finalizer is added.
@@ -256,7 +256,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 		} else {
 			logger.Info(
 				"The RayCluster with GCS enabled is being deleted. Start to handle the Redis cleanup finalizer.",
-				"rayClusterName", instance.Name,
 				"redisCleanupFinalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
 				"deletionTimestamp", instance.ObjectMeta.DeletionTimestamp,
 			)
@@ -337,7 +336,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		logger.Info("RayCluster is being deleted, just ignore", "cluster name", request.Name)
+		logger.Info("RayCluster is being deleted, just ignore")
 		return ctrl.Result{}, nil
 	}
 
@@ -365,7 +364,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 	var updateErr error
 	var inconsistent bool
 	if calculateErr != nil {
-		logger.Info("Got error when calculating new status", "cluster name", request.Name, "error", calculateErr)
+		logger.Info("Got error when calculating new status", "error", calculateErr)
 	} else {
 		inconsistent, updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
@@ -395,11 +394,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, request 
 			"Environment variable is not set, using default value of seconds",
 			"environmentVariable", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV,
 			"defaultValue", utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS,
-			"clusterName", request.Name,
 		)
 		requeueAfterSeconds = utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
 	}
-	logger.Info("Unconditional requeue after", "cluster name", request.Name, "seconds", requeueAfterSeconds)
+	logger.Info("Unconditional requeue after", "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
 }
 
@@ -575,7 +573,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			logger.Info("Ray head service does not have any ports set up.", "serviceSpecification", headSvc.Spec)
-			return fmt.Errorf("Ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
+			return fmt.Errorf("ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
 		}
 
 		if err != nil {
@@ -725,7 +723,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
-		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.", "rayClusterName", instance.Name)
+		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
 		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			common.FailedClustersCounterInc(instance.Namespace)
@@ -733,7 +731,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods: Found more than one head Pods; deleting extra head Pods.", "nHeadPods", len(headPods.Items), "rayClusterName", instance.Name)
+		logger.Info("reconcilePods: Found more than one head Pods; deleting extra head Pods.", "nHeadPods", len(headPods.Items))
 		// TODO (kevin85421): In-place update may not be a good idea.
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
@@ -787,7 +785,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		// If we delete unhealthy Pods, we will not create new Pods in this reconciliation.
 		if numDeletedUnhealthyWorkerPods > 0 {
-			return fmt.Errorf("Delete %d unhealthy worker Pods", numDeletedUnhealthyWorkerPods)
+			return fmt.Errorf("delete %d unhealthy worker Pods", numDeletedUnhealthyWorkerPods)
 		}
 
 		// Always remove the specified WorkersToDelete - regardless of the value of Replicas.
@@ -877,7 +875,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
 				}
 			} else {
-				logger.Info("Random Pod deletion is disabled for the cluster. The only decision-maker for Pod deletions is Autoscaler.", "rayClusterName", instance.Name)
+				logger.Info("Random Pod deletion is disabled for the cluster. The only decision-maker for Pod deletions is Autoscaler.")
 			}
 		}
 	}
@@ -1449,7 +1447,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 			}
 		}
 	} else {
-		logger.Info("updateEndpoints: Unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", "rayClusterName", instance.Name, "serviceSelectors", filterLabels)
+		logger.Info("updateEndpoints: Unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", "serviceSelectors", filterLabels)
 	}
 
 	return nil
