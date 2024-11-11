@@ -93,7 +93,15 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		localPort := 8265
 		remotePort := 8265
-		stopChan, err := SetupPortForward(t, pod.Name, pod.Namespace, localPort, remotePort)
+		// Setup port forward request
+		req := t.Client().Core().CoreV1().RESTClient().
+			Post().
+			Resource("pods").
+			Namespace(pod.Namespace).
+			Name(pod.Name).
+			SubResource("portforward")
+
+		stopChan, err := SetupPortForward(t, req, localPort, remotePort)
 		defer close(stopChan)
 
 		g.Expect(err).ToNot(HaveOccurred())
