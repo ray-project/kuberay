@@ -1,6 +1,7 @@
 package yunikorn
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -17,7 +18,7 @@ import (
 
 func TestPopulatePodLabels(t *testing.T) {
 	yk := &YuniKornScheduler{}
-
+	ctx := context.Background()
 	// --- case 1
 	// Ray Cluster CR has labels defined
 	job1 := "job-1-01234"
@@ -33,8 +34,8 @@ func TestPopulatePodLabels(t *testing.T) {
 	)
 
 	rayPod := createPod("my-pod-1", "test")
-	yk.populatePodLabels(rayCluster1, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	yk.populatePodLabels(rayCluster1, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	yk.populatePodLabels(ctx, rayCluster1, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	yk.populatePodLabels(ctx, rayCluster1, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
 	assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, job1), true)
 	assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, queue1), true)
 
@@ -50,8 +51,8 @@ func TestPopulatePodLabels(t *testing.T) {
 		nil, // empty labels
 	)
 	rayPod3 := createPod("my-pod-2", "test")
-	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	yk.populatePodLabels(rayCluster2, rayPod3, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	yk.populatePodLabels(ctx, rayCluster2, rayPod3, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	yk.populatePodLabels(ctx, rayCluster2, rayPod3, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
 	assert.Equal(t, podLabelsContains(rayPod3, YuniKornPodApplicationIDLabelName, job2), false)
 	assert.Equal(t, podLabelsContains(rayPod3, YuniKornPodQueueLabelName, queue2), false)
 }
@@ -99,6 +100,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 
 func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	yk := &YuniKornScheduler{}
+	ctx := context.Background()
 
 	job1 := "job-1-01234"
 	queue1 := "root.default"
@@ -135,7 +137,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
 	rayPod := createPod("ray-pod", "default")
-	yk.populateTaskGroupsAnnotationToPod(rayClusterWithGangScheduling, rayPod)
+	yk.populateTaskGroupsAnnotationToPod(ctx, rayClusterWithGangScheduling, rayPod)
 
 	kk, err := getTaskGroupsFromAnnotation(rayPod)
 	assert.NoError(t, err)
