@@ -70,7 +70,7 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
 }
 
-func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer) {
 	req := t.Client().Core().CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -102,6 +102,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
 	assert.NoError(t.T(), err)
+	return stdout, stderr
 }
 
 func SetupPortForward(t Test, req *rest.Request, localPort, remotePort int) (chan struct{}, error) {
