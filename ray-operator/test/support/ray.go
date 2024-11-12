@@ -3,7 +3,6 @@ package support
 import (
 	"errors"
 
-	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
@@ -141,11 +140,9 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	return pods.Items
 }
 
-func RayService(t Test, namespace, name string) func(g gomega.Gomega) *rayv1.RayService {
-	return func(g gomega.Gomega) *rayv1.RayService {
-		service, err := t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		return service
+func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error) {
+	return func() (*rayv1.RayService, error) {
+		return GetRayService(t, namespace, name)
 	}
 }
 
