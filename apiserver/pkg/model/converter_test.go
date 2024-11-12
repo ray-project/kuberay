@@ -370,7 +370,7 @@ var JobWithOutputTest = rayv1api.RayJob{
 		JobDeploymentStatus: "Initializing",
 		Message:             "Job is currently running",
 		RayClusterName:      "raycluster-sample-xxxxx",
-		StartTime:           &metav1.Time{Time: time.Date(2024, 07, 25, 0, 0, 0, 0, time.UTC)},
+		StartTime:           &metav1.Time{Time: time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC)},
 		EndTime:             nil,
 	},
 }
@@ -657,7 +657,7 @@ func TestPopulateJob(t *testing.T) {
 
 	job = FromCrdToApiJob(&JobWithOutputTest)
 	fmt.Printf("jobWithOutput = %#v\n", job)
-	assert.Equal(t, time.Date(2024, 07, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
+	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
 	assert.Nil(t, job.EndTime)
 	assert.Equal(t, "RUNNING", job.JobStatus)
 	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
