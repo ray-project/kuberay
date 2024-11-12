@@ -97,11 +97,13 @@ func FromCrdToApiClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[
 
 func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []corev1.Event) *api.Cluster {
 	pbCluster := &api.Cluster{
-		Name:         cluster.Name,
-		Namespace:    cluster.Namespace,
-		Version:      cluster.Labels[util.RayClusterVersionLabelKey],
-		User:         cluster.Labels[util.RayClusterUserLabelKey],
-		Environment:  api.Cluster_Environment(api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]]),
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+		Version:   cluster.Labels[util.RayClusterVersionLabelKey],
+		User:      cluster.Labels[util.RayClusterUserLabelKey],
+		Environment: api.Cluster_Environment(
+			api.Cluster_Environment_value[cluster.Labels[util.RayClusterEnvironmentLabelKey]],
+		),
 		CreatedAt:    &timestamppb.Timestamp{Seconds: cluster.CreationTimestamp.Unix()},
 		ClusterState: string(cluster.Status.State),
 	}
@@ -244,7 +246,8 @@ func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {
 	}
 
 	// Here we update environment only for a container named 'ray-head'
-	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
+	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok &&
+		len(container.Env) > 0 {
 		headNodeSpec.Environment = convertEnvVariables(container.Env, true)
 	}
 
@@ -292,7 +295,8 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 		}
 
 		// Here we update environment only for a container named 'ray-worker'
-		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
+		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok &&
+			len(container.Env) > 0 {
 			workerNodeSpec.Environment = convertEnvVariables(container.Env, false)
 		}
 
@@ -481,10 +485,23 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		pbJob.EntrypointResources = jres
 	}
 
+	if jstarttime := job.Status.StartTime; jstarttime != nil {
+		pbJob.StartTime = timestamppb.New(job.Status.StartTime.Time)
+	}
+	if jendtime := job.Status.EndTime; jendtime != nil {
+		pbJob.EndTime = timestamppb.New(job.Status.EndTime.Time)
+	}
+	if jclustername := job.Status.RayClusterName; jclustername != "" {
+		pbJob.RayClusterName = jclustername
+	}
+
 	return pbJob
 }
 
-func FromCrdToApiServices(services []*rayv1api.RayService, serviceEventsMap map[string][]corev1.Event) []*api.RayService {
+func FromCrdToApiServices(
+	services []*rayv1api.RayService,
+	serviceEventsMap map[string][]corev1.Event,
+) []*api.RayService {
 	apiServices := make([]*api.RayService, 0)
 	for _, service := range services {
 		apiServices = append(apiServices, FromCrdToApiService(service, serviceEventsMap[service.Name]))
@@ -505,16 +522,20 @@ func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *a
 		deleteTime = service.DeletionTimestamp.Unix()
 	}
 	pbService := &api.RayService{
-		Name:                               service.Name,
-		Namespace:                          service.Namespace,
-		User:                               service.Labels[util.RayClusterUserLabelKey],
-		ServeConfig_V2:                     service.Spec.ServeConfigV2,
-		ClusterSpec:                        PopulateRayClusterSpec(service.Spec.RayClusterSpec),
-		ServiceUnhealthySecondThreshold:    PoplulateUnhealthySecondThreshold(service.Spec.ServiceUnhealthySecondThreshold),
-		DeploymentUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(service.Spec.DeploymentUnhealthySecondThreshold),
-		RayServiceStatus:                   PoplulateRayServiceStatus(service.Name, service.Status, events),
-		CreatedAt:                          &timestamppb.Timestamp{Seconds: service.CreationTimestamp.Unix()},
-		DeleteAt:                           &timestamppb.Timestamp{Seconds: deleteTime},
+		Name:           service.Name,
+		Namespace:      service.Namespace,
+		User:           service.Labels[util.RayClusterUserLabelKey],
+		ServeConfig_V2: service.Spec.ServeConfigV2,
+		ClusterSpec:    PopulateRayClusterSpec(service.Spec.RayClusterSpec),
+		ServiceUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(
+			service.Spec.ServiceUnhealthySecondThreshold,
+		),
+		DeploymentUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(
+			service.Spec.DeploymentUnhealthySecondThreshold,
+		),
+		RayServiceStatus: PoplulateRayServiceStatus(service.Name, service.Status, events),
+		CreatedAt:        &timestamppb.Timestamp{Seconds: service.CreationTimestamp.Unix()},
+		DeleteAt:         &timestamppb.Timestamp{Seconds: deleteTime},
 	}
 	return pbService
 }
@@ -526,7 +547,11 @@ func PoplulateUnhealthySecondThreshold(value *int32) int32 {
 	return *value
 }
 
-func PoplulateRayServiceStatus(serviceName string, serviceStatus rayv1api.RayServiceStatuses, events []corev1.Event) *api.RayServiceStatus {
+func PoplulateRayServiceStatus(
+	serviceName string,
+	serviceStatus rayv1api.RayServiceStatuses,
+	events []corev1.Event,
+) *api.RayServiceStatus {
 	status := &api.RayServiceStatus{
 		RayServiceEvents:       PopulateRayServiceEvent(serviceName, events),
 		RayClusterName:         serviceStatus.ActiveServiceStatus.RayClusterName,
@@ -540,7 +565,9 @@ func PoplulateRayServiceStatus(serviceName string, serviceStatus rayv1api.RaySer
 	return status
 }
 
-func PopulateServeApplicationStatus(serveApplicationStatuses map[string]rayv1api.AppStatus) []*api.ServeApplicationStatus {
+func PopulateServeApplicationStatus(
+	serveApplicationStatuses map[string]rayv1api.AppStatus,
+) []*api.ServeApplicationStatus {
 	appStatuses := make([]*api.ServeApplicationStatus, 0)
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
@@ -554,7 +581,9 @@ func PopulateServeApplicationStatus(serveApplicationStatuses map[string]rayv1api
 	return appStatuses
 }
 
-func PopulateServeDeploymentStatus(serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus) []*api.ServeDeploymentStatus {
+func PopulateServeDeploymentStatus(
+	serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus,
+) []*api.ServeDeploymentStatus {
 	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{

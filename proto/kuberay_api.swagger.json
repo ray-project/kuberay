@@ -1845,6 +1845,11 @@
           "format": "date-time",
           "description": "Output. When JobDeploymentStatus transitioned to 'Complete' status.",
           "readOnly": true
+        },
+        "rayClusterName": {
+          "type": "string",
+          "description": "Output. Name of the ray cluster.",
+          "readOnly": true
         }
       },
       "title": "RayJob definition",

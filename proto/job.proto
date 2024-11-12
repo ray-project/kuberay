@@ -161,5 +161,6 @@ message RayJob {
   google.protobuf.Timestamp start_time = 22 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. When JobDeploymentStatus transitioned to 'Complete' status.
   google.protobuf.Timestamp end_time = 23 [(google.api.field_behavior) = OUTPUT_ONLY];
-
+  // Output. Name of the ray cluster. 
+  string ray_cluster_name = 24 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
