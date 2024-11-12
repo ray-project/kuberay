@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"bytes"
 	"embed"
+	"fmt"
 
 	"github.com/stretchr/testify/assert"
 
@@ -9,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -174,4 +177,23 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
+}
+
+func curlRayServicePod(
+	t Test,
+	rayService *rayv1.RayService,
+	curlPod *corev1.Pod,
+	curlPodContainerName,
+	rayServicePath,
+	body string,
+) (bytes.Buffer, bytes.Buffer) {
+	cmd := []string{
+		"curl",
+		"-X", "POST",
+		"-H", "Content-Type: application/json",
+		fmt.Sprintf("%s-serve-svc.%s.svc.cluster.local:8000%s", rayService.Name, rayService.Namespace, rayServicePath),
+		"-d", body,
+	}
+
+	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }

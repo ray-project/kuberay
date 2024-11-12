@@ -142,7 +142,7 @@ func SetupPortForward(t Test, req *rest.Request, localPort, remotePort int) (cha
 	return stopChan, nil
 }
 
-func CreateCurlPod(t Test, podName, containerName, namespace string) *corev1.Pod {
+func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
 	// Define the podSpec spec
 	podSpec := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -159,8 +159,5 @@ func CreateCurlPod(t Test, podName, containerName, namespace string) *corev1.Pod
 			},
 		},
 	}
-	// Create the pod
-	pod, err := t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
-	assert.NoError(t.T(), err)
-	return pod
+	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
 }
