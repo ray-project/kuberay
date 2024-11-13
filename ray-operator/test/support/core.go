@@ -11,7 +11,6 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 
 	corev1 "k8s.io/api/core/v1"
@@ -105,8 +104,15 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	return stdout, stderr
 }
 
-func SetupPortForward(t Test, req *rest.Request, localPort, remotePort int) (chan struct{}, error) {
+func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {
 	cfg := t.Client().Config()
+
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward")
 
 	transport, upgrader, err := spdy.RoundTripperFor(&cfg)
 	if err != nil {
