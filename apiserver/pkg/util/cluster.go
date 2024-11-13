@@ -806,19 +806,19 @@ func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
 }
 
 // Build security context
-func buildSecurityContext(securityctx *api.SecurityContext) *corev1.SecurityContext {
-	if securityctx == nil {
+func buildSecurityContext(securityCtx *api.SecurityContext) *corev1.SecurityContext {
+	if securityCtx == nil {
 		return nil
 	}
 	result := &corev1.SecurityContext{
-		Privileged:   securityctx.Privileged,
+		Privileged:   securityCtx.Privileged,
 		Capabilities: &corev1.Capabilities{},
 	}
-	if securityctx.Capabilities != nil {
-		for _, cap := range securityctx.Capabilities.Add {
+	if securityCtx.Capabilities != nil {
+		for _, cap := range securityCtx.Capabilities.Add {
 			result.Capabilities.Add = append(result.Capabilities.Add, corev1.Capability(cap))
 		}
-		for _, cap := range securityctx.Capabilities.Drop {
+		for _, cap := range securityCtx.Capabilities.Drop {
 			result.Capabilities.Drop = append(result.Capabilities.Drop, corev1.Capability(cap))
 		}
 	}

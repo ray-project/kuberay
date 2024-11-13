@@ -243,11 +243,11 @@ func PopulateHeadNodeSpec(spec rayv1api.HeadGroupSpec) *api.HeadGroupSpec {
 		headNodeSpec.EnableIngress = true
 	}
 
-	// Here we update environment only for a container named 'ray-head'
-	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok && len(container.Env) > 0 {
-		headNodeSpec.Environment = convertEnvVariables(container.Env, true)
-	}
+	// Here we update environment and security context only for a container named 'ray-head'
 	if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-head"); ok {
+		if len(container.Env) > 0 {
+			headNodeSpec.Environment = convertEnvVariables(container.Env, true)
+		}
 		headNodeSpec.SecurityContext = convertSecurityContext(container.SecurityContext)
 	}
 
@@ -294,11 +294,11 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 			workerNodeSpec.Labels = spec.Template.Labels
 		}
 
-		// Here we update environment only for a container named 'ray-worker'
-		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok && len(container.Env) > 0 {
-			workerNodeSpec.Environment = convertEnvVariables(container.Env, false)
-		}
+		// Here we update environment and security context only for a container named 'ray-worker'
 		if container, _, ok := util.GetContainerByName(spec.Template.Spec.Containers, "ray-worker"); ok {
+			if len(container.Env) > 0 {
+				workerNodeSpec.Environment = convertEnvVariables(container.Env, false)
+			}
 			workerNodeSpec.SecurityContext = convertSecurityContext(container.SecurityContext)
 		}
 
@@ -319,19 +319,19 @@ func PopulateWorkerNodeSpec(specs []rayv1api.WorkerGroupSpec) []*api.WorkerGroup
 	return workerNodeSpecs
 }
 
-func convertSecurityContext(securityctx *corev1.SecurityContext) *api.SecurityContext {
-	if securityctx == nil {
+func convertSecurityContext(securityCtx *corev1.SecurityContext) *api.SecurityContext {
+	if securityCtx == nil {
 		return nil
 	}
 	result := &api.SecurityContext{
-		Privileged:   securityctx.Privileged,
+		Privileged:   securityCtx.Privileged,
 		Capabilities: &api.Capabilities{},
 	}
-	if securityctx.Capabilities != nil {
-		for _, cap := range securityctx.Capabilities.Add {
+	if securityCtx.Capabilities != nil {
+		for _, cap := range securityCtx.Capabilities.Add {
 			result.Capabilities.Add = append(result.Capabilities.Add, string(cap))
 		}
-		for _, cap := range securityctx.Capabilities.Drop {
+		for _, cap := range securityCtx.Capabilities.Drop {
 			result.Capabilities.Drop = append(result.Capabilities.Drop, string(cap))
 		}
 	}
