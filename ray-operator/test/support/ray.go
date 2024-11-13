@@ -62,10 +62,6 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 	return t.Client().Ray().RayV1().RayClusters(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
 
-func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
-	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
-}
-
 func UpdateRayServiceConfig(t Test, namespace, name, serveConfig string) (*rayv1.RayService, error) {
 	rs, err := GetRayService(t, namespace, name)
 	assert.NoError(t.T(), err)
@@ -138,6 +134,10 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	)
 	assert.NoError(t.T(), err)
 	return pods.Items
+}
+
+func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
+	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
 
 func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error) {
