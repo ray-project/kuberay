@@ -45,16 +45,12 @@ func TestRayService(t *testing.T) {
 
 			var rayClusterName string
 			// Wait for RayCluster name to be populated
-			g.Eventually(func(g Gomega) {
-				rs, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
-				g.Expect(err).NotTo(HaveOccurred())
-				if rs.Status.PendingServiceStatus.RayClusterName != "" {
-					rayClusterName = rs.Status.PendingServiceStatus.RayClusterName
-				} else if rs.Status.ActiveServiceStatus.RayClusterName != "" {
-					rayClusterName = rs.Status.ActiveServiceStatus.RayClusterName
-				}
-				g.Expect(rayClusterName).NotTo(BeEmpty())
-			}, TestTimeoutShort).Should(Succeed())
+			g.Eventually(UnderlyingRayCluster(test, rayService), TestTimeoutShort).Should(
+				WithTransform(func(cluster *rayv1.RayCluster) string {
+					rayClusterName = cluster.Name
+					return rayClusterName
+				}, Not(BeEmpty())),
+			)
 
 			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayClusterName)
 			g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).

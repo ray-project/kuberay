@@ -70,6 +70,20 @@ func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
 	return cluster.Status.DesiredWorkerReplicas
 }
 
+func UnderlyingRayCluster(t Test, rayService *rayv1.RayService) func() (*rayv1.RayCluster, error) {
+	return func() (*rayv1.RayCluster, error) {
+		var rayClusterName string
+		rs, err := GetRayService(t, rayService.Namespace, rayService.Name)
+		assert.NoError(t.T(), err)
+		if rs.Status.PendingServiceStatus.RayClusterName != "" {
+			rayClusterName = rs.Status.PendingServiceStatus.RayClusterName
+		} else if rs.Status.ActiveServiceStatus.RayClusterName != "" {
+			rayClusterName = rs.Status.ActiveServiceStatus.RayClusterName
+		}
+		return GetRayCluster(t, rs.Namespace, rayClusterName)
+	}
+}
+
 func HeadPod(t Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {
 	return func() (*corev1.Pod, error) {
 		return GetHeadPod(t, rayCluster)
