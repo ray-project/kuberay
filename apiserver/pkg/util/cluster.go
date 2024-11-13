@@ -805,28 +805,7 @@ func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
 	return vols, nil
 }
 
-// Pretty much invert of this
-/*
-func convertSecurityContext(securityctx *corev1.SecurityContext) *api.SecurityContext {
-	if securityctx == nil {
-		return nil
-	}
-	result := &api.SecurityContext{
-		Privileged:   securityctx.Privileged,
-		Capabilities: &api.Capabilities{},
-	}
-	if securityctx.Capabilities != nil {
-		for _, cap := range securityctx.Capabilities.Add {
-			result.Capabilities.Add = append(result.Capabilities.Add, string(cap))
-		}
-		for _, cap := range securityctx.Capabilities.Drop {
-			result.Capabilities.Drop = append(result.Capabilities.Drop, string(cap))
-		}
-	}
-	return result
-}
-*/
-
+// Build security context
 func buildSecurityContext(securityctx *api.SecurityContext) *corev1.SecurityContext {
 	if securityctx == nil {
 		return nil
