@@ -47,7 +47,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -2390,8 +2389,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			assert.Equal(t, 1, len(rayClusterList.Items))
 			assert.Equal(t, 0, len(rayClusterList.Items[0].Finalizers))
 
-			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
-			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			if tc.enableGCSFTRedisCleanup == "false" {
 				assert.Nil(t, err)
 				podList := corev1.PodList{}
@@ -2419,7 +2417,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				assert.Equal(t, 0, len(podList.Items))
 
 				// Reconcile the RayCluster again. The controller should create Pods.
-				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 				assert.Nil(t, err)
 
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
@@ -2498,8 +2496,7 @@ func TestEvents_RedisCleanup(t *testing.T) {
 				Scheme:   newScheme,
 			}
 
-			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
-			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			assert.ErrorIs(t, err, tc.errInjected)
 
 			var foundEvent bool
@@ -2642,8 +2639,7 @@ func Test_RedisCleanup(t *testing.T) {
 			assert.Nil(t, err, "Fail to get Job list")
 			assert.Equal(t, 0, len(jobList.Items))
 
-			request := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
-			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			assert.Nil(t, err)
 
 			// Check Job
@@ -2670,7 +2666,7 @@ func Test_RedisCleanup(t *testing.T) {
 
 				// Reconcile the RayCluster again. The controller should remove the finalizer and the RayCluster will be deleted.
 				// See https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.11/pkg/client/fake/client.go#L308-L310 for more details.
-				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, request, cluster)
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 				assert.Nil(t, err, "Fail to reconcile RayCluster")
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 				assert.Nil(t, err, "Fail to get RayCluster list")
