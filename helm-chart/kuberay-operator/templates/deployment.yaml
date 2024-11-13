@@ -37,7 +37,12 @@ spec:
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
+          {{- if .Values.logging.sizeLimit }}
+          emptyDir:
+            sizeLimit: {{ .Values.logging.sizeLimit }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
