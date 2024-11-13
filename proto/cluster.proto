@@ -284,8 +284,8 @@ message Capabilities {
 message SecurityContext {
   // Optional. The capabilities to add/drop when running containers.
   Capabilities capabilities = 1;
-  // Optional. Run container in privileged mode - essentially equivalent to root on the host
-  bool privileged = 2;
+  // Optional. Run container in privileged mode - essentially equivalent to root on the host. Default is false.
+  optional bool privileged = 2;
 }
 
 // Cluster HeadGroup specification

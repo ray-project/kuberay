@@ -643,7 +643,7 @@
         },
         "privileged": {
           "type": "boolean",
-          "title": "Optional. Run container in privileged mode - essentially equivalent to root on the host"
+          "description": "Optional. Run container in privileged mode - essentially equivalent to root on the host. Default is false."
         }
       },
       "description": "SecurityContext holds security configuration that will be applied to a container.\nSome fields are present in both SecurityContext and PodSecurityContext.  When both\nare set, the values in SecurityContext take precedence."
