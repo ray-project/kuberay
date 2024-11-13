@@ -154,7 +154,7 @@ func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Po
 				{
 					Name:    containerName,
 					Image:   "rancher/curl",
-					Command: []string{"/bin/sh", "-c", "while true; do sleep 10; done"},
+					Command: []string{"/bin/sh", "-c", "tail -f /dev/null"},
 				},
 			},
 		},
