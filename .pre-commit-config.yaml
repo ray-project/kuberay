@@ -31,7 +31,7 @@ repos:
     hooks:
       - id: check-golangci-lint-version
         name: golangci-lint version check
-        entry: sh -c 'version="1.60.3"; [ "$(golangci-lint --version | awk "/version/ {print \$4}")" = "$version" ] || { echo "golangci-lint version is not $version"; exit 1; }'
+        entry: bash -c 'version="1.60.3"; [ "$(golangci-lint --version | awk "/version/ {print \$4}")" = "$version" ] || { echo "golangci-lint version is not $version"; exit 1; }'
         language: system
         always_run: true
         fail_fast: true
@@ -61,7 +61,7 @@ repos:
     hooks:
       - id: check-kubeconform-version
         name: kubeconform version check
-        entry: sh -c 'version="0.6.7"; [ "$(kubeconform -v | awk -F"v" "{print \$2}")" = "$version" ] || { echo "kubeconform version is not $version"; exit 1; }'
+        entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | awk -F"v" "{print \$2}")" = "$version" ] || { echo "kubeconform version is not $version"; exit 1; }'
         language: system
         always_run: true
         fail_fast: true
