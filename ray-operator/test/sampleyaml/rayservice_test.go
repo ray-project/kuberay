@@ -38,7 +38,7 @@ func TestRayService(t *testing.T) {
 			test.StreamKubeRayOperatorLogs()
 			rayServiceFromYaml := DeserializeRayServiceYAML(test, yamlFilePath)
 			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
-			
+
 			rayService, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
