@@ -38,14 +38,22 @@ func TestRayService(t *testing.T) {
 			test.StreamKubeRayOperatorLogs()
 			rayServiceFromYaml := DeserializeRayServiceYAML(test, yamlFilePath)
 			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
-
+			
 			rayService, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(rayService).NotTo(BeNil())
+
+			test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+				Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+			// Get the latest rayService
+			rayService, err = GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
 
 			var rayClusterName string
 			// Wait for RayCluster name to be populated
-			g.Eventually(UnderlyingRayCluster(test, rayService), TestTimeoutShort).Should(
+			g.Eventually(UnderlyingRayCluster(rayService), TestTimeoutShort).Should(
 				WithTransform(func(cluster *rayv1.RayCluster) string {
 					rayClusterName = cluster.Name
 					return rayClusterName

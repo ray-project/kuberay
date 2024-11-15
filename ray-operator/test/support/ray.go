@@ -70,17 +70,29 @@ func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
 	return cluster.Status.DesiredWorkerReplicas
 }
 
-func UnderlyingRayCluster(t Test, rayService *rayv1.RayService) func() (*rayv1.RayCluster, error) {
+func UnderlyingRayCluster(rayService *rayv1.RayService) func() (*rayv1.RayCluster, error) {
 	return func() (*rayv1.RayCluster, error) {
+		var rayClusterStatus rayv1.RayClusterStatus
 		var rayClusterName string
-		rs, err := GetRayService(t, rayService.Namespace, rayService.Name)
-		assert.NoError(t.T(), err)
-		if rs.Status.PendingServiceStatus.RayClusterName != "" {
-			rayClusterName = rs.Status.PendingServiceStatus.RayClusterName
-		} else if rs.Status.ActiveServiceStatus.RayClusterName != "" {
-			rayClusterName = rs.Status.ActiveServiceStatus.RayClusterName
+
+		if rayService.Status.PendingServiceStatus.RayClusterName != "" {
+			rayClusterStatus = rayService.Status.PendingServiceStatus.RayClusterStatus
+			rayClusterName = rayService.Status.PendingServiceStatus.RayClusterName
+		} else if rayService.Status.ActiveServiceStatus.RayClusterName != "" {
+			rayClusterStatus = rayService.Status.ActiveServiceStatus.RayClusterStatus
+			rayClusterName = rayService.Status.ActiveServiceStatus.RayClusterName
 		}
-		return GetRayCluster(t, rs.Namespace, rayClusterName)
+		return &rayv1.RayCluster{
+			TypeMeta: rayService.TypeMeta,
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:   rayService.Namespace,
+				Labels:      rayService.Labels,
+				Annotations: rayService.Annotations,
+				Name:        rayClusterName,
+			},
+			Spec:   rayService.Spec.RayClusterSpec,
+			Status: rayClusterStatus,
+		}, nil
 	}
 }
 
