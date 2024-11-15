@@ -13,5 +13,7 @@ requiredDropCapabilities:
 runAsUser:
   type: MustRunAs
   uid: 1000
+fsGroup:
+  type: MustRunAs
 users:
   - 'system:serviceaccount:$(namespace):kuberay-operator'
