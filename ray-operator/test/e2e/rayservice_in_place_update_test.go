@@ -47,6 +47,12 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
+	// Check if the head pod is ready
+	g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
+
+	// Check if all worker pods are ready
+	g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.AllPodsRunningAndReady, BeTrue()))
+	
 	// Create curl pod
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
@@ -59,12 +65,6 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-
-	// Check if the head pod is ready
-	g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-
-	// Check if all worker pods are ready
-	g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.AllPodsRunningAndReady, BeTrue()))
 
 	// test the default curl result
 	// curl /fruit
