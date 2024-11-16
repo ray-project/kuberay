@@ -269,6 +269,25 @@ message Volume {
   map<string, string> items = 11; // Items used for configMap and secrets
 }
 
+// Adds and removes POSIX capabilities from running containers.
+message Capabilities {
+  // Optional. Added capabilities
+  repeated string add = 1;
+
+  // Optional. Removed capabilities
+  repeated string drop = 2;
+}
+
+// SecurityContext holds security configuration that will be applied to a container.
+// Some fields are present in both SecurityContext and PodSecurityContext.  When both
+// are set, the values in SecurityContext take precedence.
+message SecurityContext {
+  // Optional. The capabilities to add/drop when running containers.
+  Capabilities capabilities = 1;
+  // Optional. Run container in privileged mode - essentially equivalent to root on the host. Default is false.
+  optional bool privileged = 2;
+}
+
 // Cluster HeadGroup specification
 message HeadGroupSpec {
   // Required. The computeTemplate of head node group
@@ -297,6 +316,8 @@ message HeadGroupSpec {
   map<string, string> labels = 11;
   // Optional image pull policy We only support Always and ifNotPresent
   string imagePullPolicy = 12;
+  // Optional. Configure the security context for the head container for debugging etc.
+  SecurityContext security_context = 13;
 }
 
 message WorkerGroupSpec {
@@ -329,6 +350,8 @@ message WorkerGroupSpec {
   map<string, string> labels = 13;
   // Optional image pull policy We only support Always and ifNotPresent
   string imagePullPolicy = 14;
+  // Optional. Configure the security context for the worker container for debugging etc.
+  SecurityContext security_context = 15;
 }
 
 message ClusterEvent {
