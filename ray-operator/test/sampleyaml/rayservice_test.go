@@ -51,14 +51,11 @@ func TestRayService(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
 
-			var rayClusterName string
 			// Wait for RayCluster name to be populated
-			g.Eventually(UnderlyingRayCluster(rayService), TestTimeoutShort).Should(
-				WithTransform(func(cluster *rayv1.RayCluster) string {
-					rayClusterName = cluster.Name
-					return rayClusterName
-				}, Not(BeEmpty())),
+			g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutShort).Should(
+				WithTransform(UnderlyingRayClusterName, Not(BeEmpty())),
 			)
+			rayClusterName := UnderlyingRayClusterName(rayService)
 
 			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayClusterName)
 			g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).

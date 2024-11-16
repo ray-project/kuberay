@@ -70,30 +70,15 @@ func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
 	return cluster.Status.DesiredWorkerReplicas
 }
 
-func UnderlyingRayCluster(rayService *rayv1.RayService) func() (*rayv1.RayCluster, error) {
-	return func() (*rayv1.RayCluster, error) {
-		var rayClusterStatus rayv1.RayClusterStatus
-		var rayClusterName string
+func UnderlyingRayClusterName(rayService *rayv1.RayService) string {
+	var rayClusterName string
 
-		if rayService.Status.PendingServiceStatus.RayClusterName != "" {
-			rayClusterStatus = rayService.Status.PendingServiceStatus.RayClusterStatus
-			rayClusterName = rayService.Status.PendingServiceStatus.RayClusterName
-		} else if rayService.Status.ActiveServiceStatus.RayClusterName != "" {
-			rayClusterStatus = rayService.Status.ActiveServiceStatus.RayClusterStatus
-			rayClusterName = rayService.Status.ActiveServiceStatus.RayClusterName
-		}
-		return &rayv1.RayCluster{
-			TypeMeta: rayService.TypeMeta,
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:   rayService.Namespace,
-				Labels:      rayService.Labels,
-				Annotations: rayService.Annotations,
-				Name:        rayClusterName,
-			},
-			Spec:   rayService.Spec.RayClusterSpec,
-			Status: rayClusterStatus,
-		}, nil
+	if rayService.Status.PendingServiceStatus.RayClusterName != "" {
+		rayClusterName = rayService.Status.PendingServiceStatus.RayClusterName
+	} else if rayService.Status.ActiveServiceStatus.RayClusterName != "" {
+		rayClusterName = rayService.Status.ActiveServiceStatus.RayClusterName
 	}
+	return rayClusterName
 }
 
 func HeadPod(t Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {

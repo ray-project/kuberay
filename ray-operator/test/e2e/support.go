@@ -183,7 +183,7 @@ func curlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
 	curlPod *corev1.Pod,
-	curlPodContainerName, //nolint:unparam // This parameter is necessary
+	curlPodContainerName, //nolint:unparam // This parameter is necessary TODO: remove it when calls this function with a different curlPodContainerName
 	rayServicePath,
 	body string,
 ) (bytes.Buffer, bytes.Buffer) {
