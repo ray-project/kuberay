@@ -84,7 +84,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
-			logger.Info("RayJob resource not found. Ignoring since object must be deleted", "name", request.NamespacedName)
+			logger.Info("RayJob resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -141,7 +141,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
-	logger.Info("RayJob", "name", rayJobInstance.Name, "namespace", rayJobInstance.Namespace, "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
+	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
@@ -154,7 +154,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
-		logger.Info("JobDeploymentStatusNew", "RayJob", rayJobInstance.Name)
+		logger.Info("JobDeploymentStatusNew")
 		if err = r.initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
@@ -199,7 +199,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		logger.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode,
-			"RayJob", rayJobInstance.Name, "RayCluster", rayJobInstance.Status.RayClusterName)
+			"RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
 		// Try to get the Ray job id from rayJob.Spec.JobId
@@ -447,7 +447,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 		return err
 	}
 
-	logger.Info("The submitter Kubernetes Job for RayJob already exists", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	logger.Info("The submitter Kubernetes Job for RayJob already exists", "Kubernetes Job", job.Name)
 	return nil
 }
 
@@ -536,7 +536,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayJobSubmitter), "Failed to create new Kubernetes Job %s/%s: %v", job.Namespace, job.Name, err)
 		return err
 	}
-	logger.Info("Created submitter Kubernetes Job for RayJob", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+	logger.Info("Created submitter Kubernetes Job for RayJob", "Kubernetes Job", job.Name)
 	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedRayJobSubmitter), "Created Kubernetes Job %s/%s", job.Namespace, job.Name)
 	return nil
 }
@@ -557,19 +557,19 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
 			isJobDeleted = true
-			logger.Info("The submitter Kubernetes Job has been already deleted", "RayJob", rayJobInstance.Name, "Kubernetes Job", job.Name)
+			logger.Info("The submitter Kubernetes Job has been already deleted", "Kubernetes Job", job.Name)
 		} else {
 			return false, err
 		}
 	} else {
 		if !job.DeletionTimestamp.IsZero() {
-			logger.Info("The deletion of submitter Kubernetes Job for RayJob is ongoing.", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+			logger.Info("The deletion of submitter Kubernetes Job for RayJob is ongoing.", "Submitter K8s Job", job.Name)
 		} else {
 			if err := r.Client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayJobSubmitter), "Failed to delete submitter K8s Job %s/%s: %v", job.Namespace, job.Name, err)
 				return false, err
 			}
-			logger.Info("The associated submitter Kubernetes Job for RayJob is deleted", "RayJob", rayJobInstance.Name, "Submitter K8s Job", job.Name)
+			logger.Info("The associated submitter Kubernetes Job for RayJob is deleted", "Submitter K8s Job", job.Name)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayJobSubmitter), "Deleted submitter K8s Job %s/%s", job.Namespace, job.Name)
 		}
 	}
@@ -590,19 +590,19 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 			// If the cluster is not found, it means the cluster has been already deleted.
 			// Don't return error to make this function idempotent.
 			isClusterDeleted = true
-			logger.Info("The associated RayCluster for RayJob has been already deleted and it can not be found", "RayCluster", clusterIdentifier, "RayJob", rayJobInstance.Name)
+			logger.Info("The associated RayCluster for RayJob has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
 		} else {
 			return false, err
 		}
 	} else {
 		if !cluster.DeletionTimestamp.IsZero() {
-			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayJob", rayJobInstance.Name, "RayCluster", cluster.Name)
+			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayCluster", cluster.Name)
 		} else {
 			if err := r.Delete(ctx, &cluster); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete cluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
 				return false, err
 			}
-			logger.Info("The associated RayCluster for RayJob is deleted", "RayCluster", clusterIdentifier, "RayJob", rayJobInstance.Name)
+			logger.Info("The associated RayCluster for RayJob is deleted", "RayCluster", clusterIdentifier)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted cluster %s/%s", cluster.Namespace, cluster.Name)
 		}
 	}
@@ -639,7 +639,7 @@ func (r *RayJobReconciler) initRayJobStatusIfNeed(ctx context.Context, rayJob *r
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
 	// Please don't update `shouldUpdateStatus` below.
-	logger.Info("initRayJobStatusIfNeed", "shouldUpdateStatus", shouldUpdateStatus, "RayJob", rayJob.Name, "jobId", rayJob.Status.JobId, "rayClusterName", rayJob.Status.RayClusterName, "jobStatus", rayJob.Status.JobStatus)
+	logger.Info("initRayJobStatusIfNeed", "shouldUpdateStatus", shouldUpdateStatus, "jobId", rayJob.Status.JobId, "rayClusterName", rayJob.Status.RayClusterName, "jobStatus", rayJob.Status.JobStatus)
 	if !shouldUpdateStatus {
 		return nil
 	}
@@ -706,7 +706,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	rayClusterInstance := &rayv1.RayCluster{}
 	if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("RayCluster not found", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
+			logger.Info("RayCluster not found", "RayCluster", rayClusterNamespacedName)
 			if len(rayJobInstance.Spec.ClusterSelector) != 0 {
 				err := fmt.Errorf("we have choosed the cluster selector mode, failed to find the cluster named %v, err: %w", rayClusterNamespacedName.Name, err)
 				return nil, err
@@ -726,12 +726,12 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			return nil, err
 		}
 	}
-	logger.Info("Found the associated RayCluster for RayJob", "RayJob", rayJobInstance.Name, "RayCluster", rayClusterNamespacedName)
+	logger.Info("Found the associated RayCluster for RayJob", "RayCluster", rayClusterNamespacedName)
 
 	// Verify that RayJob is not in cluster selector mode first to avoid nil pointer dereference error during spec comparison.
 	// This is checked by ensuring len(rayJobInstance.Spec.ClusterSelector) equals 0.
 	if len(rayJobInstance.Spec.ClusterSelector) == 0 && !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
-		logger.Info("Disregard changes in RayClusterSpec of RayJob", "RayJob", rayJobInstance.Name)
+		logger.Info("Disregard changes in RayClusterSpec of RayJob")
 	}
 
 	return rayClusterInstance, nil
@@ -773,10 +773,10 @@ func (r *RayJobReconciler) updateStatusToSuspendingIfNeeded(ctx context.Context,
 		rayv1.JobDeploymentStatusInitializing: {},
 	}
 	if _, ok := validTransitions[rayJob.Status.JobDeploymentStatus]; !ok {
-		logger.Info("The current status is not allowed to transition to `Suspending`", "RayJob", rayJob.Name, "JobDeploymentStatus", rayJob.Status.JobDeploymentStatus)
+		logger.Info("The current status is not allowed to transition to `Suspending`", "JobDeploymentStatus", rayJob.Status.JobDeploymentStatus)
 		return false
 	}
-	logger.Info("Try to transition the status to `Suspending`", "oldStatus", rayJob.Status.JobDeploymentStatus, "RayJob", rayJob.Name)
+	logger.Info("Try to transition the status to `Suspending`", "oldStatus", rayJob.Status.JobDeploymentStatus)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
 	return true
 }
@@ -785,7 +785,7 @@ func (r *RayJobReconciler) checkK8sJobAndUpdateStatusIfNeeded(ctx context.Contex
 	logger := ctrl.LoggerFrom(ctx)
 	for _, cond := range job.Status.Conditions {
 		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
-			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.", "RayJob", rayJob.Name, "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
+			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.", "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
 			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
