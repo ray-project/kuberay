@@ -118,6 +118,13 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 							},
 						},
 					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -222,6 +229,13 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 						{
 							Name:  "RAY_USAGE_STATS_KUBERAY_IN_USE",
 							Value: "1",
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
 						},
 					},
 				},
@@ -487,6 +501,10 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	if !reflect.DeepEqual(groupSpec.Environment, expectedHeadEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedHeadEnv)
 	}
+	// Cannot use deep equal since protobuf locks copying
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
+	}
 }
 
 func TestPopulateWorkerNodeSpec(t *testing.T) {
@@ -506,6 +524,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedEnv)
+	}
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
 	}
 }
 
