@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"path"
 	"strings"
 	"testing"
 
@@ -10,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -20,15 +20,12 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
+	rayServiceName := "rayservice-sample"
 	test.StreamKubeRayOperatorLogs()
 
-	fileName := "ray-service.sample.yaml"
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
 
-	yamlFilePath := path.Join(sampleyaml.GetSampleYAMLDir(test), fileName)
-	rayServiceFromYaml := DeserializeRayServiceYAML(test, yamlFilePath)
-	KubectlApplyYAML(test, yamlFilePath, namespace.Name)
-
-	rayService, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
+	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
@@ -37,12 +34,12 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
 	// Get the latest RayService
-	rayService, err = GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
 	// Wait for RayCluster name to be populated
-	g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutShort).Should(
+	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(
 		WithTransform(UnderlyingRayClusterName, Not(BeEmpty())),
 	)
 	rayClusterName := UnderlyingRayClusterName(rayService)
