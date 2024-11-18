@@ -193,8 +193,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !isReady {
-		logger.Info("Ray Serve applications are not ready to serve requests", "requeue_duration", ServiceDefaultRequeueDuration.String())
-		r.Recorder.Eventf(rayServiceInstance, "Normal", "ServiceNotReady", "The service is not ready yet. Controller will perform a round of actions in %s.", ServiceDefaultRequeueDuration)
+		logger.Info("Ray Serve applications are not ready to serve requests")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
@@ -1124,9 +1123,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			err = r.updateState(ctx, rayServiceInstance, rayv1.WaitForServeDeploymentReady, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
 		}
-
-		r.Recorder.Eventf(rayServiceInstance, "Normal", "SubmittedServeDeployment",
-			"Controller sent API request to update Serve deployments on cluster %s", rayClusterInstance.Name)
 	}
 
 	var isReady bool
@@ -1140,7 +1136,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 		r.updateRayClusterInfo(ctx, rayServiceInstance, rayClusterInstance.Name)
-		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve application is now running and healthy.")
 	} else {
 		rayServiceInstance.Status.ServiceStatus = rayv1.WaitForServeDeploymentReady
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
