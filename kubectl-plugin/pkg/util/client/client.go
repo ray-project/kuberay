@@ -11,11 +11,14 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
 type Client interface {
 	KubernetesClient() kubernetes.Interface
 	DynamicClient() dynamic.Interface
+	RayClient() rayclient.Interface
 	// GetRayHeadSvcName retrieves the name of RayHead service for the given RayCluster, RayJob, or RayService.
 	GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
 	GetKubeRayOperatorVersion(ctx context.Context) (string, error)
@@ -24,6 +27,7 @@ type Client interface {
 type k8sClient struct {
 	kubeClient    kubernetes.Interface
 	dynamicClient dynamic.Interface
+	rayClient     rayclient.Interface
 }
 
 func NewClient(factory cmdutil.Factory) (Client, error) {
@@ -35,16 +39,26 @@ func NewClient(factory cmdutil.Factory) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	restConfig, err := factory.ToRESTConfig()
+	if err != nil {
+		return nil, err
+	}
+	rayClient, err := rayclient.NewForConfig(restConfig)
+	if err != nil {
+		return nil, err
+	}
 	return &k8sClient{
 		kubeClient:    kubeClient,
 		dynamicClient: dynamicClient,
+		rayClient:     rayClient,
 	}, nil
 }
 
-func NewClientForTesting(kubeClient kubernetes.Interface, dynamicClient dynamic.Interface) Client {
+func NewClientForTesting(kubeClient kubernetes.Interface, dynamicClient dynamic.Interface, rayClient rayclient.Interface) Client {
 	return &k8sClient{
 		kubeClient:    kubeClient,
 		dynamicClient: dynamicClient,
+		rayClient:     rayClient,
 	}
 }
 
@@ -54,6 +68,10 @@ func (c *k8sClient) KubernetesClient() kubernetes.Interface {
 
 func (c *k8sClient) DynamicClient() dynamic.Interface {
 	return c.dynamicClient
+}
+
+func (c *k8sClient) RayClient() rayclient.Interface {
+	return c.rayClient
 }
 
 func (c *k8sClient) GetKubeRayOperatorVersion(ctx context.Context) (string, error) {

@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	dynamicFake "k8s.io/client-go/dynamic/fake"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
+
+	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestGetKubeRayOperatorVersion(t *testing.T) {
@@ -90,7 +92,7 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kubeClientSet := kubeFake.NewSimpleClientset(tc.kubeObjects...)
-			client := NewClientForTesting(kubeClientSet, nil)
+			client := NewClientForTesting(kubeClientSet, nil, nil)
 
 			version, err := client.GetKubeRayOperatorVersion(context.Background())
 
@@ -142,7 +144,8 @@ func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 
 	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
 	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	client := NewClientForTesting(kubeClientSet, dynamicClient)
+	rayClient := rayClientFake.NewSimpleClientset()
+	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
 
 	tests := []struct {
 		name         string
@@ -225,7 +228,8 @@ func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 
 	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
 	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	client := NewClientForTesting(kubeClientSet, dynamicClient)
+	rayClient := rayClientFake.NewSimpleClientset()
+	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
 
 	tests := []struct {
 		name         string
@@ -312,7 +316,8 @@ func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 
 	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
 	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	client := NewClientForTesting(kubeClientSet, dynamicClient)
+	rayClient := rayClientFake.NewSimpleClientset()
+	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
 
 	tests := []struct {
 		name         string
