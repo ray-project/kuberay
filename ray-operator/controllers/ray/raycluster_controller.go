@@ -18,6 +18,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -41,7 +42,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	controller "sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -55,6 +56,8 @@ var (
 
 	// Definition of a index field for pod name
 	podUIDIndexField = "metadata.uid"
+
+	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
 )
 
 // getDiscoveryClient returns a discovery client for the current reconciler
@@ -105,7 +108,8 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		panic(err)
 	}
 	isOpenShift := getClusterType(ctx)
-
+	// init ray cluster expectations
+	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(mgr.GetClient())
 	// init the batch scheduler manager
 	schedulerMgr, err := batchscheduler.NewSchedulerManager(rayConfigs, mgr.GetConfig())
 	if err != nil {
@@ -116,7 +120,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
-
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -184,6 +187,8 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// No match found
 	if errors.IsNotFound(err) {
+		// Clear all related expectations
+		rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
@@ -698,9 +703,10 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 	}
-
 	// Reconcile head Pod
-	if len(headPods.Items) == 1 {
+	if !rayClusterScaleExpectation.IsSatisfied(ctx, instance.Namespace, instance.Name, expectations.HeadGroup) {
+		logger.Info("reconcilePods", "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
+	} else if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
 		logger.Info("reconcilePods", "Found 1 head Pod", headPod.Name, "Pod status", headPod.Status.Phase,
 			"Pod status reason", headPod.Status.Reason,
@@ -716,6 +722,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					headPod.Namespace, headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod), err)
 				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
 			}
+			rayClusterScaleExpectation.ExpectScalePod(headPod.Namespace, instance.Name, expectations.HeadGroup, headPod.Name, expectations.Delete)
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedHeadPod),
 				"Deleted head Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 				headPod.Namespace, headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod))
@@ -747,11 +754,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
 				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
 			}
+			rayClusterScaleExpectation.ExpectScalePod(extraHeadPodToDelete.Namespace, instance.Name, expectations.HeadGroup, extraHeadPodToDelete.Name, expectations.Delete)
 		}
 	}
 
 	// Reconcile worker pods now
 	for _, worker := range instance.Spec.WorkerGroupSpecs {
+		if !rayClusterScaleExpectation.IsSatisfied(ctx, instance.Namespace, instance.Name, worker.GroupName) {
+			logger.Info("reconcilePods", "Expectation", fmt.Sprintf("NotSatisfiedGroupExpectations, reconcile group %s later", worker.GroupName))
+			continue
+		}
 		// workerReplicas will store the target number of pods for this worker group.
 		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
 		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
@@ -777,6 +789,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 						workerPod.Namespace, workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod), err)
 					return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 				}
+				rayClusterScaleExpectation.ExpectScalePod(workerPod.Namespace, instance.Name, worker.GroupName, workerPod.Name, expectations.Delete)
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
 					"Deleted worker Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 					workerPod.Namespace, workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
@@ -804,6 +817,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				}
 				logger.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
 			} else {
+				rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, worker.GroupName, pod.Name, expectations.Delete)
 				deletedWorkers[pod.Name] = deleted
 				r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted pod %s/%s", pod.Namespace, pod.Name)
 			}
@@ -872,6 +886,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 						}
 						logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
 					}
+					rayClusterScaleExpectation.ExpectScalePod(randomPodToDelete.Namespace, instance.Name, worker.GroupName, randomPodToDelete.Name, expectations.Delete)
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
 				}
 			} else {
@@ -1037,6 +1052,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateHeadPod), "Failed to create head Pod %s/%s, %v", pod.Namespace, pod.Name, err)
 		return err
 	}
+	rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, expectations.HeadGroup, pod.Name, expectations.Create)
 	logger.Info("Created head Pod for RayCluster", "name", pod.Name)
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedHeadPod), "Created head Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
@@ -1055,10 +1071,12 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		}
 	}
 
-	if err := r.Create(ctx, &pod); err != nil {
+	replica := pod
+	if err := r.Create(ctx, &replica); err != nil {
 		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod %s/%s, %v", pod.Namespace, pod.Name, err)
 		return err
 	}
+	rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
 	logger.Info("Created worker Pod for RayCluster", "name", pod.Name)
 	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
