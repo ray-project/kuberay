@@ -183,7 +183,7 @@ func curlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
 	curlPod *corev1.Pod,
-	curlPodContainerName, //nolint:unparam // This parameter is necessary TODO: remove it when calls this function with a different curlPodContainerName
+	curlPodContainerName,
 	rayServicePath,
 	body string,
 ) (bytes.Buffer, bytes.Buffer) {
@@ -284,11 +284,6 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 						WithContainers(corev1ac.Container().
 							WithName("ray-worker").
 							WithImage(GetRayImage()).
-							WithLifecycle(corev1ac.Lifecycle().
-								WithPreStop(corev1ac.LifecycleHandler().
-									WithExec(corev1ac.ExecAction().
-										WithCommand("/bin/sh", "-c", "ray stop"))),
-							).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("500m"),

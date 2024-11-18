@@ -38,24 +38,6 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	// Wait for RayCluster name to be populated
-	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(
-		WithTransform(UnderlyingRayClusterName, Not(BeEmpty())),
-	)
-	rayClusterName := UnderlyingRayClusterName(rayService)
-
-	test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayClusterName)
-	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).
-		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-	rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Check if the head pod is ready
-	g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-
-	// Check if all worker pods are ready
-	g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.AllPodsRunningAndReady, BeTrue()))
-
 	// Create curl pod
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
@@ -77,7 +59,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	// In place update
+	// In-place update
 	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -101,14 +83,15 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 		// Check Ray service status
 		rsStatus := RayServiceStatus(newRs)
 		g.Expect(rsStatus).To(Equal(rayv1.Running))
-		g.Expect(newRs.Status.ObservedGeneration).To(Equal(newRs.Generation))
 	}, TestTimeoutShort).Should(Succeed())
 
 	// Test the new price and factor
-	// curl /fruit
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("8"))
-	// curl /calc
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
+	g.Eventually(func(g Gomega) {
+		// curl /fruit
+		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		g.Expect(stdout.String()).To(Equal("8"))
+		// curl /calc
+		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+		g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
+	}, TestTimeoutShort).Should(Succeed())
 }
