@@ -1065,7 +1065,7 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	return err
 }
 
-// Reconciles the Serve applications on the RayCluster. Returns (ctrl.Result, isReady, error).
+// Reconciles the Serve applications on the RayCluster. Returns (isReady, error).
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, isActive bool) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
