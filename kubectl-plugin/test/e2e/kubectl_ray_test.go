@@ -19,7 +19,7 @@ func TestKubectlRayGet(t *testing.T) {
 
 var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 	It("succeed in getting ray cluster information", func() {
-		cmd := exec.Command("kubectl", "ray", "cluster", "get", "--namespace", "default")
+		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", "default")
 		output, err := cmd.CombinedOutput()
 
 		expectedOutputTablePrinter := printers.NewTablePrinter(printers.PrintOptions{})
@@ -59,7 +59,7 @@ var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 	})
 
 	It("should not succeed", func() {
-		cmd := exec.Command("kubectl", "ray", "cluster", "get", "fakeclustername", "anotherfakeclustername")
+		cmd := exec.Command("kubectl", "ray", "get", "cluster", "fakeclustername", "anotherfakeclustername")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())
