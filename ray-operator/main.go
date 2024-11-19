@@ -159,7 +159,6 @@ func main() {
 		k8sLogger := k8szap.New(k8szap.UseFlagOptions(&opts))
 		ctrl.SetLogger(k8sLogger)
 		klog.SetLogger(k8sLogger)
-
 	}
 
 	if forcedClusterUpgrade {
