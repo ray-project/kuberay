@@ -519,12 +519,8 @@ func getAutoscalerContainerIndex(pod corev1.Pod) (autoscalerContainerIndex int) 
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	ret = map[string]string{
+func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, overrideLabels map[string]string) map[string]string {
+	labels := map[string]string{
 		utils.RayNodeLabelKey:                   "yes",
 		utils.RayClusterLabelKey:                rayClusterName,
 		utils.RayNodeTypeLabelKey:               string(rayNodeType),
@@ -534,22 +530,16 @@ func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName st
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
 
-	for k, v := range ret {
-		if k == string(rayNodeType) {
-			// overriding invalid values for this label
-			if v != string(rayv1.HeadNode) && v != string(rayv1.WorkerNode) {
-				labels[k] = v
-			}
+	for k, v := range overrideLabels {
+		// The following labels are not overridable
+		// - ray.io/node-type
+		// - ray.io/group
+		// - ray.io/cluster
+		if k == utils.RayNodeTypeLabelKey || k == utils.RayNodeGroupLabelKey || k == utils.RayClusterLabelKey {
+			continue
 		}
-		if k == utils.RayNodeGroupLabelKey {
-			// overriding invalid values for this label
-			if v != groupName {
-				labels[k] = v
-			}
-		}
-		if _, ok := labels[k]; !ok {
-			labels[k] = v
-		}
+
+		labels[k] = v
 	}
 
 	return labels

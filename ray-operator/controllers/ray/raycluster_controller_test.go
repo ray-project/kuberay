@@ -322,6 +322,100 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
+	Describe("RayCluster with invalid overridden ray.io/cluster labels", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-overridden-cluster-label", namespace)
+		rayCluster.Spec.HeadGroupSpec.Template.Labels = map[string]string{
+			utils.RayClusterLabelKey: "invalid-cluster-name",
+		}
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			// These test are designed based on the following assumptions:
+			// (1) The ray.io/cluster label of the HeadGroupSpec is overridden.
+			// (2) There is only one worker group, and its `replicas` is set to 3.
+			Expect(rayCluster.Spec.HeadGroupSpec.Template.Labels[utils.RayClusterLabelKey]).NotTo(BeEmpty())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of head Pods", func() {
+			numHeadPods := 1
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numHeadPods), fmt.Sprintf("headGroup %v, headFilters: %v", headPods.Items, headFilters))
+			for _, head := range headPods.Items {
+				Expect(head.Labels[utils.RayClusterLabelKey]).To(Equal("raycluster-overridden-cluster-label"))
+			}
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("Update all Pods to Running", func() {
+			// We need to manually update Pod statuses otherwise they'll always be Pending.
+			// envtest doesn't create a full K8s cluster. It's only the control plane.
+			// There's no container runtime or any other K8s controllers.
+			// So Pods are created, but no controller updates them from Pending to Running.
+			// See https://book.kubebuilder.io/reference/envtest.html
+
+			// Note that this test assumes that headPods and workerPods are up-to-date.
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				headPod.Status.PodIP = "1.1.1.1" // This should be carried to rayCluster.Status.Head.ServiceIP. We check it later.
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("RayCluster's .status.state and .status.head.ServiceIP should be updated shortly after all Pods are Running", func() {
+			// Note that RayCluster is `ready` when all Pods are Running and their PodReady conditions are true.
+			// However, in envtest, PodReady conditions are automatically set to true when Pod.Status.Phase is set to Running.
+			// We need to figure out the behavior. See https://github.com/ray-project/kuberay/issues/1736 for more details.
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			// Check that the StateTransitionTimes are set.
+			Eventually(
+				func() *metav1.Time {
+					status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+					return status.StateTransitionTimes[rayv1.Ready]
+				},
+				time.Second*3, time.Millisecond*500).Should(Not(BeNil()))
+
+			Eventually(func() (string, error) {
+				err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)()
+				return rayCluster.Status.Head.ServiceIP, err
+			}, time.Second*3, time.Millisecond*500).Should(Equal("1.1.1.1"), "Should be able to see the rayCluster.Status.Head.ServiceIP: %v", rayCluster.Status.Head.ServiceIP)
+		})
+	})
+
 	Describe("RayCluster with autoscaling enabled", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
