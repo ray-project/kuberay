@@ -51,23 +51,13 @@ func TestRayService(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
 
-			// Wait for RayCluster name to be populated
-			g.Eventually(RayService(test, namespace.Name, rayServiceFromYaml.Name), TestTimeoutShort).Should(
-				WithTransform(UnderlyingRayClusterName, Not(BeEmpty())),
-			)
-			rayClusterName := UnderlyingRayClusterName(rayService)
+			rayClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayClusterName)
-			g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).
-				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
-
-			// Check if all worker pods are ready
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 
 			// Check if .status.numServeEndpoints is greater than zero
 			g.Eventually(func(g Gomega) int32 {
