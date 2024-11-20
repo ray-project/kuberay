@@ -151,6 +151,7 @@ var configMapWithTolerations = corev1.ConfigMap{
 		"gpu_accelerator":    "",
 		"memory":             "8",
 		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"node_selector":      "{\"node-role\": \"util\"}",
 		"name":               "head-node-template",
 		"namespace":          "max",
 		"tolerations":        "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
@@ -636,6 +637,7 @@ func TestPopulateTemplate(t *testing.T) {
 		template.ExtendedResources,
 		"Extended resources mismatch",
 	)
+	assert.Equal(t, map[string]string{"node-role": "util"}, template.NodeSelector, "Node selector mismatch")
 }
 
 func tolerationToString(toleration *api.PodToleration) string {

@@ -193,7 +193,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			Labels:      map[string]string{},
 		},
 		Spec: corev1.PodSpec{
-			Tolerations: []corev1.Toleration{},
+			NodeSelector: map[string]string{},
+			Tolerations:  []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
 					Name:            "ray-head",
@@ -294,6 +295,13 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 	if spec.Labels != nil {
 		for k, v := range spec.Labels {
 			podTemplateSpec.ObjectMeta.Labels[k] = v
+		}
+	}
+
+	// Add specific node_selector
+	if computeRuntime.NodeSelector != nil {
+		for k, v := range computeRuntime.NodeSelector {
+			podTemplateSpec.Spec.NodeSelector[k] = v
 		}
 	}
 
@@ -447,7 +455,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			Labels:      map[string]string{},
 		},
 		Spec: corev1.PodSpec{
-			Tolerations: []corev1.Toleration{},
+			NodeSelector: map[string]string{},
+			Tolerations:  []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
 					Name:            "ray-worker",
@@ -588,6 +597,13 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	if spec.Labels != nil {
 		for k, v := range spec.Labels {
 			podTemplateSpec.ObjectMeta.Labels[k] = v
+		}
+	}
+
+	// Add specific node_selector
+	if computeRuntime.NodeSelector != nil {
+		for k, v := range computeRuntime.NodeSelector {
+			podTemplateSpec.Spec.NodeSelector[k] = v
 		}
 	}
 
@@ -846,6 +862,10 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
 	}
+	nodeSelectorJSON, err := json.Marshal(runtime.NodeSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+	}
 
 	// Create data map
 	dmap := map[string]string{
@@ -856,6 +876,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
 		"gpu_accelerator":    runtime.GpuAccelerator,
 		"extended_resources": string(extendedResourcesJSON),
+		"node_selector":      string(nodeSelectorJSON),
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
