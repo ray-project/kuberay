@@ -155,15 +155,15 @@ func main() {
 
 		ctrl.SetLogger(combineLoggerR)
 
-        // By default, the log from kubernetes/client-go is not json format.
-        // This will apply the logger to kubernetes/client-go and change it to json format.
-        klog.SetLogger(combineLoggerR)
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
+		klog.SetLogger(combineLoggerR)
 	} else {
 		k8sLogger := k8szap.New(k8szap.UseFlagOptions(&opts))
 		ctrl.SetLogger(k8sLogger)
 
-        // By default, the log from kubernetes/client-go is not json format.
-        // This will apply the logger to kubernetes/client-go and change it to json format.
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
 		klog.SetLogger(k8sLogger)
 	}
 
