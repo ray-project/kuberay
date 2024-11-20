@@ -333,7 +333,7 @@ func TestGetJobsInNamespace(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
-	require.NotEmpty(t, response.Jobs, "A list of compute templates is required")
+	require.NotEmpty(t, response.Jobs, "A list of jobs is required")
 	foundName := false
 	for _, job := range response.Jobs {
 		if testJobRequest.Job.Name == job.Name && tCtx.GetNamespaceName() == job.Namespace {

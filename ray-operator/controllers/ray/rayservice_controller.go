@@ -117,7 +117,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	var rayServiceInstance *rayv1.RayService
 	var err error
-	var ctrlResult ctrl.Result
 
 	// Resolve the CR from request.
 	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
@@ -165,9 +164,9 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
 		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-		if ctrlResult, isReady, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true); err != nil {
+		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
-			return ctrlResult, nil
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve component. Active and pending Ray clusters exist.")
@@ -176,15 +175,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Error(err, "Failed to update active Ray cluster's status.")
 		}
 
-		if ctrlResult, isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
+		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
-			return ctrlResult, nil
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
 	} else if activeRayClusterInstance == nil && pendingRayClusterInstance != nil {
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
-		if ctrlResult, isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
+		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
-			return ctrlResult, nil
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
 	} else {
 		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
@@ -193,8 +192,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !isReady {
-		logger.Info("Ray Serve applications are not ready to serve requests", "requeue_duration", ServiceDefaultRequeueDuration.String())
-		r.Recorder.Eventf(rayServiceInstance, "Normal", "ServiceNotReady", "The service is not ready yet. Controller will perform a round of actions in %s.", ServiceDefaultRequeueDuration)
+		logger.Info("Ray Serve applications are not ready to serve requests")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
@@ -247,6 +245,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 func validateRayServiceSpec(rayService *rayv1.RayService) error {
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+	}
+
+	if upgradeStrategy := rayService.Spec.UpgradeStrategy; upgradeStrategy != nil {
+		if *upgradeStrategy != rayv1.NewCluster && *upgradeStrategy != rayv1.None {
+			return fmt.Errorf("spec.UpgradeStrategy value %s is invalid, valid options are %s or %s", *upgradeStrategy, rayv1.NewCluster, rayv1.None)
+		}
 	}
 	return nil
 }
@@ -424,10 +428,19 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if clusterAction == RolloutNew {
 		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+		zeroDowntimeEnvVar := os.Getenv(ENABLE_ZERO_DOWNTIME)
+		rayServiceSpecUpgradeStrategy := rayServiceInstance.Spec.UpgradeStrategy
+		// There are two ways to enable zero downtime upgrade. Through ENABLE_ZERO_DOWNTIME env var or setting Spec.UpgradeStrategy.
+		// If no fields are set, zero downtime upgrade by default is enabled.
+		// Spec.UpgradeStrategy takes precedence over ENABLE_ZERO_DOWNTIME.
 		enableZeroDowntime := true
-		if s := os.Getenv(ENABLE_ZERO_DOWNTIME); strings.ToLower(s) == "false" {
-			enableZeroDowntime = false
+		if zeroDowntimeEnvVar != "" {
+			enableZeroDowntime = strings.ToLower(zeroDowntimeEnvVar) != "false"
 		}
+		if rayServiceSpecUpgradeStrategy != nil {
+			enableZeroDowntime = *rayServiceSpecUpgradeStrategy == rayv1.NewCluster
+		}
+
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
@@ -635,7 +648,7 @@ func (r *RayServiceReconciler) createRayClusterInstanceIfNeeded(ctx context.Cont
 	} else {
 		clusterAction, err = getClusterAction(pendingRayCluster.Spec, rayServiceInstance.Spec.RayClusterSpec)
 		if err != nil {
-			err = fmt.Errorf("Fail to generate hash for RayClusterSpec: %w", err)
+			err = fmt.Errorf("fail to generate hash for RayClusterSpec: %w", err)
 			return nil, err
 		}
 	}
@@ -672,7 +685,7 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 		Name:      rayClusterInstance.Name,
 	})
 	if err != nil {
-		err = fmt.Errorf("Failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+		err = fmt.Errorf("failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 		return err
 	}
 
@@ -843,12 +856,12 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 	configJson, err := json.Marshal(serveConfig)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal converted serve config into bytes: %w", err)
+		return fmt.Errorf("failed to marshal converted serve config into bytes: %w", err)
 	}
 	logger.Info("updateServeDeployment", "MULTI_APP json config", string(configJson))
 	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
 		err = fmt.Errorf(
-			"Fail to create / update Serve applications. If you observe this error consistently, "+
+			"fail to create / update Serve applications. If you observe this error consistently, "+
 				"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
 				"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
 				"err: %v", err)
@@ -873,7 +886,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	var err error
 	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 		err = fmt.Errorf(
-			"Failed to get Serve application statuses from the dashboard. "+
+			"failed to get Serve application statuses from the dashboard. "+
 				"If you observe this error consistently, please check https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayservice-troubleshooting.md for more details. "+
 				"err: %v", err)
 		return false, err
@@ -979,7 +992,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info(
 		"reconcileServices", "serviceType", serviceType,
-		"RayService name", rayServiceInstance.Name, "RayService namespace", rayServiceInstance.Namespace,
 	)
 
 	var newSvc *corev1.Service
@@ -1067,9 +1079,9 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 	return err
 }
 
-// Reconciles the Serve applications on the RayCluster. Returns (ctrl.Result, isReady, error).
+// Reconciles the Serve applications on the RayCluster. Returns (isReady, error).
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
-func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, isActive bool) (ctrl.Result, bool, error) {
+func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, isActive bool) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
 	var err error
@@ -1095,7 +1107,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if features.Enabled(features.RayClusterStatusConditions) {
 		if !meta.IsStatusConditionTrue(rayClusterInstance.Status.Conditions, string(rayv1.HeadPodReady)) {
 			logger.Info("The head Pod is not ready, requeue the resource event to avoid redundant custom resource status updates.")
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, nil
+			return false, nil
 		}
 	} else {
 		if isRunningAndReady, err := r.isHeadPodRunningAndReady(ctx, rayClusterInstance); err != nil || !isRunningAndReady {
@@ -1104,36 +1116,33 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			} else {
 				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
 			}
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+			return false, err
 		}
 	}
 
 	// TODO(architkulkarni): Check the RayVersion. If < 2.8.0, error.
 
 	if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+		return false, err
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
 	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+		return false, err
 	}
 
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(ctx, rayServiceInstance, rayClusterInstance, rayServiceStatus)
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.WaitForServeDeploymentReady, err)
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+			return false, err
 		}
-
-		r.Recorder.Eventf(rayServiceInstance, "Normal", "SubmittedServeDeployment",
-			"Controller sent API request to update Serve deployments on cluster %s", rayClusterInstance.Name)
 	}
 
 	var isReady bool
 	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
 		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+		return false, err
 	}
 
 	logger.Info("Check serve health", "isReady", isReady, "isActive", isActive)
@@ -1141,16 +1150,15 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if isReady {
 		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 		r.updateRayClusterInfo(ctx, rayServiceInstance, rayClusterInstance.Name)
-		r.Recorder.Event(rayServiceInstance, "Normal", "Running", "The Serve application is now running and healthy.")
 	} else {
 		rayServiceInstance.Status.ServiceStatus = rayv1.WaitForServeDeploymentReady
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, false, err
+			return false, err
 		}
 		logger.Info("Mark cluster as waiting for Serve deployments", "rayCluster", rayClusterInstance)
 	}
 
-	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, isReady, nil
+	return isReady, nil
 }
 
 func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {

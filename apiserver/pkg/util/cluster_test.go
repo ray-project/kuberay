@@ -167,6 +167,11 @@ var headGroup = api.HeadGroupSpec{
 	Labels: map[string]string{
 		"foo": "bar",
 	},
+	SecurityContext: &api.SecurityContext{
+		Capabilities: &api.Capabilities{
+			Add: []string{"SYS_PTRACE"},
+		},
+	},
 }
 
 var workerGroup = api.WorkerGroupSpec{
@@ -192,6 +197,11 @@ var workerGroup = api.WorkerGroupSpec{
 	},
 	Labels: map[string]string{
 		"foo": "bar",
+	},
+	SecurityContext: &api.SecurityContext{
+		Capabilities: &api.Capabilities{
+			Add: []string{"SYS_PTRACE"},
+		},
 	},
 }
 
@@ -319,6 +329,14 @@ var expectedHeadNodeEnv = []corev1.EnvVar{
 			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "path",
 			},
+		},
+	},
+}
+
+var expectedSecurityContext = corev1.SecurityContext{
+	Capabilities: &corev1.Capabilities{
+		Add: []corev1.Capability{
+			"SYS_PTRACE",
 		},
 	},
 }
@@ -570,6 +588,10 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
 	}
 
+	if !reflect.DeepEqual(podSpec.Spec.Containers[0].SecurityContext, &expectedSecurityContext) {
+		t.Errorf("failed to convert security context, got %v, expected %v", podSpec.Spec.SecurityContext, &expectedSecurityContext)
+	}
+
 	podSpec, err = buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, true)
 	assert.Nil(t, err)
 	if len(podSpec.Spec.Containers[0].Ports) != 6 {
@@ -624,6 +646,7 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.memory"}}), "failed to propagate environment variable: MEMORY_LIMITS")
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_NAME", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}), "failed to propagate environment variable: MY_POD_NAME")
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_IP", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"}}), "failed to propagate environment variable: MY_POD_IP")
+	assert.Equal(t, &expectedSecurityContext, podSpec.Spec.Containers[0].SecurityContext, "failed to convert security context")
 
 	// Check Resources
 	container := podSpec.Spec.Containers[0]

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -118,6 +119,13 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 							},
 						},
 					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -222,6 +230,13 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 						{
 							Name:  "RAY_USAGE_STATS_KUBERAY_IN_USE",
 							Value: "1",
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
 						},
 					},
 				},
@@ -347,6 +362,30 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 				RestartPolicy: corev1.RestartPolicyNever,
 			},
 		},
+	},
+}
+
+var JobWithOutputTest = rayv1api.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: rayv1api.RayJobSpec{
+		Entrypoint:              "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:          "mytest yaml",
+		TTLSecondsAfterFinished: secondsValue,
+		RayClusterSpec:          &ClusterSpecTest.Spec,
+	},
+	Status: rayv1api.RayJobStatus{
+		JobStatus:           "RUNNING",
+		JobDeploymentStatus: "Initializing",
+		Message:             "Job is currently running",
+		RayClusterName:      "raycluster-sample-xxxxx",
+		StartTime:           &metav1.Time{Time: time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC)},
+		EndTime:             nil,
 	},
 }
 
@@ -487,6 +526,10 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	if !reflect.DeepEqual(groupSpec.Environment, expectedHeadEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedHeadEnv)
 	}
+	// Cannot use deep equal since protobuf locks copying
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
+	}
 }
 
 func TestPopulateWorkerNodeSpec(t *testing.T) {
@@ -506,6 +549,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedEnv)
+	}
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
 	}
 }
 
@@ -584,11 +630,20 @@ func TestPopulateTemplate(t *testing.T) {
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
 	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
 	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
-	assert.Equal(t, map[string]uint32{"vpc.amazonaws.com/efa": 32}, template.ExtendedResources, "Extended resources mismatch")
+	assert.Equal(
+		t,
+		map[string]uint32{"vpc.amazonaws.com/efa": 32},
+		template.ExtendedResources,
+		"Extended resources mismatch",
+	)
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
-	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
+	return "Key: " + toleration.Key + " Operator: " + string(
+		toleration.Operator,
+	) + " Effect: " + string(
+		toleration.Effect,
+	)
 }
 
 func TestPopulateJob(t *testing.T) {
@@ -620,4 +675,13 @@ func TestPopulateJob(t *testing.T) {
 	assert.Nil(t, job.ClusterSpec)
 	assert.Equal(t, "image", job.JobSubmitter.Image)
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
+
+	job = FromCrdToApiJob(&JobWithOutputTest)
+	fmt.Printf("jobWithOutput = %#v\n", job)
+	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
+	assert.Nil(t, job.EndTime)
+	assert.Equal(t, "RUNNING", job.JobStatus)
+	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
+	assert.Equal(t, "Job is currently running", job.Message)
+	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
 }

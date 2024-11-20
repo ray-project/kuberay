@@ -1,4 +1,4 @@
-package cluster
+package get
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -16,30 +17,30 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-type ClusterGetOptions struct {
+type GetClusterOptions struct {
 	configFlags   *genericclioptions.ConfigFlags
 	ioStreams     *genericclioptions.IOStreams
 	args          []string
 	AllNamespaces bool
 }
 
-func NewClusterGetOptions(streams genericclioptions.IOStreams) *ClusterGetOptions {
-	return &ClusterGetOptions{
+func NewGetClusterOptions(streams genericclioptions.IOStreams) *GetClusterOptions {
+	return &GetClusterOptions{
 		configFlags: genericclioptions.NewConfigFlags(true),
 		ioStreams:   &streams,
 	}
 }
 
-func NewClusterGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewClusterGetOptions(streams)
+func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewGetClusterOptions(streams)
 	// Initialize the factory for later use with the current config flag
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:          "get [NAME]",
-		Short:        "Get cluster information.",
-		Aliases:      []string{"list"},
-		SilenceUsage: true,
+		Use:               "cluster [NAME]",
+		Short:             "Get cluster information.",
+		SilenceUsage:      true,
+		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args); err != nil {
 				return err
@@ -56,7 +57,7 @@ func NewClusterGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	return cmd
 }
 
-func (options *ClusterGetOptions) Complete(args []string) error {
+func (options *GetClusterOptions) Complete(args []string) error {
 	if *options.configFlags.Namespace == "" {
 		options.AllNamespaces = true
 	}
@@ -65,7 +66,7 @@ func (options *ClusterGetOptions) Complete(args []string) error {
 	return nil
 }
 
-func (options *ClusterGetOptions) Validate() error {
+func (options *GetClusterOptions) Validate() error {
 	// Overrides and binds the kube config then retrieves the merged result
 	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
@@ -80,7 +81,7 @@ func (options *ClusterGetOptions) Validate() error {
 	return nil
 }
 
-func (options *ClusterGetOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+func (options *GetClusterOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
 	// Retrieves the dynamic client with factory.
 	dynamicClient, err := factory.DynamicClient()
 	if err != nil {

@@ -44,6 +44,8 @@ logging:
   baseDir: ""
   # File name for kuberay-operator log file
   fileName: ""
+  # EmptyDir volume size limit for kuberay-operator log file
+  sizeLimit: ""
 
 livenessProbe:
   initialDelaySeconds: 10
