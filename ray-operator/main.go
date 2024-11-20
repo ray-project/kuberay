@@ -21,6 +21,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -153,8 +154,17 @@ func main() {
 		combineLoggerR := zapr.NewLogger(combineLogger)
 
 		ctrl.SetLogger(combineLoggerR)
+
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
+		klog.SetLogger(combineLoggerR)
 	} else {
-		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
+		k8sLogger := k8szap.New(k8szap.UseFlagOptions(&opts))
+		ctrl.SetLogger(k8sLogger)
+
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
+		klog.SetLogger(k8sLogger)
 	}
 
 	if forcedClusterUpgrade {
