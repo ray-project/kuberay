@@ -4116,6 +4116,9 @@ spec:
                   properties:
                     groupName:
                       type: string
+                    idleTimeoutSeconds:
+                      format: int32
+                      type: integer
                     maxReplicas:
                       default: 2147483647
                       format: int32

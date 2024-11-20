@@ -657,6 +657,11 @@ func (in *WorkerGroupSpec) DeepCopyInto(out *WorkerGroupSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.IdleTimeoutSeconds != nil {
+		in, out := &in.IdleTimeoutSeconds, &out.IdleTimeoutSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams
 		*out = make(map[string]string, len(*in))
