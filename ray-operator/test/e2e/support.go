@@ -219,12 +219,6 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
               price: 2
             ray_actor_options:
               num_cpus: 0.1
-          - name: PearStand
-            num_replicas: 1
-            user_config:
-              price: 1
-            ray_actor_options:
-              num_cpus: 0.1
           - name: FruitMarket
             num_replicas: 1
             ray_actor_options:
