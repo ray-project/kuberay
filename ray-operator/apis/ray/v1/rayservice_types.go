@@ -20,6 +20,15 @@ const (
 	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
 )
 
+type RayServiceUpgradeStrategy string
+
+const (
+	// During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready
+	NewCluster RayServiceUpgradeStrategy = "NewCluster"
+	// No new cluster will be created while the strategy is set to None
+	None RayServiceUpgradeStrategy = "None"
+)
+
 // These statuses should match Ray Serve's application statuses
 // See `enum ApplicationStatus` in https://sourcegraph.com/github.com/ray-project/ray/-/blob/src/ray/protobuf/serve.proto for more details.
 var ApplicationStatusEnum = struct {
@@ -57,6 +66,8 @@ type RayServiceSpec struct {
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *corev1.Service `json:"serveService,omitempty"`
+	// UpgradeStrategy represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`
+	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`

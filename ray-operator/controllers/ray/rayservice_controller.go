@@ -246,6 +246,12 @@ func validateRayServiceSpec(rayService *rayv1.RayService) error {
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
+
+	if upgradeStrategy := rayService.Spec.UpgradeStrategy; upgradeStrategy != nil {
+		if *upgradeStrategy != rayv1.NewCluster && *upgradeStrategy != rayv1.None {
+			return fmt.Errorf("spec.UpgradeStrategy value %s is invalid, valid options are %s or %s", *upgradeStrategy, rayv1.NewCluster, rayv1.None)
+		}
+	}
 	return nil
 }
 
@@ -422,10 +428,19 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if clusterAction == RolloutNew {
 		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
+		zeroDowntimeEnvVar := os.Getenv(ENABLE_ZERO_DOWNTIME)
+		rayServiceSpecUpgradeStrategy := rayServiceInstance.Spec.UpgradeStrategy
+		// There are two ways to enable zero downtime upgrade. Through ENABLE_ZERO_DOWNTIME env var or setting Spec.UpgradeStrategy.
+		// If no fields are set, zero downtime upgrade by default is enabled.
+		// Spec.UpgradeStrategy takes precedence over ENABLE_ZERO_DOWNTIME.
 		enableZeroDowntime := true
-		if s := os.Getenv(ENABLE_ZERO_DOWNTIME); strings.ToLower(s) == "false" {
-			enableZeroDowntime = false
+		if zeroDowntimeEnvVar != "" {
+			enableZeroDowntime = strings.ToLower(zeroDowntimeEnvVar) != "false"
 		}
+		if rayServiceSpecUpgradeStrategy != nil {
+			enableZeroDowntime = *rayServiceSpecUpgradeStrategy == rayv1.NewCluster
+		}
+
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
