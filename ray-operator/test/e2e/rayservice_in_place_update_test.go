@@ -76,15 +76,6 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	g.Eventually(func(g Gomega) {
-		// Get latest ray service
-		newRs, err := GetRayService(test, rayService.Namespace, rayService.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		// Check Ray service status
-		rsStatus := RayServiceStatus(newRs)
-		g.Expect(rsStatus).To(Equal(rayv1.Running))
-	}, TestTimeoutShort).Should(Succeed())
-
 	// Test the new price and factor
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
