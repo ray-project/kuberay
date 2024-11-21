@@ -242,6 +242,8 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
             ray_actor_options:
               num_cpus: 0.1
           - name: Router
+            ray_actor_options:
+              num_cpus: 0.1
             num_replicas: 1`).
 		WithRayClusterSpec(rayClusterSpec())
 }
