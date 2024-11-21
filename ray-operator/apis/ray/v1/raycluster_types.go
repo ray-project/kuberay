@@ -65,7 +65,7 @@ type WorkerGroupSpec struct {
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	// +kubebuilder:default:=1
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
-	// idleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
+	// IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
 	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 }
