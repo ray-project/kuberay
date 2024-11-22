@@ -41,19 +41,19 @@ type RayClusterScaleExpectation interface {
 }
 
 func NewRayClusterScaleExpectation(client client.Client) RayClusterScaleExpectation {
-	return &realRayClusterScaleExpectation{
+	return &rayClusterScaleExpectationImpl{
 		Client:     client,
 		itemsCache: cache.NewIndexer(rayPodKey, cache.Indexers{GroupIndex: groupIndexFunc, RayClusterIndex: rayClusterIndexFunc}),
 	}
 }
 
-type realRayClusterScaleExpectation struct {
+type rayClusterScaleExpectationImpl struct {
 	client.Client
 	// itemsCache is only used to cache rayPod.
 	itemsCache cache.Indexer
 }
 
-func (r *realRayClusterScaleExpectation) ExpectScalePod(namespace, rayClusterName, group, name string, action ScaleAction) {
+func (r *rayClusterScaleExpectationImpl) ExpectScalePod(namespace, rayClusterName, group, name string, action ScaleAction) {
 	// Strictly limit the data type stored in itemsCache to rayPod.
 	// If an error occurs, it must be due to an issue with our usage. We should panic immediately instead of returning an error.
 	if err := r.itemsCache.Add(&rayPod{
@@ -70,7 +70,7 @@ func (r *realRayClusterScaleExpectation) ExpectScalePod(namespace, rayClusterNam
 	}
 }
 
-func (r *realRayClusterScaleExpectation) IsSatisfied(ctx context.Context, namespace, rayClusterName, group string) (isSatisfied bool) {
+func (r *rayClusterScaleExpectationImpl) IsSatisfied(ctx context.Context, namespace, rayClusterName, group string) (isSatisfied bool) {
 	items, err := r.itemsCache.ByIndex(GroupIndex, fmt.Sprintf("%s/%s/%s", namespace, rayClusterName, group))
 	if err != nil {
 		// An error occurs when there is no corresponding IndexFunc for GroupIndex. This should be a fatal error.
@@ -112,7 +112,7 @@ func (r *realRayClusterScaleExpectation) IsSatisfied(ctx context.Context, namesp
 	return isSatisfied
 }
 
-func (r *realRayClusterScaleExpectation) Delete(rayClusterName, namespace string) {
+func (r *rayClusterScaleExpectationImpl) Delete(rayClusterName, namespace string) {
 	items, err := r.itemsCache.ByIndex(RayClusterIndex, fmt.Sprintf("%s/%s", namespace, rayClusterName))
 	if err != nil {
 		// An error occurs when there is no corresponding IndexFunc for RayClusterIndex. This should be a fatal error.

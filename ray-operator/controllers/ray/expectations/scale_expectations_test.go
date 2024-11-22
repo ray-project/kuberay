@@ -12,7 +12,7 @@ import (
 )
 
 func TestRayClusterExpectationsHeadPod(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	// Simulate local Informer with fakeClient.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
 	exp := NewRayClusterScaleExpectation(fakeClient)
@@ -39,7 +39,7 @@ func TestRayClusterExpectationsHeadPod(t *testing.T) {
 }
 
 func TestRayClusterExpectationsForSamePod(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	// Simulate local Informer with fakeClient.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
 	exp := NewRayClusterScaleExpectation(fakeClient)
@@ -64,7 +64,7 @@ func TestRayClusterExpectationsForSamePod(t *testing.T) {
 }
 
 func TestRayClusterExpectationsWorkerGroupPods(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	// Simulate local Informer with fakeClient.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
 	exp := NewRayClusterScaleExpectation(fakeClient)
@@ -106,7 +106,7 @@ func TestRayClusterExpectationsWorkerGroupPods(t *testing.T) {
 }
 
 func TestRayClusterExpectationsDeleteAll(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	// Simulate local Informer with fakeClient.
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
 	exp := NewRayClusterScaleExpectation(fakeClient)
@@ -126,7 +126,7 @@ func TestRayClusterExpectationsDeleteAll(t *testing.T) {
 }
 
 func TestRayClusterExpectationsTimeout(t *testing.T) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	// Reduce the timeout duration so that tests don't have to wait for a long time.
 	ExpectationsTimeout = 1 * time.Second
 	// Simulate local Informer with fakeClient.

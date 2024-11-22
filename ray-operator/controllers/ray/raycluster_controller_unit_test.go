@@ -493,11 +493,11 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 
 			// Simulate the Ray Autoscaler attempting to scale down.
 			assert.Equal(t, expectedNumWorkersToDelete, len(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete))
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -586,11 +586,12 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 			// Simulate the Ray Autoscaler attempting to scale down.
 			assert.Equal(t, expectedNumWorkersToDelete, len(testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete)-tc.numNonExistPods)
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
+
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -634,11 +635,11 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list")
 
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -697,12 +698,12 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	err = fakeClient.Delete(ctx, &podList.Items[4])
 	assert.Nil(t, err, "Fail to delete pod")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas,
@@ -755,12 +756,12 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	err = fakeClient.Delete(ctx, &podList.Items[3])
 	assert.Nil(t, err, "Fail to delete pod")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas, the controller
@@ -811,12 +812,12 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 	assert.Nil(t, err, "Fail to get pod list")
 	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Pod3 and Pod4 should be deleted because of the workersToDelete.
@@ -884,12 +885,12 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			if tc.enableRandomPodDelete {
@@ -947,7 +948,6 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 				WithRuntimeObjects(testPods...).
 				Build()
 			ctx := context.Background()
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
@@ -963,9 +963,10 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			assert.Nil(t, err, "Fail to update head Pod status")
 
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
@@ -1019,12 +1020,12 @@ func TestReconcileHeadService(t *testing.T) {
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 	})
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize RayCluster reconciler.
 	r := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Case 1: Head service does not exist.
@@ -1089,12 +1090,12 @@ func TestReconcileHeadlessService(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.TODO()
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize RayCluster reconciler.
 	r := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	headlessServiceSelector := labels.SelectorFromSet(map[string]string{
@@ -1166,11 +1167,11 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 
 	assert.True(t, k8serrors.IsNotFound(err), "Head group service account should not exist yet")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, testRayCluster)
@@ -1199,12 +1200,12 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.Background()
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize the reconciler
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves.
@@ -1246,11 +1247,11 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 
 	assert.True(t, k8serrors.IsNotFound(err), "autoscaler RoleBinding should not exist yet")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerRoleBinding(ctx, testRayCluster)
@@ -1283,11 +1284,11 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.Reason, "Cluster reason should be empty")
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 	reason := "test reason"
 
@@ -1445,11 +1446,11 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.services...).Build()
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
@@ -1528,12 +1529,12 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
 	assert.Equal(t, int64(0), cluster.ObjectMeta.Generation)
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize RayCluster reconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
@@ -1566,11 +1567,11 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	assert.Nil(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.State, "Cluster state should be empty") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   newScheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	state := rayv1.Ready
@@ -1967,12 +1968,12 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 		assert.Nil(t, err, "Fail to update pod status")
 	}
 
-	rayClusterScaleExpectation = expectations.NewFakeRayClusterScaleExpectation()
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// Since the desired state of the workerGroup is 3 replicas, the controller
@@ -2091,12 +2092,12 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   newScheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// The head Pod will be deleted regardless restart policy.
@@ -2189,12 +2190,12 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
 	assert.Nil(t, err)
 
-	rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   newScheme,
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 
 	// The head Pod will be deleted and the controller will return an error
@@ -2392,12 +2393,12 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				WithStatusSubresource(cluster).
 				Build()
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Initialize the reconciler
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   newScheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			rayClusterList := rayv1.RayClusterList{}
@@ -2757,12 +2758,12 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			// Since the desired state of the workerGroup is 1 replica,
@@ -2850,12 +2851,12 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			// Since the desired state of the workerGroup is 1 replica,
@@ -2919,12 +2920,12 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 			assert.Nil(t, err, "Fail to get pod list")
 			assert.Equal(t, 1, len(podList.Items), "Init pod list len is wrong")
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
@@ -3116,7 +3117,6 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			}).WithRuntimeObjects(testPods...).Build()
 			ctx := context.Background()
 
-			rayClusterScaleExpectation = expectations.NewRayClusterScaleExpectation(fakeClient)
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
@@ -3132,9 +3132,10 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
-				Client:   fakeClient,
-				Recorder: recorder,
-				Scheme:   scheme.Scheme,
+				Client:                     fakeClient,
+				Recorder:                   recorder,
+				Scheme:                     scheme.Scheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
 			// Since the desired state of the workerGroup is 3 replicas,
