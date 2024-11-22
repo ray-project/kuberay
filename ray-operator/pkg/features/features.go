@@ -24,7 +24,7 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions: {Default: true, PreRelease: featuregate.Beta},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
