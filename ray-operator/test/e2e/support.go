@@ -244,5 +244,29 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
             ray_actor_options:
               num_cpus: 0.1
             num_replicas: 1`).
-		WithRayClusterSpec(rayClusterSpec())
+		WithRayClusterSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(corev1ac.PodTemplateSpec().
+					WithSpec(corev1ac.PodSpec().
+						WithContainers(corev1ac.Container().
+							WithName("ray-head").
+							WithImage(GetRayImage()).
+							WithPorts(
+								corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
+								corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
+								corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
+								corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+							).
+							WithResources(corev1ac.ResourceRequirements().
+								WithRequests(corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
+								}).
+								WithLimits(corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
+								})))))),
+		)
 }
