@@ -69,7 +69,7 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
 }
 
-func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer) {
 	req := t.Client().Core().CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -101,6 +101,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) {
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
 	assert.NoError(t.T(), err)
+	return stdout, stderr
 }
 
 func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {
@@ -145,4 +146,24 @@ func SetupPortForward(t Test, podName, namespace string, localPort, remotePort i
 	<-readyChan // wait for port forward to finish
 
 	return stopChan, nil
+}
+
+func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
+	// Define the podSpec spec
+	podSpec := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    containerName,
+					Image:   "rancher/curl",
+					Command: []string{"/bin/sh", "-c", "tail -f /dev/null"},
+				},
+			},
+		},
+	}
+	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
 }

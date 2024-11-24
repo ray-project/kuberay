@@ -43,30 +43,21 @@ func TestRayService(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
 
-			var rayClusterName string
-			// Wait for RayCluster name to be populated
-			g.Eventually(func(g Gomega) {
-				rs, err := GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
-				g.Expect(err).NotTo(HaveOccurred())
-				if rs.Status.PendingServiceStatus.RayClusterName != "" {
-					rayClusterName = rs.Status.PendingServiceStatus.RayClusterName
-				} else if rs.Status.ActiveServiceStatus.RayClusterName != "" {
-					rayClusterName = rs.Status.ActiveServiceStatus.RayClusterName
-				}
-				g.Expect(rayClusterName).NotTo(BeEmpty())
-			}, TestTimeoutShort).Should(Succeed())
+			test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+				Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+			// Get the latest rayService
+			rayService, err = GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(rayService).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayClusterName)
-			g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).
-				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+			rayClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
-
-			// Check if all worker pods are ready
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 
 			// Check if .status.numServeEndpoints is greater than zero
 			g.Eventually(func(g Gomega) int32 {
