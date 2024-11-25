@@ -1,26 +1,4 @@
 #ci:group=:yaml: Sample YAML tests
-
-# TODO: Remove deprecated tests after migrating to Go tests
-- label: '(Deprecated) Test RayService Sample YAMLs (nightly operator)'
-  instance_size: large
-  image: golang:1.22
-  commands:
-    - ./.buildkite/setup-env.sh
-    # Build nightly KubeRay operator image
-    - pushd ray-operator
-    - IMG=kuberay/operator:nightly make docker-image
-    - popd
-    # Use nightly KubeRay operator image
-    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=kuberay/operator:nightly python3 tests/test_sample_rayservice_yamls.py
-
-- label: '(Deprecated) Test RayService Sample YAMLs (latest release)'
-  instance_size: large
-  image: golang:1.22
-  commands:
-    - ./.buildkite/setup-env.sh
-    # Use KubeRay operator image from the latest release
-    - source .venv/bin/activate && BUILDKITE_ENV=true OPERATOR_IMAGE=quay.io/kuberay/operator:v1.2.2 python3 tests/test_sample_rayservice_yamls.py
-
 - label: 'Test Autoscaler E2E (nightly operator)'
   instance_size: large
   image: golang:1.22
