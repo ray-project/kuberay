@@ -90,7 +90,7 @@ func (r *rayClusterScaleExpectationImpl) IsSatisfied(ctx context.Context, namesp
 				//   The first reconciliation created a Pod. If the Pod was quickly deleted from etcd by another component
 				//   before the second reconciliation. This would lead to never satisfying the expected condition.
 				//   Avoid this by setting a timeout.
-				isPodSatisfied = errors.IsNotFound(err) && rp.recordTimestamp.Add(ExpectationsTimeout).Before(time.Now())
+				isPodSatisfied = rp.recordTimestamp.Add(ExpectationsTimeout).Before(time.Now())
 			}
 		case Delete:
 			if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: namespace}, pod); err != nil {
