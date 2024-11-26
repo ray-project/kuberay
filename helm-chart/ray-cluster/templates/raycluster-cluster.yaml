@@ -169,7 +169,7 @@ spec:
             resources: {{- toYaml $values.resources | nindent 14 }}
             securityContext:
             {{- toYaml $values.securityContext | nindent 14 }}
-            {{- with concat $.Values.common.containerEnv $values.containerEnv }}
+            {{- with concat $.Values.common.containerEnv ($values.containerEnv | default list) }}
             env:
             {{- toYaml . | nindent 14 }}
             {{- end }}
