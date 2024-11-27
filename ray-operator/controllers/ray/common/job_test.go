@@ -88,6 +88,7 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--no-wait",
 		"--",
 		"echo", "hello",
+		"2>&1", "|", "grep", "-zv", "'Please use a different submission_id'",
 		";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
@@ -124,6 +125,7 @@ pip: ["python-multipart==0.0.6"]
 		"--no-wait",
 		"--",
 		"echo", "hello",
+		"2>&1", "|", "grep", "-zv", "'Please use a different submission_id'",
 		";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}

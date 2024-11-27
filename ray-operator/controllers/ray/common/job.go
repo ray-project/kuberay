@@ -119,6 +119,8 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 	k8sJobCommand = append(k8sJobCommand, commandSlice...)
 
+	k8sJobCommand = append(k8sJobCommand, "2>&1", "|", "grep", "-zv", "'Please use a different submission_id'")
+
 	k8sJobCommand = append(k8sJobCommand, ";", "ray", "job", "logs", "--address", address, "--follow", jobId)
 
 	return k8sJobCommand, nil
