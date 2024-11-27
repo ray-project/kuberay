@@ -15,14 +15,17 @@ COPY apis/ apis/
 COPY controllers/ controllers/
 COPY pkg/features pkg/features
 COPY pkg/utils pkg/utils
+COPY rayjob-submitter/ rayjob-submitter/
 
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o submitter rayjob-submitter/main.go
 
 FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/submitter .
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]
