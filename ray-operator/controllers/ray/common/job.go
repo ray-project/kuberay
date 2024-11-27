@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
@@ -34,10 +35,6 @@ func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
 
 // GetBaseRayJobCommand returns the first part of the Ray Job command up to and including the address, e.g. "ray job submit --address http://..."
 func GetBaseRayJobCommand(address string) []string {
-	// add http:// if needed
-	if !strings.HasPrefix(address, "http://") {
-		address = "http://" + address
-	}
 	return []string{"ray", "job", "submit", "--address", address}
 }
 
@@ -72,6 +69,11 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
+	// add http:// if needed
+	if !strings.HasPrefix(address, "http://") {
+		address = "http://" + address
+	}
+
 	k8sJobCommand := GetBaseRayJobCommand(address)
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
@@ -79,7 +81,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		return nil, err
 	}
 	if len(runtimeEnvJson) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", runtimeEnvJson)
+		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
 	if len(metadata) > 0 {
@@ -87,7 +89,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		k8sJobCommand = append(k8sJobCommand, "--metadata-json", metadataJson)
+		k8sJobCommand = append(k8sJobCommand, "--metadata-json", strconv.Quote(metadataJson))
 	}
 
 	if len(jobId) > 0 {
@@ -103,8 +105,10 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 
 	if len(entrypointResources) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", entrypointResources)
+		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", strconv.Quote(entrypointResources))
 	}
+
+	k8sJobCommand = append(k8sJobCommand, "--no-wait")
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
 	k8sJobCommand = append(k8sJobCommand, "--")
@@ -114,6 +118,8 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		return nil, err
 	}
 	k8sJobCommand = append(k8sJobCommand, commandSlice...)
+
+	k8sJobCommand = append(k8sJobCommand, ";", "ray", "job", "logs", "--address", address, "--follow", jobId)
 
 	return k8sJobCommand, nil
 }

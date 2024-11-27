@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,14 +79,17 @@ func TestGetMetadataJson(t *testing.T) {
 func TestGetK8sJobCommand(t *testing.T) {
 	expected := []string{
 		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
-		"--runtime-env-json", `{"test":"test"}`,
-		"--metadata-json", `{"testKey":"testValue"}`,
+		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
+		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
 		"--entrypoint-num-cpus", "1.000000",
 		"--entrypoint-num-gpus", "0.500000",
-		"--entrypoint-resources", `{"Custom_1": 1, "Custom_2": 5.5}`,
+		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
+		"--no-wait",
 		"--",
 		"echo", "hello",
+		";",
+		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
 	command, err := GetK8sJobCommand(testRayJob)
 	assert.NoError(t, err)
@@ -114,11 +118,14 @@ pip: ["python-multipart==0.0.6"]
 	}
 	expected := []string{
 		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
-		"--runtime-env-json", `{"working_dir":"https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip","pip":["python-multipart==0.0.6"]}`,
-		"--metadata-json", `{"testKey":"testValue"}`,
+		"--runtime-env-json", strconv.Quote(`{"working_dir":"https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip","pip":["python-multipart==0.0.6"]}`),
+		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
+		"--no-wait",
 		"--",
 		"echo", "hello",
+		";",
+		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
 	command, err := GetK8sJobCommand(rayJobWithYAML)
 	assert.NoError(t, err)
@@ -127,11 +134,17 @@ pip: ["python-multipart==0.0.6"]
 	assert.Equal(t, len(expected), len(command))
 
 	for i := 0; i < len(expected); i++ {
+		// For non-JSON elements, compare them directly.
+		assert.Equal(t, expected[i], command[i])
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]interface{}
-			err1 := json.Unmarshal([]byte(expected[i+1]), &expectedMap)
-			err2 := json.Unmarshal([]byte(command[i+1]), &actualMap)
+			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
+			assert.NoError(t, err1)
+			unquotedCommand, err2 := strconv.Unquote(command[i+1])
+			assert.NoError(t, err2)
+			err1 = json.Unmarshal([]byte(unquoteExpected), &expectedMap)
+			err2 = json.Unmarshal([]byte(unquotedCommand), &actualMap)
 
 			// If there's an error decoding either JSON string, it's an error in the test.
 			assert.NoError(t, err1)
@@ -142,9 +155,6 @@ pip: ["python-multipart==0.0.6"]
 
 			// Skip the next element because we've just checked it.
 			i++
-		} else {
-			// For non-JSON elements, compare them directly.
-			assert.Equal(t, expected[i], command[i])
 		}
 	}
 }
