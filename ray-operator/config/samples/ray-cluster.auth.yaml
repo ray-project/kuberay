@@ -1,0 +1,133 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-rbac-proxy
+data:
+  config-file.yaml: |+
+    authorization:
+      resourceAttributes:
+        namespace: default
+        apiVersion: ray.io/v1
+        resource: rayclusters
+        name: ray-cluster-with-auth
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-rbac-proxy
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-rbac-proxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-rbac-proxy
+subjects:
+- kind: ServiceAccount
+  name: kube-rbac-proxy
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-rbac-proxy
+rules:
+- apiGroups: ["authentication.k8s.io"]
+  resources:
+  - tokenreviews
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources:
+  - subjectaccessreviews
+  verbs: ["create"]
+---
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-cluster-with-auth
+spec:
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '127.0.0.1'
+      dashboard-port: '8443'
+    template:
+      metadata:
+      spec:
+        serviceAccountName: kube-rbac-proxy
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.39.0
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            exec:
+              command:
+              - bash
+              - -c
+              - wget -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep
+                success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep
+                success
+            failureThreshold: 10
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 2
+          livenessProbe:
+            exec:
+              command:
+              - bash
+              - -c
+              - wget -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep
+                success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep
+                success
+            failureThreshold: 120
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 2
+        - name: kube-rbac-proxy
+          image: quay.io/brancz/kube-rbac-proxy:v0.18.1
+          args:
+            - "--insecure-listen-address=0.0.0.0:8265"
+            - "--upstream=http://127.0.0.1:8443/"
+            - "--logtostderr=true"
+          volumeMounts:
+          - name: config
+            mountPath: /etc/kube-rbac-proxy
+        volumes:
+        - name: config
+          configMap:
+            name: kube-rbac-proxy
+  workerGroupSpecs:
+  - replicas: 2
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: worker-group
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.39.0
+          resources:
+            limits:
+              cpu: 1
+              memory: "4Gi"
+            requests:
+              cpu: 1
+              memory: "4Gi"
