@@ -92,6 +92,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if manager := managedByExternalController(rayJobInstance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayJob managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
@@ -847,5 +852,12 @@ func validateRayJobStatus(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode")
 	}
 
+	return nil
+}
+
+func managedByExternalController(controllerName *string) *string {
+	if controllerName != nil && *controllerName != rayv1.RayJobController {
+		return controllerName
+	}
 	return nil
 }
