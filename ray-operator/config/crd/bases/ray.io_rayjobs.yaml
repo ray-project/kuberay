@@ -68,6 +68,14 @@ spec:
                 type: string
               jobId:
                 type: string
+              managedBy:
+                type: string
+                x-kubernetes-validations:
+                - message: the managedBy field is immutable
+                  rule: self == oldSelf
+                - message: the managedBy field value must be either empty, 'ray.io/kuberay-operator'
+                    or 'kueue.x-k8s.io/multikueue'
+                  rule: self in ['', 'ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']
               metadata:
                 additionalProperties:
                   type: string

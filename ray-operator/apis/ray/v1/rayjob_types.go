@@ -62,6 +62,14 @@ const (
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
+const (
+	// RayJobController represents the value of the default job controller
+	RayJobController = "ray.io/kuberay-operator"
+
+	// MultiKueueController represents the vaue of the MultiKueue controller
+	MultiKueueController = "kueue.x-k8s.io/multikueue"
+)
+
 type SubmitterConfig struct {
 	// BackoffLimit of the submitter k8s job.
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
@@ -119,6 +127,15 @@ type RayJobSpec struct {
 	// If the RayCluster is already created, it will be deleted.
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
+	// ManagedBy is used to indicate the controller or entity that manages a RayJob.
+	// The value must be either empty, 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayJob which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['', 'ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either empty, 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	ManagedBy *string `json:"managedBy,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
