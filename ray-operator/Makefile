@@ -77,6 +77,10 @@ test-sampleyaml: WHAT ?= ./test/sampleyaml
 test-sampleyaml: manifests fmt vet
 	go test -timeout 30m -v $(WHAT)
 
+test-e2erayjobsubmitter: WHAT ?= ./test/e2erayjobsubmitter
+test-e2erayjobsubmitter: fmt vet
+	go test -timeout 30m -v $(WHAT)
+
 sync: helm api-docs
 	./hack/update-codegen.sh
 

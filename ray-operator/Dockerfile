@@ -15,12 +15,12 @@ COPY apis/ apis/
 COPY controllers/ controllers/
 COPY pkg/features pkg/features
 COPY pkg/utils pkg/utils
-COPY rayjob-submitter/ rayjob-submitter/
+COPY rayjobsubmitter/ rayjobsubmitter/
 
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
-RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o submitter rayjob-submitter/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o submitter ./rayjobsubmitter/cmd/main.go
 
 FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
