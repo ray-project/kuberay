@@ -57,7 +57,7 @@ type RayServiceReconciler struct {
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
-	ServeConfigs                 cmap.ConcurrentMap[string, string]
+	ServeConfigs                 cmap.ConcurrentMap[string, cmap.ConcurrentMap[string, string]]
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
@@ -72,7 +72,7 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeConfigs:                 cmap.New[string](),
+		ServeConfigs:                 cmap.New[cmap.ConcurrentMap[string, string]](),
 		RayClusterDeletionTimestamps: cmap.New[time.Time](),
 
 		dashboardClientFunc: dashboardClientFunc,
@@ -529,21 +529,21 @@ func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context
 // cleanUpServeConfigCache cleans up the unused serve deployments config in the cached map.
 func (r *RayServiceReconciler) cleanUpServeConfigCache(ctx context.Context, rayServiceInstance *rayv1.RayService) {
 	logger := ctrl.LoggerFrom(ctx)
-	activeConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.ActiveServiceStatus.RayClusterName)
-	pendingConfigKey := r.generateConfigKey(rayServiceInstance, rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
-	configPrefix := r.generateConfigKeyPrefix(rayServiceInstance)
+	activeRayClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+	pendingRayClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
 
-	// Clean up RayCluster serve deployment configs.
-	for key := range r.ServeConfigs.Items() {
-		if key == activeConfigKey || key == pendingConfigKey {
+	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
+	serveConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	if !exist {
+		return
+	}
+
+	for key := range serveConfigs.Items() {
+		if key == activeRayClusterName || key == pendingRayClusterName {
 			continue
 		}
-		if !strings.HasPrefix(key, configPrefix) {
-			// Skip configs owned by other RayService Instance.
-			continue
-		}
-		logger.Info("cleanUpServeConfigCache", "activeConfigKey", activeConfigKey, "pendingConfigKey", pendingConfigKey, "remove key", key)
-		r.ServeConfigs.Remove(key)
+		logger.Info("cleanUpServeConfigCache", "activeRayClusterName", activeRayClusterName, "pendingRayClusterName", pendingRayClusterName, "remove key", key)
+		serveConfigs.Remove(key)
 	}
 }
 
@@ -803,16 +803,13 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 	logger := ctrl.LoggerFrom(ctx)
 
 	// If the Serve config has not been cached, update the Serve config.
-	cacheKey := r.generateConfigKey(rayServiceInstance, rayClusterInstance.Name)
-	cachedServeConfigV2, exist := r.ServeConfigs.Get(cacheKey)
-
-	if !exist {
+	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
+	if cachedServeConfigV2 == "" {
 		logger.Info(
 			"shouldUpdate",
 			"shouldUpdateServe", true,
-			"reason", "Nothing has been cached for the cluster with the key",
+			"reason", "Nothing has been cached for the cluster",
 			"rayClusterName", rayClusterInstance.Name,
-			"cacheKey", cacheKey,
 		)
 		return true
 	}
@@ -838,7 +835,7 @@ func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Cont
 
 	if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
 		shouldUpdate = true
-		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s with key %s", rayClusterInstance.Name, cacheKey)
+		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s", rayClusterInstance.Name)
 	}
 	logger.Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 
@@ -868,9 +865,8 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 		return err
 	}
 
-	cacheKey := r.generateConfigKey(rayServiceInstance, clusterName)
-	r.ServeConfigs.Set(cacheKey, rayServiceInstance.Spec.ServeConfigV2)
-	logger.Info("updateServeDeployment", "message", "Cached Serve config for Ray cluster with the key", "rayClusterName", clusterName, "cacheKey", cacheKey)
+	r.cacheServeConfig(rayServiceInstance, clusterName)
+	logger.Info("updateServeDeployment", "message", "Cached Serve config for Ray cluster with the key", "rayClusterName", clusterName)
 	return nil
 }
 
@@ -960,12 +956,27 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	return isReady, nil
 }
 
-func (r *RayServiceReconciler) generateConfigKey(rayServiceInstance *rayv1.RayService, clusterName string) string {
-	return r.generateConfigKeyPrefix(rayServiceInstance) + clusterName
+func (r *RayServiceReconciler) getServeConfigFromCache(rayServiceInstance *rayv1.RayService, clusterName string) string {
+	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
+	serveConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	if !exist {
+		return ""
+	}
+	serveConfig, exist := serveConfigs.Get(clusterName)
+	if !exist {
+		return ""
+	}
+	return serveConfig
 }
 
-func (r *RayServiceReconciler) generateConfigKeyPrefix(rayServiceInstance *rayv1.RayService) string {
-	return rayServiceInstance.Namespace + "/" + rayServiceInstance.Name + "/"
+func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RayService, clusterName string) {
+	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
+	rayServiceServeConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	if !exist {
+		rayServiceServeConfigs = cmap.New[string]()
+		r.ServeConfigs.Set(cacheKey, rayServiceServeConfigs)
+	}
+	rayServiceServeConfigs.Set(clusterName, rayServiceInstance.Spec.ServeConfigV2)
 }
 
 func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(ctx context.Context, rayServiceInstance *rayv1.RayService) {
