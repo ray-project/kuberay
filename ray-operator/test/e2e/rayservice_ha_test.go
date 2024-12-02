@@ -258,7 +258,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	// Kill gcs server
 	ExecPodCmd(test, noOpsHeadPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
 	// wait for head pod not to be ready
-	g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutMedium).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeFalse()))
+	g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeFalse()))
 
 	go func() {
 		// wait for head pod to be ready

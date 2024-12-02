@@ -20,7 +20,7 @@ spec:
             ray_actor_options:
               num_cpus: 1
   rayClusterConfig:
-    rayVersion: '2.9.0'
+    rayVersion: "2.9.0"
     headGroupSpec:
       rayStartParams: {}
       template:
@@ -28,6 +28,9 @@ spec:
           containers:
             - name: ray-head
               image: rayproject/ray:2.9.0
+              env:
+                - name: RAY_gcs_rpc_server_reconnect_timeout_s
+                  value: "20"
               resources:
                 requests:
                   cpu: 300m
