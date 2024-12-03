@@ -16,6 +16,7 @@ type RayServiceSpecApplyConfiguration struct {
 	UpgradeStrategy                    *rayv1.RayServiceUpgradeStrategy  `json:"upgradeStrategy,omitempty"`
 	ServeConfigV2                      *string                           `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     *RayClusterSpecApplyConfiguration `json:"rayClusterConfig,omitempty"`
+	AddProxyActorOnHeadPod             *bool                             `json:"AddProxyActorOnHeadPod,omitempty"`
 }
 
 // RayServiceSpecApplyConfiguration constructs an declarative configuration of the RayServiceSpec type for use with
@@ -69,5 +70,13 @@ func (b *RayServiceSpecApplyConfiguration) WithServeConfigV2(value string) *RayS
 // If called multiple times, the RayClusterSpec field is set to the value of the last call.
 func (b *RayServiceSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecApplyConfiguration) *RayServiceSpecApplyConfiguration {
 	b.RayClusterSpec = value
+	return b
+}
+
+// WithAddProxyActorOnHeadPod sets the AddProxyActorOnHeadPod field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AddProxyActorOnHeadPod field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithAddProxyActorOnHeadPod(value bool) *RayServiceSpecApplyConfiguration {
+	b.AddProxyActorOnHeadPod = &value
 	return b
 }
