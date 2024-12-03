@@ -970,13 +970,17 @@ func (r *RayServiceReconciler) getServeConfigFromCache(rayServiceInstance *rayv1
 }
 
 func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RayService, clusterName string) {
+	serveConfig := rayServiceInstance.Spec.ServeConfigV2
+	if serveConfig == "" {
+		return
+	}
 	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
 	rayServiceServeConfigs, exist := r.ServeConfigs.Get(cacheKey)
 	if !exist {
 		rayServiceServeConfigs = cmap.New[string]()
 		r.ServeConfigs.Set(cacheKey, rayServiceServeConfigs)
 	}
-	rayServiceServeConfigs.Set(clusterName, rayServiceInstance.Spec.ServeConfigV2)
+	rayServiceServeConfigs.Set(clusterName, serveConfig)
 }
 
 func (r *RayServiceReconciler) markRestartAndAddPendingClusterName(ctx context.Context, rayServiceInstance *rayv1.RayService) {
