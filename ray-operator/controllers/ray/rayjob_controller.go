@@ -92,7 +92,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if manager := managedByExternalController(rayJobInstance.Spec.ManagedBy); manager != nil {
+	if manager := utils.ManagedByExternalController(rayJobInstance.Spec.ManagedBy); manager != nil {
 		logger.Info("Skipping RayJob managed by a custom controller", "managed-by", manager)
 		return ctrl.Result{}, nil
 	}
@@ -852,12 +852,5 @@ func validateRayJobStatus(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode")
 	}
 
-	return nil
-}
-
-func managedByExternalController(controllerName *string) *string {
-	if controllerName != nil && *controllerName != rayv1.RayJobController {
-		return controllerName
-	}
 	return nil
 }

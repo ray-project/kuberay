@@ -11,6 +11,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -247,7 +248,7 @@ env_vars:
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
 	})
 
-	test.T().Run("RayJob should be created, but not updated when managed externaly", func(_ *testing.T) {
+	test.T().Run("RayJob should be created, but not updated when managed externally", func(_ *testing.T) {
 		// RayJob
 		rayJobAC := rayv1ac.RayJob("managed-externally", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
@@ -259,11 +260,18 @@ env_vars:
 `).
 				WithShutdownAfterJobFinishes(true).
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
-				WithManagedBy(rayv1.MultiKueueController))
+				WithManagedBy(MultiKueueController))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Should not to be able to change managedBy field as it's immutable
+		rayJobAC.Spec.WithManagedBy(utils.KubeRayController)
+		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).To(HaveOccurred())
+		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
+			Should(WithTransform(RayJobManagedBy, Equal(ptr.To(MultiKueueController))))
 
 		// Refresh the RayJob status and assert it has not been updated
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
@@ -278,15 +286,6 @@ env_vars:
 
 		// Assert the submitter Job has not been created
 		g.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
-
-		// Should not to be able to change managedBy field as it's immutable
-		rayJobAC.Spec.WithManagedBy(rayv1.RayJobController)
-		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
-		g.Expect(err).To(HaveOccurred())
-		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
-			Should(WithTransform(RayJobManagedBy, Equal(ptr.To(rayv1.MultiKueueController))))
-		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), *rayJobAC.Name, metav1.DeleteOptions{})

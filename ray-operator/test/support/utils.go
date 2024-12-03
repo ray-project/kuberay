@@ -16,6 +16,8 @@ type OutputType string
 
 const (
 	Log OutputType = "log"
+	// MultiKueueController represents the vaue of the MultiKueue controller
+	MultiKueueController = "kueue.x-k8s.io/multikueue"
 )
 
 func WriteToOutputDir(t Test, fileName string, fileType OutputType, data []byte) {
