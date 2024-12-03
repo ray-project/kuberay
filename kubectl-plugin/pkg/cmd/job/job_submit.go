@@ -104,6 +104,9 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		Example: jobSubmitExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entryPointStart := cmd.ArgsLenAtDash()
+			if entryPointStart == -1 || len(args[entryPointStart:]) == 0 {
+				return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
+			}
 			options.entryPoint = strings.Join(args[entryPointStart:], " ")
 			if err := options.Complete(); err != nil {
 				return err
