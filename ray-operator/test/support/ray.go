@@ -132,6 +132,10 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	return pods.Items
 }
 
+func RayClusterManagedBy(rayCluster *rayv1.RayCluster) *string {
+	return rayCluster.Spec.ManagedBy
+}
+
 func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
 	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }

@@ -76,6 +76,11 @@ var (
 	workersToDelete         []string
 )
 
+const (
+	// MultiKueueController represents the vaue of the MultiKueue controller
+	MultiKueueController = "kueue.x-k8s.io/multikueue"
+)
+
 func setupTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	namespaceStr = "default"
@@ -3160,6 +3165,70 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			}
 
 			assert.Truef(t, foundFailureEvent, "Expected event to be generated for %s pod creation failure, got events: %s", test.podType, strings.Join(events, "\n"))
+		})
+	}
+}
+
+func Test_ReconcileManagedBy(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	tests := map[string]struct {
+		managedBy       *string
+		shouldReconcile bool
+	}{
+		"ManagedBy field not set": {
+			managedBy:       nil,
+			shouldReconcile: true,
+		},
+		"ManagedBy field to RayOperator": {
+			managedBy:       ptr.To(utils.KubeRayController),
+			shouldReconcile: true,
+		},
+		"ManagedBy field empty": {
+			managedBy: ptr.To(""),
+		},
+		"ManagedBy field to external allowed controller": {
+			managedBy: ptr.To(MultiKueueController),
+		},
+		"ManagedBy field to external not allowed controller": {
+			managedBy: ptr.To("controller.com/invalid"),
+		},
+	}
+
+	for name, tc := range tests {
+		name, tc := name, tc
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+			cluster.Status = rayv1.RayClusterStatus{}
+			cluster.Spec.ManagedBy = tc.managedBy
+			runtimeObjects := []runtime.Object{cluster}
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(runtimeObjects...).
+				WithStatusSubresource(cluster).
+				Build()
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			result, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+			assert.Nil(t, err)
+			if tc.shouldReconcile {
+				// finish with requeue due to detected incosistency
+				assert.Equal(t, result.RequeueAfter.Seconds(), DefaultRequeueDuration.Seconds())
+			} else {
+				// skip reconciliation
+				assert.Equal(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds())
+			}
 		})
 	}
 }

@@ -103,7 +103,7 @@ env_vars:
   counter_name: test_counter
 `).
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
-				WithManagedBy(MultiKueueController))
+				WithManagedBy("kueue.x-k8s.io/multikueue"))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())

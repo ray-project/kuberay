@@ -260,7 +260,7 @@ env_vars:
 `).
 				WithShutdownAfterJobFinishes(true).
 				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
-				WithManagedBy(MultiKueueController))
+				WithManagedBy("kueue.x-k8s.io/multikueue"))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -271,7 +271,7 @@ env_vars:
 		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).To(HaveOccurred())
 		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
-			Should(WithTransform(RayJobManagedBy, Equal(ptr.To(MultiKueueController))))
+			Should(WithTransform(RayJobManagedBy, Equal(ptr.To("kueue.x-k8s.io/multikueue"))))
 
 		// Refresh the RayJob status and assert it has not been updated
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).

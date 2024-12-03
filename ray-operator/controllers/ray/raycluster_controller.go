@@ -226,6 +226,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
 
+	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.validateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
