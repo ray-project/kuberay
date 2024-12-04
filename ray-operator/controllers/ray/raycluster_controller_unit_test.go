@@ -1688,6 +1688,10 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 func TestCalculateStatus(t *testing.T) {
 	setupTest(t)
+	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
+
+	// disable feature gate for the following tests
+	restoreFeatureFlag := features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
@@ -1747,7 +1751,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Empty(t, newInstance.Status.Conditions)
 
 	// enable feature gate for the following tests
-	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	restoreFeatureFlag()
 
 	// Test CheckRayHeadRunningAndReady with head pod running and ready
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
@@ -1782,7 +1786,7 @@ func TestCalculateStatus(t *testing.T) {
 
 func TestRayClusterProvisionedCondition(t *testing.T) {
 	setupTest(t)
-	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
 
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
