@@ -1,0 +1,4 @@
+releases:
+  - name: KubeRay
+    version: 1.2.2
+    repoUrl: https://github.com/ray-project/kuberay
