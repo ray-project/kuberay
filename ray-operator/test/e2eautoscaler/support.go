@@ -41,8 +41,8 @@ func options[T any](options ...option[T]) option[T] {
 	}
 }
 
-func newConfigMap(namespace, name string, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
-	cmAC := corev1ac.ConfigMap(name, namespace).
+func newConfigMap(namespace string, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
+	cmAC := corev1ac.ConfigMap("scripts", namespace).
 		WithBinaryData(map[string][]byte{}).
 		WithImmutable(true)
 

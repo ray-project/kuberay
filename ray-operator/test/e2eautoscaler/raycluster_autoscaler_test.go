@@ -22,7 +22,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -88,7 +88,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -147,7 +147,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -214,7 +214,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	test.StreamKubeRayOperatorLogs()
 
 	// Scripts for creating and terminating detached actors to trigger autoscaling
-	scriptsAC := newConfigMap(namespace.Name, "scripts", files(test, "create_concurrent_tasks.py"))
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_concurrent_tasks.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
