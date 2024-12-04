@@ -28,7 +28,7 @@ jobs:
     - name: Set Go
       uses: actions/setup-go@v5
       with:
-        go-version: v1.20
+        go-version: v1.22
         cache-dependency-path: "ray-operator/go.sum"
 
     - name: Verify that release doesn't exist yet
