@@ -41,8 +41,6 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * **KubeRay Python client**: This Python client library provides APIs to handle RayCluster from your Python application.
 
-* **KubeRay CLI**: KubeRay CLI provides the ability to manage KubeRay resources through command-line interface.
-
 ## KubeRay ecosystem
 
 * [AWS Application Load Balancer](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#aws-application-load-balancer-alb-ingress-support-on-aws-eks)
