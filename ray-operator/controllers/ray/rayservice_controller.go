@@ -57,6 +57,8 @@ type RayServiceReconciler struct {
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
+	// Stores map of cacheKey to map of RayCluster name to Serve deployment config,
+	// where cacheKey is the combination of RayService namespace and name.
 	ServeConfigs                 cmap.ConcurrentMap[string, cmap.ConcurrentMap[string, string]]
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 
