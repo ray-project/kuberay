@@ -215,7 +215,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if err := r.labelHeadPodForServeStatus(ctx, rayServiceInstance, rayClusterInstance); err != nil {
+		if err := r.labelHeadPodForServeStatus(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
@@ -1160,7 +1160,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	return isReady, nil
 }
 
-func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
+func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster, excludeHeadPodFromServeSvc bool) error {
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
@@ -1185,10 +1185,10 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 	for key, value := range headPod.Labels {
 		originalLabels[key] = value
 	}
-	if err = httpProxyClient.CheckProxyActorHealth(ctx); err != nil || rayServiceInstance.Spec.AddProxyActorOnHeadPod {
-		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
-	} else {
+	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil || !excludeHeadPodFromServeSvc {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
+	} else {
+		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
 	}
 
 	if !reflect.DeepEqual(originalLabels, headPod.Labels) {

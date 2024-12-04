@@ -73,7 +73,7 @@ type RayServiceSpec struct {
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
 	RayClusterSpec RayClusterSpec `json:"rayClusterConfig,omitempty"`
 	// If the field is configured, the value of the label ray.io/serve on the head Pod should always be false
-	AddProxyActorOnHeadPod bool `json:"AddProxyActorOnHeadPod,omitempty"`
+	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
