@@ -55,9 +55,9 @@ type RayServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	// Currently, the Ray dashboard doesn't cache the Serve deployment config.
+	// Currently, the Ray dashboard doesn't cache the Serve application config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
-	// Stores map of cacheKey to map of RayCluster name to Serve deployment config,
+	// Stores map of cacheKey to map of RayCluster name to Serve application config,
 	// where cacheKey is the combination of RayService namespace and name.
 	ServeConfigs                 cmap.ConcurrentMap[string, cmap.ConcurrentMap[string, string]]
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
@@ -528,7 +528,7 @@ func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context
 	return rayCluster, nil
 }
 
-// cleanUpServeConfigCache cleans up the unused serve deployments config in the cached map.
+// cleanUpServeConfigCache cleans up the unused serve applications config in the cached map.
 func (r *RayServiceReconciler) cleanUpServeConfigCache(ctx context.Context, rayServiceInstance *rayv1.RayService) {
 	logger := ctrl.LoggerFrom(ctx)
 	activeRayClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
@@ -1131,7 +1131,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 			if err != nil {
 				logger.Error(err, "Failed to check if head Pod is running and ready!")
 			} else {
-				logger.Info("Skipping the update of Serve deployments because the Ray head Pod is not ready.")
+				logger.Info("Skipping the update of Serve applications because the Ray head Pod is not ready.")
 			}
 			return false, err
 		}
@@ -1172,7 +1172,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return false, err
 		}
-		logger.Info("Mark cluster as waiting for Serve deployments", "rayCluster", rayClusterInstance)
+		logger.Info("Mark cluster as waiting for Serve applications", "rayCluster", rayClusterInstance)
 	}
 
 	return isReady, nil
