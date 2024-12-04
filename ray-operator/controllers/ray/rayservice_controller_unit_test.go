@@ -667,7 +667,7 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 		Client:       fakeClient,
 		Recorder:     &record.FakeRecorder{},
 		Scheme:       scheme.Scheme,
-		ServeConfigs: cmap.New[string](),
+		ServeConfigs: cmap.New[cmap.ConcurrentMap[string, string]](),
 	}
 
 	namespace := "ray"
@@ -703,22 +703,21 @@ applications:
 	// Test 1: The RayCluster is new, and this is the first reconciliation after the RayCluster becomes ready.
 	// No Serve application has been created yet, so the RayService's serve configuration has not been cached in
 	// `r.ServeConfigs`.
-	cacheKey := r.generateConfigKey(&rayService, cluster.Name)
-	_, exist := r.ServeConfigs.Get(cacheKey)
-	assert.False(t, exist)
+	serveConfig := r.getServeConfigFromCache(&rayService, cluster.Name)
+	assert.Empty(t, serveConfig)
 	shouldCreate := r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 2: The RayCluster is not new, but the head Pod without GCS FT-enabled crashes and restarts.
 	// Hence, the RayService's Serve application status is empty, but the KubeRay operator has cached the Serve
 	// application's configuration.
-	r.ServeConfigs.Set(cacheKey, rayService.Spec.ServeConfigV2) // Simulate the Serve application's configuration has been cached.
+	r.cacheServeConfig(&rayService, cluster.Name) // Simulate the Serve application's configuration has been cached.
 	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 3: The Serve application has been created, and the RayService's status has been updated.
-	_, exist = r.ServeConfigs.Get(cacheKey)
-	assert.True(t, exist)
+	serveConfig = r.getServeConfigFromCache(&rayService, cluster.Name)
+	assert.NotEmpty(t, serveConfig)
 	serveStatus := rayv1.RayServiceStatus{
 		Applications: map[string]rayv1.AppStatus{
 			"myapp": {
