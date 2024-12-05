@@ -16,7 +16,4 @@ def f():
   sleep_time_sec = random.randint(_TASK_MIN_DUR_SEC, _TASK_MAX_DUR_SEC)
   time.sleep(sleep_time_sec)
 
-ref_list = []
-for _ in range(_TASK_NUM):
-  ref_list.append(f.remote())
-ray.get(ref_list)
+ray.get([f.remote() for _ in range(_TASK_NUM)])
