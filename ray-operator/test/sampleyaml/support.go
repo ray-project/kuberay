@@ -57,6 +57,11 @@ func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 		}
 		for _, pod := range pods {
 			for _, container := range pod.Spec.Containers {
+
+				if container.Name == "fluentbit" {
+					continue
+				}
+
 				ExecPodCmd(t, &pod, container.Name, cmd)
 			}
 		}

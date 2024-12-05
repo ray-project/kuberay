@@ -56,6 +56,9 @@ func TestRayCluster(t *testing.T) {
 		{
 			name: "ray-cluster.tls.yaml",
 		},
+		{
+			name: "ray-cluster-fluentbit-sidecar.yaml",
+		},
 	}
 
 	for _, tt := range tests {
