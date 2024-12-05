@@ -5,7 +5,7 @@ import time
 import random
 
 # The task number should be large enough, so the autoscalar is triggered to scale to max replica.
-_TASK_NUM = 50
+_TASK_NUM = 30
 # The min task duration should be long enough, which passes the autoscaling stage of the test.
 _TASK_MIN_DUR_SEC = 5
 # The max task duration should be reasonable to have a cap on overal test duration.

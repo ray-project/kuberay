@@ -1,9 +1,7 @@
 package e2eautoscaler
 
 import (
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/onsi/gomega"
 
@@ -14,8 +12,6 @@ import (
 )
 
 func TestRayClusterAutoscaler(t *testing.T) {
-	t.Skip()
-
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -82,8 +78,6 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
-	t.Skip()
-
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -143,8 +137,6 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
-	t.Skip()
-
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -208,9 +200,8 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	const maxReplica = 3
-
-	// Used in main goroutine to block wait until test script execution completion.
-	var taskExecWg sync.WaitGroup
+	// Set the scale down window to a large enough value, so scale down could be disabled to avoid test flakiness. 
+	const scaleDownWaitSec = 3600
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
@@ -235,7 +226,9 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 			WithMaxReplicas(maxReplica).
 			WithGroupName(groupName).
 			WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
-			WithTemplate(workerPodTemplateApplyConfiguration()))
+			WithTemplate(workerPodTemplateApplyConfiguration())).
+		WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+			WithIdleTimeoutSeconds(scaleDownWaitSec))
 	rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 		WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
@@ -252,24 +245,11 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-	taskExecWg.Add(1)
-	go func() {
-		// Create a number of tasks and wait for their completion, and a worker in the "custom-resource-group" should be created.
-		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_concurrent_tasks.py"})
-		taskExecWg.Done()
-	}()
-
-	// Periodically check whether replica count has autoscaled to maximum value.
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	// Block until current replica has reached the preset maximum value, which proves the autoscaling works.
-	for range ticker.C {
-		pods, _ := GetWorkerPods(test, rayCluster)
-		if len(pods) == maxReplica {
-			break
-		}
-	}
-
-	taskExecWg.Wait()
+	// Create a number of tasks and wait for their completion, and a worker in the "custom-resource-group" should be created.
+	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_concurrent_tasks.py"})
+	
+	// Scale down has been disabled, after ray script execution completion the cluster is expected to have max replica's number of pods. 
+	pods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Expect(len(pods)).Should(gomega.BeNumerically("==", maxReplica))
 }
