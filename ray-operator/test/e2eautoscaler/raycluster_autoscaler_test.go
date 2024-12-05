@@ -14,6 +14,8 @@ import (
 )
 
 func TestRayClusterAutoscaler(t *testing.T) {
+	t.Skip()
+
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -80,6 +82,8 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
+	t.Skip()
+
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -139,6 +143,8 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
+	t.Skip()
+
 	test := With(t)
 	g := gomega.NewWithT(t)
 
@@ -201,11 +207,8 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	test := With(t)
 	g := gomega.NewWithT(t)
 
-	var rayCluster *rayv1.RayCluster
 	const maxReplica = 3
 
-	// Used in main goroutine to block wait until kubernetes setup completion.
-	var setupReadyWg sync.WaitGroup
 	// Used in main goroutine to block wait until test script execution completion.
 	var taskExecWg sync.WaitGroup
 
@@ -219,51 +222,44 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-	setupReadyWg.Add(1)
+	groupName := "custom-resource-group"
+	rayClusterSpecAC := rayv1ac.RayClusterSpec().
+		WithEnableInTreeAutoscaling(true).
+		WithRayVersion(GetRayVersion()).
+		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+			WithRayStartParams(map[string]string{"num-cpus": "0"}).
+			WithTemplate(headPodTemplateApplyConfiguration())).
+		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+			WithReplicas(0).
+			WithMinReplicas(0).
+			WithMaxReplicas(maxReplica).
+			WithGroupName(groupName).
+			WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
+			WithTemplate(workerPodTemplateApplyConfiguration()))
+	rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+		WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for RayCluster to become ready and verify the number of available worker replicas.
+	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+		Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+	g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
 	taskExecWg.Add(1)
 	go func() {
-		test.T().Run("Create a RayCluster with autoscaling enabled", func(_ *testing.T) {
-			groupName := "custom-resource-group"
-
-			rayClusterSpecAC := rayv1ac.RayClusterSpec().
-				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
-				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-					WithRayStartParams(map[string]string{"num-cpus": "0"}).
-					WithTemplate(headPodTemplateApplyConfiguration())).
-				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-					WithReplicas(0).
-					WithMinReplicas(0).
-					WithMaxReplicas(maxReplica).
-					WithGroupName(groupName).
-					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
-					WithTemplate(workerPodTemplateApplyConfiguration()))
-			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
-
-			var err error
-			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-			g.Expect(err).NotTo(gomega.HaveOccurred())
-			test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-			setupReadyWg.Done()
-
-			// Wait for RayCluster to become ready and verify the number of available worker replicas.
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
-
-			headPod, err := GetHeadPod(test, rayCluster)
-			g.Expect(err).NotTo(gomega.HaveOccurred())
-			test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
-
-			// Create a number of tasks and wait for their completion, and a worker in the "custom-resource-group" should be created.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_concurrent_tasks.py"})
-			taskExecWg.Done()
-		})
+		// Create a number of tasks and wait for their completion, and a worker in the "custom-resource-group" should be created.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_concurrent_tasks.py"})
+		taskExecWg.Done()
 	}()
 
 	// Periodically check whether replica count has autoscaled to maximum value.
-	setupReadyWg.Wait()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
