@@ -251,5 +251,5 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	// Scale down has been disabled, after ray script execution completion the cluster is expected to have max replica's number of pods.
 	pods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Expect(pods).To(gomega.HaveLen(1))
+	g.Expect(pods).To(gomega.HaveLen(maxReplica))
 }
