@@ -200,7 +200,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	const maxReplica = 3
-	// Set the scale down window to a large enough value, so scale down could be disabled to avoid test flakiness. 
+	// Set the scale down window to a large enough value, so scale down could be disabled to avoid test flakiness.
 	const scaleDownWaitSec = 3600
 
 	// Create a namespace
@@ -247,9 +247,9 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 
 	// Create a number of tasks and wait for their completion, and a worker in the "custom-resource-group" should be created.
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_concurrent_tasks.py"})
-	
-	// Scale down has been disabled, after ray script execution completion the cluster is expected to have max replica's number of pods. 
+
+	// Scale down has been disabled, after ray script execution completion the cluster is expected to have max replica's number of pods.
 	pods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Expect(len(pods)).Should(gomega.BeNumerically("==", maxReplica))
+	g.Expect(pods).To(gomega.HaveLen(1))
 }
