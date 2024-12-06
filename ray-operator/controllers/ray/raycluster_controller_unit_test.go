@@ -30,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
@@ -231,7 +232,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.9.0",
+						Image:   support.GetRayImage(),
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -261,7 +262,7 @@ func setupTest(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "ray-worker",
-						Image:   "rayproject/ray:2.9.0",
+						Image:   support.GetRayImage(),
 						Command: []string{"echo"},
 						Args:    []string{"Hello Ray"},
 					},
@@ -316,7 +317,7 @@ func setupTest(t *testing.T) {
 						Containers: []corev1.Container{
 							{
 								Name:    "ray-head",
-								Image:   "rayproject/ray:2.9.0",
+								Image:   support.GetRayImage(),
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
 								Env: []corev1.EnvVar{
@@ -350,7 +351,7 @@ func setupTest(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "ray-worker",
-									Image:   "rayproject/ray:2.9.0",
+									Image:   support.GetRayImage(),
 									Command: []string{"echo"},
 									Args:    []string{"Hello Ray"},
 									Env: []corev1.EnvVar{

@@ -23,6 +23,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 func TestValidateRayServiceSpec(t *testing.T) {
@@ -61,7 +62,7 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	// `hash2` in this case.
 	cluster := rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			RayVersion: "2.9.0",
+			RayVersion: support.GetRayVersion(),
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
 					Template: corev1.PodTemplateSpec{
@@ -92,7 +93,7 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 
 func TestGetClusterAction(t *testing.T) {
 	clusterSpec1 := rayv1.RayClusterSpec{
-		RayVersion: "2.9.0",
+		RayVersion: support.GetRayVersion(),
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
 				Replicas:    ptr.To[int32](2),
