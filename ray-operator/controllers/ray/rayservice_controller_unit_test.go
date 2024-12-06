@@ -1006,10 +1006,10 @@ func TestLabelHeadPodForServeStatus_ExcludeHeadPod(t *testing.T) {
 
 	err = r.labelHeadPodForServeStatus(ctx, &cluster, true)
 	assert.NoError(t, err)
-	headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 	// Get latest headPod status
 	headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 	assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], "false")
+	assert.NoError(t, err)
 }
 
 func TestLabelHeadPodForServeStatus_IncludeHeadPod(t *testing.T) {
@@ -1096,4 +1096,5 @@ func TestLabelHeadPodForServeStatus_IncludeHeadPod(t *testing.T) {
 	// Get latest headPod status
 	headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 	assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], "true")
+	assert.NoError(t, err)
 }
