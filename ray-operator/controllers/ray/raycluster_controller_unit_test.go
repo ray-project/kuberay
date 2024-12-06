@@ -1784,6 +1784,78 @@ func TestCalculateStatus(t *testing.T) {
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
+func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
+	setupTest(t)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			PodIP: headNodeIP,
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	// Test head information with a reconcile error
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, errors.New("invalid"))
+	assert.Nil(t, err)
+	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "invalid")
+	assert.Nil(t, newInstance.Status.StateTransitionTimes)
+
+	// Test head information without a reconcile error
+	newInstance, err = r.calculateStatus(ctx, newInstance, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+	t1 := newInstance.Status.StateTransitionTimes[rayv1.Ready]
+
+	// Test head information with a reconcile error again
+	newInstance, err = r.calculateStatus(ctx, newInstance, errors.New("invalid2"))
+	assert.Nil(t, err)
+	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "invalid2")
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+	assert.Equal(t, t1, newInstance.Status.StateTransitionTimes[rayv1.Ready]) // no change to StateTransitionTimes
+}
+
 func TestRayClusterProvisionedCondition(t *testing.T) {
 	setupTest(t)
 	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
