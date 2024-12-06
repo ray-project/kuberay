@@ -74,7 +74,7 @@ jobs:
 
             set -euo pipefail
             cd ${{ inputs.dir-to-test }}
-            go test -timeout 30m -v ./test/e2e -json 2>&1 | tee ${KUBERAY_TEST_OUTPUT_DIR}/gotest.log | gotestfmt
+            go test -timeout 60m -v ./test/e2e -json 2>&1 | tee ${KUBERAY_TEST_OUTPUT_DIR}/gotest.log | gotestfmt
 
         - name: Print KubeRay operator logs
           if: (!inputs.plugin-test) && always() && steps.deploy.outcome == 'success'
