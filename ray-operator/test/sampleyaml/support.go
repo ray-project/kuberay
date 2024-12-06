@@ -56,9 +56,8 @@ func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 			"import ray; ray.init(); print(ray.cluster_resources())",
 		}
 		for _, pod := range pods {
-			for _, container := range pod.Spec.Containers {
-				ExecPodCmd(t, &pod, container.Name, cmd)
-			}
+			container := pod.Spec.Containers[utils.RayContainerIndex] // Directly access the Ray container
+			ExecPodCmd(t, &pod, container.Name, cmd)
 		}
 	}
 }
