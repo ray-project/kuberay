@@ -7,23 +7,35 @@ import (
 
 func generateGangGroupName(app *rayv1.RayCluster, namespace, groupName string) string {
 	if namespace == "" {
+		namespace = app.Namespace
+	}
+	if namespace == "" {
 		namespace = "default"
 	}
-	return namespace + "/" + app.Name + "-" + groupName
+	return namespace + "/" + getAppPodGroupName(app, groupName)
 }
 
-func newGangGroupsFromApp(app *rayv1.RayCluster) ([]string, map[string]int32) {
+type wokerGroupReplicas struct {
+	Replicas    int32
+	MinReplicas int32
+}
+
+func analyzeGangGroupsFromApp(app *rayv1.RayCluster) ([]string, map[string]wokerGroupReplicas) {
 	gangGroups := make([]string, 1+len(app.Spec.WorkerGroupSpecs))
-	minMemberMap := map[string]int32{}
+	minMemberMap := map[string]wokerGroupReplicas{}
 
 	gangGroups[0] = generateGangGroupName(app, app.Spec.HeadGroupSpec.Template.Namespace, utils.RayNodeHeadGroupLabelValue)
-	minMemberMap[utils.RayNodeHeadGroupLabelValue] = 1
+	minMemberMap[utils.RayNodeHeadGroupLabelValue] = wokerGroupReplicas{
+		Replicas:    1,
+		MinReplicas: 1,
+	}
 
 	for i, workerGroupSepc := range app.Spec.WorkerGroupSpecs {
-		minWorkers := workerGroupSepc.MinReplicas
 		gangGroups[1+i] = generateGangGroupName(app, workerGroupSepc.Template.Namespace, workerGroupSepc.GroupName)
-		minMemberMap[workerGroupSepc.GroupName] = *minWorkers
-
+		minMemberMap[workerGroupSepc.GroupName] = wokerGroupReplicas{
+			Replicas:    *(workerGroupSepc.Replicas),
+			MinReplicas: *(workerGroupSepc.MinReplicas),
+		}
 	}
 
 	return gangGroups, minMemberMap

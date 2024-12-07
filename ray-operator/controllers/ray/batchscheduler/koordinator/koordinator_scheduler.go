@@ -61,11 +61,11 @@ func (y *KoodinatorScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.R
 		// the group name for the head and each of the worker group should be different
 		// the api is define here https://koordinator.sh/docs/designs/gang-scheduling/#annotation-way
 
-		gangGroups, minMemberMap := newGangGroupsFromApp(app)
+		gangGroups, minMemberMap := analyzeGangGroupsFromApp(app)
 
 		pod.Annotations[KoordinatorGangAnnotationName] = getAppPodGroupName(app, groupName)
-		pod.Annotations[KoordinatorGangMinAvailableAnnotationName] = strconv.Itoa(int(minMemberMap[groupName]))
-		pod.Annotations[KoordinatorGangTotalNumberAnnotationName] = pod.Annotations[KoordinatorGangMinAvailableAnnotationName]
+		pod.Annotations[KoordinatorGangMinAvailableAnnotationName] = strconv.Itoa(int(minMemberMap[groupName].MinReplicas))
+		pod.Annotations[KoordinatorGangTotalNumberAnnotationName] = strconv.Itoa(int(minMemberMap[groupName].Replicas))
 		pod.Annotations[KoordinatorGangModeAnnotationName] = KoordinatorGangModeStrict
 
 		gangGroupAnnotationValueBytes, err := json.Marshal(gangGroups)
@@ -107,16 +107,5 @@ func (yf *KoordinatorSchedulerFactory) ConfigureReconciler(b *builder.Builder) *
 }
 
 func getAppPodGroupName(app *rayv1.RayCluster, groupName string) string {
-
-	return app.Name + "-" + groupName
-}
-
-func getMinAvailable(app *rayv1.RayCluster) int32 {
-
-	var minAvailable int32
-	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
-		minAvailable += *workerGroupSpec.MinReplicas
-	}
-	return minAvailable + 1
-
+	return "ray-" + app.Name + "-" + groupName
 }
