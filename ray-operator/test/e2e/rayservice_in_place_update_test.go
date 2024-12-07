@@ -52,12 +52,14 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
 
 	// test the default curl result
-	// curl /fruit
-	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("6"))
-	// curl /calc
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	g.Eventually(func(g Gomega) {
+		// curl /fruit
+		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		g.Expect(stdout.String()).To(Equal("6"))
+		// curl /calc
+		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+		g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	}, TestTimeoutShort).Should(Succeed())
 
 	// In-place update
 	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
@@ -79,7 +81,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	// Test the new price and factor
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
-		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 		g.Expect(stdout.String()).To(Equal("8"))
 		// curl /calc
 		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
