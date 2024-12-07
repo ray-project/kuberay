@@ -30,4 +30,3 @@ spec:
       nodePort: {{ $port.nodePort }}
       {{ end }}
     {{ end }}
-

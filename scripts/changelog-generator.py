@@ -36,4 +36,3 @@ g = ChangelogGenerator("ray-project/kuberay")
 for pr_match in re.finditer(r"#(\d+)", payload):
     pr_id = int(pr_match.group(1))
     print("* {}".format(g.generate(pr_id)))
-

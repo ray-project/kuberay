@@ -18,14 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.20
+### Use go v1.22
 
-Currently, KubeRay uses go v1.20 for development.
+Currently, KubeRay uses go v1.22 for development.
 
 ```bash
-go install golang.org/dl/go1.20.11@latest
-go1.20.11 download
-export GOROOT=$(go1.20.11 env GOROOT)
+go install golang.org/dl/go1.22.4@latest
+go1.22.4 download
+export GOROOT=$(go1.22.4 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -200,43 +200,14 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 > Note: remember to replace with your own image
 
+## pre-commit hooks
+
+1. Install [golangci-lint](https://github.com/golangci/golangci-lint/releases).
+2. Install [kubeconform](https://github.com/yannh/kubeconform/releases).
+3. Install [pre-commit](https://pre-commit.com/).
+4. Run `pre-commit install` to install the pre-commit hooks.
+
 ## CI/CD
-
-### Linting
-
-KubeRay uses the gofumpt linter.
-
-Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.20. Run this command to download it:
-
-```bash
-go install mvdan.cc/gofumpt@v0.5.0
-```
-
-As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
-
-Check that the `gofumpt` version is 0.5.0:
-
-```bash
-gofumpt --version
-# v0.5.0 (go1.19)
-```
-
-Make sure your `go` version is still 1.20:
-
-```bash
-go version
-# go version go1.20 darwin/amd64
-```
-
-If your `go` version isn’t 1.20 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.20`. It should be back to 1.20.x.
-
-Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
-
-```bash
-gofumpt -w .
-```
-
-The `-w` flag will overwrite any unformatted code.
 
 ### Helm chart linter
 

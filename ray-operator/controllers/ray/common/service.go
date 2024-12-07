@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,10 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
+
+func getEnableRayHeadClusterIPService() bool {
+	return strings.ToLower(os.Getenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)) == "true"
+}
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
 func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
@@ -117,6 +123,11 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 			Ports:    ports,
 			Type:     defaultType,
 		},
+	}
+	if !getEnableRayHeadClusterIPService() && (defaultType == "" || defaultType == corev1.ServiceTypeClusterIP) {
+		// Make the head service headless by default, because a RayCluster should have at most one head Pod.
+		headService.Spec.ClusterIP = corev1.ClusterIPNone
+		headService.Spec.PublishNotReadyAddresses = true // We don't need to hide the Head address if its health checks failed.
 	}
 
 	// This change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
@@ -277,7 +288,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 }
 
 // BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
-func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Service {
 	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	namespace := rayCluster.Namespace
 
@@ -299,10 +310,13 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 			ClusterIP: "None",
 			Selector:  selectorLabels,
 			Type:      corev1.ServiceTypeClusterIP,
+			// The headless worker service is used for peer communication between multi-host workers and should not be
+			// dependent on Proxy Actor placement to publish DNS addresses.
+			PublishNotReadyAddresses: true,
 		},
 	}
 
-	return headlessService, nil
+	return headlessService
 }
 
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
@@ -361,9 +375,9 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
-	ports, err := getPortsFromCluster(cluster)
+	ports := getPortsFromCluster(cluster)
 	// Assign default ports
-	if err != nil || len(ports) == 0 {
+	if len(ports) == 0 {
 		ports = getDefaultPorts()
 	}
 
@@ -378,7 +392,7 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 // getPortsFromCluster get the ports from head container and directly map them in service
 // It's user's responsibility to maintain rayStartParam ports and container ports mapping
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
-func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
+func getPortsFromCluster(cluster rayv1.RayCluster) map[string]int32 {
 	svcPorts := map[string]int32{}
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
@@ -389,7 +403,7 @@ func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 		svcPorts[port.Name] = port.ContainerPort
 	}
 
-	return svcPorts, nil
+	return svcPorts
 }
 
 func getDefaultPorts() map[string]int32 {

@@ -23,4 +23,3 @@ curl 'localhost:8888/apis/v1/namespaces/default/compute_templates/default-templa
 # Delete by name
 curl -X DELETE 'localhost:8888/apis/v1/namespaces/default/compute_templates/default-template' \
 --header 'Content-Type: application/json'
-

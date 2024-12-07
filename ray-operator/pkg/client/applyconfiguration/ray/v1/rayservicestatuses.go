@@ -4,24 +4,40 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // RayServiceStatusesApplyConfiguration represents an declarative configuration of the RayServiceStatuses type for use
 // with apply.
 type RayServiceStatusesApplyConfiguration struct {
+	LastUpdateTime       *v1.Time                            `json:"lastUpdateTime,omitempty"`
+	ServiceStatus        *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
 	ActiveServiceStatus  *RayServiceStatusApplyConfiguration `json:"activeServiceStatus,omitempty"`
 	PendingServiceStatus *RayServiceStatusApplyConfiguration `json:"pendingServiceStatus,omitempty"`
-	ServiceStatus        *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
 	NumServeEndpoints    *int32                              `json:"numServeEndpoints,omitempty"`
 	ObservedGeneration   *int64                              `json:"observedGeneration,omitempty"`
-	LastUpdateTime       *metav1.Time                        `json:"lastUpdateTime,omitempty"`
 }
 
 // RayServiceStatusesApplyConfiguration constructs an declarative configuration of the RayServiceStatuses type for use with
 // apply.
 func RayServiceStatuses() *RayServiceStatusesApplyConfiguration {
 	return &RayServiceStatusesApplyConfiguration{}
+}
+
+// WithLastUpdateTime sets the LastUpdateTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LastUpdateTime field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithLastUpdateTime(value v1.Time) *RayServiceStatusesApplyConfiguration {
+	b.LastUpdateTime = &value
+	return b
+}
+
+// WithServiceStatus sets the ServiceStatus field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ServiceStatus field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithServiceStatus(value rayv1.ServiceStatus) *RayServiceStatusesApplyConfiguration {
+	b.ServiceStatus = &value
+	return b
 }
 
 // WithActiveServiceStatus sets the ActiveServiceStatus field in the declarative configuration to the given value
@@ -40,14 +56,6 @@ func (b *RayServiceStatusesApplyConfiguration) WithPendingServiceStatus(value *R
 	return b
 }
 
-// WithServiceStatus sets the ServiceStatus field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ServiceStatus field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithServiceStatus(value rayv1.ServiceStatus) *RayServiceStatusesApplyConfiguration {
-	b.ServiceStatus = &value
-	return b
-}
-
 // WithNumServeEndpoints sets the NumServeEndpoints field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NumServeEndpoints field is set to the value of the last call.
@@ -61,13 +69,5 @@ func (b *RayServiceStatusesApplyConfiguration) WithNumServeEndpoints(value int32
 // If called multiple times, the ObservedGeneration field is set to the value of the last call.
 func (b *RayServiceStatusesApplyConfiguration) WithObservedGeneration(value int64) *RayServiceStatusesApplyConfiguration {
 	b.ObservedGeneration = &value
-	return b
-}
-
-// WithLastUpdateTime sets the LastUpdateTime field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the LastUpdateTime field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithLastUpdateTime(value metav1.Time) *RayServiceStatusesApplyConfiguration {
-	b.LastUpdateTime = &value
 	return b
 }

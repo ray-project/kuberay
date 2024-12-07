@@ -3,15 +3,18 @@ package common
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +34,16 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
+	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName          = "neuron_cores"
+	TPUContainerResourceName           = "google.com/tpu"
+	TPURayResourceName                 = "TPU"
 )
+
+var customAcceleratorToRayResourceMap = map[string]string{
+	NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
+	TPUContainerResourceName:        TPURayResourceName,
+}
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
@@ -101,7 +113,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
-	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "", instance.Annotations)
+	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -122,7 +134,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := corev1.ContainerPort{
@@ -186,7 +198,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 							fi
 							echo "$SECONDS seconds elapsed: Still waiting for GCS to be ready. For troubleshooting, refer to the FAQ at https://github.com/ray-project/kuberay/blob/master/docs/guidance/FAQ.md."
 						fi
-						sleep 5		
+						sleep 5
 					done
 				`, fqdnRayIP, headPort, fqdnRayIP, headPort),
 			},
@@ -221,11 +233,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
-	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP, instance.Annotations)
+	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
-	// If the metrics port does not exist in the Ray container, add a default one for Promethues.
+	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
 		metricsPort := corev1.ContainerPort{
@@ -239,8 +251,18 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
-	rayAgentRayletHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardAgentListenPort, utils.RayAgentRayletHealthPath)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand, utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
+	rayAgentRayletHealthCommand := fmt.Sprintf(
+		utils.BaseWgetHealthCommand,
+		utils.DefaultReadinessProbeTimeoutSeconds,
+		utils.DefaultDashboardAgentListenPort,
+		utils.RayAgentRayletHealthPath,
+	)
+	rayDashboardGCSHealthCommand := fmt.Sprintf(
+		utils.BaseWgetHealthCommand,
+		utils.DefaultReadinessProbeFailureThreshold,
+		utils.DefaultDashboardPort,
+		utils.RayDashboardGCSHealthPath,
+	)
 
 	// Generally, the liveness and readiness probes perform the same checks.
 	// For head node => Check GCS and Raylet status.
@@ -253,9 +275,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.LivenessProbe == nil {
+		probeTimeout := int32(utils.DefaultLivenessProbeTimeoutSeconds)
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = int32(utils.DefaultHeadLivenessProbeTimeoutSeconds)
+		}
+
 		rayContainer.LivenessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultLivenessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultLivenessProbeTimeoutSeconds,
+			TimeoutSeconds:      probeTimeout,
 			PeriodSeconds:       utils.DefaultLivenessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
@@ -264,9 +291,13 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	}
 
 	if rayContainer.ReadinessProbe == nil {
+		probeTimeout := int32(utils.DefaultReadinessProbeTimeoutSeconds)
+		if rayNodeType == rayv1.HeadNode {
+			probeTimeout = int32(utils.DefaultHeadReadinessProbeTimeoutSeconds)
+		}
 		rayContainer.ReadinessProbe = &corev1.Probe{
 			InitialDelaySeconds: utils.DefaultReadinessProbeInitialDelaySeconds,
-			TimeoutSeconds:      utils.DefaultReadinessProbeTimeoutSeconds,
+			TimeoutSeconds:      probeTimeout,
 			PeriodSeconds:       utils.DefaultReadinessProbePeriodSeconds,
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
@@ -278,8 +309,12 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
-			rayServeProxyHealthCommand := fmt.Sprintf(utils.BaseWgetHealthCommand,
-				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort), utils.RayServeProxyHealthPath)
+			rayServeProxyHealthCommand := fmt.Sprintf(
+				utils.BaseWgetHealthCommand,
+				utils.DefaultReadinessProbeInitialDelaySeconds,
+				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
+				utils.RayServeProxyHealthPath,
+			)
 			commands = append(commands, rayServeProxyHealthCommand)
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
@@ -414,14 +449,12 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 			},
 		},
 		Command: []string{
-			"ray",
+			"/bin/bash",
+			"-lc",
+			"--",
 		},
 		Args: []string{
-			"kuberay-autoscaler",
-			"--cluster-name",
-			"$(RAY_CLUSTER_NAME)",
-			"--cluster-namespace",
-			"$(RAY_CLUSTER_NAMESPACE)",
+			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
@@ -486,12 +519,8 @@ func getAutoscalerContainerIndex(pod corev1.Pod) (autoscalerContainerIndex int) 
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, labels map[string]string) (ret map[string]string) {
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	ret = map[string]string{
+func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, overrideLabels map[string]string) map[string]string {
+	labels := map[string]string{
 		utils.RayNodeLabelKey:                   "yes",
 		utils.RayClusterLabelKey:                rayClusterName,
 		utils.RayNodeTypeLabelKey:               string(rayNodeType),
@@ -501,29 +530,23 @@ func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName st
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
 
-	for k, v := range ret {
-		if k == string(rayNodeType) {
-			// overriding invalid values for this label
-			if v != string(rayv1.HeadNode) && v != string(rayv1.WorkerNode) {
-				labels[k] = v
-			}
+	for k, v := range overrideLabels {
+		// The following labels are not overridable
+		// - ray.io/node-type
+		// - ray.io/group
+		// - ray.io/cluster
+		if k == utils.RayNodeTypeLabelKey || k == utils.RayNodeGroupLabelKey || k == utils.RayClusterLabelKey {
+			continue
 		}
-		if k == utils.RayNodeGroupLabelKey {
-			// overriding invalid values for this label
-			if v != groupName {
-				labels[k] = v
-			}
-		}
-		if _, ok := labels[k]; !ok {
-			labels[k] = v
-		}
+
+		labels[k] = v
 	}
 
 	return labels
 }
 
 func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 	// Init containers in both head and worker require FQ_RAY_IP.
@@ -539,7 +562,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
-	if container.Env == nil || len(container.Env) == 0 {
+	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
 	}
 
@@ -665,7 +688,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 	}
 }
 
-func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string, annotations map[string]string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
 	log := ctrl.LoggerFrom(ctx)
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
@@ -718,6 +741,12 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		cpu := resource.Limits[corev1.ResourceCPU]
 		if !cpu.IsZero() {
 			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+		} else {
+			// Fall back to CPU request if limit is not specified
+			cpu := resource.Requests[corev1.ResourceCPU]
+			if !cpu.IsZero() {
+				rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+			}
 		}
 	}
 
@@ -728,15 +757,9 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		}
 	}
 
-	if _, ok := rayStartParams["num-gpus"]; !ok {
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu".
-		for resourceKey, resource := range resource.Limits {
-			if strings.HasSuffix(string(resourceKey), "gpu") && !resource.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resource.Value(), 10)
-				// For now, only support one GPU type. Break on first match.
-				break
-			}
-		}
+	// Add GPU and custom accelerator resources to rayStartParams if not already present.
+	if err := addWellKnownAcceleratorResources(rayStartParams, resource.Limits); err != nil {
+		log.Error(err, "failed to add accelerator resources to rayStartParams")
 	}
 
 	rayStartCmd := ""
@@ -752,12 +775,106 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
+func addWellKnownAcceleratorResources(rayStartParams map[string]string, resourceLimits corev1.ResourceList) error {
+	if len(resourceLimits) == 0 {
+		return nil
+	}
+
+	resourcesMap, err := getResourcesMap(rayStartParams)
+	if err != nil {
+		return fmt.Errorf("failed to get resources map from rayStartParams: %w", err)
+	}
+
+	// Flag to track if any custom accelerator resource are present/added in rayStartParams resources.
+	isCustomAcceleratorResourceAdded := isCustomAcceleratorPresentInResources(resourcesMap)
+
+	// Create a sorted slice of resource keys
+	// Needed for consistent looping and adding first found custom accelerator resource to ray start params
+	sortedResourceKeys := getSortedResourceKeys(resourceLimits)
+
+	for _, resourceKeyString := range sortedResourceKeys {
+		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
+
+		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		if _, ok := rayStartParams["num-gpus"]; !ok {
+			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+			}
+		}
+
+		// Add the first encountered custom accelerator resource from the resource limits to the rayStartParams if not already present
+		if !isCustomAcceleratorResourceAdded {
+			if rayResourceName, ok := customAcceleratorToRayResourceMap[resourceKeyString]; ok && !resourceValue.IsZero() {
+				if _, exists := resourcesMap[rayResourceName]; !exists {
+					resourcesMap[rayResourceName] = resourceValue.AsApproximateFloat64()
+
+					// Update the resources map in the rayStartParams
+					updatedResourcesStr, err := json.Marshal(resourcesMap)
+					if err != nil {
+						return fmt.Errorf("failed to marshal resources map to string: %w", err)
+					}
+
+					rayStartParams["resources"] = fmt.Sprintf("'%s'", updatedResourcesStr)
+				}
+				isCustomAcceleratorResourceAdded = true
+			}
+		}
+	}
+
+	return nil
+}
+
+func isCustomAcceleratorPresentInResources(resourcesMap map[string]float64) bool {
+	// Check whether there exists any custom accelerator resources specified as part of rayStartParams
+	if len(resourcesMap) > 0 {
+		for _, customAcceleratorRayResource := range customAcceleratorToRayResourceMap {
+			if _, ok := resourcesMap[customAcceleratorRayResource]; ok {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func getResourcesMap(rayStartParams map[string]string) (map[string]float64, error) {
+	var resources map[string]float64
+	if resourcesStr, ok := rayStartParams["resources"]; !ok {
+		resources = make(map[string]float64)
+	} else {
+		// Trim any surrounding quotes (single, double, or backticks) and spaces
+		resourcesStr = strings.Trim(resourcesStr, "'\"` ")
+		err := json.Unmarshal([]byte(resourcesStr), &resources)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal resources %w", err)
+		}
+	}
+	return resources, nil
+}
+
+func getSortedResourceKeys(resourceLimits corev1.ResourceList) []string {
+	sortedResourceKeys := make([]string, 0, len(resourceLimits))
+	for resourceKey := range resourceLimits {
+		sortedResourceKeys = append(sortedResourceKeys, string(resourceKey))
+	}
+	sort.Strings(sortedResourceKeys)
+	return sortedResourceKeys
+}
+
 func convertParamMap(rayStartParams map[string]string) (s string) {
+	// Order rayStartParams keys for consistent ray start command flags generation
+	keys := make([]string, 0, len(rayStartParams))
+	for k := range rayStartParams {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	flags := new(bytes.Buffer)
 	// specialParameterOptions' arguments can be true or false.
 	// For example, --log-color can be auto | false | true.
 	specialParameterOptions := []string{"log-color", "include-dashboard"}
-	for option, argument := range rayStartParams {
+	for _, option := range keys {
+		argument := rayStartParams[option]
 		if utils.Contains([]string{"true", "false"}, strings.ToLower(argument)) && !utils.Contains(specialParameterOptions, option) {
 			// booleanOptions: do not require any argument. Essentially represent boolean on-off switches.
 			if strings.ToLower(argument) == "true" {
@@ -776,7 +893,7 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 func addEmptyDir(ctx context.Context, container *corev1.Container, pod *corev1.Pod, volumeName string, volumeMountPath string, storageMedium corev1.StorageMedium) {
 	log := ctrl.LoggerFrom(ctx)
 
-	if checkIfVolumeMounted(container, pod, volumeMountPath) {
+	if checkIfVolumeMounted(container, volumeMountPath) {
 		log.Info("volume already mounted", "volume", volumeName, "path", volumeMountPath)
 		return
 	}
@@ -821,7 +938,7 @@ func makeEmptyDirVolume(container *corev1.Container, volumeName string, storageM
 
 // Checks if the container has a volumeMount with the given mount path and if
 // the pod has a matching Volume.
-func checkIfVolumeMounted(container *corev1.Container, pod *corev1.Pod, volumeMountPath string) bool {
+func checkIfVolumeMounted(container *corev1.Container, volumeMountPath string) bool {
 	for _, mountedVol := range container.VolumeMounts {
 		if mountedVol.MountPath == volumeMountPath {
 			return true

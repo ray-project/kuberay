@@ -2,14 +2,14 @@ package common
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
@@ -90,7 +90,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
 	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
 	if !ok {
-		log.Info(fmt.Sprintf("ingress class annotation is not set for cluster %s/%s", cluster.Namespace, cluster.Name))
+		log.Info("Ingress class annotation is not set for the cluster.", "clusterNamespace", cluster.Namespace, "clusterName", cluster.Name)
 	} else {
 		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
 		ingress.Spec.IngressClassName = &ingressClassName

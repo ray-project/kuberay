@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 // Generate a string of length 200.

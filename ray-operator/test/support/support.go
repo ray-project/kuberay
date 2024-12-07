@@ -7,7 +7,6 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -49,11 +48,4 @@ func init() {
 	gomega.SetDefaultConsistentlyPollingInterval(1 * time.Second)
 	// Disable object truncation on test results
 	format.MaxLength = 0
-}
-
-func NotFound[T any](fn func(g gomega.Gomega) (T, error)) func(g gomega.Gomega) bool {
-	return func(g gomega.Gomega) bool {
-		_, err := fn(g)
-		return k8serrors.IsNotFound(err)
-	}
 }

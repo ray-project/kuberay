@@ -2,7 +2,7 @@ package utils
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // We are not using this for security purposes
 	"encoding/base32"
 	"fmt"
 	"math"
@@ -10,18 +10,22 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -68,6 +72,65 @@ func IsCreated(pod *corev1.Pod) bool {
 	return pod.Status.Phase != ""
 }
 
+func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
+	headPodReadyCondition := metav1.Condition{
+		Type:   string(rayv1.HeadPodReady),
+		Status: metav1.ConditionFalse,
+		Reason: rayv1.UnknownReason,
+	}
+
+	for _, cond := range headPod.Status.Conditions {
+		if cond.Type != corev1.PodReady {
+			continue
+		}
+		// Set the status based on the PodReady condition
+		headPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
+		headPodReadyCondition.Message = cond.Message
+
+		// Determine the reason; default to HeadPodRunningAndReady if the headPod is ready but no specific reason is provided
+		reason := cond.Reason
+		if cond.Status == corev1.ConditionTrue && reason == "" {
+			reason = rayv1.HeadPodRunningAndReady
+		}
+
+		// Update the reason if it's not empty
+		if reason != "" {
+			headPodReadyCondition.Reason = reason
+		}
+
+		// Since we're only interested in the PodReady condition, break after processing it
+		break
+	}
+	return headPodReadyCondition
+}
+
+// FindRayClusterSuspendStatus returns the current suspend status from two conditions:
+//  1. rayv1.RayClusterSuspending
+//  2. rayv1.RayClusterSuspended
+//
+// The two conditions should not be both True at the same time. The transition logic should be the following:
+//
+//	rayv1.RayClusterSuspending:
+//	  False by default
+//	  False -> True: when `spec.Suspend` is true.
+//	  True -> False: when all Pods are deleted, set rayv1.RayClusterSuspended from False to True.
+//	rayv1.RayClusterSuspended
+//	  False by default
+//	  False -> True: when suspending transitions from True to False
+//	  True -> False: when `spec.Suspend` is false.
+//
+// If both rayv1.RayClusterSuspending and rayv1.RayClusterSuspended are False, FindRayClusterSuspendStatus returns "".
+func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) rayv1.RayClusterConditionType {
+	for _, cond := range instance.Status.Conditions {
+		if cond.Type == string(rayv1.RayClusterSuspending) || cond.Type == string(rayv1.RayClusterSuspended) {
+			if cond.Status == metav1.ConditionTrue {
+				return rayv1.RayClusterConditionType(cond.Type)
+			}
+		}
+	}
+	return ""
+}
+
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 func IsRunningAndReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {
@@ -94,12 +157,27 @@ func CheckRouteName(ctx context.Context, s string, n string) string {
 
 	if len(s) > maxLength {
 		// shorten the name
-		log.Info(fmt.Sprintf("route name is too long: len = %v, we will shorten it to = %v\n", len(s), maxLength))
+		log.Info("Route name is too long, we will shorten it to the max length", "nameLength", len(s), "maxLength", maxLength)
 		s = s[:maxLength]
 	}
 
 	// Pass through CheckName for remaining string validations
 	return CheckName(s)
+}
+
+// PodGenerateName returns the value that should be used for a Pod's generateName
+// based on the RayCluster name and node type (head or worker).
+func PodGenerateName(prefix string, nodeType rayv1.RayNodeType) string {
+	maxPrefixLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+
+	var podPrefix string
+	if len(prefix) <= maxPrefixLength {
+		podPrefix = prefix
+	} else {
+		podPrefix = prefix[:maxPrefixLength]
+	}
+
+	return strings.ToLower(podPrefix + DashSymbol + string(nodeType) + DashSymbol)
 }
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
@@ -245,8 +323,8 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		log.Info(fmt.Sprintf("minReplicas (%v) is greater than maxReplicas (%v), using maxReplicas as desired replicas. "+
-			"Please fix this to avoid any unexpected behaviors.", *workerGroupSpec.MinReplicas, *workerGroupSpec.MaxReplicas))
+		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
+			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
 		workerReplicas = *workerGroupSpec.MaxReplicas
 	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
@@ -290,6 +368,22 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 	return count
 }
 
+// CalculateReadyReplicas calculates ready worker replicas at the cluster level
+// A worker is ready if its Pod has a PodCondition with type == Ready and status == True
+func CalculateReadyReplicas(pods corev1.PodList) int32 {
+	count := int32(0)
+	for _, pod := range pods.Items {
+		if val, ok := pod.Labels[RayNodeTypeLabelKey]; !ok || val != string(rayv1.WorkerNode) {
+			continue
+		}
+		if IsRunningAndReady(&pod) {
+			count++
+		}
+	}
+
+	return count
+}
+
 // CalculateAvailableReplicas calculates available worker replicas at the cluster level
 // A worker is available if its Pod is running
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
@@ -308,10 +402,10 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
-	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		podResource := calculatePodResource(nodeGroup.Template.Spec)
+		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)
 		}
@@ -321,10 +415,10 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
-	headPodResource := calculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		podResource := calculatePodResource(nodeGroup.Template.Spec)
+		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)
 		}
@@ -332,9 +426,9 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	return sumResourceList(minResourcesList)
 }
 
-// calculatePodResource returns the total resources of a pod.
+// CalculatePodResource returns the total resources of a pod.
 // Request values take precedence over limit values.
-func calculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
+func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
 		containerResource := container.Resources.Requests
@@ -356,6 +450,14 @@ func calculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 		}
 	}
 	return podResource
+}
+
+func ConvertResourceListToMapString(resourceList corev1.ResourceList) map[string]resource.Quantity {
+	result := make(map[string]resource.Quantity)
+	for key, value := range resourceList {
+		result[string(key)] = value
+	}
+	return result
 }
 
 func sumResourceList(list []corev1.ResourceList) corev1.ResourceList {
@@ -401,12 +503,12 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 	}
 	for _, pod := range runningPods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
-			log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not running; Pod Name: %s; Pod Status.Phase: %v", pod.Name, pod.Status.Phase))
+			log.Info("CheckAllPodsRunning: Pod is not running.", "podName", pod.Name, "pod Status.Phase", pod.Status.Phase)
 			return false
 		}
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == corev1.PodReady && cond.Status != corev1.ConditionTrue {
-				log.Info(fmt.Sprintf("CheckAllPodsRunning: Pod is not ready; Pod Name: %s; Pod Status.Conditions[PodReady]: %v", pod.Name, cond))
+				log.Info("CheckAllPodsRunning: Pod is not ready.", "podName", pod.Name, "pod Status.Conditions[PodReady]", cond)
 				return false
 			}
 		}
@@ -436,14 +538,6 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	return reflect.DeepEqual(v1, v2)
 }
 
-func ConvertUnixTimeToMetav1Time(unixTime uint64) *metav1.Time {
-	// The Ray jobInfo returns the start_time, which is a unix timestamp in milliseconds.
-	// https://docs.ray.io/en/latest/cluster/jobs-package-ref.html#jobinfo
-	t := time.Unix(int64(unixTime)/1000, int64(unixTime)%1000*1000000)
-	kt := metav1.NewTime(t)
-	return &kt
-}
-
 // Json-serializes obj and returns its hash string
 func GenerateJsonHash(obj interface{}) (string, error) {
 	serialObj, err := json.Marshal(obj)
@@ -451,10 +545,10 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 		return "", err
 	}
 
-	hashBytes := sha1.Sum(serialObj)
+	hashBytes := sha1.Sum(serialObj) //nolint:gosec // We are not using this for security purposes
 
 	// Convert to an ASCII string
-	hashStr := string(base32.HexEncoding.EncodeToString(hashBytes[:]))
+	hashStr := base32.HexEncoding.EncodeToString(hashBytes[:])
 
 	return hashStr, nil
 }
@@ -501,4 +595,9 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 		}
 	}
 	return corev1.EnvVar{}, false
+}
+
+type ClientProvider interface {
+	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }

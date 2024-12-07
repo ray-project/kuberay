@@ -21,15 +21,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 )
 
 var _ = Context("RayJob with suspend operation", func() {
-	Describe("When creating a rayjob with suspend == true", func() {
+	Describe("When creating a rayjob with suspend == true", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := &rayv1.RayCluster{}
@@ -101,7 +102,7 @@ var _ = Context("RayJob with suspend operation", func() {
 		})
 	})
 
-	Describe("RayJob suspend operation shoud be atomic", func() {
+	Describe("RayJob suspend operation shoud be atomic", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-atomic-suspend", namespace)

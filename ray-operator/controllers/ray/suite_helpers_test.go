@@ -9,11 +9,12 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 
 	"github.com/onsi/gomega"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
@@ -30,7 +31,7 @@ func listResourceFunc(ctx context.Context, workerPods *corev1.PodList, opt ...cl
 
 		count := 0
 		for _, aPod := range workerPods.Items {
-			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && aPod.DeletionTimestamp == nil {
+			if (reflect.DeepEqual(aPod.Status.Phase, corev1.PodRunning) || reflect.DeepEqual(aPod.Status.Phase, corev1.PodPending)) && (aPod.DeletionTimestamp == nil || len(aPod.Finalizers) != 0) {
 				count++
 			}
 		}
@@ -45,11 +46,21 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
 			log.Fatal(err)
 		}
-		return cluster.Status.State
+		return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	}
 }
 
-func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt ...client.ListOption) bool {
+func getClusterStatus(ctx context.Context, namespace string, clusterName string) func() rayv1.RayClusterStatus {
+	return func() rayv1.RayClusterStatus {
+		var cluster rayv1.RayCluster
+		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
+			log.Fatal(err)
+		}
+		return cluster.Status
+	}
+}
+
+func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt []client.ListOption) bool {
 	err := k8sClient.List(ctx, &podlist, opt...)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "failed to list Pods")
 	for _, pod := range podlist.Items {
@@ -60,14 +71,14 @@ func isAllPodsRunningByFilters(ctx context.Context, podlist corev1.PodList, opt 
 	return true
 }
 
-func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, workerGroupIndex int) {
+func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster) {
 	// Updating WorkersToDelete is the responsibility of the Ray Autoscaler. In this function,
 	// we simulate the behavior of the Ray Autoscaler after the scaling process has finished.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		gomega.Eventually(
 			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
 			time.Second*9, time.Millisecond*500).Should(gomega.BeNil(), "raycluster = %v", rayCluster)
-		rayCluster.Spec.WorkerGroupSpecs[workerGroupIndex].ScaleStrategy.WorkersToDelete = []string{}
+		rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 		return k8sClient.Update(ctx, rayCluster)
 	})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to clean up WorkersToDelete")
@@ -75,10 +86,28 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster, w
 
 func getRayJobDeploymentStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (rayv1.JobDeploymentStatus, error) {
 	return func() (rayv1.JobDeploymentStatus, error) {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
 			return "", err
 		}
 		return rayJob.Status.JobDeploymentStatus, nil
+	}
+}
+
+func getRayJobSucceededStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Succeeded, nil
+	}
+}
+
+func getRayJobFailedStatus(ctx context.Context, rayJob *rayv1.RayJob) func() (int32, error) {
+	return func() (int32, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: "default"}, rayJob); err != nil {
+			return 0, err
+		}
+		return *rayJob.Status.Failed, nil
 	}
 }
 
@@ -229,8 +258,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, 
 
 	// Make sure the head Pod is updated.
 	gomega.Eventually(
-		isAllPodsRunningByFilters(ctx, headPods, headLabels...),
-		time.Second*15, time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
+		isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headLabels).WithTimeout(time.Second*15).WithPolling(time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
 }
 
 // Update the status of the worker Pods to Running and Ready. Similar to updateHeadPodToRunningAndReady.
@@ -246,7 +274,7 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 
 	gomega.Eventually(
 		listResourceFunc(ctx, &workerPods, workerLabels...),
-		time.Second*3, time.Millisecond*500).Should(gomega.Equal(int(numWorkerPods)), "workerGroup: %v", workerPods.Items)
+		time.Second*3, time.Millisecond*500).Should(gomega.Equal(numWorkerPods), "workerGroup: %v", workerPods.Items)
 
 	for _, pod := range workerPods.Items {
 		pod.Status.Phase = corev1.PodRunning
@@ -262,8 +290,7 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 
 	// Make sure all worker Pods are updated.
 	gomega.Eventually(
-		isAllPodsRunningByFilters(ctx, workerPods, workerLabels...),
-		time.Second*3, time.Millisecond*500).Should(gomega.BeTrue(), "Worker Pods should be running: %v", workerPods.Items)
+		isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerLabels).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(gomega.BeTrue(), "Worker Pods should be running: %v", workerPods.Items)
 }
 
 func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend bool) error {
@@ -273,6 +300,17 @@ func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend
 			return err
 		}
 		rayJob.Spec.Suspend = suspend
+		return k8sClient.Update(ctx, rayJob)
+	})
+}
+
+func setJobIdOnRayJob(ctx context.Context, rayJob *rayv1.RayJob, jobId string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
+		if err != nil {
+			return err
+		}
+		rayJob.Spec.JobId = jobId
 		return k8sClient.Update(ctx, rayJob)
 	})
 }

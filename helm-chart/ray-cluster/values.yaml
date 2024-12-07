@@ -20,7 +20,7 @@ imagePullSecrets: []
 common:
   # containerEnv specifies environment variables for the Ray head and worker containers.
   # Follows standard K8s container env schema.
-  containerEnv: {}
+  containerEnv: []
   #  - name: BLAH
   #    value: VAL
 head:
@@ -56,6 +56,7 @@ head:
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
+  restartPolicy: ""
   rayStartParams:
     dashboard-host: '0.0.0.0'
   # containerEnv specifies environment variables for the Ray container,
@@ -89,6 +90,8 @@ head:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Pod security context.
+  podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
@@ -113,6 +116,19 @@ head:
     #   annotations:
     #     prometheus.io/scrape: "true"
 
+  # Custom pod DNS configuration
+  # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+  # dnsConfig:
+  #   nameservers:
+  #     - 8.8.8.8
+  #   searches:
+  #     - example.local
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+  #     - name: edns0
+  topologySpreadConstraints: {}
+
 
 worker:
   # If you want to disable the default workergroup
@@ -124,6 +140,7 @@ worker:
   maxReplicas: 3
   labels: {}
   serviceAccountName: ""
+  restartPolicy: ""
   rayStartParams: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
@@ -155,6 +172,8 @@ worker:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # Pod security context.
+  podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
@@ -172,6 +191,20 @@ worker:
   # container command for worker Pod.
   command: []
   args: []
+  topologySpreadConstraints: {}
+
+
+  # Custom pod DNS configuration
+  # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+  # dnsConfig:
+  #   nameservers:
+  #     - 8.8.8.8
+  #   searches:
+  #     - example.local
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+  #     - name: edns0
 
 # The map's key is used as the groupName.
 # For example, key:small-group in the map below
@@ -185,6 +218,7 @@ additionalWorkerGroups:
     maxReplicas: 3
     labels: {}
     serviceAccountName: ""
+    restartPolicy: ""
     rayStartParams: {}
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.
@@ -216,6 +250,8 @@ additionalWorkerGroups:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    # Pod security context.
+    podSecurityContext: {}
     # Ray container security context.
     securityContext: {}
     # Optional: The following volumes/volumeMounts configurations are optional but recommended because
@@ -231,6 +267,18 @@ additionalWorkerGroups:
     # container command for worker Pod.
     command: []
     args: []
+
+    # Custom pod DNS configuration
+    # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
+    # dnsConfig:
+    #   nameservers:
+    #     - 8.8.8.8
+    #   searches:
+    #     - example.local
+    #   options:
+    #     - name: ndots
+    #       value: "2"
+    #     - name: edns0
 
 # Configuration for Head's Kubernetes Service
 service:

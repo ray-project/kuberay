@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thank you for reporting the problem!
-        Please make sure what you are reporting is a bug with reproducible steps. 
+        Please make sure what you are reporting is a bug with reproducible steps.
 
   - type: checkboxes
     attributes:

@@ -19,7 +19,7 @@ var clientStreamDescForProxying = &grpc.StreamDesc{
 }
 
 // RegisterService sets up a proxy handler for a particular gRPC service and method.
-// The behaviour is the same as if you were registering a handler method, e.g. from a generated pb.go file.
+// The behavior is the same as if you were registering a handler method, e.g. from a generated pb.go file.
 func RegisterService(server *grpc.Server, director StreamDirector, serviceName string, methodNames ...string) *handler {
 	streamer := &handler{director: director, securityheader: nil}
 	fakeDesc := &grpc.ServiceDesc{
@@ -76,11 +76,11 @@ func (s *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 			if v, exists := header[h_name]; exists {
 				// Authentication header exists
 				if v[0] != strings.ToLower(header_value) {
-					return status.Error(codes.Unauthenticated, "Request unauthorised")
+					return status.Error(codes.Unauthenticated, "Request unauthorized")
 				}
 			} else {
 				// Authentication header does not exist
-				return status.Error(codes.Unauthenticated, "Request unauthorised")
+				return status.Error(codes.Unauthenticated, "Request unauthorized")
 			}
 		}
 	}

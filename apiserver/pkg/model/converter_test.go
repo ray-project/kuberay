@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var (
@@ -69,8 +71,9 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-head",
-					Image: "blublinsky1/ray310:2.5.0",
+					Name:            "ray-head",
+					Image:           "blublinsky1/ray310:2.5.0",
+					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -116,6 +119,13 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 							},
 						},
 					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -124,24 +134,26 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 
 var configMapWithoutTolerations = corev1.ConfigMap{
 	Data: map[string]string{
-		"cpu":             "4",
-		"gpu":             "0",
-		"gpu_accelerator": "",
-		"memory":          "8",
-		"name":            "head-node-template",
-		"namespace":       "max",
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
 	},
 }
 
 var configMapWithTolerations = corev1.ConfigMap{
 	Data: map[string]string{
-		"cpu":             "4",
-		"gpu":             "0",
-		"gpu_accelerator": "",
-		"memory":          "8",
-		"name":            "head-node-template",
-		"namespace":       "max",
-		"tolerations":     "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
+		"tolerations":        "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
 	},
 }
 
@@ -220,6 +232,13 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 							Value: "1",
 						},
 					},
+					SecurityContext: &corev1.SecurityContext{
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{
+								"SYS_PTRACE",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -255,11 +274,11 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
 			workerSpecTest,
 		},
-		EnableInTreeAutoscaling: pointer.Bool(true),
+		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: pointer.Int32(int32(60)),
-			UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
-			ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+			IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
+			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -346,6 +365,30 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 	},
 }
 
+var JobWithOutputTest = rayv1api.RayJob{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test",
+		Namespace: "test",
+		Labels: map[string]string{
+			"ray.io/user": "user",
+		},
+	},
+	Spec: rayv1api.RayJobSpec{
+		Entrypoint:              "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:          "mytest yaml",
+		TTLSecondsAfterFinished: secondsValue,
+		RayClusterSpec:          &ClusterSpecTest.Spec,
+	},
+	Status: rayv1api.RayJobStatus{
+		JobStatus:           "RUNNING",
+		JobDeploymentStatus: "Initializing",
+		Message:             "Job is currently running",
+		RayClusterName:      "raycluster-sample-xxxxx",
+		StartTime:           &metav1.Time{Time: time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC)},
+		EndTime:             nil,
+	},
+}
+
 var ServiceV2Test = rayv1api.RayService{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test",
@@ -362,10 +405,10 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: pointer.Int32(int32(60)),
-	UpscalingMode:      (*rayv1api.UpscalingMode)(pointer.String("Default")),
-	Image:              pointer.String("Some Image"),
-	ImagePullPolicy:    (*corev1.PullPolicy)(pointer.String("Always")),
+	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
+	Image:              ptr.To("Some Image"),
+	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 	Env: []corev1.EnvVar{
 		{
 			Name:  "n1",
@@ -393,13 +436,13 @@ var autoscalerOptions = &rayv1api.AutoscalerOptions{
 			Name:             "vmount1",
 			MountPath:        "path1",
 			ReadOnly:         false,
-			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("None")),
+			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("None")),
 		},
 		{
 			Name:             "vmount2",
 			MountPath:        "path2",
 			ReadOnly:         true,
-			MountPropagation: (*corev1.MountPropagationMode)(pointer.String("HostToContainer")),
+			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("HostToContainer")),
 		},
 	},
 	Resources: &corev1.ResourceRequirements{
@@ -471,6 +514,9 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
 	}
+	if groupSpec.ImagePullPolicy != "Always" {
+		t.Errorf("failed to convert image pull policy")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -479,6 +525,10 @@ func TestPopulateHeadNodeSpec(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedHeadEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedHeadEnv)
+	}
+	// Cannot use deep equal since protobuf locks copying
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
 	}
 }
 
@@ -499,6 +549,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	}
 	if !reflect.DeepEqual(groupSpec.Environment, expectedEnv) {
 		t.Errorf("failed to convert environment, got %v, expected %v", groupSpec.Environment, expectedEnv)
+	}
+	if groupSpec.SecurityContext == nil || groupSpec.SecurityContext.Capabilities == nil || len(groupSpec.SecurityContext.Capabilities.Add) != 1 {
+		t.Errorf("failed to convert security context")
 	}
 }
 
@@ -573,10 +626,24 @@ func TestPopulateTemplate(t *testing.T) {
 		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(template.Tolerations[0]),
 			tolerationToString(&expectedTolerations))
 	}
+
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(
+		t,
+		map[string]uint32{"vpc.amazonaws.com/efa": 32},
+		template.ExtendedResources,
+		"Extended resources mismatch",
+	)
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
-	return "Key: " + toleration.Key + " Operator: " + string(toleration.Operator) + " Effect: " + string(toleration.Effect)
+	return "Key: " + toleration.Key + " Operator: " + string(
+		toleration.Operator,
+	) + " Effect: " + string(
+		toleration.Effect,
+	)
 }
 
 func TestPopulateJob(t *testing.T) {
@@ -608,4 +675,13 @@ func TestPopulateJob(t *testing.T) {
 	assert.Nil(t, job.ClusterSpec)
 	assert.Equal(t, "image", job.JobSubmitter.Image)
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
+
+	job = FromCrdToApiJob(&JobWithOutputTest)
+	fmt.Printf("jobWithOutput = %#v\n", job)
+	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
+	assert.Nil(t, job.EndTime)
+	assert.Equal(t, "RUNNING", job.JobStatus)
+	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
+	assert.Equal(t, "Job is currently running", job.Message)
+	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
 }

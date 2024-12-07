@@ -37,7 +37,12 @@ spec:
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
+          {{- if .Values.logging.sizeLimit }}
+          emptyDir:
+            sizeLimit: {{ .Values.logging.sizeLimit }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -53,11 +58,17 @@ spec:
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
           command:
-            - /manager
+            - {{ .Values.operatorComand }}
           args:
             {{- $argList := list -}}
+            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
+            {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
+            {{- end -}}
+            {{- if .Values.batchScheduler.name -}}
+            {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
+            {{- end -}}
             {{- end -}}
             {{- $watchNamespace := "" -}}
             {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
@@ -81,13 +92,19 @@ spec:
             {{- $argList = append $argList "--log-file-encoder" -}}
             {{- $argList = append $argList .Values.logging.fileEncoder -}}
             {{- end -}}
+            {{- if hasKey .Values "useKubernetesProxy" -}}
+            {{- $argList = append $argList (printf "--use-kubernetes-proxy=%t" .Values.useKubernetesProxy) -}}
+            {{- end -}}
+            {{- if hasKey .Values "leaderElectionEnabled" -}}
+            {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
+            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          env: 
+          env:
           {{- toYaml .Values.env | nindent 12}}
           livenessProbe:
             httpGet:

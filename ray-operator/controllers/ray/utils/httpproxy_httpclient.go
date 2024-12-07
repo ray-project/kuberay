@@ -26,10 +26,9 @@ func GetRayHttpProxyClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func()
 }
 
 type RayHttpProxyClient struct {
-	client       *http.Client
-	httpProxyURL string
-
+	client             *http.Client
 	mgr                ctrl.Manager
+	httpProxyURL       string
 	useKubernetesProxy bool
 }
 
@@ -50,18 +49,19 @@ func (r *RayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, por
 
 // CheckProxyActorHealth checks the health status of the Ray Serve proxy actor.
 func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
-	logger := ctrl.LoggerFrom(ctx)
-	resp, err := r.client.Get(r.httpProxyURL + RayServeProxyHealthPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.httpProxyURL+RayServeProxyHealthPath, nil)
 	if err != nil {
-		logger.Error(err, "CheckProxyActorHealth fails.")
+		return err
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		err := fmt.Errorf("CheckProxyActorHealth fails: Status code is not 200")
-		logger.Error(err, "CheckProxyActorHealth fails.", "status code", resp.StatusCode, "status", resp.Status, "body", string(body))
+		err := fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
 		return err
 	}
 

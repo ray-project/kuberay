@@ -10,18 +10,49 @@ import (
 	"time"
 
 	cmap "github.com/orcaman/concurrent-map/v2"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
+
+func TestValidateRayServiceSpec(t *testing.T) {
+	err := validateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					HeadService: &corev1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "my-head-service",
+						},
+					},
+				},
+			},
+		},
+	})
+	assert.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+
+	err = validateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{},
+	})
+	assert.NoError(t, err, "The RayService spec is valid.")
+
+	var upgradeStrat rayv1.RayServiceUpgradeStrategy = "invalidStrategy"
+	err = validateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &upgradeStrat,
+		},
+	})
+	assert.Error(t, err, "spec.UpgradeStrategy is invalid")
+}
 
 func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	// `generateRayClusterJsonHash` will mute fields that will not trigger new RayCluster preparation. For example,
@@ -35,9 +66,9 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{},
 					},
-					Replicas:    pointer.Int32(2),
-					MinReplicas: pointer.Int32(1),
-					MaxReplicas: pointer.Int32(4),
+					Replicas:    ptr.To[int32](2),
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
 				},
 			},
 		},
@@ -63,9 +94,10 @@ func TestGetClusterAction(t *testing.T) {
 		RayVersion: "2.9.0",
 		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 			{
-				Replicas:    pointer.Int32(2),
-				MinReplicas: pointer.Int32(1),
-				MaxReplicas: pointer.Int32(4),
+				Replicas:    ptr.To[int32](2),
+				MinReplicas: ptr.To[int32](1),
+				MaxReplicas: ptr.To[int32](4),
+				GroupName:   "worker-group-1",
 			},
 		},
 	}
@@ -84,7 +116,7 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 3: Different WorkerGroupSpecs should lead to RolloutNew.
 	clusterSpec3 := clusterSpec1.DeepCopy()
-	clusterSpec3.WorkerGroupSpecs[0].MinReplicas = pointer.Int32(5)
+	clusterSpec3.WorkerGroupSpecs[0].GroupName = "worker-group-2"
 	action, err = getClusterAction(clusterSpec1, *clusterSpec3)
 	assert.Nil(t, err)
 	assert.Equal(t, RolloutNew, action)
@@ -92,9 +124,9 @@ func TestGetClusterAction(t *testing.T) {
 	// Test Case 4: Adding a new WorkerGroupSpec should lead to Update.
 	clusterSpec4 := clusterSpec1.DeepCopy()
 	clusterSpec4.WorkerGroupSpecs = append(clusterSpec4.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec4)
 	assert.Nil(t, err)
@@ -109,18 +141,18 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 6: Only changing the number of replicas should lead to DoNothing.
 	clusterSpec6 := clusterSpec1.DeepCopy()
-	clusterSpec6.WorkerGroupSpecs[0].Replicas = pointer.Int32(3)
+	clusterSpec6.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
 	action, err = getClusterAction(clusterSpec1, *clusterSpec6)
 	assert.Nil(t, err)
 	assert.Equal(t, DoNothing, action)
 
 	// Test Case 7: Only changing the number of replicas in an existing WorkerGroupSpec *and* adding a new WorkerGroupSpec should lead to Update.
 	clusterSpec7 := clusterSpec1.DeepCopy()
-	clusterSpec7.WorkerGroupSpecs[0].Replicas = pointer.Int32(3)
+	clusterSpec7.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
 	clusterSpec7.WorkerGroupSpecs = append(clusterSpec7.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec7)
 	assert.Nil(t, err)
@@ -129,14 +161,14 @@ func TestGetClusterAction(t *testing.T) {
 	// Test Case 8: Adding two new WorkerGroupSpecs should lead to Update.
 	clusterSpec8 := clusterSpec1.DeepCopy()
 	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(3),
-		MinReplicas: pointer.Int32(2),
-		MaxReplicas: pointer.Int32(5),
+		Replicas:    ptr.To[int32](3),
+		MinReplicas: ptr.To[int32](2),
+		MaxReplicas: ptr.To[int32](5),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec8)
 	assert.Nil(t, err)
@@ -144,11 +176,11 @@ func TestGetClusterAction(t *testing.T) {
 
 	// Test Case 9: Changing an existing WorkerGroupSpec outside of Replicas/WorkersToDelete *and* adding a new WorkerGroupSpec should lead to RolloutNew.
 	clusterSpec9 := clusterSpec1.DeepCopy()
-	clusterSpec9.WorkerGroupSpecs[0].MaxReplicas = pointer.Int32(5)
+	clusterSpec9.WorkerGroupSpecs[0].GroupName = "worker-group-3"
 	clusterSpec9.WorkerGroupSpecs = append(clusterSpec9.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    pointer.Int32(2),
-		MinReplicas: pointer.Int32(1),
-		MaxReplicas: pointer.Int32(4),
+		Replicas:    ptr.To[int32](2),
+		MinReplicas: ptr.To[int32](1),
+		MaxReplicas: ptr.To[int32](4),
 	})
 	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
 	assert.Nil(t, err)
@@ -635,7 +667,7 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 		Client:       fakeClient,
 		Recorder:     &record.FakeRecorder{},
 		Scheme:       scheme.Scheme,
-		ServeConfigs: cmap.New[string](),
+		ServeConfigs: cmap.New[cmap.ConcurrentMap[string, string]](),
 	}
 
 	namespace := "ray"
@@ -671,22 +703,21 @@ applications:
 	// Test 1: The RayCluster is new, and this is the first reconciliation after the RayCluster becomes ready.
 	// No Serve application has been created yet, so the RayService's serve configuration has not been cached in
 	// `r.ServeConfigs`.
-	cacheKey := r.generateConfigKey(&rayService, cluster.Name)
-	_, exist := r.ServeConfigs.Get(cacheKey)
-	assert.False(t, exist)
+	serveConfig := r.getServeConfigFromCache(&rayService, cluster.Name)
+	assert.Empty(t, serveConfig)
 	shouldCreate := r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 2: The RayCluster is not new, but the head Pod without GCS FT-enabled crashes and restarts.
 	// Hence, the RayService's Serve application status is empty, but the KubeRay operator has cached the Serve
 	// application's configuration.
-	r.ServeConfigs.Set(cacheKey, rayService.Spec.ServeConfigV2) // Simulate the Serve application's configuration has been cached.
+	r.cacheServeConfig(&rayService, cluster.Name) // Simulate the Serve application's configuration has been cached.
 	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
 	assert.True(t, shouldCreate)
 
 	// Test 3: The Serve application has been created, and the RayService's status has been updated.
-	_, exist = r.ServeConfigs.Get(cacheKey)
-	assert.True(t, exist)
+	serveConfig = r.getServeConfigFromCache(&rayService, cluster.Name)
+	assert.NotEmpty(t, serveConfig)
 	serveStatus := rayv1.RayServiceStatus{
 		Applications: map[string]rayv1.AppStatus{
 			"myapp": {
@@ -732,15 +763,19 @@ func TestReconcileRayCluster(t *testing.T) {
 			Annotations: map[string]string{
 				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
 				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
 			},
 		},
 	}
 
 	tests := map[string]struct {
-		activeCluster           *rayv1.RayCluster
-		updateRayClusterSpec    bool
-		enableZeroDowntime      bool
-		shouldPrepareNewCluster bool
+		activeCluster             *rayv1.RayCluster
+		rayServiceUpgradeStrategy rayv1.RayServiceUpgradeStrategy
+		kubeRayVersion            string
+		updateRayClusterSpec      bool
+		enableZeroDowntime        bool
+		shouldPrepareNewCluster   bool
+		updateKubeRayVersion      bool
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
@@ -763,8 +798,8 @@ func TestReconcileRayCluster(t *testing.T) {
 			enableZeroDowntime:      true,
 			shouldPrepareNewCluster: true,
 		},
-		// Test 4: The active cluster exists. Trigger the zero-downtime upgrade.
-		"Zero-downtime upgrade is disabled. The active cluster exists. Trigger the zero-downtime upgrade.": {
+		// Test 4: The active cluster exists. Zero-downtime upgrade is false, should not trigger zero-downtime upgrade.
+		"Zero-downtime upgrade is disabled. The active cluster exists. Does not trigger the zero-downtime upgrade.": {
 			activeCluster:           activeCluster.DeepCopy(),
 			updateRayClusterSpec:    true,
 			enableZeroDowntime:      false,
@@ -777,6 +812,56 @@ func TestReconcileRayCluster(t *testing.T) {
 			enableZeroDowntime:      false,
 			shouldPrepareNewCluster: true,
 		},
+		// Test 6: If the active KubeRay version doesn't match the KubeRay version annotation on the RayCluster, update the RayCluster's hash and KubeRay version
+		// annotations first before checking whether to trigger a zero downtime upgrade. This behavior occurs because when we upgrade the KubeRay CRD, the hash
+		// generated by different KubeRay versions may differ, which can accidentally trigger a zero downtime upgrade.
+		"Active RayCluster exists. KubeRay version is mismatched. Update the RayCluster.": {
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: false,
+			updateKubeRayVersion:    true,
+			kubeRayVersion:          "new-version",
+		},
+		// Test 7: Zero downtime upgrade is enabled, but is enabled through the RayServiceSpec
+		"Zero-downtime upgrade enabled. The active cluster exist. Zero-downtime upgrade is triggered through RayServiceSpec.": {
+			activeCluster:             activeCluster.DeepCopy(),
+			updateRayClusterSpec:      true,
+			enableZeroDowntime:        true,
+			shouldPrepareNewCluster:   true,
+			rayServiceUpgradeStrategy: rayv1.NewCluster,
+		},
+		// Test 8: Zero downtime upgrade is enabled. Env var is set to false but RayServiceSpec is set to NewCluster. Trigger the zero-downtime upgrade.
+		"Zero-downtime upgrade is enabled through RayServiceSpec and not through env var. Active cluster exist. Trigger the zero-downtime upgrade.": {
+			activeCluster:             activeCluster.DeepCopy(),
+			updateRayClusterSpec:      true,
+			enableZeroDowntime:        false,
+			shouldPrepareNewCluster:   true,
+			rayServiceUpgradeStrategy: rayv1.NewCluster,
+		},
+		// Test 9: Zero downtime upgrade is disabled. Env var is set to true but RayServiceSpec is set to None.
+		"Zero-downtime upgrade is disabled. Env var is set to true but RayServiceSpec is set to None.": {
+			activeCluster:             activeCluster.DeepCopy(),
+			updateRayClusterSpec:      true,
+			enableZeroDowntime:        true,
+			shouldPrepareNewCluster:   false,
+			rayServiceUpgradeStrategy: rayv1.None,
+		},
+		// Test 10: Zero downtime upgrade is enabled. Neither the env var nor the RayServiceSpec is set. Trigger the zero-downtime upgrade.
+		"Zero-downtime upgrade is enabled. Neither the env var nor the RayServiceSpec is set.": {
+			activeCluster:             nil,
+			updateRayClusterSpec:      true,
+			shouldPrepareNewCluster:   true,
+			rayServiceUpgradeStrategy: "",
+		},
+		// Test 11: Zero downtime upgrade is disabled. Both the env var and the RayServiceSpec is set to disable zero-downtime upgrade.
+		"Zero-downtime upgrade is disabled by both env var and RayServiceSpec.": {
+			activeCluster:             activeCluster.DeepCopy(),
+			updateRayClusterSpec:      true,
+			enableZeroDowntime:        false,
+			shouldPrepareNewCluster:   false,
+			rayServiceUpgradeStrategy: rayv1.None,
+		},
 	}
 
 	for name, tc := range tests {
@@ -788,13 +873,21 @@ func TestReconcileRayCluster(t *testing.T) {
 			}
 			runtimeObjects := []runtime.Object{}
 			if tc.activeCluster != nil {
+				// Update 'ray.io/kuberay-version' to a new version if kubeRayVersion is set.
+				if tc.updateKubeRayVersion {
+					tc.activeCluster.Annotations[utils.KubeRayVersion] = tc.kubeRayVersion
+				}
 				runtimeObjects = append(runtimeObjects, tc.activeCluster.DeepCopy())
 			}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			r := RayServiceReconciler{
 				Client: fakeClient,
+				Scheme: newScheme,
 			}
 			service := rayService.DeepCopy()
+			if tc.rayServiceUpgradeStrategy != "" {
+				service.Spec.UpgradeStrategy = &tc.rayServiceUpgradeStrategy
+			}
 			if tc.updateRayClusterSpec {
 				service.Spec.RayClusterSpec.RayVersion = "new-version"
 			}
@@ -802,8 +895,13 @@ func TestReconcileRayCluster(t *testing.T) {
 				service.Status.ActiveServiceStatus.RayClusterName = tc.activeCluster.Name
 			}
 			assert.Equal(t, "", service.Status.PendingServiceStatus.RayClusterName)
-			_, _, err = r.reconcileRayCluster(ctx, service)
+			activeRayCluster, _, err := r.reconcileRayCluster(ctx, service)
 			assert.Nil(t, err)
+
+			// If the KubeRay version has changed, check that the RayCluster annotations have been updated to the correct version.
+			if tc.updateKubeRayVersion && activeRayCluster != nil {
+				assert.Equal(t, utils.KUBERAY_VERSION, activeRayCluster.Annotations[utils.KubeRayVersion])
+			}
 
 			// If KubeRay operator is preparing a new cluster, the `PendingServiceStatus.RayClusterName` should be set by calling the function `markRestart`.
 			if tc.shouldPrepareNewCluster {

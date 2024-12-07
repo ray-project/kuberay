@@ -74,6 +74,21 @@ func TestValidateClusterSpec(t *testing.T) {
 			expectedError: util.NewInvalidInputError("HeadGroupSpec RayStartParams is empty. Please specify values."),
 		},
 		{
+			name: "A head group with A wrong image pull policy",
+			clusterSpec: &api.ClusterSpec{
+				HeadGroupSpec: &api.HeadGroupSpec{
+					ComputeTemplate: "a template",
+					RayStartParams: map[string]string{
+						"dashboard-host":      "0.0.0.0",
+						"metrics-export-port": "8080",
+					},
+					ImagePullPolicy: "foo",
+				},
+				WorkerGroupSpec: []*api.WorkerGroupSpec{},
+			},
+			expectedError: util.NewInvalidInputError("HeadGroupSpec unsupported value for Image pull policy. Please specify Always or IfNotPresent"),
+		},
+		{
 			name: "An empty worker group",
 			clusterSpec: &api.ClusterSpec{
 				HeadGroupSpec: &api.HeadGroupSpec{

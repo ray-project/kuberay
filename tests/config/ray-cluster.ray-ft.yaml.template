@@ -150,7 +150,7 @@ data:
 
     # 0: Wait until only 1 head Pod is alive
     print("Wait until only 1 head Pod is alive", flush=True)
-    for i in range(90): 
+    for i in range(90):
       nodes = list_nodes()
       num_alive_heads = 0
       for node in nodes:

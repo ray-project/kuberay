@@ -136,7 +136,7 @@ class RayClusterApi:
                 else:
                     log.error("error fetching custom resource: {}".format(e))
                     return None
-            
+
             if resource["status"]:
                     return resource["status"]
             else:
@@ -177,7 +177,7 @@ class RayClusterApi:
                 else:
                     log.error("error fetching custom resource: {}".format(e))
                     return None
-            
+
             if resource["status"]:
                     return resource["status"]
             else:
@@ -208,13 +208,13 @@ class RayClusterApi:
         #TODO: once we add State to Status, we should check for that as well  <if status and status["state"] == "Running":>
         if status and status["head"] and status["head"]["serviceIP"]:
             return True
- 
+
         log.info("raycluster {} status is not running yet, current status is {}".format(name, status["state"] if status else "unknown"))
         return False
 
 
 
-    
+
 
     def create_ray_cluster(self, body: Any, k8s_namespace: str = "default") -> Any:
         """Create a new Ray cluster custom resource.

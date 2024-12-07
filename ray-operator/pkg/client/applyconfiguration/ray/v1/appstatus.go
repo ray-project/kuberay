@@ -9,32 +9,16 @@ import (
 // AppStatusApplyConfiguration represents an declarative configuration of the AppStatus type for use
 // with apply.
 type AppStatusApplyConfiguration struct {
-	Status               *string                                            `json:"status,omitempty"`
-	Message              *string                                            `json:"message,omitempty"`
 	HealthLastUpdateTime *v1.Time                                           `json:"healthLastUpdateTime,omitempty"`
 	Deployments          map[string]ServeDeploymentStatusApplyConfiguration `json:"serveDeploymentStatuses,omitempty"`
+	Status               *string                                            `json:"status,omitempty"`
+	Message              *string                                            `json:"message,omitempty"`
 }
 
 // AppStatusApplyConfiguration constructs an declarative configuration of the AppStatus type for use with
 // apply.
 func AppStatus() *AppStatusApplyConfiguration {
 	return &AppStatusApplyConfiguration{}
-}
-
-// WithStatus sets the Status field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Status field is set to the value of the last call.
-func (b *AppStatusApplyConfiguration) WithStatus(value string) *AppStatusApplyConfiguration {
-	b.Status = &value
-	return b
-}
-
-// WithMessage sets the Message field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Message field is set to the value of the last call.
-func (b *AppStatusApplyConfiguration) WithMessage(value string) *AppStatusApplyConfiguration {
-	b.Message = &value
-	return b
 }
 
 // WithHealthLastUpdateTime sets the HealthLastUpdateTime field in the declarative configuration to the given value
@@ -56,5 +40,21 @@ func (b *AppStatusApplyConfiguration) WithDeployments(entries map[string]ServeDe
 	for k, v := range entries {
 		b.Deployments[k] = v
 	}
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *AppStatusApplyConfiguration) WithStatus(value string) *AppStatusApplyConfiguration {
+	b.Status = &value
+	return b
+}
+
+// WithMessage sets the Message field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Message field is set to the value of the last call.
+func (b *AppStatusApplyConfiguration) WithMessage(value string) *AppStatusApplyConfiguration {
+	b.Message = &value
 	return b
 }

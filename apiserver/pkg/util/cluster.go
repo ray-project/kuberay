@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-
-	klog "k8s.io/klog/v2"
+	"strings"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type RayCluster struct {
@@ -143,11 +143,37 @@ func buildNodeGroupAnnotations(computeTemplate *api.ComputeTemplate, image strin
 	return annotations
 }
 
+// Add resource to container
+func addResourceToContainer(container *corev1.Container, resourceName string, quantity uint32) {
+	if quantity == 0 {
+		return
+	}
+	quantityStr := fmt.Sprint(quantity)
+	resourceQuantity := resource.MustParse(quantityStr)
+
+	if container.Resources.Requests == nil {
+		container.Resources.Requests = make(corev1.ResourceList)
+	}
+	if container.Resources.Limits == nil {
+		container.Resources.Limits = make(corev1.ResourceList)
+	}
+
+	container.Resources.Requests[corev1.ResourceName(resourceName)] = resourceQuantity
+	container.Resources.Limits[corev1.ResourceName(resourceName)] = resourceQuantity
+}
+
 // Build head node template
 func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.HeadGroupSpec, computeRuntime *api.ComputeTemplate, enableServeService bool) (*corev1.PodTemplateSpec, error) {
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
+	}
+
+	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only
+	// Overwrite it if it is Always
+	imagePullPolicy := corev1.PullIfNotPresent
+	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
+		imagePullPolicy = corev1.PullAlways
 	}
 
 	// calculate resources
@@ -170,8 +196,9 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			Tolerations: []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-head",
-					Image: image,
+					Name:            "ray-head",
+					Image:           image,
+					ImagePullPolicy: imagePullPolicy,
 					Env: []corev1.EnvVar{
 						{
 							Name: "MY_POD_IP",
@@ -212,7 +239,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 							corev1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
-					VolumeMounts: volMounts,
+					VolumeMounts:    volMounts,
+					SecurityContext: buildSecurityContext(spec.SecurityContext),
 				},
 			},
 			Volumes: vols,
@@ -222,15 +250,18 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 	// We are filtering container by name `ray-head`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-head"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+			addResourceToContainer(&container, accelerator, gpu)
 		}
+
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
+		}
+
 		globalEnv := convertEnvironmentVariables(envs)
 		if len(globalEnv) > 0 {
 			container.Env = append(container.Env, globalEnv...)
@@ -392,6 +423,13 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		image = spec.Image
 	}
 
+	// Image pull policy. Kubernetes default image pull policy IfNotPresent, so we here only
+	// Overwrite it if it is Always
+	imagePullPolicy := corev1.PullIfNotPresent
+	if len(spec.ImagePullPolicy) > 0 && strings.ToLower(spec.ImagePullPolicy) == "always" {
+		imagePullPolicy = corev1.PullAlways
+	}
+
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
@@ -412,8 +450,9 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			Tolerations: []corev1.Toleration{},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-worker",
-					Image: image,
+					Name:            "ray-worker",
+					Image:           image,
+					ImagePullPolicy: imagePullPolicy,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "RAY_DISABLE_DOCKER_CPU_WARNING",
@@ -446,7 +485,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "requests.cpu",
+									Resource:      "requests.memory",
 								},
 							},
 						},
@@ -455,7 +494,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							ValueFrom: &corev1.EnvVarSource{
 								ResourceFieldRef: &corev1.ResourceFieldSelector{
 									ContainerName: "ray-worker",
-									Resource:      "limits.cpu",
+									Resource:      "limits.memory",
 								},
 							},
 						},
@@ -500,7 +539,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 							corev1.ResourceMemory: resource.MustParse(memory),
 						},
 					},
-					VolumeMounts: volMounts,
+					VolumeMounts:    volMounts,
+					SecurityContext: buildSecurityContext(spec.SecurityContext),
 				},
 			},
 			Volumes: vols,
@@ -510,16 +550,16 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	// We are filtering container by name `ray-worker`. If container with this name does not exist
 	// (should never happen) we are not adding container specific parameters
 	if container, index, ok := GetContainerByName(podTemplateSpec.Spec.Containers, "ray-worker"); ok {
-		if computeRuntime.GetGpu() != 0 {
-			gpu := computeRuntime.GetGpu()
+		if gpu := computeRuntime.GetGpu(); gpu != 0 {
 			accelerator := "nvidia.com/gpu"
 			if len(computeRuntime.GetGpuAccelerator()) != 0 {
 				accelerator = computeRuntime.GetGpuAccelerator()
 			}
+			addResourceToContainer(&container, accelerator, gpu)
+		}
 
-			// need smarter algorithm to filter main container. for example filter by name `ray-worker`
-			container.Resources.Requests[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
-			container.Resources.Limits[corev1.ResourceName(accelerator)] = resource.MustParse(fmt.Sprint(gpu))
+		for k, v := range computeRuntime.GetExtendedResources() {
+			addResourceToContainer(&container, k, v)
 		}
 
 		globalEnv := convertEnvironmentVariables(envs)
@@ -724,7 +764,7 @@ func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
 								},
 							},
 							Spec: corev1.PersistentVolumeClaimSpec{
-								Resources: corev1.ResourceRequirements{
+								Resources: corev1.VolumeResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceStorage: resource.MustParse(rayVol.Storage),
 									},
@@ -765,6 +805,26 @@ func buildVols(apiVolumes []*api.Volume) ([]corev1.Volume, error) {
 	return vols, nil
 }
 
+// Build security context
+func buildSecurityContext(securityCtx *api.SecurityContext) *corev1.SecurityContext {
+	if securityCtx == nil {
+		return nil
+	}
+	result := &corev1.SecurityContext{
+		Privileged:   securityCtx.Privileged,
+		Capabilities: &corev1.Capabilities{},
+	}
+	if securityCtx.Capabilities != nil {
+		for _, cap := range securityCtx.Capabilities.Add {
+			result.Capabilities.Add = append(result.Capabilities.Add, corev1.Capability(cap))
+		}
+		for _, cap := range securityCtx.Capabilities.Drop {
+			result.Capabilities.Drop = append(result.Capabilities.Drop, corev1.Capability(cap))
+		}
+	}
+	return result
+}
+
 // Init pointer
 func intPointer(value int32) *int32 {
 	return &value
@@ -782,24 +842,28 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 
 // Build compute template
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
+	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+	}
+
 	// Create data map
 	dmap := map[string]string{
-		"name":            runtime.Name,
-		"namespace":       runtime.Namespace,
-		"cpu":             strconv.FormatUint(uint64(runtime.Cpu), 10),
-		"memory":          strconv.FormatUint(uint64(runtime.Memory), 10),
-		"gpu":             strconv.FormatUint(uint64(runtime.Gpu), 10),
-		"gpu_accelerator": runtime.GpuAccelerator,
+		"name":               runtime.Name,
+		"namespace":          runtime.Namespace,
+		"cpu":                strconv.FormatUint(uint64(runtime.Cpu), 10),
+		"memory":             strconv.FormatUint(uint64(runtime.Memory), 10),
+		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
+		"gpu_accelerator":    runtime.GpuAccelerator,
+		"extended_resources": string(extendedResourcesJSON),
 	}
 	// Add tolerations in defined
 	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
 		t, err := json.Marshal(runtime.Tolerations)
 		if err != nil {
-			klog.Errorf("failed to marshall tolerations ", runtime.Tolerations, " for compute template ", runtime.Name,
-				" error ", err)
-		} else {
-			dmap["tolerations"] = string(t)
+			return nil, fmt.Errorf("failed to marshal tolerations for compute template %s: %w", runtime.Name, err)
 		}
+		dmap["tolerations"] = string(t)
 	}
 
 	config := &corev1.ConfigMap{
@@ -858,9 +922,11 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 	if len(autoscalerOptions.Image) > 0 {
 		options.Image = &autoscalerOptions.Image
 	}
-	if len(autoscalerOptions.ImagePullPolicy) > 0 {
-		options.ImagePullPolicy = (*corev1.PullPolicy)(&autoscalerOptions.ImagePullPolicy)
+	if len(autoscalerOptions.ImagePullPolicy) > 0 && strings.ToLower(autoscalerOptions.ImagePullPolicy) == "always" {
+		policy := corev1.PullAlways
+		options.ImagePullPolicy = &policy
 	}
+
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
 			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))

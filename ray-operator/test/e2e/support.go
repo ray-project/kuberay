@@ -1,14 +1,17 @@
 package e2e
 
 import (
+	"bytes"
 	"embed"
+	"fmt"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -19,7 +22,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return file
 }
 
@@ -126,13 +129,10 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithImage(GetRayImage()).
 				WithPorts(
 					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
 					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
 					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
 				).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),
@@ -150,10 +150,6 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 			WithContainers(corev1ac.Container().
 				WithName("ray-worker").
 				WithImage(GetRayImage()).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),
@@ -181,4 +177,96 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
+}
+
+func curlRayServicePod(
+	t Test,
+	rayService *rayv1.RayService,
+	curlPod *corev1.Pod,
+	curlPodContainerName,
+	rayServicePath,
+	body string,
+) (bytes.Buffer, bytes.Buffer) {
+	cmd := []string{
+		"curl",
+		"-X", "POST",
+		"-H", "Content-Type: application/json",
+		fmt.Sprintf("%s-serve-svc.%s.svc.cluster.local:8000%s", rayService.Name, rayService.Namespace, rayServicePath),
+		"-d", body,
+	}
+
+	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
+}
+
+func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
+	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
+      - name: fruit_app
+        import_path: fruit.deployment_graph
+        route_prefix: /fruit
+        runtime_env:
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: MangoStand
+            num_replicas: 1
+            user_config:
+              price: 3
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: OrangeStand
+            num_replicas: 1
+            user_config:
+              price: 2
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: FruitMarket
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.1
+      - name: math_app
+        import_path: conditional_dag.serve_dag
+        route_prefix: /calc
+        runtime_env:
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: Adder
+            num_replicas: 1
+            user_config:
+              increment: 3
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: Multiplier
+            num_replicas: 1
+            user_config:
+              factor: 5
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: Router
+            ray_actor_options:
+              num_cpus: 0.1
+            num_replicas: 1`).
+		WithRayClusterSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(corev1ac.PodTemplateSpec().
+					WithSpec(corev1ac.PodSpec().
+						WithContainers(corev1ac.Container().
+							WithName("ray-head").
+							WithImage(GetRayImage()).
+							WithPorts(
+								corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
+								corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
+								corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
+								corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+							).
+							WithResources(corev1ac.ResourceRequirements().
+								WithRequests(corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
+								}).
+								WithLimits(corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
+								})))))),
+		)
 }

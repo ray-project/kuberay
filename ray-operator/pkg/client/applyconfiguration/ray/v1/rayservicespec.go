@@ -3,39 +3,25 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 // RayServiceSpecApplyConfiguration represents an declarative configuration of the RayServiceSpec type for use
 // with apply.
 type RayServiceSpecApplyConfiguration struct {
-	ServeConfigV2                      *string                           `json:"serveConfigV2,omitempty"`
-	RayClusterSpec                     *RayClusterSpecApplyConfiguration `json:"rayClusterConfig,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                            `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                            `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	ServeService                       *corev1.Service                   `json:"serveService,omitempty"`
+	ServeService                       *v1.Service                       `json:"serveService,omitempty"`
+	UpgradeStrategy                    *rayv1.RayServiceUpgradeStrategy  `json:"upgradeStrategy,omitempty"`
+	ServeConfigV2                      *string                           `json:"serveConfigV2,omitempty"`
+	RayClusterSpec                     *RayClusterSpecApplyConfiguration `json:"rayClusterConfig,omitempty"`
 }
 
 // RayServiceSpecApplyConfiguration constructs an declarative configuration of the RayServiceSpec type for use with
 // apply.
 func RayServiceSpec() *RayServiceSpecApplyConfiguration {
 	return &RayServiceSpecApplyConfiguration{}
-}
-
-// WithServeConfigV2 sets the ServeConfigV2 field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ServeConfigV2 field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithServeConfigV2(value string) *RayServiceSpecApplyConfiguration {
-	b.ServeConfigV2 = &value
-	return b
-}
-
-// WithRayClusterSpec sets the RayClusterSpec field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the RayClusterSpec field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecApplyConfiguration) *RayServiceSpecApplyConfiguration {
-	b.RayClusterSpec = value
-	return b
 }
 
 // WithServiceUnhealthySecondThreshold sets the ServiceUnhealthySecondThreshold field in the declarative configuration to the given value
@@ -57,7 +43,31 @@ func (b *RayServiceSpecApplyConfiguration) WithDeploymentUnhealthySecondThreshol
 // WithServeService sets the ServeService field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ServeService field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithServeService(value corev1.Service) *RayServiceSpecApplyConfiguration {
+func (b *RayServiceSpecApplyConfiguration) WithServeService(value v1.Service) *RayServiceSpecApplyConfiguration {
 	b.ServeService = &value
+	return b
+}
+
+// WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the UpgradeStrategy field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithUpgradeStrategy(value rayv1.RayServiceUpgradeStrategy) *RayServiceSpecApplyConfiguration {
+	b.UpgradeStrategy = &value
+	return b
+}
+
+// WithServeConfigV2 sets the ServeConfigV2 field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ServeConfigV2 field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithServeConfigV2(value string) *RayServiceSpecApplyConfiguration {
+	b.ServeConfigV2 = &value
+	return b
+}
+
+// WithRayClusterSpec sets the RayClusterSpec field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayClusterSpec field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecApplyConfiguration) *RayServiceSpecApplyConfiguration {
+	b.RayClusterSpec = value
 	return b
 }

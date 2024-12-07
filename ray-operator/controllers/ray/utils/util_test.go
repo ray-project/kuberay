@@ -2,14 +2,16 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
+	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	corev1 "k8s.io/api/core/v1"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -95,25 +97,88 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	}
 }
 
-func TestCheckName(t *testing.T) {
-	// test 1 -> change
-	str := "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s"
-	str = CheckName(str)
-	if str != "rca41-e903-fc3ae634b18e-lazer090scholar-director-s" {
-		t.Fail()
-	}
-	// test 2 -> change
-	str = "--------566666--------444433-----------222222----------4444"
-	str = CheckName(str)
-	if str != "r6666--------444433-----------222222----------4444" {
-		t.Fail()
+func TestPodGenerateName(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefix   string
+		nodeType rayv1.RayNodeType
+		expected string
+	}{
+		{
+			name:     "short cluster name, head pod",
+			prefix:   "ray-cluster-01",
+			nodeType: rayv1.HeadNode,
+			expected: "ray-cluster-01-head-",
+		},
+		{
+			name:     "short cluster name, worker pod",
+			prefix:   "ray-cluster-group-name-01",
+			nodeType: rayv1.WorkerNode,
+			expected: "ray-cluster-group-name-01-worker-",
+		},
+		{
+			name:     "long cluster name, head pod",
+			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
+			nodeType: rayv1.HeadNode,
+			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
+		},
+		{
+			name:     "long cluster name, worker pod",
+			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333-group-name",
+			nodeType: rayv1.WorkerNode,
+			expected: "ray-cluster-00000000000000000000000111111111222222-worker-",
+		},
 	}
 
-	// test 3 -> keep
-	str = "acceptable-name-head-12345"
-	str = CheckName(str)
-	if str != "acceptable-name-head-12345" {
-		t.Fail()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := PodGenerateName(test.prefix, test.nodeType)
+			if str != test.expected {
+				t.Logf("expected: %q", test.expected)
+				t.Logf("actual: %q", str)
+				t.Error("PodGenerateName returned an unexpected string")
+			}
+
+			// 63 (max pod name length) - 5 random hexadecimal characters from generateName
+			if len(str) > 58 {
+				t.Error("Generated pod name is too long")
+			}
+		})
+	}
+}
+
+func TestCheckName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "shorten long string starting with numeric character",
+			input:    "72fbcc7e-a661-4b18e-ca41-e903-fc3ae634b18e-lazer090scholar-director-s",
+			expected: "rca41-e903-fc3ae634b18e-lazer090scholar-director-s",
+		},
+		{
+			name:     "shorten long string starting with special character",
+			input:    "--------566666--------444433-----------222222----------4444",
+			expected: "r6666--------444433-----------222222----------4444",
+		},
+		{
+			name:     "unchanged",
+			input:    "acceptable-name-head-12345",
+			expected: "acceptable-name-head-12345",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := CheckName(test.input)
+			if str != test.expected {
+				t.Logf("expected: %q", test.expected)
+				t.Logf("actual: %q", str)
+				t.Error("CheckName returned an unexpected string")
+			}
+		})
 	}
 }
 
@@ -200,6 +265,31 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
+func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-head",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/node-type": string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   typ,
+					Status: status,
+				},
+			},
+		},
+	}
+}
+
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
 	tests := map[string]struct {
 		input *rayv1.RayCluster
@@ -274,6 +364,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
+						},
+					},
 				},
 			},
 			{
@@ -285,6 +381,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionFalse,
+						},
+					},
 				},
 			},
 			{
@@ -300,8 +402,12 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 			},
 		},
 	}
-	count := CalculateAvailableReplicas(podList)
-	assert.Equal(t, count, int32(1), "expect 1 available replica")
+
+	availableCount := CalculateAvailableReplicas(podList)
+	assert.Equal(t, availableCount, int32(1), "expect 1 available replica")
+
+	readyCount := CalculateReadyReplicas(podList)
+	assert.Equal(t, readyCount, int32(1), "expect 1 ready replica")
 }
 
 func TestFindContainerPort(t *testing.T) {
@@ -421,29 +527,29 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 	}{
 		"Both groups' Replicas are nil": {
 			group1Replicas:    nil,
-			group1MinReplicas: pointer.Int32(1),
-			group1MaxReplicas: pointer.Int32(5),
+			group1MinReplicas: ptr.To[int32](1),
+			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    nil,
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            3,
 		},
 		"Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.": {
-			group1Replicas:    pointer.Int32(0),
-			group1MinReplicas: pointer.Int32(2),
-			group1MaxReplicas: pointer.Int32(5),
-			group2Replicas:    pointer.Int32(6),
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group1Replicas:    ptr.To[int32](0),
+			group1MinReplicas: ptr.To[int32](2),
+			group1MaxReplicas: ptr.To[int32](5),
+			group2Replicas:    ptr.To[int32](6),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            7,
 		},
 		"Group1's Replicas is more than MaxReplicas.": {
-			group1Replicas:    pointer.Int32(6),
-			group1MinReplicas: pointer.Int32(2),
-			group1MaxReplicas: pointer.Int32(5),
-			group2Replicas:    pointer.Int32(3),
-			group2MinReplicas: pointer.Int32(2),
-			group2MaxReplicas: pointer.Int32(5),
+			group1Replicas:    ptr.To[int32](6),
+			group1MinReplicas: ptr.To[int32](2),
+			group1MaxReplicas: ptr.To[int32](5),
+			group2Replicas:    ptr.To[int32](3),
+			group2MinReplicas: ptr.To[int32](2),
+			group2MaxReplicas: ptr.To[int32](5),
 			answer:            8,
 		},
 	}
@@ -505,4 +611,54 @@ env_vars:
 			}
 		})
 	}
+}
+
+func TestFindHeadPodReadyCondition(t *testing.T) {
+	tests := map[string]struct {
+		pod      *corev1.Pod
+		expected metav1.Condition
+	}{
+		"condition true if Ray head pod is running and ready": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionTrue,
+			},
+		},
+		"condition false if Ray head pod is not running": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionFalse,
+			},
+		},
+		"condition false if Ray head pod is not ready": {
+			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+			expected: metav1.Condition{
+				Type:   string(rayv1.HeadPodReady),
+				Status: metav1.ConditionFalse,
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			headPodReadyCondition := FindHeadPodReadyCondition(tc.pod)
+			assert.Equal(t, tc.expected.Status, headPodReadyCondition.Status)
+		})
+	}
+}
+
+func TestErrRayClusterReplicaFailureReason(t *testing.T) {
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteAllPods), "FailedDeleteAllPods")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod), "FailedDeleteHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateHeadPod), "FailedCreateHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod), "FailedDeleteWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod), "FailedCreateWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))), "FailedDeleteAllPods")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))), "FailedDeleteHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))), "FailedCreateHeadPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))), "FailedDeleteWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
+	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
 }

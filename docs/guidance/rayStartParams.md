@@ -16,8 +16,8 @@ The default value for both Ray and KubeRay 0.5.0 is `localhost`. Please note tha
 
 - `--port`: Port for the GCS server. The port is set to `6379` by default. Please ensure that this value matches the `gcs-server` container port in Ray head container.
 
-- `--redis-password`: Redis password for an external Redis, necessary when [fault tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md) is enabled. 
-The default value is `""` after Ray 2.3.0. See [#929](https://github.com/ray-project/kuberay/pull/929) for more details. 
+- `--redis-password`: Redis password for an external Redis, necessary when [fault tolerance](https://github.com/ray-project/kuberay/blob/master/docs/guidance/gcs-ft.md) is enabled.
+The default value is `""` after Ray 2.3.0. See [#929](https://github.com/ray-project/kuberay/pull/929) for more details.
 
 ### Options Exclusive to the worker Pods
 
@@ -34,5 +34,3 @@ The default value is `""` after Ray 2.3.0. See [#929](https://github.com/ray-pro
 - `--num-cpus`: Number of logical CPUs on this Ray node. Default is determined by Ray container resource limits. Modify Ray container resource limits instead of this option. See [PR #170](https://github.com/ray-project/kuberay/pull/170). However, it is sometimes useful to override this autodetected value. For example, setting `num-cpus:"0"` for the Ray head pod will prevent Ray workloads with non-zero CPU requirements from being scheduled on the head.
 
 - `--num-gpus`: Number of GPUs on this Ray node. Default is determined by Ray container resource limits. Modify Ray container resource limits instead of this option. See [PR #170](https://github.com/ray-project/kuberay/pull/170).
-
-

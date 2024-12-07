@@ -13,10 +13,8 @@ To learn more about developing and testing the KubeRay Operator, please refer to
 The KubeRay APIServer is a central component that exposes the KubeRay API for managing Ray clusters.
 For more information about developing and testing the KubeRay APIServer, please refer to the [APIServer Development Guide](https://github.com/ray-project/kuberay/blob/master/apiserver/DEVELOPMENT.md).
 
-## KubeRay CLI
-
-The KubeRay CLI is a command-line interface for interacting with Ray clusters managed by KubeRay.
-For more information about developing and testing the KubeRay CLI, please refer to the [CLI Development Guide](https://github.com/ray-project/kuberay/blob/master/cli/README.md).
+## KubeRay Python client
+The KubeRay Python client library provides APIs to handle RayCluster from your Python application. For more information about developing and testing the KubeRay Python client, please refer to the [Python Client](https://github.com/ray-project/kuberay/blob/master/components/pythonclient.md), [Python API Client](https://github.com/ray-project/kuberay/blob/master/components/pythonapiclient.md).
 
 ## Proto and OpenAPI
 

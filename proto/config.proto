@@ -53,7 +53,7 @@ service ComputeTemplateService {
     };
   }
 
-  // Deletes a compute template by its name and namespace 
+  // Deletes a compute template by its name and namespace
   rpc DeleteComputeTemplate(DeleteComputeTemplateRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/apis/v1/namespaces/{namespace}/compute_templates/{name}"
@@ -76,7 +76,7 @@ message GetComputeTemplateRequest {
 }
 
 message ListComputeTemplatesRequest {
-  // Required. The namespace of the compute templates to be retrieved. 
+  // Required. The namespace of the compute templates to be retrieved.
   string namespace = 1 [(google.api.field_behavior) = REQUIRED];
   // TODO: support paganation later
 }
@@ -128,6 +128,8 @@ message ComputeTemplate {
   string gpu_accelerator = 6;
   // Optional pod tolerations
   repeated PodToleration tolerations = 7;
+  // Optional. Name and number of the extended resources
+  map<string, uint32> extended_resources = 8;
 }
 
 // This service is not implemented.

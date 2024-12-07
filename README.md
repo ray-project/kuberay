@@ -20,8 +20,6 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * **KubeRay Python client**: This Python client library provides APIs to handle RayCluster from your Python application.
 
-* **KubeRay CLI**: KubeRay CLI provides the ability to manage KubeRay resources through command-line interface.
-
 ## Documentation
 
 From September 2023, all user-facing KubeRay documentation will be hosted on the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).

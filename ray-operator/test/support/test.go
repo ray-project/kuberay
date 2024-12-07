@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,8 +22,6 @@ type Test interface {
 	Client() Client
 	OutputDir() string
 
-	gomega.Gomega
-
 	NewTestNamespace(...Option[*corev1.Namespace]) *corev1.Namespace
 	StreamKubeRayOperatorLogs()
 }
@@ -33,8 +32,6 @@ type Option[T any] interface {
 
 type errorOption[T any] func(to T) error
 
-// nolint: unused
-// To be removed when the false-positivity is fixed.
 func (o errorOption[T]) applyTo(to T) error {
 	return o(to)
 }
@@ -51,16 +48,14 @@ func With(t *testing.T) Test {
 	}
 
 	return &T{
-		WithT: gomega.NewWithT(t),
-		t:     t,
-		ctx:   ctx,
+		t:   t,
+		ctx: ctx,
 	}
 }
 
 type T struct {
-	*gomega.WithT
 	t *testing.T
-	// nolint: containedctx
+	//nolint:containedctx //nolint:nolintlint // TODO: The reason for this lint is unknown
 	ctx       context.Context
 	client    Client
 	outputDir string
@@ -134,7 +129,7 @@ func (t *T) StreamKubeRayOperatorLogs() {
 	pods, err := t.Client().Core().CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/component=kuberay-operator",
 	})
-	t.Expect(err).ShouldNot(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	now := metav1.NewTime(time.Now())
 	for _, pod := range pods.Items {
 		go func(pod corev1.Pod, ts *metav1.Time) {

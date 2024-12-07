@@ -1,5 +1,5 @@
 # This example shows how to configure a custom Kubernetes service for Ray Serve
-# by specifying the `serveService` field in the RayService CRD. 
+# by specifying the `serveService` field in the RayService CRD.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:

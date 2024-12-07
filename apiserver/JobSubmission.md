@@ -114,7 +114,7 @@ Once the job is submitted, the following command can be used to get job's detail
 
 ```shell
 curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
---header 'Content-Type: application/json' 
+--header 'Content-Type: application/json'
 ```
 
 This should return JSON similar to the one below
@@ -141,7 +141,7 @@ You can also get job execution log using the following command (Note that submis
 
 ```shell
 curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/log/raysubmit_KWZLwme56esG3Wcr' \
---header 'Content-Type: application/json' 
+--header 'Content-Type: application/json'
 ```
 
 This will return execution log, that will look something like the following
@@ -165,7 +165,7 @@ You can also list all the jobs (in any state) in the Ray cluster using the follo
 
 ```shell
 curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster' \
---header 'Content-Type: application/json' 
+--header 'Content-Type: application/json'
 ```
 
 This should return the list of the submissions, that looks as follows:
@@ -196,7 +196,7 @@ Execution of the job can be stoped using the following command (Note that submis
 
 ```shell
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
---header 'Content-Type: application/json' 
+--header 'Content-Type: application/json'
 ```
 
 ### Delete Job
@@ -205,7 +205,7 @@ Finally, you can delete job using the following command (Note that submission id
 
 ```shell
 curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
---header 'Content-Type: application/json' 
+--header 'Content-Type: application/json'
 ```
 
 You can validate job deletion by looking at the Ray dashboard (jobs pane) and ensuring that it was removed

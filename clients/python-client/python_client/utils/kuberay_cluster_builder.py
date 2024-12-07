@@ -95,7 +95,7 @@ class ClusterBuilder(IClusterBuilder):
 
         Parameters:
         - ray_image (str): Docker image for the head node. Default value is "rayproject/ray:2.9.0".
-        - service_type (str): Service type of the head node. Default value is "ClusterIP".
+        - service_type (str): Service type of the head node. Default value is "ClusterIP", which creates a headless ClusterIP service.
         - cpu_requests (str): CPU requests for the head node. Default value is "2".
         - memory_requests (str): Memory requests for the head node. Default value is "3G".
         - cpu_limits (str): CPU limits for the head node. Default value is "2".

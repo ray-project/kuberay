@@ -72,6 +72,11 @@ test-e2e: WHAT ?= ./test/e2e
 test-e2e: manifests fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
+
+test-sampleyaml: WHAT ?= ./test/sampleyaml
+test-sampleyaml: manifests fmt vet
+	go test -timeout 30m -v $(WHAT)
+
 sync: helm api-docs
 	./hack/update-codegen.sh
 
@@ -146,7 +151,7 @@ $(LOCALBIN):
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 $(CONTROLLER_GEN): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.13.0
+	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0
 
 KUSTOMIZE = $(LOCALBIN)/kustomize
 $(KUSTOMIZE): $(LOCALBIN)
@@ -167,7 +172,7 @@ CRD_REF_DOCS = $(LOCALBIN)/crd-ref-docs
 $(CRD_REF_DOCS): $(LOCALBIN)
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
-	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.0.10
+	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.0.12
 
 .PHONY: clean
 clean:
