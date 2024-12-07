@@ -2,12 +2,13 @@ package koordinator
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -17,8 +18,13 @@ import (
 
 const (
 	SchedulerName                             string = "koordinator"
-	KoordinatorGangMinAvailableAnnotationName string = "gang.scheduling.koordinator.sh/min-available"
 	KoordinatorGangAnnotationName             string = "gang.scheduling.koordinator.sh/name"
+	KoordinatorGangMinAvailableAnnotationName string = "gang.scheduling.koordinator.sh/min-available"
+	KoordinatorGangTotalNumberAnnotationName  string = "gang.scheduling.koordinator.sh/total-number"
+	KoordinatorGangModeAnnotationName         string = "gang.scheduling.koordinator.sh/mode"
+	KoordinatorGangGroupsAnnotationName       string = "gang.scheduling.koordinator.sh/groups"
+
+	KoordinatorGangModeStrict string = "Strict"
 )
 
 type KoodinatorScheduler struct{}
@@ -42,13 +48,44 @@ func (y *KoodinatorScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _
 // AddMetadataToPod adds essential labels and annotations to the Ray pods
 // the koordinator scheduler needs these labels and annotations in order to do the scheduling properly
 func (y *KoodinatorScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 
 	// when gang scheduling is enabled, extra annotations need to be added to all pods
 	if y.isGangSchedulingEnabled(app) {
-		// set the task group name based on the head or worker group name
+
+		if pod.Annotations == nil {
+			pod.Annotations = make(map[string]string)
+		}
+
+		// set the pod group name based on the head or worker group name
 		// the group name for the head and each of the worker group should be different
-		pod.Annotations[KoordinatorGangAnnotationName] = getAppPodGroupName(app)
-		pod.Annotations[KoordinatorGangMinAvailableAnnotationName] = strconv.Itoa(int(getMinAvailable(app)))
+		// the api is define here https://koordinator.sh/docs/designs/gang-scheduling/#annotation-way
+
+		gangGroups, minMemberMap := newGangGroupsFromApp(app)
+
+		pod.Annotations[KoordinatorGangAnnotationName] = getAppPodGroupName(app, groupName)
+		pod.Annotations[KoordinatorGangMinAvailableAnnotationName] = strconv.Itoa(int(minMemberMap[groupName]))
+		pod.Annotations[KoordinatorGangTotalNumberAnnotationName] = pod.Annotations[KoordinatorGangMinAvailableAnnotationName]
+		pod.Annotations[KoordinatorGangModeAnnotationName] = KoordinatorGangModeStrict
+
+		gangGroupAnnotationValueBytes, err := json.Marshal(gangGroups)
+		if err != nil {
+			logger.Error(err, "failed to add gang group scheduling related annotations to pod, "+
+				"gang scheduling will not be enabled for this workload",
+				"name", pod.Name, "namespace", pod.Namespace)
+			return
+		}
+
+		gangGroupAnnotationValue := string(gangGroupAnnotationValueBytes)
+		logger.Info("add task groups info to pod's annotation",
+			"key", KoordinatorGangGroupsAnnotationName,
+			"value", gangGroupAnnotationValue,
+			"group", pod.Annotations[KoordinatorGangAnnotationName],
+			"min-available", pod.Annotations[KoordinatorGangMinAvailableAnnotationName])
+
+		pod.Annotations[KoordinatorGangGroupsAnnotationName] = gangGroupAnnotationValue
+
+		logger.Info("Gang Group Scheduling enabled for RayCluster")
 	}
 }
 
@@ -69,9 +106,11 @@ func (yf *KoordinatorSchedulerFactory) ConfigureReconciler(b *builder.Builder) *
 	return b
 }
 
-func getAppPodGroupName(app *rayv1.RayCluster) string {
-	return fmt.Sprintf("ray-%s-pg", app.Name)
+func getAppPodGroupName(app *rayv1.RayCluster, groupName string) string {
+
+	return app.Name + "-" + groupName
 }
+
 func getMinAvailable(app *rayv1.RayCluster) int32 {
 
 	var minAvailable int32
