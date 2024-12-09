@@ -1,11 +1,19 @@
 // Util functions for type conversion between byte array and string without copy.
 //
-// Example usage:
+// Example usage 1 (convert string to byte slice):
 // func TakeByteSlice(bs []byte) {...}
 //
 // func f() {
 //   s := "helloworld"
 //   TakeByteSlice(ConvertStringToByteSlice(s))  // convert string to byte slice with zero-copy
+// }
+//
+// Example usage 2 (convert byte slice to string):
+// func TakeString(s string) {...}
+//
+// func f() {
+//   bytes := []byte("helloworld")
+//   TakeByteSlice(ConvertByteSliceToString(bytes))  // convert byte slice to string with zero-copy
 // }
 
 package utils
