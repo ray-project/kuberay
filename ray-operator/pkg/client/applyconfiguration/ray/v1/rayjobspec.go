@@ -17,6 +17,7 @@ type RayJobSpecApplyConfiguration struct {
 	Metadata                 map[string]string                         `json:"metadata,omitempty"`
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
+	ManagedBy                *string                                   `json:"managedBy,omitempty"`
 	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
 	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
 	JobId                    *string                                   `json:"jobId,omitempty"`
@@ -100,6 +101,14 @@ func (b *RayJobSpecApplyConfiguration) WithClusterSelector(entries map[string]st
 // If called multiple times, the SubmitterConfig field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithSubmitterConfig(value *SubmitterConfigApplyConfiguration) *RayJobSpecApplyConfiguration {
 	b.SubmitterConfig = value
+	return b
+}
+
+// WithManagedBy sets the ManagedBy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ManagedBy field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithManagedBy(value string) *RayJobSpecApplyConfiguration {
+	b.ManagedBy = &value
 	return b
 }
 

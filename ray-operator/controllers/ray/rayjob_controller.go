@@ -92,6 +92,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if manager := utils.ManagedByExternalController(rayJobInstance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayJob managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes

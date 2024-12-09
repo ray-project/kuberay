@@ -2,8 +2,10 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -86,5 +88,49 @@ env_vars:
 		// Assert the Ray job has failed
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
+	})
+
+	test.T().Run("RayJob should be created but not to be updated when managed externally", func(_ *testing.T) {
+		t.Parallel()
+
+		// RayJob
+		rayJobAC := rayv1ac.RayJob("managed-externally", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
+				WithManagedBy(MultiKueueController))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Assert the Ray job status has not been updated
+		g.Consistently(func(gg Gomega) {
+			rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+			gg.Expect(err).ToNot(HaveOccurred())
+			gg.Expect(rayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusNew))
+		}, time.Second*3, time.Millisecond*500).Should(Succeed())
+	})
+
+	test.T().Run("RayJob should not be created due to managedBy invalid value", func(_ *testing.T) {
+		// RayJob
+		rayJobAC := rayv1ac.RayJob("managed-externally-invalid", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
+				WithManagedBy("invalid.com/controller"))
+
+		_, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(errors.IsInvalid(err)).To(BeTrue(), "error: %v", err)
 	})
 }

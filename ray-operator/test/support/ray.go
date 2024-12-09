@@ -30,6 +30,10 @@ func RayJobDeploymentStatus(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
 	return job.Status.JobDeploymentStatus
 }
 
+func RayJobManagedBy(job *rayv1.RayJob) *string {
+	return job.Spec.ManagedBy
+}
+
 func RayJobReason(job *rayv1.RayJob) rayv1.JobFailedReason {
 	return job.Status.Reason
 }
