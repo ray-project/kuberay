@@ -14,10 +14,10 @@ func TestStringConversion(t *testing.T) {
 	str := "hello world"
 
 	// Test string to byte array conversion.
-	arr := utils.ConvertStringToByteArray(str)
+	arr := utils.ConvertStringToByteSlice(str)
 	g.Expect(arr).Should(gomega.Equal([]byte(str)))
 
 	// Test byte array to string conversion.
-	convStr := utils.ConvertByteArrayToString(arr)
+	convStr := utils.ConvertByteSliceToString(arr)
 	g.Expect(str).Should(gomega.Equal(convStr))
 }
