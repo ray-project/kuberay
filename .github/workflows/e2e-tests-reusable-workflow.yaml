@@ -61,7 +61,7 @@ jobs:
             echo Deploying Kuberay cluster
 
             kubectl apply -f ./ray-operator/config/samples/ray-cluster.sample.yaml
-            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-sample
+            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-kuberay
 
         - name: Run e2e tests
           run: |
