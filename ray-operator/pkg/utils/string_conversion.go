@@ -16,7 +16,7 @@ import (
 
 // Convert a byte array to string w/o copy.
 //
-// WARNING: The returned byte slice is not expected to change.
+// WARNING: The input byte slice is not expected to change.
 func ConvertByteSliceToString(arr []byte) string {
 	return unsafe.String(&arr[0], len(arr))
 }
