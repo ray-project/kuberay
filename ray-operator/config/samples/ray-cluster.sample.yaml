@@ -5,7 +5,7 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: raycluster-sample
+  name: raycluster-kuberay
 spec:
   rayVersion: '2.9.0' # should match the Ray version in the image of the containers
   # Ray head pod template
@@ -37,7 +37,7 @@ spec:
       minReplicas: 1
       maxReplicas: 5
       # logical group name, for this called small-group, also can be functional
-      groupName: small-group
+      groupName: workergroup
       rayStartParams: {}
       #pod template
       template:
