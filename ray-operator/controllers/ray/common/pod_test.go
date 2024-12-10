@@ -1245,6 +1245,17 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			expected: `ray start  --resources='{"TPU":4}' `,
 		},
 		{
+			name:           "WorkerNode with Aliyun's GPU Share",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"aliyun.com/gpu-mem": resource.MustParse("4"),
+				},
+			},
+			expected: `ray start  --num-gpus=4 `,
+		},
+		{
 			name:           "HeadNode with Neuron Cores",
 			nodeType:       rayv1.HeadNode,
 			rayStartParams: map[string]string{},
@@ -1261,11 +1272,12 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
+					"aliyun.com/gpu-mem":        resource.MustParse("3"),
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
 					"nvidia.com/gpu":            resource.MustParse("1"),
 				},
 			},
-			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
+			expected: `ray start --head  --num-gpus=4  --resources='{"neuron_cores":4}' `,
 		},
 		{
 			name:           "HeadNode with multiple custom accelerators",
@@ -1273,12 +1285,13 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
+					"aliyun.com/gpu-mem":        resource.MustParse("4"),
 					"google.com/tpu":            resource.MustParse("8"),
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
 					"nvidia.com/gpu":            resource.MustParse("1"),
 				},
 			},
-			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
+			expected: `ray start --head  --num-gpus=5  --resources='{"neuron_cores":4}' `,
 		},
 		{
 			name:     "HeadNode with existing resources",

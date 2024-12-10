@@ -38,6 +38,7 @@ const (
 	NeuronCoreRayResourceName          = "neuron_cores"
 	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
+	AliyunGPUContainerResourceName     = "aliyun.com/gpu-mem"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -795,9 +796,22 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 	for _, resourceKeyString := range sortedResourceKeys {
 		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
+		// Scan for resource keys that match "aliyun.com/gpu-mem"
+		if resourceKeyString == AliyunGPUContainerResourceName && !resourceValue.IsZero() {
+			if existingValue, ok := rayStartParams["num-gpus"]; ok {
+				existingIntValue, _ := strconv.ParseInt(existingValue, 10, 64)
+				rayStartParams["num-gpus"] = strconv.FormatInt(existingIntValue+resourceValue.Value(), 10)
+			} else {
+				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+			}
+		}
+
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
-		if _, ok := rayStartParams["num-gpus"]; !ok {
-			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+		if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+			if existingValue, ok := rayStartParams["num-gpus"]; ok {
+				existingIntValue, _ := strconv.ParseInt(existingValue, 10, 64)
+				rayStartParams["num-gpus"] = strconv.FormatInt(existingIntValue+resourceValue.Value(), 10)
+			} else {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
