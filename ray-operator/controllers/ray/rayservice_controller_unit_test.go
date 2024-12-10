@@ -1082,7 +1082,7 @@ func TestLabelHeadPodForServeStatus_IncludeHeadPod(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, mgr)
 
-	// Initialize RayCluster reconciler.
+	// Initialize RayService reconciler.
 	r := &RayServiceReconciler{
 		Client:              fakeClient,
 		Recorder:            &record.FakeRecorder{},
