@@ -159,7 +159,7 @@ _Appears in:_
 | `metadata` _object (keys:string, values:string)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `clusterSelector` _object (keys:string, values:string)_ | clusterSelector is used to select running rayclusters by labels |  |  |
 | `submitterConfig` _[SubmitterConfig](#submitterconfig)_ | Configurations of submitter k8s job. |  |  |
-| `managedBy` _string_ | ManagedBy is used to indicate the controller or entity that manages a RayJob.<br />The value must be either empty, 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayJob which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
+| `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayJob.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayJob which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
 | `entrypoint` _string_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
 | `runtimeEnvYAML` _string_ | RuntimeEnvYAML represents the runtime environment configuration<br />provided as a multi-line YAML string. |  |  |
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |  |  |
