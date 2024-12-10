@@ -46,16 +46,18 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
 
+	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	// Wait until curl pod is created
+	test.T().Logf("Waiting for curl pod %s/%s to be running and ready", namespace.Name, curlPodName)
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
 
-	// test the default curl result
+	test.T().Logf("Sending requests to the Ray Serve applications and checking the results")
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
 		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
@@ -74,6 +76,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
 	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
 
+	test.T().Logf("Updating the Ray Serve applications")
 	rayService.Spec.ServeConfigV2 = serveConfig
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
 		test.Ctx(),
@@ -82,7 +85,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Test the new price and factor
+	test.T().Logf("Sending requests to the Ray Serve applications and checking the results")
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
 		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
