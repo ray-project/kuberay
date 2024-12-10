@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+  pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
 
 // Default annotations used by Ray nodes
@@ -416,7 +417,7 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 
 	val, ok := configMap.Data["extended_resources"]
 	if ok {
-		err := json.Unmarshal([]byte(val), &runtime.ExtendedResources)
+		err := json.Unmarshal(pkgutils.ConvertStringToByteSlice(val), &runtime.ExtendedResources)
 		if err != nil {
 			klog.Error("failed to unmarshall extended resources for compute template ", runtime.Name, " value ",
 				runtime.ExtendedResources, " error ", err)
@@ -425,7 +426,7 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 
 	val, ok = configMap.Data["tolerations"]
 	if ok {
-		err := json.Unmarshal([]byte(val), &runtime.Tolerations)
+		err := json.Unmarshal(pkgutils.ConvertStringToByteSlice(val), &runtime.Tolerations)
 		if err != nil {
 			klog.Error("failed to unmarshall tolerations for compute template ", runtime.Name, " value ",
 				runtime.Tolerations, " error ", err)
