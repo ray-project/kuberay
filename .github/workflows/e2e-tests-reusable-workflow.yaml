@@ -68,7 +68,7 @@ jobs:
             make docker-push -e IMG="${IMG}" -e ENGINE=podman
 
             make deploy -e IMG="${IMG}"
-            kubectl wait --timeout=90s --for=condition=Available=true deployment -n ray-system kuberay-operator
+            kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
 
         - name: Deploy Kuberay Cluster
           if: inputs.plugin-test
@@ -76,7 +76,7 @@ jobs:
             echo Deploying Kuberay cluster
 
             kubectl apply -f ./ray-operator/config/samples/ray-cluster.sample.yaml
-            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-sample
+            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-kuberay
 
         - name: Run e2e tests
           run: |
@@ -95,7 +95,7 @@ jobs:
           if: (!inputs.plugin-test) && always() && steps.deploy.outcome == 'success'
           run: |
             echo "Printing KubeRay operator logs"
-            kubectl logs -n ray-system --tail -1 -l app.kubernetes.io/name=kuberay | tee ${KUBERAY_TEST_OUTPUT_DIR}/kuberay-operator.log
+            kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee ${KUBERAY_TEST_OUTPUT_DIR}/kuberay-operator.log
 
         - name: Upload logs
           uses: actions/upload-artifact@v4
