@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-  pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
+	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
 
 // Default annotations used by Ray nodes
