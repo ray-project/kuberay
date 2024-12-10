@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/create"
+	kubectlraydelete "github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/delete"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/get"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/job"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/log"
@@ -33,6 +34,7 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd.AddCommand(job.NewJobCommand(streams))
 	cmd.AddCommand(version.NewVersionCommand(streams))
 	cmd.AddCommand(create.NewCreateCommand(streams))
+	cmd.AddCommand(kubectlraydelete.NewDeleteCommand(streams))
 
 	return cmd
 }
