@@ -13,6 +13,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
 
 // GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
@@ -21,12 +22,12 @@ func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
 
 	if len(runtimeEnvYAML) > 0 {
 		// Convert YAML to JSON
-		jsonData, err := yaml.YAMLToJSON([]byte(runtimeEnvYAML))
+		jsonData, err := yaml.YAMLToJSON(pkgutils.ConvertStringToByteSlice(runtimeEnvYAML))
 		if err != nil {
 			return "", err
 		}
 		// We return the JSON as a string
-		return string(jsonData), nil
+		return pkgutils.ConvertByteSliceToString(jsonData), nil
 	}
 
 	return "", nil
@@ -59,7 +60,7 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal metadata: %v: %w", metadata, err)
 	}
-	return string(metadataBytes), nil
+	return pkgutils.ConvertByteSliceToString(metadataBytes), nil
 }
 
 // GetK8sJobCommand builds the K8s job command for the Ray job.
