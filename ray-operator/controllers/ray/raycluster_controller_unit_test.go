@@ -1801,6 +1801,8 @@ func TestCalculateStatus(t *testing.T) {
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
+// TestCalculateStatusWithoutDesiredReplicas tests that the cluster CR should not be marked as Ready if
+// DesiredWorkerReplicas > 0 and DesiredWorkerReplicas != ReadyWorkerReplicas
 func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	setupTest(t)
 
@@ -1849,11 +1851,15 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.Equal(t, newInstance.Status.Reason, "")
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 }
 
+// TestCalculateStatusWithReconcileErrorBackAndForth tests that the cluster CR should not be marked as Ready if reconcileErr != nil
+// and the Ready state should not be removed after being Ready even if reconcileErr != nil
 func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	setupTest(t)
 
@@ -1919,6 +1925,9 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Test head information with a reconcile error
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, errors.New("invalid"))
 	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	// Note that even if there are DesiredWorkerReplicas ready, we don't mark CR to be Ready state due to the reconcile error.
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.Equal(t, newInstance.Status.Reason, "")
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
@@ -1926,6 +1935,8 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Test head information without a reconcile error
 	newInstance, err = r.calculateStatus(ctx, newInstance, nil)
 	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.Equal(t, newInstance.Status.Reason, "")
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
@@ -1935,6 +1946,8 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Test head information with a reconcile error again
 	newInstance, err = r.calculateStatus(ctx, newInstance, errors.New("invalid2"))
 	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.Equal(t, newInstance.Status.Reason, "")
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
