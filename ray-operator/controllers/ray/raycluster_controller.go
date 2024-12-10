@@ -1284,11 +1284,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	if reconcileErr != nil {
-		// newInstance.Status.State = rayv1.Failed <- we don't do this because rayv1.Failed has been gone since v1.2.
-		// See https://github.com/ray-project/kuberay/issues/2357 for more details.
-		newInstance.Status.Reason = reconcileErr.Error()
-	} else {
+	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
 		if utils.CheckAllPodsRunning(ctx, runtimePods) {
 			newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 			newInstance.Status.Reason = ""
