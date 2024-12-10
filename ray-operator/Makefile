@@ -104,6 +104,9 @@ build: fmt vet ## Build manager binary.
 docker-image: ## Build image only
 	${ENGINE} build -t ${IMG} .
 
+docker-submitter-image: ## Build image only
+	${ENGINE} build -t ${IMG} --target submitter .
+
 docker-build: build docker-image ## Build image with the manager.
 
 docker-push: ## Push image with the manager.

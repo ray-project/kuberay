@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.22.4-bullseye as builder
+FROM golang:1.22.4-bullseye AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -20,12 +20,18 @@ COPY rayjobsubmitter/ rayjobsubmitter/
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
-RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o submitter ./rayjobsubmitter/cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -tags strictfipsruntime -a -o submitter ./rayjobsubmitter/cmd/main.go
+
+FROM scratch AS submitter
+WORKDIR /
+COPY --from=builder /workspace/submitter .
+USER 65532:65532
+
+ENTRYPOINT ["/submitter"]
 
 FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
-COPY --from=builder /workspace/submitter .
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]
