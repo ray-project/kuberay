@@ -38,6 +38,8 @@ spec:
               deploymentUnhealthySecondThreshold:
                 format: int32
                 type: integer
+              excludeHeadPodFromServeSvc:
+                type: boolean
               rayClusterConfig:
                 properties:
                   autoscalerOptions:

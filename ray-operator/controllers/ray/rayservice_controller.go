@@ -61,9 +61,8 @@ type RayServiceReconciler struct {
 	// where cacheKey is the combination of RayService namespace and name.
 	ServeConfigs                 cmap.ConcurrentMap[string, cmap.ConcurrentMap[string, string]]
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
-
-	dashboardClientFunc func() utils.RayDashboardClientInterface
-	httpProxyClientFunc func() utils.RayHttpProxyClientInterface
+	dashboardClientFunc          func() utils.RayDashboardClientInterface
+	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
@@ -218,7 +217,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if err := r.labelHeadPodForServeStatus(ctx, rayClusterInstance); err != nil {
+		if err := r.labelHeadPodForServeStatus(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
 			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
@@ -1178,7 +1177,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	return isReady, nil
 }
 
-func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
+func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster, excludeHeadPodFromServeSvc bool) error {
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
@@ -1203,8 +1202,7 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 	for key, value := range headPod.Labels {
 		originalLabels[key] = value
 	}
-
-	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil {
+	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil && !excludeHeadPodFromServeSvc {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	} else {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse

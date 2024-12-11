@@ -20,6 +20,7 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
@@ -918,4 +919,100 @@ func initFakeDashboardClient(appName string, deploymentStatus string, appStatus 
 	status := generateServeStatus(deploymentStatus, appStatus)
 	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{appName: &status})
 	return &fakeDashboardClient
+}
+
+type FakeRayHttpProxyClient struct {
+	isHealthy bool
+}
+
+func (*FakeRayHttpProxyClient) InitClient() {}
+func (f *FakeRayHttpProxyClient) CheckProxyActorHealth(_ context.Context) error {
+	if f.isHealthy {
+		return nil
+	}
+	return fmt.Errorf("the proxy actor is unhealthy")
+}
+func (*FakeRayHttpProxyClient) SetHostIp(_, _, _ string, _ int) {}
+
+func TestLabelHeadPodForServeStatus(t *testing.T) {
+	tests := map[string]struct {
+		expectServeResult          string
+		excludeHeadPodFromServeSvc bool
+		isHealthy                  bool
+	}{
+		"Ray serve application is running, excludeHeadPodFromServeSvc is true": {
+			"false",
+			true,
+			true,
+		},
+		"Ray serve application is running, excludeHeadPodFromServeSvc is false": {
+			"true",
+			false,
+			true,
+		},
+		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true": {
+			"false",
+			true,
+			false,
+		},
+		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false": {
+			"false",
+			false,
+			false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = corev1.AddToScheme(newScheme)
+
+			namespace := "mock-ray-namespace"
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: namespace,
+				},
+			}
+			headPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "head-pod",
+					Namespace: cluster.ObjectMeta.Namespace,
+					Labels: map[string]string{
+						utils.RayClusterLabelKey:  cluster.ObjectMeta.Name,
+						utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "test-container",
+						},
+					},
+				},
+			}
+			// Initialize a fake client with newScheme and runtimeObjects.
+			runtimeObjects := []runtime.Object{headPod}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			ctx := context.TODO()
+			// Initialize RayService reconciler.
+			r := &RayServiceReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+				httpProxyClientFunc: func() utils.RayHttpProxyClientInterface {
+					return &FakeRayHttpProxyClient{
+						isHealthy: tc.isHealthy,
+					}
+				},
+			}
+
+			err := r.labelHeadPodForServeStatus(ctx, &cluster, tc.excludeHeadPodFromServeSvc)
+			assert.NoError(t, err)
+			// Get latest headPod status
+			headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
+			assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], tc.expectServeResult)
+			assert.NoError(t, err)
+		})
+	}
 }
