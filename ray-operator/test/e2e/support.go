@@ -247,7 +247,7 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 		WithRayClusterSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithRayStartParams(map[string]string{"num-cpus": "4"}).
 				WithTemplate(corev1ac.PodTemplateSpec().
 					WithSpec(corev1ac.PodSpec().
 						WithContainers(corev1ac.Container().
@@ -261,8 +261,8 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 							).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
-									corev1.ResourceMemory: resource.MustParse("2Gi"),
+									corev1.ResourceCPU:    resource.MustParse("300m"),
+									corev1.ResourceMemory: resource.MustParse("1Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("2"),
