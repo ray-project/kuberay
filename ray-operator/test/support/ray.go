@@ -145,3 +145,11 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
 	return service.Status.ServiceStatus
 }
+
+func GetRayClusterWorkerGroupReplicaSum(cluster *rayv1.RayCluster) int32 {
+	var replicas int32
+	for _, workerGroup := range cluster.Spec.WorkerGroupSpecs {
+		replicas += *workerGroup.Replicas
+	}
+	return replicas
+}
