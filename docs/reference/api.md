@@ -212,7 +212,7 @@ _Appears in:_
 | `upgradeStrategy` _[RayServiceUpgradeStrategy](#rayserviceupgradestrategy)_ | UpgradeStrategy represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None` |  |  |
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
-| `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false. |  |  |
+| `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
 
 
 
