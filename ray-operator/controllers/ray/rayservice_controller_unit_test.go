@@ -926,39 +926,39 @@ type FakeRayHttpProxyClient struct {
 }
 
 func (*FakeRayHttpProxyClient) InitClient() {}
-func (f *FakeRayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
-	if f.isHealthy{
+func (f *FakeRayHttpProxyClient) CheckProxyActorHealth(_ context.Context) error {
+	if f.isHealthy {
 		return nil
 	}
-	return fmt.Errorf("The Proxy Actor is unhealthy.")
+	return fmt.Errorf("the proxy actor is unhealthy")
 }
-func (*FakeRayHttpProxyClient) SetHostIp(hostIp, podNamespace, podName string, port int) {}
+func (*FakeRayHttpProxyClient) SetHostIp(_, _, _ string, _ int) {}
 
 func TestLabelHeadPodForServeStatus(t *testing.T) {
 	tests := map[string]struct {
+		expectServeResult          string
 		excludeHeadPodFromServeSvc bool
 		isHealthy                  bool
-		expectServeResult          string
 	}{
 		"Ray serve application is running, excludeHeadPodFromServeSvc is true": {
-			true,
-			true,
 			"false",
+			true,
+			true,
 		},
 		"Ray serve application is running, excludeHeadPodFromServeSvc is false": {
+			"true",
 			false,
 			true,
-			"true",
 		},
 		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true": {
+			"false",
 			true,
 			false,
-			"false",
 		},
 		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false": {
-			false,
-			false,
 			"false",
+			false,
+			false,
 		},
 	}
 
