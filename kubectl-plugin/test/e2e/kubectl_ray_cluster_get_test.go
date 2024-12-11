@@ -4,18 +4,12 @@ import (
 	"bytes"
 	"os/exec"
 	"strings"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/printers"
 )
-
-func TestKubectlRayGet(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Kubectl Ray Get")
-}
 
 var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 	It("succeed in getting ray cluster information", func() {
@@ -39,14 +33,14 @@ var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 
 		expectedTestResultTable.Rows = append(expectedTestResultTable.Rows, v1.TableRow{
 			Cells: []interface{}{
-				"raycluster-sample",
+				"raycluster-kuberay",
 				"default",
 				"1",
 				"1",
-				"1",
+				"2",
 				"0",
 				"0",
-				"3Gi",
+				"3G",
 			},
 		})
 

@@ -217,6 +217,11 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.ManagedBy != nil {
+		in, out := &in.ManagedBy, &out.ManagedBy
+		*out = new(string)
+		**out = **in
+	}
 	if in.AutoscalerOptions != nil {
 		in, out := &in.AutoscalerOptions, &out.AutoscalerOptions
 		*out = new(AutoscalerOptions)
@@ -399,6 +404,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		in, out := &in.SubmitterConfig, &out.SubmitterConfig
 		*out = new(SubmitterConfig)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.ManagedBy != nil {
+		in, out := &in.ManagedBy, &out.ManagedBy
+		*out = new(string)
+		**out = **in
 	}
 }
 

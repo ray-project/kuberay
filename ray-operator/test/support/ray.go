@@ -30,6 +30,10 @@ func RayJobDeploymentStatus(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
 	return job.Status.JobDeploymentStatus
 }
 
+func RayJobManagedBy(job *rayv1.RayJob) *string {
+	return job.Spec.ManagedBy
+}
+
 func RayJobReason(job *rayv1.RayJob) rayv1.JobFailedReason {
 	return job.Status.Reason
 }
@@ -126,6 +130,10 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 	)
 	assert.NoError(t.T(), err)
 	return pods.Items
+}
+
+func RayClusterManagedBy(rayCluster *rayv1.RayCluster) *string {
+	return rayCluster.Spec.ManagedBy
 }
 
 func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {

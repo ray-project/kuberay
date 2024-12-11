@@ -38,3 +38,4 @@ jobs:
     with:
       plugin-test: true
       dir-to-test: kubectl-plugin
+      ray-version: 2.40.0

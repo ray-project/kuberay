@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -74,6 +75,11 @@ var (
 	testServices            []runtime.Object
 	workerSelector          labels.Selector
 	workersToDelete         []string
+)
+
+const (
+	// MultiKueueController represents the vaue of the MultiKueue controller
+	MultiKueueController = "kueue.x-k8s.io/multikueue"
 )
 
 func setupTest(t *testing.T) {
@@ -1688,6 +1694,122 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 func TestCalculateStatus(t *testing.T) {
 	setupTest(t)
+	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
+
+	// disable feature gate for the following tests
+	restoreFeatureFlag := features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	podReadyStatus := corev1.PodStatus{
+		PodIP: headNodeIP,
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+	headLabel := map[string]string{
+		utils.RayClusterLabelKey:  instanceName,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+	}
+	workerLabel := map[string]string{
+		utils.RayClusterLabelKey:  instanceName,
+		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+	}
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels:    headLabel,
+		},
+		Status: podReadyStatus,
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+	for i := int32(0); i < expectReplicaNum; i++ {
+		runtimeObjects = append(runtimeObjects, &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "workerNode-" + strconv.Itoa(int(i)),
+				Namespace: namespaceStr,
+				Labels:    workerLabel,
+			},
+			Status: podReadyStatus,
+		})
+	}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	// Test head information
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
+	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
+	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
+	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+
+	// Test reconcilePodsErr with the feature gate disabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
+	assert.Nil(t, err)
+	assert.Empty(t, newInstance.Status.Conditions)
+
+	// enable feature gate for the following tests
+	restoreFeatureFlag()
+
+	// Test CheckRayHeadRunningAndReady with head pod running and ready
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+
+	// Test CheckRayHeadRunningAndReady with head pod not ready
+	headPod.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+
+	// Test CheckRayHeadRunningAndReady with head pod not running
+	headPod.Status.Phase = corev1.PodFailed
+	runtimeObjects = []runtime.Object{headPod, headService}
+	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r.Client = fakeClient
+	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+
+	// Test reconcilePodsErr with the feature gate enabled
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
+	assert.Nil(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
+}
+
+// TestCalculateStatusWithoutDesiredReplicas tests that the cluster CR should not be marked as Ready if
+// DesiredWorkerReplicas > 0 and DesiredWorkerReplicas != ReadyWorkerReplicas
+func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
+	setupTest(t)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
@@ -1732,57 +1854,115 @@ func TestCalculateStatus(t *testing.T) {
 		Scheme:   scheme.Scheme,
 	}
 
-	// Test head information
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	assert.Nil(t, err)
-	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
-	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
-	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
-	assert.NotNil(t, newInstance.Status.StateTransitionTimes, "Cluster state transition timestamp should be created")
-	assert.Equal(t, newInstance.Status.LastUpdateTime, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
+	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Nil(t, newInstance.Status.StateTransitionTimes)
+}
 
-	// Test reconcilePodsErr with the feature gate disabled
-	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
-	assert.Nil(t, err)
-	assert.Empty(t, newInstance.Status.Conditions)
+// TestCalculateStatusWithReconcileErrorBackAndForth tests that the cluster CR should not be marked as Ready if reconcileErr != nil
+// and the Ready state should not be removed after being Ready even if reconcileErr != nil
+func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
+	setupTest(t)
 
-	// enable feature gate for the following tests
-	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
 
-	// Test CheckRayHeadRunningAndReady with head pod running and ready
-	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
-
-	// Test CheckRayHeadRunningAndReady with head pod not ready
-	headPod.Status.Conditions = []corev1.PodCondition{
-		{
-			Type:   corev1.PodReady,
-			Status: corev1.ConditionFalse,
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	podReadyStatus := corev1.PodStatus{
+		PodIP: headNodeIP,
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
 		},
 	}
-	runtimeObjects = []runtime.Object{headPod, headService}
-	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-	r.Client = fakeClient
-	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	headLabel := map[string]string{
+		utils.RayClusterLabelKey:  instanceName,
+		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+	}
+	workerLabel := map[string]string{
+		utils.RayClusterLabelKey:  instanceName,
+		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+	}
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels:    headLabel,
+		},
+		Status: podReadyStatus,
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+	for i := int32(0); i < expectReplicaNum; i++ {
+		runtimeObjects = append(runtimeObjects, &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "workerNode-" + strconv.Itoa(int(i)),
+				Namespace: namespaceStr,
+				Labels:    workerLabel,
+			},
+			Status: podReadyStatus,
+		})
+	}
 
-	// Test CheckRayHeadRunningAndReady with head pod not running
-	headPod.Status.Phase = corev1.PodFailed
-	runtimeObjects = []runtime.Object{headPod, headService}
-	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-	r.Client = fakeClient
-	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionFalse))
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
 
-	// Test reconcilePodsErr with the feature gate enabled
-	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	// Test head information with a reconcile error
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, errors.New("invalid"))
 	assert.Nil(t, err)
-	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	// Note that even if there are DesiredWorkerReplicas ready, we don't mark CR to be Ready state due to the reconcile error.
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
+	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Nil(t, newInstance.Status.StateTransitionTimes)
+
+	// Test head information without a reconcile error
+	newInstance, err = r.calculateStatus(ctx, newInstance, nil)
+	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
+	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+	t1 := newInstance.Status.StateTransitionTimes[rayv1.Ready]
+
+	// Test head information with a reconcile error again
+	newInstance, err = r.calculateStatus(ctx, newInstance, errors.New("invalid2"))
+	assert.Nil(t, err)
+	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
+	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
+	assert.Equal(t, t1, newInstance.Status.StateTransitionTimes[rayv1.Ready]) // no change to StateTransitionTimes
 }
 
 func TestRayClusterProvisionedCondition(t *testing.T) {
 	setupTest(t)
-	defer features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)()
+	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
 
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -3156,6 +3336,70 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			}
 
 			assert.Truef(t, foundFailureEvent, "Expected event to be generated for %s pod creation failure, got events: %s", test.podType, strings.Join(events, "\n"))
+		})
+	}
+}
+
+func Test_ReconcileManagedBy(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	tests := map[string]struct {
+		managedBy       *string
+		shouldReconcile bool
+	}{
+		"ManagedBy field not set": {
+			managedBy:       nil,
+			shouldReconcile: true,
+		},
+		"ManagedBy field to RayOperator": {
+			managedBy:       ptr.To(utils.KubeRayController),
+			shouldReconcile: true,
+		},
+		"ManagedBy field empty": {
+			managedBy: ptr.To(""),
+		},
+		"ManagedBy field to external allowed controller": {
+			managedBy: ptr.To(MultiKueueController),
+		},
+		"ManagedBy field to external not allowed controller": {
+			managedBy: ptr.To("controller.com/invalid"),
+		},
+	}
+
+	for name, tc := range tests {
+		name, tc := name, tc
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+			cluster.Status = rayv1.RayClusterStatus{}
+			cluster.Spec.ManagedBy = tc.managedBy
+			runtimeObjects := []runtime.Object{cluster}
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(runtimeObjects...).
+				WithStatusSubresource(cluster).
+				Build()
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			result, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+			assert.Nil(t, err)
+			if tc.shouldReconcile {
+				// finish with requeue due to detected incosistency
+				assert.Equal(t, result.RequeueAfter.Seconds(), DefaultRequeueDuration.Seconds())
+			} else {
+				// skip reconciliation
+				assert.Equal(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds())
+			}
 		})
 	}
 }

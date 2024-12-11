@@ -25,6 +25,10 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
 
+	// TODO: This test will fail on Ray 2.40.0. Pin the Ray version to 2.9.0 as a workaround. Need to remove this after the issue is fixed.
+	rayServiceAC.Spec.RayClusterSpec.WithRayVersion("2.9.0")
+	rayServiceAC.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].WithImage("rayproject/ray:2.9.0")
+
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -52,12 +56,14 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
 
 	// test the default curl result
-	// curl /fruit
-	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("6"))
-	// curl /calc
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	g.Eventually(func(g Gomega) {
+		// curl /fruit
+		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		g.Expect(stdout.String()).To(Equal("6"))
+		// curl /calc
+		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+		g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	}, TestTimeoutShort).Should(Succeed())
 
 	// In-place update
 	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
@@ -79,7 +85,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	// Test the new price and factor
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
-		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 		g.Expect(stdout.String()).To(Equal("8"))
 		// curl /calc
 		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)

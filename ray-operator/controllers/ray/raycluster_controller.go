@@ -226,6 +226,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
 
+	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.validateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
@@ -1284,8 +1289,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	if utils.CheckAllPodsRunning(ctx, runtimePods) {
-		newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
+		if utils.CheckAllPodsRunning(ctx, runtimePods) {
+			newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			newInstance.Status.Reason = ""
+		}
 	}
 
 	// Check if the head node is running and ready by checking the head pod's status or if the cluster has been suspended.

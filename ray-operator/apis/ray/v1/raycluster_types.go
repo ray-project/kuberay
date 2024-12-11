@@ -14,6 +14,15 @@ type RayClusterSpec struct {
 	// Suspend indicates whether a RayCluster should be suspended.
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	Suspend *bool `json:"suspend,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	ManagedBy *string `json:"managedBy,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
 	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`

@@ -29,7 +29,8 @@ nav:
   - Components:
     - KubeRay Operator: components/operator.md
     - KubeRay API Server: components/apiserver.md
-    - KubeRay CLI: components/cli.md
+    - KubeRay Python Client: components/pythonclient.md
+    - KubeRay Python API Client: components/pythonapiclient.md
   - Features:
     - RayService: guidance/rayservice.md
     - RayJob: guidance/rayjob.md
