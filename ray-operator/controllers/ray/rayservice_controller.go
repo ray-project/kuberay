@@ -1202,7 +1202,7 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 	for key, value := range headPod.Labels {
 		originalLabels[key] = value
 	}
-	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil || !excludeHeadPodFromServeSvc {
+	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil && !excludeHeadPodFromServeSvc {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	} else {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse
