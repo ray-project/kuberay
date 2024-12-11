@@ -995,6 +995,7 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 			runtimeObjects := []runtime.Object{headPod}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			ctx := context.TODO()
+			// Initialize RayService reconciler.
 			r := &RayServiceReconciler{
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
