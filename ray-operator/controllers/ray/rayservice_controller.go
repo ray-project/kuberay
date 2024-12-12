@@ -1178,6 +1178,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 }
 
 func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, rayClusterInstance *rayv1.RayCluster, excludeHeadPodFromServeSvc bool) error {
+	logger := ctrl.LoggerFrom(ctx)
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
@@ -1202,7 +1203,10 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 	for key, value := range headPod.Labels {
 		originalLabels[key] = value
 	}
-	if err = httpProxyClient.CheckProxyActorHealth(ctx); err == nil && !excludeHeadPodFromServeSvc {
+
+	isHealthy := httpProxyClient.CheckProxyActorHealth(ctx) == nil
+	logger.Info("labelHeadPodForServeStatus", "isHealthy", isHealthy, "excludeHeadPodFromServeSvc", excludeHeadPodFromServeSvc)
+	if isHealthy && !excludeHeadPodFromServeSvc {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	} else {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceFalse

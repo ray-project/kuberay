@@ -167,3 +167,16 @@ func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Po
 	}
 	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
 }
+
+func logAllPodDetails(t Test, namespace *corev1.Namespace) {
+	t.T().Helper()
+
+	pods, err := t.Client().Core().CoreV1().Pods(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
+	if err != nil {
+		t.T().Logf("Error getting pods for status: %v", err)
+		return
+	}
+	for _, pod := range pods.Items {
+		t.T().Logf("Pod %s/%s: %v", pod.Namespace, pod.Name, pod)
+	}
+}

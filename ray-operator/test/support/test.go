@@ -116,6 +116,7 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 	t.T().Cleanup(func() {
 		storeAllPodLogs(t, namespace)
 		storeEvents(t, namespace)
+		logAllPodDetails(t, namespace)
 		deleteTestNamespace(t, namespace)
 	})
 	return namespace
