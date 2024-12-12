@@ -22,7 +22,6 @@ func TestStaticRayService(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	// Create a ConfigMap with Locust runner script
 	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
@@ -73,7 +72,6 @@ func TestAutoscalingRayService(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	// Create a ConfigMap with Locust runner script
 	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
@@ -140,7 +138,6 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	// Create a ConfigMap with Locust runner script
 	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))

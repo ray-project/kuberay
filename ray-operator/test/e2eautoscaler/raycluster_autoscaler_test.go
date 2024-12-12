@@ -37,7 +37,6 @@ func TestRayClusterAutoscaler(t *testing.T) {
 
 		// Create a namespace
 		namespace := test.NewTestNamespace()
-		test.StreamKubeRayOperatorLogs()
 
 		// Scripts for creating and terminating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
@@ -106,7 +105,6 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 
 		// Create a namespace
 		namespace := test.NewTestNamespace()
-		test.StreamKubeRayOperatorLogs()
 
 		// Scripts for creating and terminating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
@@ -168,7 +166,6 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 
 		// Create a namespace
 		namespace := test.NewTestNamespace()
-		test.StreamKubeRayOperatorLogs()
 
 		// Scripts for creating and terminating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
@@ -233,7 +230,6 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 
 		// Create a namespace
 		namespace := test.NewTestNamespace()
-		test.StreamKubeRayOperatorLogs()
 
 		// Scripts for creating and terminating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_concurrent_tasks.py"))
@@ -294,7 +290,6 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 
 		// Create a namespace
 		namespace := test.NewTestNamespace()
-		test.StreamKubeRayOperatorLogs()
 
 		// Script for creating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))

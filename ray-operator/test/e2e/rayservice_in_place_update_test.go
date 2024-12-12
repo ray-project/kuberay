@@ -21,7 +21,6 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-sample"
-	test.StreamKubeRayOperatorLogs()
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
 
