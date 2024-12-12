@@ -35,7 +35,6 @@ func TestRayService(t *testing.T) {
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
-			test.StreamKubeRayOperatorLogs()
 			rayServiceFromYaml := DeserializeRayServiceYAML(test, yamlFilePath)
 			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 

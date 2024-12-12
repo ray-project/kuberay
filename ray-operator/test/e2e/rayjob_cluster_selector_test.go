@@ -19,7 +19,6 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
 	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py"))

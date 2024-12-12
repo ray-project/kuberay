@@ -68,7 +68,6 @@ func TestRayCluster(t *testing.T) {
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
-			test.StreamKubeRayOperatorLogs()
 			rayClusterFromYaml := DeserializeRayClusterYAML(test, yamlFilePath)
 			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 
