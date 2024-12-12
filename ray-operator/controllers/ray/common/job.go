@@ -33,11 +33,6 @@ func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
 	return "", nil
 }
 
-// GetBaseRayJobCommand returns the first part of the Ray Job command up to and including the address, e.g. "ray job submit --address http://..."
-func GetBaseRayJobCommand(address string) []string {
-	return []string{"ray", "job", "submit", "--address", address}
-}
-
 // GetMetadataJson returns the JSON string of the metadata for the Ray job.
 func GetMetadataJson(metadata map[string]string, rayVersion string) (string, error) {
 	// Check that the Ray version is at least 2.6.0.
@@ -74,7 +69,14 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		address = "http://" + address
 	}
 
-	k8sJobCommand := GetBaseRayJobCommand(address)
+	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
+	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
+	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
+	k8sJobCommand := append([]string{"if"}, jobStatusCommand...)
+	k8sJobCommand = append(k8sJobCommand, ";", "then")
+	k8sJobCommand = append(k8sJobCommand, jobFollowCommand...)
+	k8sJobCommand = append(k8sJobCommand, ";", "else")
+	k8sJobCommand = append(k8sJobCommand, jobSubmitCommand...)
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
 	if err != nil {
@@ -108,8 +110,6 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", strconv.Quote(entrypointResources))
 	}
 
-	k8sJobCommand = append(k8sJobCommand, "--no-wait")
-
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
 	k8sJobCommand = append(k8sJobCommand, "--")
 
@@ -119,9 +119,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 	k8sJobCommand = append(k8sJobCommand, commandSlice...)
 
-	k8sJobCommand = append(k8sJobCommand, "2>&1", "|", "grep", "-zv", "'Please use a different submission_id'")
-
-	k8sJobCommand = append(k8sJobCommand, ";", "ray", "job", "logs", "--address", address, "--follow", jobId)
+	k8sJobCommand = append(k8sJobCommand, ";", "fi")
 
 	return k8sJobCommand, nil
 }
