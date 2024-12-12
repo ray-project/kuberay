@@ -1214,6 +1214,7 @@ func (r *RayServiceReconciler) labelHeadPodForServeStatus(ctx context.Context, r
 
 	if !reflect.DeepEqual(originalLabels, headPod.Labels) {
 		if updateErr := r.Update(ctx, headPod); updateErr != nil {
+			logger.Info("Failed to update head pod labels", "error", updateErr)
 			return updateErr
 		}
 	}
