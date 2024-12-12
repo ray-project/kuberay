@@ -921,18 +921,11 @@ func initFakeDashboardClient(appName string, deploymentStatus string, appStatus 
 	return &fakeDashboardClient
 }
 
-type FakeRayHttpProxyClient struct {
-	isHealthy bool
-}
-
-func (*FakeRayHttpProxyClient) InitClient() {}
-func (f *FakeRayHttpProxyClient) CheckProxyActorHealth(_ context.Context) error {
-	if f.isHealthy {
-		return nil
+func initFakeRayHttpProxyClient(isHealthy bool) utils.RayHttpProxyClientInterface {
+	return &utils.FakeRayHttpProxyClient{
+		IsHealthy: isHealthy,
 	}
-	return fmt.Errorf("the proxy actor is unhealthy")
 }
-func (*FakeRayHttpProxyClient) SetHostIp(_, _, _ string, _ int) {}
 
 func TestLabelHeadPodForServeStatus(t *testing.T) {
 	tests := map[string]struct {
@@ -995,15 +988,15 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 			runtimeObjects := []runtime.Object{headPod}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			ctx := context.TODO()
+
+			fakeRayHttpProxyClient := initFakeRayHttpProxyClient(tc.isHealthy)
 			// Initialize RayService reconciler.
 			r := &RayServiceReconciler{
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
 				httpProxyClientFunc: func() utils.RayHttpProxyClientInterface {
-					return &FakeRayHttpProxyClient{
-						isHealthy: tc.isHealthy,
-					}
+					return fakeRayHttpProxyClient
 				},
 			}
 
