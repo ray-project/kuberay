@@ -62,6 +62,15 @@ const (
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
+type DeletionPolicy string
+
+const (
+	DeleteClusterDeletionPolicy DeletionPolicy = "DeleteCluster" // Deletion policy to delete the entire Ray cluster on job completion.
+	DeleteWorkersDeletionPolicy DeletionPolicy = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
+	DeleteSelfDeletionPolicy    DeletionPolicy = "DeleteSelf"    // Deletion policy to delete the RayJob resource (and all associated resources) on job completion.
+	DeleteNoneDeletionPolicy    DeletionPolicy = "DeleteNone"    // Deletion policy to delete no resources on job completion.
+)
+
 type SubmitterConfig struct {
 	// BackoffLimit of the submitter k8s job.
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
@@ -95,6 +104,12 @@ type RayJobSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	ManagedBy *string `json:"managedBy,omitempty"`
+	// DeletionPolicy indicates what resources of the RayJob are deleted upon job completion.
+	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
+	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
+	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deletionPolicy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
+	DeletionPolicy *DeletionPolicy `json:"deletionPolicy,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Entrypoint string `json:"entrypoint,omitempty"`

@@ -19,6 +19,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -346,11 +347,53 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
-		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus), "RayJob", rayJobInstance.Name, "ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes, "ClusterSelector", rayJobInstance.Spec.ClusterSelector)
-		if rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
-			nowTime := time.Now()
-			shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
+		ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
+		nowTime := time.Now()
+		shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
+		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus), "RayJob", rayJobInstance.Name,
+			"ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
+			"ClusterSelector", rayJobInstance.Spec.ClusterSelector,
+			"ttlSecondsAfterFinished", ttlSeconds,
+			"Status.endTime", rayJobInstance.Status.EndTime,
+			"Now", nowTime,
+			"ShutdownTime", shutdownTime)
+
+		if features.Enabled(features.RayJobDeletionPolicy) &&
+			rayJobInstance.Spec.DeletionPolicy != nil &&
+			*rayJobInstance.Spec.DeletionPolicy != rayv1.DeleteNoneDeletionPolicy &&
+			len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			logger.Info(
+				"RayJob deployment status",
+				"jobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus,
+				"deletionPolicy", rayJobInstance.Spec.DeletionPolicy,
+				"ttlSecondsAfterFinished", ttlSeconds,
+				"Status.endTime", rayJobInstance.Status.EndTime,
+				"Now", nowTime,
+				"ShutdownTime", shutdownTime)
+			if shutdownTime.After(nowTime) {
+				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
+				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
+				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
+			}
+
+			switch *rayJobInstance.Spec.DeletionPolicy {
+			case rayv1.DeleteClusterDeletionPolicy:
+				logger.Info("Deleting RayCluster", "RayCluster", rayJobInstance.Status.RayClusterName)
+				_, err = r.deleteClusterResources(ctx, rayJobInstance)
+			case rayv1.DeleteWorkersDeletionPolicy:
+				logger.Info("Suspending all worker groups", "RayCluster", rayJobInstance.Status.RayClusterName)
+				err = r.suspendWorkerGroups(ctx, rayJobInstance)
+			case rayv1.DeleteSelfDeletionPolicy:
+				logger.Info("Deleting RayJob")
+				err = r.Client.Delete(ctx, rayJobInstance)
+			default:
+			}
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+		}
+
+		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionPolicy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			logger.Info(
 				"RayJob deployment status",
 				"jobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus,
@@ -377,6 +420,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
+
 		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
 	default:
@@ -617,6 +661,30 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 	return isClusterDeleted, nil
 }
 
+func (r *RayJobReconciler) suspendWorkerGroups(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
+	logger := ctrl.LoggerFrom(ctx)
+	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJobInstance)
+
+	cluster := rayv1.RayCluster{}
+	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
+		return err
+	}
+
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		cluster.Spec.WorkerGroupSpecs[i].Suspend = ptr.To[bool](true)
+	}
+
+	if err := r.Update(ctx, &cluster); err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update cluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
+		return err
+	}
+
+	logger.Info("All worker groups for RayCluster have had `suspend` set to true", "RayCluster", clusterIdentifier)
+	r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Set the `suspend` field to true for all worker groups in cluster %s/%s", cluster.Namespace, cluster.Name)
+
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -844,6 +912,9 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
+	}
+	if rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy == rayv1.DeleteNoneDeletionPolicy {
+		return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 	}
 	return nil
 }
