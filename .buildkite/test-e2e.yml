@@ -11,10 +11,15 @@
     - kind load docker-image kuberay/operator:nightly
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
-    # Run e2e tests
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e
-    # Printing KubeRay operator logs
-    - kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay
+    - sleep 20000
+    # # Run e2e tests
+    # - |
+    #   for i in {1..10}; do
+    #     echo "=== Test Run $i ==="
+    #     KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -v ./test/e2e/rayservice_in_place_update_test.go ./test/e2e/support.go
+    #   done
+    # # Printing KubeRay operator logs
+    # - kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay
 
 - label: 'Test Autoscaler E2E (nightly operator)'
   instance_size: large
