@@ -20,7 +20,6 @@ func TestRayClusterManagedBy(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	test.T().Run("Successful creation of cluster, managed by Kuberay Operator", func(t *testing.T) {
 		t.Parallel()

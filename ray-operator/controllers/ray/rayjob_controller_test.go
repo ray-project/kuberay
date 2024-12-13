@@ -30,6 +30,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -50,7 +51,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 			SubmissionMode:           rayv1.K8sJobMode,
 			ShutdownAfterJobFinishes: true,
 			RayClusterSpec: &rayv1.RayClusterSpec{
-				RayVersion: "2.9.0",
+				RayVersion: support.GetRayVersion(),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
@@ -58,7 +59,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-head",
-									Image: "rayproject/ray:2.9.0",
+									Image: support.GetRayImage(),
 									Resources: corev1.ResourceRequirements{
 										Limits: corev1.ResourceList{
 											corev1.ResourceCPU:    resource.MustParse("1"),
@@ -100,7 +101,7 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 								Containers: []corev1.Container{
 									{
 										Name:  "ray-worker",
-										Image: "rayproject/ray:2.9.0",
+										Image: support.GetRayImage(),
 									},
 								},
 							},
