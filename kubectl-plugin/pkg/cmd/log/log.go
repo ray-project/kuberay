@@ -195,7 +195,9 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 	// Get a list of logs of the ray nodes.
 	var logList []*bytes.Buffer
 	for _, rayNode := range rayNodes.Items {
-		request := kubeClientSet.CoreV1().Pods(rayNode.Namespace).GetLogs(rayNode.Name, &corev1.PodLogOptions{})
+		// Since the first container is always the ray container, we will retrieve the first container logs
+		containerName := rayNode.Spec.Containers[0].Name
+		request := kubeClientSet.CoreV1().Pods(rayNode.Namespace).GetLogs(rayNode.Name, &corev1.PodLogOptions{Container: containerName})
 
 		podLogs, err := request.Stream(ctx)
 		if err != nil {
@@ -232,12 +234,14 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 			return fmt.Errorf("failed to write to file for kuberay-head: %s: %w", rayNodes.Items[ind].Name, err)
 		}
 
+		containerName := rayNodes.Items[ind].Spec.Containers[0].Name
 		req := kubeClientSet.CoreV1().RESTClient().
 			Get().
 			Namespace(rayNodes.Items[ind].Namespace).
 			Resource("pods").
 			Name(rayNodes.Items[ind].Name).
 			SubResource("exec").
+			Param("container", containerName).
 			VersionedParams(&corev1.PodExecOptions{
 				Command: []string{"tar", "--warning=no-file-changed", "-cf", "-", "-C", filePathInPod, "."},
 				Stdin:   true,
