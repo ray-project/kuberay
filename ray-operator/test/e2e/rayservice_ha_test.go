@@ -269,7 +269,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 		"python", "/locust-runner/locust_runner.py", "-f", "/locustfile/locustfile.py", "--host", "http://test-rayservice-serve-svc:8000",
 	})
-	// Because this test shares the Locust RayCluster YAML file with other tests, 
+	// Because this test shares the Locust RayCluster YAML file with other tests,
 	// we need to ensure the YAML file is not accidentally updated.
 	g.Expect(time.Since(startTime) > 2*time.Minute).To(BeTrue())
 
