@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -59,7 +60,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
-								Image: "rayproject/ray:2.9.0",
+								Image: support.GetRayImage(),
 							},
 						},
 					},
@@ -77,7 +78,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-worker",
-									Image: "rayproject/ray:2.9.0",
+									Image: support.GetRayImage(),
 								},
 							},
 						},
