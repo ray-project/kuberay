@@ -15,7 +15,6 @@ import (
 )
 
 func TestRayServiceInPlaceUpdate(t *testing.T) {
-	// t.Skip("Skipping test due to flakiness")
 	test := With(t)
 	g := NewWithT(t)
 
