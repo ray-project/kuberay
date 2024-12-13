@@ -203,7 +203,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 }
 
 func TestRayServiceGCSFaultTolerance(t *testing.T) {
-	rayserviceYamlFile := "testdata/rayservice.ft.yaml"
+	rayserviceYamlFile := "testdata/ray-service.ft.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
 	test := With(t)
