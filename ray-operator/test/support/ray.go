@@ -150,6 +150,10 @@ func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
 	return service.Status.ServiceStatus
 }
 
+func RayServicesNumEndPoints(service *rayv1.RayService) int32 {
+	return service.Status.NumServeEndpoints
+}
+
 func GetRayClusterWorkerGroupReplicaSum(cluster *rayv1.RayCluster) int32 {
 	var replicas int32
 	for _, workerGroup := range cluster.Spec.WorkerGroupSpecs {

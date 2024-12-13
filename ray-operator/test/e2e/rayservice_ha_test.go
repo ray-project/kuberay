@@ -229,6 +229,8 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
+	g.Expect(GetRayService(test, rayService.Namespace, rayService.Name)).To(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))
+
 	// Get the underlying RayCluster of the RayService
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -252,22 +254,31 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	// Install Locust in the Locust head Pod
 	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
 
-	// Get no ops' head pod
-	noOpsHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
+	// Get current head pod
+	oldHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
+	// Store the name of the head Pod in a variable
+	oldHeadPodName := oldHeadPod.Name
 	// Kill gcs server
-	ExecPodCmd(test, noOpsHeadPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
+	ExecPodCmd(test, oldHeadPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
 	// wait for head pod not to be ready
 	g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeFalse()))
 
-	go func() {
-		// wait for head pod to be ready
-		g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-		// wait for 30 seconds
-		time.Sleep(30 * time.Second)
-	}()
+	startTime := time.Now()
 	// Run Locust test
 	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 		"python", "/locust-runner/locust_runner.py", "-f", "/locustfile/locustfile.py", "--host", "http://test-rayservice-serve-svc:8000",
 	})
+	// Because this test shares the Locust RayCluster YAML file with other tests, 
+	// we need to ensure the YAML file is not accidentally updated.
+	g.Expect(time.Since(startTime) > 2*time.Minute).To(BeTrue())
+
+	newHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Expect(newHeadPod.Name).To(Equal(oldHeadPodName))
+	g.Expect(newHeadPod.Status.ContainerStatuses[0].RestartCount).To(Equal(int32(1)))
+	// Verify that all pods are running
+	g.Expect(GetHeadPod(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
+	g.Expect(GetWorkerPods(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(sampleyaml.AllPodsRunningAndReady, BeTrue()))
 }
