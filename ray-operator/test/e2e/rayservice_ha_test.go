@@ -225,7 +225,8 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 
-	g.Expect(GetRayService(test, rayService.Namespace, rayService.Name)).To(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
+		Should(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))
 
 	// Get the underlying RayCluster of the RayService
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
