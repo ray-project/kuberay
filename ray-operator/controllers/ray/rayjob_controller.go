@@ -476,7 +476,8 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = k8sJobCommand
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/sh"}
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-c", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
 		logger.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
