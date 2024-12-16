@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -173,7 +174,12 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
 
 	// Start a goroutine to perform zero-downtime upgrade
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
+
 		test.T().Logf("Waiting several seconds before updating RayService")
 		time.Sleep(30 * time.Second)
 
@@ -196,4 +202,6 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
 		"python", "/locust-runner/locust_runner.py", "-f", "/locustfile/locustfile.py", "--host", "http://test-rayservice-serve-svc:8000",
 	})
+
+	wg.Wait()
 }
