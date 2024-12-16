@@ -1,0 +1,161 @@
+---
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: test-rayservice
+  annotations:
+    ray.io/ft-enabled: "true"
+spec:
+  excludeHeadPodFromServeSvc: true
+  serveConfigV2: |
+    applications:
+      - name: no_ops
+        route_prefix: /
+        import_path: microbenchmarks.no_ops:app_builder
+        args:
+          num_forwards: 0
+        runtime_env:
+          working_dir: https://github.com/ray-project/serve_workloads/archive/a2e2405f3117f1b4134b6924b5f44c4ff0710c00.zip
+        deployments:
+          - name: NoOp
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 1
+  rayClusterConfig:
+    rayVersion: "2.9.0"
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+        redis-password: $REDIS_PASSWORD
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray:2.9.0
+              env:
+                - name: RAY_REDIS_ADDRESS
+                  value: redis:6379
+                # This environment variable is used in the `rayStartParams` above.
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-password-secret
+                      key: password
+                - name: RAY_gcs_rpc_server_reconnect_timeout_s
+                  value: "20"
+              resources:
+                requests:
+                  cpu: 300m
+                  memory: 1G
+                limits:
+                  cpu: 500m
+                  memory: 2G
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+    workerGroupSpecs:
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 1
+        groupName: small-group
+        rayStartParams:
+          num-cpus: "1"
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: rayproject/ray:2.9.0
+                resources:
+                  requests:
+                    cpu: 300m
+                    memory: 1G
+                  limits:
+                    cpu: 500m
+                    memory: 1G
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: redis-config
+  labels:
+    app: redis
+data:
+  redis.conf: |-
+    dir /data
+    port 6379
+    bind 0.0.0.0
+    appendonly yes
+    protected-mode no
+    requirepass 5241590000000000
+    pidfile /data/redis-6379.pid
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:5.0.8
+          command:
+            - "sh"
+            - "-c"
+            - "redis-server /usr/local/etc/redis/redis.conf"
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+---
+# Redis password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-password-secret
+type: Opaque
+data:
+  # echo -n "5241590000000000" | base64
+  password: NTI0MTU5MDAwMDAwMDAwMA==
