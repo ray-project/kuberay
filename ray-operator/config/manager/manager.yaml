@@ -26,7 +26,8 @@ spec:
       containers:
       - command:
         - /manager
-#        args:
+        args:
+        - --feature-gates=RayClusterStatusConditions=true
 #        - --enable-leader-election
         image: kuberay/operator
         imagePullPolicy: IfNotPresent
