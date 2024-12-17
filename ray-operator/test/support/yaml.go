@@ -57,3 +57,19 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	}
 	t.T().Logf("Successfully applied %s to namespace %s", filename, namespace)
 }
+
+func KubectlApplyQuota(t Test, namespace, quota string) {
+	t.T().Helper()
+	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "create", "quota", namespace, "-n", namespace, quota)
+	err := kubectlCmd.Run()
+	assert.NoError(t.T(), err)
+	t.T().Logf("Successfully applied quota %s in %s", quota, namespace)
+}
+
+func KubectlDeleteAllPods(t Test, namespace string) {
+	t.T().Helper()
+	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "delete", "--all", "pods", "-n", namespace)
+	err := kubectlCmd.Run()
+	assert.NoError(t.T(), err)
+	t.T().Logf("Successfully delete pods in %s", namespace)
+}
