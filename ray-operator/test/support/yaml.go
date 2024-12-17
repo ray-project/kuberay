@@ -52,6 +52,8 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	t.T().Helper()
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "apply", "-f", filename, "-n", namespace)
 	err := kubectlCmd.Run()
-	assert.NoError(t.T(), err)
-	t.T().Logf("Successfully applied %s", filename)
+	if err != nil {
+		t.T().Fatalf("Failed to apply %s to namespace %s: %v", filename, namespace, err)
+	}
+	t.T().Logf("Successfully applied %s to namespace %s", filename, namespace)
 }
