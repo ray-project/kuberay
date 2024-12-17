@@ -6,24 +6,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	testRayClusterYamlObject := RayClusterYamlObject{
-		ClusterName:    "test-ray-cluster",
-		Namespace:      "default",
-		RayVersion:     "2.39.0",
-		Image:          "rayproject/ray:2.39.0",
-		HeadCPU:        "1",
-		HeadMemory:     "5Gi",
-		WorkerGrpName:  "worker-group1",
-		WorkerReplicas: 3,
-		WorkerCPU:      "1",
-		WorkerMemory:   "5Gi",
+		ClusterName: "test-ray-cluster",
+		Namespace:   "default",
+		RayClusterSpecObject: RayClusterSpecObject{
+			RayVersion:     "2.39.0",
+			Image:          "rayproject/ray:2.39.0",
+			HeadCPU:        "1",
+			HeadMemory:     "5Gi",
+			WorkerGrpName:  "worker-group1",
+			WorkerReplicas: 3,
+			WorkerCPU:      "1",
+			WorkerMemory:   "5Gi",
+		},
 	}
 
-	result, err := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
-	assert.Nil(t, err)
+	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	assert.Equal(t, testRayClusterYamlObject.ClusterName, *result.Name)
 	assert.Equal(t, testRayClusterYamlObject.Namespace, *result.Namespace)
@@ -37,22 +40,55 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerMemory), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
 }
 
-func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
-	testRayClusterYamlObject := RayClusterYamlObject{
-		ClusterName:    "test-ray-cluster",
+func TestGenerateRayJobApplyConfig(t *testing.T) {
+	testRayJobYamlObject := RayJobYamlObject{
+		RayJobName:     "test-ray-job",
 		Namespace:      "default",
-		RayVersion:     "2.39.0",
-		Image:          "rayproject/ray:2.39.0",
-		HeadCPU:        "1",
-		HeadMemory:     "5Gi",
-		WorkerGrpName:  "worker-group1",
-		WorkerReplicas: 3,
-		WorkerCPU:      "1",
-		WorkerMemory:   "5Gi",
+		SubmissionMode: "InteractiveMode",
+		RayClusterSpecObject: RayClusterSpecObject{
+			RayVersion:     "2.39.0",
+			Image:          "rayproject/ray:2.39.0",
+			HeadCPU:        "1",
+			HeadMemory:     "5Gi",
+			WorkerGrpName:  "worker-group1",
+			WorkerReplicas: 3,
+			WorkerCPU:      "1",
+			WorkerMemory:   "5Gi",
+		},
 	}
 
-	result, err := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
-	assert.Nil(t, err)
+	result := testRayJobYamlObject.GenerateRayJobApplyConfig()
+
+	assert.Equal(t, testRayJobYamlObject.RayJobName, *result.Name)
+	assert.Equal(t, testRayJobYamlObject.Namespace, *result.Namespace)
+	assert.Equal(t, rayv1.JobSubmissionMode(testRayJobYamlObject.SubmissionMode), *result.Spec.SubmissionMode)
+	assert.Equal(t, testRayJobYamlObject.RayVersion, *result.Spec.RayClusterSpec.RayVersion)
+	assert.Equal(t, testRayJobYamlObject.Image, *result.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image)
+	assert.Equal(t, resource.MustParse(testRayJobYamlObject.HeadCPU), *result.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Cpu())
+	assert.Equal(t, resource.MustParse(testRayJobYamlObject.HeadMemory), *result.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Memory())
+	assert.Equal(t, testRayJobYamlObject.WorkerGrpName, *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].GroupName)
+	assert.Equal(t, testRayJobYamlObject.WorkerReplicas, *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
+	assert.Equal(t, resource.MustParse(testRayJobYamlObject.WorkerCPU), *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
+	assert.Equal(t, resource.MustParse(testRayJobYamlObject.WorkerMemory), *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+}
+
+func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
+	testRayClusterYamlObject := RayClusterYamlObject{
+		ClusterName: "test-ray-cluster",
+		Namespace:   "default",
+		RayClusterSpecObject: RayClusterSpecObject{
+			RayVersion:     "2.39.0",
+			Image:          "rayproject/ray:2.39.0",
+			HeadCPU:        "1",
+			HeadMemory:     "5Gi",
+			WorkerGrpName:  "worker-group1",
+			WorkerReplicas: 3,
+			WorkerCPU:      "1",
+			WorkerMemory:   "5Gi",
+		},
+	}
+
+	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
 	assert.Nil(t, err)

@@ -119,22 +119,21 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 
 	// Will generate yaml file
 	rayClusterObject := generation.RayClusterYamlObject{
-		Namespace:      *options.configFlags.Namespace,
-		ClusterName:    options.clusterName,
-		RayVersion:     options.rayVersion,
-		Image:          options.image,
-		HeadCPU:        options.headCPU,
-		HeadMemory:     options.headMemory,
-		WorkerGrpName:  options.workerGrpName,
-		WorkerReplicas: options.workerReplicas,
-		WorkerCPU:      options.workerCPU,
-		WorkerMemory:   options.workerMemory,
+		Namespace:   *options.configFlags.Namespace,
+		ClusterName: options.clusterName,
+		RayClusterSpecObject: generation.RayClusterSpecObject{
+			RayVersion:     options.rayVersion,
+			Image:          options.image,
+			HeadCPU:        options.headCPU,
+			HeadMemory:     options.headMemory,
+			WorkerGrpName:  options.workerGrpName,
+			WorkerReplicas: options.workerReplicas,
+			WorkerCPU:      options.workerCPU,
+			WorkerMemory:   options.workerMemory,
+		},
 	}
 
-	rayClusterac, err := rayClusterObject.GenerateRayClusterApplyConfig()
-	if err != nil {
-		return err
-	}
+	rayClusterac := rayClusterObject.GenerateRayClusterApplyConfig()
 
 	// If dry run is enabled, it will call the yaml converter and print out the yaml
 	if options.dryRun {
