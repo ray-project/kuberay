@@ -883,8 +883,9 @@ func TestReconcileRayCluster(t *testing.T) {
 			}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			r := RayServiceReconciler{
-				Client: fakeClient,
-				Scheme: newScheme,
+				Client:   fakeClient,
+				Scheme:   newScheme,
+				Recorder: record.NewFakeRecorder(1),
 			}
 			service := rayService.DeepCopy()
 			if tc.rayServiceUpgradeStrategy != "" {

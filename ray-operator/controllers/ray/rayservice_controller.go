@@ -435,14 +435,20 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		// If no fields are set, zero downtime upgrade by default is enabled.
 		// Spec.UpgradeStrategy takes precedence over ENABLE_ZERO_DOWNTIME.
 		enableZeroDowntime := true
+		strategyMessage := ""
 		if zeroDowntimeEnvVar != "" {
 			enableZeroDowntime = strings.ToLower(zeroDowntimeEnvVar) != "false"
+			strategyMessage = fmt.Sprintf("ENABLE_ZERO_DOWNTIME environmental variable is set to %q", strings.ToLower(zeroDowntimeEnvVar))
 		}
 		if rayServiceSpecUpgradeStrategy != nil {
 			enableZeroDowntime = *rayServiceSpecUpgradeStrategy == rayv1.NewCluster
+			strategyMessage = fmt.Sprintf("Upgrade Strategy is set to %q", *rayServiceSpecUpgradeStrategy)
 		}
 
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
+			if enableZeroDowntime && activeRayCluster != nil {
+				r.Recorder.Event(rayServiceInstance, "Normal", "UpgradeStrategy", strategyMessage)
+			}
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.
 			r.markRestartAndAddPendingClusterName(ctx, rayServiceInstance)
