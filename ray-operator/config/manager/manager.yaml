@@ -26,7 +26,8 @@ spec:
       containers:
       - command:
         - /manager
-#        args:
+        args:
+        - --feature-gates=RayClusterStatusConditions=true # this argument can be removed for version >= v1.3 where the feature gate is enabled by default.
 #        - --enable-leader-election
         image: kuberay/operator
         imagePullPolicy: IfNotPresent

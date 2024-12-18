@@ -3,6 +3,8 @@ package support
 import (
 	"errors"
 
+	"github.com/onsi/gomega/format"
+	"github.com/onsi/gomega/types"
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
@@ -68,6 +70,48 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
 	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+}
+
+func StatusCondition(condType rayv1.RayClusterConditionType) func(*rayv1.RayCluster) metav1.Condition {
+	return func(cluster *rayv1.RayCluster) metav1.Condition {
+		if cluster != nil {
+			for _, cond := range cluster.Status.Conditions {
+				if cond.Type == string(condType) {
+					return cond
+				}
+			}
+		}
+		return metav1.Condition{}
+	}
+}
+
+type ConditionMatcher struct {
+	expected metav1.Condition
+}
+
+func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, errors.New("<actual> should be a metav1.Condition but it is nil")
+	}
+	a, ok := actual.(metav1.Condition)
+	if !ok {
+		return false, errors.New("<actual> should be a metav1.Condition")
+	}
+	return a.Reason == c.expected.Reason && a.Status == c.expected.Status, nil
+}
+
+func (c *ConditionMatcher) FailureMessage(actual interface{}) (message string) {
+	a := actual.(metav1.Condition)
+	return format.Message(a, "to equal", c.expected)
+}
+
+func (c *ConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	a := actual.(metav1.Condition)
+	return format.Message(a, "not to equal", c.expected)
+}
+
+func MatchCondition(status metav1.ConditionStatus, reason string) types.GomegaMatcher {
+	return &ConditionMatcher{expected: metav1.Condition{Status: status, Reason: reason}}
 }
 
 func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
