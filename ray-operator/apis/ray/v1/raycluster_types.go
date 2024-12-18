@@ -54,6 +54,9 @@ type HeadGroupSpec struct {
 
 // WorkerGroupSpec are the specs for the worker pods
 type WorkerGroupSpec struct {
+	// Suspend indicates whether a worker group should be suspended.
+	// A suspended worker group will have all pods deleted.
+	Suspend *bool `json:"suspend,omitempty"`
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`
 	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.

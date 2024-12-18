@@ -9,6 +9,7 @@ import (
 // WorkerGroupSpecApplyConfiguration represents an declarative configuration of the WorkerGroupSpec type for use
 // with apply.
 type WorkerGroupSpecApplyConfiguration struct {
+	Suspend            *bool                                 `json:"suspend,omitempty"`
 	GroupName          *string                               `json:"groupName,omitempty"`
 	Replicas           *int32                                `json:"replicas,omitempty"`
 	MinReplicas        *int32                                `json:"minReplicas,omitempty"`
@@ -24,6 +25,14 @@ type WorkerGroupSpecApplyConfiguration struct {
 // apply.
 func WorkerGroupSpec() *WorkerGroupSpecApplyConfiguration {
 	return &WorkerGroupSpecApplyConfiguration{}
+}
+
+// WithSuspend sets the Suspend field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Suspend field is set to the value of the last call.
+func (b *WorkerGroupSpecApplyConfiguration) WithSuspend(value bool) *WorkerGroupSpecApplyConfiguration {
+	b.Suspend = &value
+	return b
 }
 
 // WithGroupName sets the GroupName field in the declarative configuration to the given value

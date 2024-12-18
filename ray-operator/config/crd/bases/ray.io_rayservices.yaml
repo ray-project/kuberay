@@ -4134,6 +4134,8 @@ spec:
                                 type: string
                               type: array
                           type: object
+                        suspend:
+                          type: boolean
                         template:
                           properties:
                             metadata:
