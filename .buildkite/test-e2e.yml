@@ -12,7 +12,7 @@
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e/support.go ./test/e2e/raycluster_test.go ./test/e2e/rayjob_test.go ./test/e2e/rayjob_cluster_selector_test.go ./test/e2e/rayjob_lightweight_test.go ./test/e2e/rayjob_retry_test.go ./test/e2e/rayjob_suspend_test.go
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e
     # Printing KubeRay operator logs
     - kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay
 
@@ -30,7 +30,7 @@
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e/rayservice_ha_test.go ./test/e2e/rayservice_in_place_update_test.go ./test/e2e/support.go
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayservice
     # Printing KubeRay operator logs
     - kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay
 

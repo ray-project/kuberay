@@ -21,7 +21,7 @@ func TestRayJobRetry(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "fail.py"))
+	jobsAC := newConfigMap(namespace.Name, files(test, "fail.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)

@@ -26,7 +26,7 @@ func TestStaticRayService(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -76,7 +76,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -142,7 +142,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -218,7 +218,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, "locust-runner-script", files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
