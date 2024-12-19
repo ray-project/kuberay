@@ -15,6 +15,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var (
@@ -116,6 +118,33 @@ var (
 								Name: "ray-head",
 								Ports: []corev1.ContainerPort{
 									{ContainerPort: 8000, Name: "serve"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	instanceWithoutSvc = &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample-nosvc",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadServiceAnnotations: map[string]string{
+				headServiceAnnotationKey1: headServiceAnnotationValue1,
+				headServiceAnnotationKey2: headServiceAnnotationValue2,
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				ServiceType: corev1.ServiceTypeClusterIP,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 10001, Name: "client"},
 								},
 							},
 						},
@@ -644,6 +673,80 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		}
 		if port.Port != expectedPortNumber {
 			t.Fatalf("Expected `%v` but got `%v`", expectedPortNumber, port.Port)
+		}
+	}
+
+	validateServiceTypeForUserSpecifiedService(svc, userType, t)
+	validateLabelsForUserSpecifiedService(svc, userLabels, t)
+	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
+}
+
+func TestUserSpecifiedServeServicePorts(t *testing.T) {
+	// Use any RayService instance as a base for the test.
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	userName := "user-custom-name"
+	userNamespace := "user-custom-namespace"
+	userLabels := map[string]string{"userLabelKey": "userLabelValue", utils.RayClusterLabelKey: "userClusterName"} // Override default cluster name
+	userAnnotations := map[string]string{"userAnnotationKey": "userAnnotationValue", "userAnnotationKey2": "userAnnotationValue2"}
+	// Specify serve service port.
+	userServePort := []corev1.ServicePort{{Name: "serve", Port: 12345, NodePort: 55555, TargetPort: intstr.IntOrString{IntVal: 12345}}}
+	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", utils.RayClusterLabelKey: "userSelectorClusterName"}
+	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
+	userType := corev1.ServiceTypeLoadBalancer
+
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        userName,
+			Namespace:   userNamespace,
+			Labels:      userLabels,
+			Annotations: userAnnotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports:    userServePort,
+			Selector: userSelector,
+			Type:     userType,
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithoutSvc)
+	if err != nil {
+		t.Errorf("failed to build serve service: %v", err)
+	}
+
+	// Check every annotation is in the service annotation
+	for k := range userAnnotations {
+		if _, ok := svc.ObjectMeta.Annotations[k]; !ok {
+			t.Errorf("Final labels should contain key=%s", k)
+		}
+	}
+
+	// Check that selectors only have default selectors
+	if len(svc.Spec.Selector) != 2 {
+		t.Errorf("Selectors should have just 2 keys %s and %s", utils.RayClusterLabelKey, utils.RayClusterServingServiceLabelKey)
+	}
+	if svc.Spec.Selector[utils.RayClusterLabelKey] != instanceWithoutSvc.Name {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterLabelKey, instanceWithWrongSvc.Name, svc.Spec.Selector[utils.RayClusterLabelKey])
+	}
+	if svc.Spec.Selector[utils.RayClusterServingServiceLabelKey] != utils.EnableRayClusterServingServiceTrue {
+		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterServingServiceLabelKey, utils.EnableRayClusterServingServiceTrue, svc.Spec.Selector[utils.RayClusterServingServiceLabelKey])
+	}
+
+	// ports should have user define serve port
+	ports := svc.Spec.Ports
+	expectedPortName := utils.ServingPortName
+	expectedPortNumber := int32(12345)
+	expectedNodePortNumber := int32(55555)
+
+	for _, port := range ports {
+		if port.Name != utils.ServingPortName {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortName, port.Name)
+		}
+		if port.Port != expectedPortNumber {
+			t.Fatalf("Expected `%v` but got `%v`", expectedPortNumber, port.Port)
+		}
+		if port.NodePort != expectedNodePortNumber {
+			t.Fatalf("Expected `%v` but got `%v`", expectedNodePortNumber, port.NodePort)
 		}
 	}
 

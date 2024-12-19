@@ -238,7 +238,6 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 			if serveService.ObjectMeta.Annotations == nil {
 				serveService.ObjectMeta.Annotations = make(map[string]string)
 			}
-
 			// Add port with name "serve" if it is already not added and ignore any custom ports
 			// Keeping this consistentent with adding only serve port in serve service
 			if len(ports) != 0 {
@@ -248,7 +247,8 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				ports := []corev1.ServicePort{}
 				for _, port := range serveService.Spec.Ports {
 					if port.Name == utils.ServingPortName {
-						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
+						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port, NodePort: port.NodePort,
+							TargetPort: port.TargetPort}
 						ports = append(ports, svcPort)
 						break
 					}
