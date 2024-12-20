@@ -92,6 +92,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if manager := utils.ManagedByExternalController(rayJobInstance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayJob managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
@@ -471,7 +476,8 @@ func (r *RayJobReconciler) getSubmitterTemplate(ctx context.Context, rayJobInsta
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = k8sJobCommand
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/sh"}
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-c", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
 		logger.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)

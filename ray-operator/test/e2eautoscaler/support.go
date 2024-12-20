@@ -114,9 +114,52 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 					}))))
 }
 
+func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfiguration {
+	return corev1ac.PodTemplateSpec().
+		WithSpec(corev1ac.PodSpec().
+			WithRestartPolicy(corev1.RestartPolicyNever).
+			WithContainers(corev1ac.Container().
+				WithName("ray-head").
+				WithImage(GetRayImage()).
+				WithPorts(
+					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
+					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
+					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+				).
+				WithEnv(corev1ac.EnvVar().WithName("RAY_enable_autoscaler_v2").WithValue("1")).
+				WithResources(corev1ac.ResourceRequirements().
+					WithRequests(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceMemory: resource.MustParse("1G"),
+					}).
+					WithLimits(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("2G"),
+					}))))
+}
+
 func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfiguration {
 	return corev1ac.PodTemplateSpec().
 		WithSpec(corev1ac.PodSpec().
+			WithContainers(corev1ac.Container().
+				WithName("ray-worker").
+				WithImage(GetRayImage()).
+				WithResources(corev1ac.ResourceRequirements().
+					WithRequests(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceMemory: resource.MustParse("1G"),
+					}).
+					WithLimits(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("1G"),
+					}))))
+}
+
+func workerPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfiguration {
+	return corev1ac.PodTemplateSpec().
+		WithSpec(corev1ac.PodSpec().
+			WithRestartPolicy(corev1.RestartPolicyNever).
 			WithContainers(corev1ac.Container().
 				WithName("ray-worker").
 				WithImage(GetRayImage()).

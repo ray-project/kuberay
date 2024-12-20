@@ -6,6 +6,7 @@ package v1
 // with apply.
 type RayClusterSpecApplyConfiguration struct {
 	Suspend                 *bool                                `json:"suspend,omitempty"`
+	ManagedBy               *string                              `json:"managedBy,omitempty"`
 	AutoscalerOptions       *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
 	HeadServiceAnnotations  map[string]string                    `json:"headServiceAnnotations,omitempty"`
 	EnableInTreeAutoscaling *bool                                `json:"enableInTreeAutoscaling,omitempty"`
@@ -25,6 +26,14 @@ func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 // If called multiple times, the Suspend field is set to the value of the last call.
 func (b *RayClusterSpecApplyConfiguration) WithSuspend(value bool) *RayClusterSpecApplyConfiguration {
 	b.Suspend = &value
+	return b
+}
+
+// WithManagedBy sets the ManagedBy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ManagedBy field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithManagedBy(value string) *RayClusterSpecApplyConfiguration {
+	b.ManagedBy = &value
 	return b
 }
 

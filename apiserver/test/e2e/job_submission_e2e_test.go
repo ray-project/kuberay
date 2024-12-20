@@ -41,7 +41,7 @@ func TestCreateJobSubmission(t *testing.T) {
 			Name:        tCtx.GetNextName(),
 			Namespace:   tCtx.GetNamespaceName(),
 			User:        "boris",
-			Version:     "2.9.0",
+			Version:     tCtx.GetRayVersion(),
 			Environment: api.Cluster_DEV,
 			ClusterSpec: &api.ClusterSpec{
 				HeadGroupSpec: &api.HeadGroupSpec{

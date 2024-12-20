@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -28,7 +28,7 @@ func DeserializeRayClusterYAML(t Test, filename string) *rayv1.RayCluster {
 	t.T().Helper()
 	rayCluster := &rayv1.RayCluster{}
 	err := deserializeYAML(filename, rayCluster)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err, "Fail to deserialize yaml file %s", filename)
 	return rayCluster
 }
 
@@ -36,7 +36,7 @@ func DeserializeRayJobYAML(t Test, filename string) *rayv1.RayJob {
 	t.T().Helper()
 	rayJob := &rayv1.RayJob{}
 	err := deserializeYAML(filename, rayJob)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err, "Fail to deserialize yaml file %s", filename)
 	return rayJob
 }
 
@@ -44,7 +44,7 @@ func DeserializeRayServiceYAML(t Test, filename string) *rayv1.RayService {
 	t.T().Helper()
 	rayService := &rayv1.RayService{}
 	err := deserializeYAML(filename, rayService)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err, "Fail to deserialize yaml file %s", filename)
 	return rayService
 }
 
@@ -52,6 +52,22 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	t.T().Helper()
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "apply", "-f", filename, "-n", namespace)
 	err := kubectlCmd.Run()
-	assert.NoError(t.T(), err)
-	t.T().Logf("Successfully applied %s", filename)
+	require.NoError(t.T(), err, "Failed to apply %s to namespace %s", filename, namespace)
+	t.T().Logf("Successfully applied %s to namespace %s", filename, namespace)
+}
+
+func KubectlApplyQuota(t Test, namespace, quota string) {
+	t.T().Helper()
+	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "create", "quota", namespace, "-n", namespace, quota)
+	err := kubectlCmd.Run()
+	require.NoError(t.T(), err, "Failed to apply quota %s in %s", quota, namespace)
+	t.T().Logf("Successfully applied quota %s in %s", quota, namespace)
+}
+
+func KubectlDeleteAllPods(t Test, namespace string) {
+	t.T().Helper()
+	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "delete", "--all", "pods", "-n", namespace)
+	err := kubectlCmd.Run()
+	require.NoError(t.T(), err, "Failed to delete pods in %s", namespace)
+	t.T().Logf("Successfully delete pods in %s", namespace)
 }

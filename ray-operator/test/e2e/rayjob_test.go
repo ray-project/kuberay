@@ -6,10 +6,12 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -20,10 +22,9 @@ func TestRayJob(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	test.StreamKubeRayOperatorLogs()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, "jobs", files(test, "counter.py", "fail.py", "stop.py", "long_running.py"))
+	jobsAC := newConfigMap(namespace.Name, files(test, "counter.py", "fail.py", "stop.py", "long_running.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -244,5 +245,50 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+	})
+
+	test.T().Run("RayJob should be created, but not updated when managed externally", func(_ *testing.T) {
+		// RayJob
+		rayJobAC := rayv1ac.RayJob("managed-externally", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
+				WithManagedBy("kueue.x-k8s.io/multikueue"))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Should not to be able to change managedBy field as it's immutable
+		rayJobAC.Spec.WithManagedBy(utils.KubeRayController)
+		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).To(HaveOccurred())
+		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
+			Should(WithTransform(RayJobManagedBy, Equal(ptr.To("kueue.x-k8s.io/multikueue"))))
+
+		// Refresh the RayJob status and assert it has not been updated
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
+
+		// Assert the associated RayCluster has not beed created
+		rcList, err := test.Client().Ray().RayV1().RayClusters(rayJob.Namespace).List(test.Ctx(), metav1.ListOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		for _, rc := range rcList.Items {
+			g.Expect(rc.Name).NotTo(HaveSuffix(*rayJobAC.Name))
+		}
+
+		// Assert the submitter Job has not been created
+		g.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), *rayJobAC.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Deleted RayJob %s/%s successfully", *rayJobAC.Namespace, *rayJobAC.Name)
 	})
 }

@@ -44,6 +44,7 @@ type End2EndTestingContext struct {
 	k8client               *kubernetes.Clientset
 	apiServerBaseURL       string
 	rayImage               string
+	rayVersion             string
 	namespaceName          string
 	computeTemplateName    string
 	clusterName            string
@@ -61,6 +62,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 	// ordering is important as there dependencies between field values
 	return newEnd2EndTestingContext(t,
 		withRayImage(),
+		withRayVersion(),
 		withBaseURL(),
 		withHttpClient(),
 		withContext(),
@@ -117,7 +119,7 @@ func withRayImage() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		rayImage := os.Getenv("E2E_API_SERVER_RAY_IMAGE")
 		if strings.TrimSpace(rayImage) == "" {
-			rayImage = "rayproject/ray:2.9.0-py310"
+			rayImage = RayImage + "-py310"
 		}
 		// detect if we are running on arm64 machine, most likely apple silicon
 		// the os name is not checked as it also possible that it might be linux
@@ -126,6 +128,17 @@ func withRayImage() contextOption {
 			rayImage = rayImage + "-aarch64"
 		}
 		testingContext.rayImage = rayImage
+		return nil
+	}
+}
+
+func withRayVersion() contextOption {
+	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+		rayVersion := os.Getenv("E2E_API_SERVER_RAY_VERSION")
+		if strings.TrimSpace(rayVersion) == "" {
+			rayVersion = RayVersion
+		}
+		testingContext.rayVersion = rayVersion
 		return nil
 	}
 }
@@ -208,6 +221,10 @@ func (e2etc *End2EndTestingContext) GetComputeTemplateName() string {
 
 func (e2etc *End2EndTestingContext) GetRayImage() string {
 	return e2etc.rayImage
+}
+
+func (e2etc *End2EndTestingContext) GetRayVersion() string {
+	return e2etc.rayVersion
 }
 
 func (e2etc *End2EndTestingContext) GetRayApiServerClient() *kuberayHTTP.KuberayAPIServerClient {

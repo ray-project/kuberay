@@ -42,7 +42,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "3cpo",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -80,7 +80,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -140,7 +140,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -248,7 +248,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "bullwinkle",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: nil,
 				},
@@ -265,7 +265,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "bullwinkle",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{},
 				},
@@ -282,7 +282,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -310,7 +310,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -335,7 +335,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -365,7 +365,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
@@ -399,7 +399,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
 					User:        "boris",
-					Version:     "2.9.0",
+					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{

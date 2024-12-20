@@ -1,14 +1,26 @@
-name: e2e test reusable workflow
+name: kubectl plugin e2e test
 
 on:
-  workflow_call:
-    inputs:
-      plugin-test:
-        required: true
-        type: boolean
-      dir-to-test:
-        required: true
-        type: string
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths-ignore:
+      - 'apiserver/**'
+      - 'docs/**'
+      - '**.adoc'
+      - '**.md'
+      - 'LICENSE'
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths-ignore:
+      - 'apiserver/**'
+      - 'docs/**'
+      - '**.adoc'
+      - '**.md'
+      - 'LICENSE'
 
 jobs:
   build:
@@ -32,8 +44,17 @@ jobs:
         - name: Setup and start KinD cluster
           uses: ./.github/workflows/actions/kind
 
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.12'
+
+        - name: Install Ray
+          run: |
+            python --version
+            pip install -U "ray[default]==2.40.0"
+
         - name: Build CLI and Add to PATH
-          if: inputs.plugin-test
           run: |
             cd ./kubectl-plugin
 
@@ -53,15 +74,14 @@ jobs:
             make docker-push -e IMG="${IMG}" -e ENGINE=podman
 
             make deploy -e IMG="${IMG}"
-            kubectl wait --timeout=90s --for=condition=Available=true deployment -n ray-system kuberay-operator
+            kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
 
         - name: Deploy Kuberay Cluster
-          if: inputs.plugin-test
           run: |
             echo Deploying Kuberay cluster
 
             kubectl apply -f ./ray-operator/config/samples/ray-cluster.sample.yaml
-            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-sample
+            kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-kuberay
 
         - name: Run e2e tests
           run: |
@@ -73,18 +93,12 @@ jobs:
             echo "KUBERAY_TEST_OUTPUT_DIR=${KUBERAY_TEST_OUTPUT_DIR}" >> $GITHUB_ENV
 
             set -euo pipefail
-            cd ${{ inputs.dir-to-test }}
+            cd kubectl-plugin
             go test -timeout 60m -v ./test/e2e -json 2>&1 | tee ${KUBERAY_TEST_OUTPUT_DIR}/gotest.log | gotestfmt
-
-        - name: Print KubeRay operator logs
-          if: (!inputs.plugin-test) && always() && steps.deploy.outcome == 'success'
-          run: |
-            echo "Printing KubeRay operator logs"
-            kubectl logs -n ray-system --tail -1 -l app.kubernetes.io/name=kuberay | tee ${KUBERAY_TEST_OUTPUT_DIR}/kuberay-operator.log
 
         - name: Upload logs
           uses: actions/upload-artifact@v4
-          if: (!inputs.plugin-test) && always() && steps.deploy.outcome == 'success'
+          if: always() && steps.deploy.outcome == 'success'
           with:
             name: logs
             retention-days: 10

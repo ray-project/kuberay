@@ -33,14 +33,14 @@ var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 
 		expectedTestResultTable.Rows = append(expectedTestResultTable.Rows, v1.TableRow{
 			Cells: []interface{}{
-				"raycluster-sample",
+				"raycluster-kuberay",
 				"default",
 				"1",
 				"1",
-				"1",
+				"2",
 				"0",
 				"0",
-				"3Gi",
+				"3G",
 			},
 		})
 

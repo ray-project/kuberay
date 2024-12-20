@@ -21,9 +21,12 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-sample"
-	test.StreamKubeRayOperatorLogs()
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
+
+	// TODO: This test will fail on Ray 2.40.0. Pin the Ray version to 2.9.0 as a workaround. Need to remove this after the issue is fixed.
+	rayServiceAC.Spec.RayClusterSpec.WithRayVersion("2.9.0")
+	rayServiceAC.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].WithImage("rayproject/ray:2.9.0")
 
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())

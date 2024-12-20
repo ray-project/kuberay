@@ -959,12 +959,12 @@ func checkIfVolumeExists(pod *corev1.Pod, volumeName string) bool {
 
 func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 	var mem *resource.Quantity
-	// check the requests, if they are not set, check the limits.
-	if q, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
+	// check the limits, if they are not set, check the requests.
+	if q, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
 		mem = &q
 		return mem
 	}
-	if q, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
+	if q, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
 		mem = &q
 		return mem
 	}

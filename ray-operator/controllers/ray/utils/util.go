@@ -601,3 +601,10 @@ type ClientProvider interface {
 	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
 	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }
+
+func ManagedByExternalController(controllerName *string) *string {
+	if controllerName != nil && *controllerName != KubeRayController {
+		return controllerName
+	}
+	return nil
+}
