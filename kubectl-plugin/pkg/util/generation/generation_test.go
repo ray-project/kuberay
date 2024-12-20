@@ -21,8 +21,8 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 			HeadMemory:     "5Gi",
 			WorkerGrpName:  "worker-group1",
 			WorkerReplicas: 3,
-			WorkerCPU:      "1",
-			WorkerMemory:   "5Gi",
+			WorkerCPU:      "2",
+			WorkerMemory:   "10Gi",
 		},
 	}
 
@@ -52,8 +52,8 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			HeadMemory:     "5Gi",
 			WorkerGrpName:  "worker-group1",
 			WorkerReplicas: 3,
-			WorkerCPU:      "1",
-			WorkerMemory:   "5Gi",
+			WorkerCPU:      "2",
+			WorkerMemory:   "10Gi",
 		},
 	}
 
@@ -83,8 +83,8 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			HeadMemory:     "5Gi",
 			WorkerGrpName:  "worker-group1",
 			WorkerReplicas: 3,
-			WorkerCPU:      "1",
-			WorkerMemory:   "5Gi",
+			WorkerCPU:      "2",
+			WorkerMemory:   "10Gi",
 		},
 	}
 
@@ -133,11 +133,11 @@ spec:
           name: ray-worker
           resources:
             limits:
-              cpu: "1"
-              memory: 5Gi
+              cpu: "2"
+              memory: 10Gi
             requests:
-              cpu: "1"
-              memory: 5Gi`
+              cpu: "2"
+              memory: 10Gi`
 
 	assert.Equal(t, expectedResultYaml, strings.TrimSpace(resultString))
 }
