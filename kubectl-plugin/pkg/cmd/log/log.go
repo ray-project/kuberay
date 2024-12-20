@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +25,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 )
 
@@ -36,6 +39,7 @@ type ClusterLogOptions struct {
 	outputDir    string
 	nodeType     string
 	ResourceName string
+	ResourceType util.ResourceType
 }
 
 var (
@@ -78,13 +82,13 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:               "log (RAYCLUSTER) [--out-dir DIR_PATH] [--node-type all|head|worker]",
+		Use:               "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
 		Short:             "Get ray cluster log",
 		Long:              logLong,
 		Example:           logExample,
 		Aliases:           []string{"logs"},
 		SilenceUsage:      true,
-		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
+		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
@@ -106,10 +110,37 @@ func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) er
 		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 	}
 
-	options.ResourceName = args[0]
+	if *options.configFlags.Namespace == "" {
+		*options.configFlags.Namespace = "default"
+	}
+
+	typeAndName := strings.Split(args[0], "/")
+	if len(typeAndName) == 1 {
+		options.ResourceType = util.RayCluster
+		options.ResourceName = typeAndName[0]
+	} else {
+		if len(typeAndName) != 2 || typeAndName[1] == "" {
+			return cmdutil.UsageErrorf(cmd, "invalid resource type/name: %s", args[0])
+		}
+
+		switch strings.ToLower(typeAndName[0]) {
+		case string(util.RayCluster):
+			options.ResourceType = util.RayCluster
+		case string(util.RayJob):
+			options.ResourceType = util.RayJob
+		case string(util.RayService):
+			options.ResourceType = util.RayService
+		default:
+			return cmdutil.UsageErrorf(cmd, "unsupported resource type: %s", typeAndName[0])
+		}
+
+		options.ResourceName = typeAndName[1]
+	}
 
 	if options.nodeType == "" {
 		options.nodeType = "all"
+	} else {
+		options.nodeType = strings.ToLower(options.nodeType)
 	}
 
 	return nil
@@ -159,37 +190,62 @@ func (options *ClusterLogOptions) Validate() error {
 }
 
 func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-	kubeClientSet, err := factory.KubernetesClientSet()
+	clientSet, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubernetes client set: %w", err)
 	}
 
+	// Retrieve raycluster name for the non raycluster type node
+	var clusterName string
+	switch options.ResourceType {
+	case util.RayCluster:
+		clusterName = options.ResourceName
+	case util.RayJob:
+		rayJob, err := clientSet.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.ResourceName, v1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to retrieve rayjob info for %s: %w", options.ResourceName, err)
+		}
+		clusterName = rayJob.Status.RayClusterName
+	case util.RayService:
+		rayService, err := clientSet.RayClient().RayV1().RayServices(*options.configFlags.Namespace).Get(ctx, options.ResourceName, v1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to retrieve rayjob info for %s: %w", options.ResourceName, err)
+		}
+		clusterName = rayService.Status.ActiveServiceStatus.RayClusterName
+	default:
+		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
+	}
+
+	// set the list options for the specified nodetype
 	var listopts v1.ListOptions
-	if options.nodeType == "all" {
+	switch options.nodeType {
+	case "all":
 		listopts = v1.ListOptions{
-			LabelSelector: fmt.Sprintf("ray.io/cluster=%s", options.ResourceName),
+			LabelSelector: fmt.Sprintf("ray.io/cluster=%s", clusterName),
 		}
-	} else if options.nodeType == "head" {
+	case "head":
 		listopts = v1.ListOptions{
-			LabelSelector: fmt.Sprintf("ray.io/node-type=head, ray.io/cluster=%s", options.ResourceName),
+			LabelSelector: fmt.Sprintf("ray.io/node-type=head, ray.io/cluster=%s", clusterName),
 		}
-	} else if options.nodeType == "worker" {
+	case "worker":
 		listopts = v1.ListOptions{
-			LabelSelector: fmt.Sprintf("ray.io/node-type=worker, ray.io/cluster=%s", options.ResourceName),
+			LabelSelector: fmt.Sprintf("ray.io/node-type=worker, ray.io/cluster=%s", clusterName),
 		}
+	default:
+		return fmt.Errorf("Unknown ray resource node type: %s", options.nodeType)
 	}
 
 	// Get list of nodes that are considered the specified node type
-	rayNodes, err := kubeClientSet.CoreV1().Pods(*options.configFlags.Namespace).List(ctx, listopts)
+	rayNodes, err := clientSet.KubernetesClient().CoreV1().Pods(*options.configFlags.Namespace).List(ctx, listopts)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve head node for RayCluster %s: %w", options.ResourceName, err)
+		return fmt.Errorf("failed to retrieve head node for RayCluster %s: %w", clusterName, err)
 	}
 	if len(rayNodes.Items) == 0 {
 		// Clean up the empty directory if the directory was generated. Since it will always be in current dir, only Remove() is used.
 		if deleteOutputDir {
 			os.Remove(options.outputDir)
 		}
-		return fmt.Errorf("No ray nodes found for resource %s", options.ResourceName)
+		return fmt.Errorf("No ray nodes found for resource %s", clusterName)
 	}
 
 	// Get a list of logs of the ray nodes.
@@ -197,7 +253,7 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 	for _, rayNode := range rayNodes.Items {
 		// Since the first container is always the ray container, we will retrieve the first container logs
 		containerName := rayNode.Spec.Containers[0].Name
-		request := kubeClientSet.CoreV1().Pods(rayNode.Namespace).GetLogs(rayNode.Name, &corev1.PodLogOptions{Container: containerName})
+		request := clientSet.KubernetesClient().CoreV1().Pods(rayNode.Namespace).GetLogs(rayNode.Name, &corev1.PodLogOptions{Container: containerName})
 
 		podLogs, err := request.Stream(ctx)
 		if err != nil {
@@ -235,7 +291,7 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		}
 
 		containerName := rayNodes.Items[ind].Spec.Containers[0].Name
-		req := kubeClientSet.CoreV1().RESTClient().
+		req := clientSet.KubernetesClient().CoreV1().RESTClient().
 			Get().
 			Namespace(rayNodes.Items[ind].Namespace).
 			Resource("pods").

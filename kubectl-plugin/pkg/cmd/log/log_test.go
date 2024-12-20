@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -113,17 +114,91 @@ func (dre *FakeRemoteExecutor) CreateExecutor(_ *rest.Config, url *url.URL) (rem
 }
 
 func TestRayClusterLogComplete(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
-	fakeArgs := []string{"Expectedoutput"}
-
 	cmd := &cobra.Command{Use: "log"}
 
-	err := fakeClusterLogOptions.Complete(cmd, fakeArgs)
+	tests := []struct {
+		name                 string
+		nodeType             string
+		expectedResourceType util.ResourceType
+		expectedResourceName string
+		expectedNodeType     string
+		args                 []string
+		hasErr               bool
+	}{
+		{
+			name:                 "valide request with raycluster with empty nodetype input",
+			expectedResourceType: util.RayCluster,
+			expectedResourceName: "test-raycluster",
+			expectedNodeType:     "all",
+			args:                 []string{"test-raycluster"},
+			hasErr:               false,
+		},
+		{
+			name:                 "valide request with raycluster",
+			expectedResourceType: util.RayCluster,
+			expectedResourceName: "test-raycluster",
+			args:                 []string{"rayCluster/test-raycluster"},
+			expectedNodeType:     "all",
+			hasErr:               false,
+		},
+		{
+			name:                 "valide request with rayservice",
+			expectedResourceType: util.RayService,
+			expectedResourceName: "test-rayService",
+			args:                 []string{"rayService/test-rayService"},
+			expectedNodeType:     "all",
+			hasErr:               false,
+		},
+		{
+			name:                 "valide request with rayjob",
+			expectedResourceType: util.RayJob,
+			expectedResourceName: "test-rayJob",
+			args:                 []string{"rayJob/test-rayJob"},
+			expectedNodeType:     "all",
+			hasErr:               false,
+		},
+		{
+			name:   "invalid args (no args)",
+			args:   []string{},
+			hasErr: true,
+		},
+		{
+			name:   "invalid args (too many args)",
+			args:   []string{"raycluster/test-raycluster", "extra-arg"},
+			hasErr: true,
+		},
+		{
+			name:   "invalid args (no resource type)",
+			args:   []string{"/test-resource"},
+			hasErr: true,
+		},
+		{
+			name:   "invalid args (no resource name)",
+			args:   []string{"raycluster/"},
+			hasErr: true,
+		},
+		{
+			name:   "invalid args (invalid resource type)",
+			args:   []string{"invalid-type/test-resource"},
+			hasErr: true,
+		},
+	}
 
-	assert.Equal(t, fakeClusterLogOptions.nodeType, "all")
-	assert.Nil(t, err)
-	assert.Equal(t, fakeClusterLogOptions.ResourceName, fakeArgs[0])
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+			err := fakeClusterLogOptions.Complete(cmd, tc.args)
+			if tc.hasErr {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResourceType, fakeClusterLogOptions.ResourceType)
+				assert.Equal(t, tc.expectedResourceName, fakeClusterLogOptions.ResourceName)
+				assert.Equal(t, tc.expectedNodeType, fakeClusterLogOptions.nodeType)
+			}
+		})
+	}
 }
 
 func TestRayClusterLogValidate(t *testing.T) {
@@ -283,6 +358,8 @@ func TestRayClusterLogRun(t *testing.T) {
 	fakeClusterLogOptions.Executor = &FakeRemoteExecutor{}
 	fakeClusterLogOptions.ResourceName = "test-cluster"
 	fakeClusterLogOptions.outputDir = fakeDir
+	fakeClusterLogOptions.ResourceType = util.RayCluster
+	fakeClusterLogOptions.nodeType = "all"
 
 	// Create list of fake ray heads
 	rayHeadsList := &v1.PodList{
