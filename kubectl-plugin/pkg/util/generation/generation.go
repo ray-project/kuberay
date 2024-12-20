@@ -90,12 +90,12 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 						WithImage(rayClusterSpecObject.Image).
 						WithResources(corev1ac.ResourceRequirements().
 							WithRequests(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.HeadCPU),
-								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
+								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.WorkerCPU),
+								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}).
 							WithLimits(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.HeadCPU),
-								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
+								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.WorkerCPU),
+								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}))))))
 
 	// Lifecycle cannot be empty, an empty lifecycle will stop pod startup so this will add lifecycle if its not empty
