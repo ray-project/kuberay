@@ -19,6 +19,7 @@ type RayClusterSpecObject struct {
 	HeadMemory                       string
 	WorkerGrpName                    string
 	WorkerCPU                        string
+	WorkerGPU                        string
 	WorkerMemory                     string
 	HeadLifecyclePrestopExecCommand  []string
 	WorkerLifecyclePrestopExecComand []string
@@ -97,6 +98,18 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.WorkerCPU),
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}))))))
+
+	gpuResource := resource.MustParse(rayClusterSpecObject.WorkerGPU)
+	if !gpuResource.IsZero() {
+		var requests, limits corev1.ResourceList
+		requests = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests
+		limits = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits
+		requests[corev1.ResourceName("nvidia.com/gpu")] = gpuResource
+		limits[corev1.ResourceName("nvidia.com/gpu")] = gpuResource
+
+		rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = &requests
+		rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits = &limits
+	}
 
 	// Lifecycle cannot be empty, an empty lifecycle will stop pod startup so this will add lifecycle if its not empty
 	if len(rayClusterSpecObject.WorkerLifecyclePrestopExecComand) > 0 {
