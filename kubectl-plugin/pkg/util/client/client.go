@@ -35,10 +35,12 @@ func NewClient(factory cmdutil.Factory) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	rayClient, err := rayclient.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
+
 	return &k8sClient{
 		kubeClient: kubeClient,
 		rayClient:  rayClient,
