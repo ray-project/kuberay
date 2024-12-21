@@ -56,21 +56,21 @@ func TestAddMetadataToPod(t *testing.T) {
 	ctx := context.Background()
 	// test the case when gang-scheduling is enabled
 	rayClusterWithGangScheduling := createRayClusterWithLabels(
-		"ray-namespace",
+		"ray-ns",
 		"koord",
 		map[string]string{
 			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
 
-	setHeadPodNamespace(rayClusterWithGangScheduling, "ns0")
-	addWorkerPodSpec(rayClusterWithGangScheduling, "workergroup1", "ns1", 4, 2)
-	addWorkerPodSpec(rayClusterWithGangScheduling, "workergroup2", "ns2", 5, 3)
+	setHeadPodNamespace(rayClusterWithGangScheduling, "")
+	addWorkerPodSpec(rayClusterWithGangScheduling, "workergroup1", "", 4, 2)
+	addWorkerPodSpec(rayClusterWithGangScheduling, "workergroup2", "", 5, 3)
 
-	gangGroupValue := `["ns0/ray-koord-headgroup","ns1/ray-koord-workergroup1","ns2/ray-koord-workergroup2"]`
+	gangGroupValue := `["ray-ns/ray-koord-headgroup","ray-ns/ray-koord-workergroup1","ray-ns/ray-koord-workergroup2"]`
 
 	// case 1: head pod
-	headPod := createPod("ns0", "head-pod")
+	headPod := createPod("", "head-pod")
 	ks.AddMetadataToPod(context.Background(), rayClusterWithGangScheduling,
 		utils.RayNodeHeadGroupLabelValue, headPod)
 	// verify the correctness of head pod
@@ -81,7 +81,7 @@ func TestAddMetadataToPod(t *testing.T) {
 	assert.Equal(t, gangGroupValue, headPod.Annotations[KoordinatorGangGroupsAnnotationName])
 
 	// case2: woker pod 1
-	workerpod1 := createPod("ns1", "workerpod1")
+	workerpod1 := createPod("n", "workerpod1")
 	ks.AddMetadataToPod(ctx, rayClusterWithGangScheduling, "workergroup1", workerpod1)
 	// verify the correctness of woker pod 1
 	assert.Equal(t, "ray-koord-workergroup1", workerpod1.Annotations[KoordinatorGangAnnotationName])
@@ -91,7 +91,7 @@ func TestAddMetadataToPod(t *testing.T) {
 	assert.Equal(t, gangGroupValue, workerpod1.Annotations[KoordinatorGangGroupsAnnotationName])
 
 	// case3: woker pod 2
-	workerpod2 := createPod("ns2", "workerpod2")
+	workerpod2 := createPod("", "workerpod2")
 	ks.AddMetadataToPod(ctx, rayClusterWithGangScheduling, "workergroup2", workerpod2)
 	// verify the correctness of woker pod 2
 	assert.Equal(t, "ray-koord-workergroup2", workerpod2.Annotations[KoordinatorGangAnnotationName])

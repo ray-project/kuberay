@@ -5,6 +5,10 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
+const (
+	workerOffset = 1
+)
+
 func generateGangGroupName(app *rayv1.RayCluster, namespace, groupName string) string {
 	if namespace == "" {
 		namespace = app.Namespace
@@ -21,7 +25,7 @@ type wokerGroupReplicas struct {
 }
 
 func analyzeGangGroupsFromApp(app *rayv1.RayCluster) ([]string, map[string]wokerGroupReplicas) {
-	gangGroups := make([]string, 1+len(app.Spec.WorkerGroupSpecs))
+	gangGroups := make([]string, len(app.Spec.WorkerGroupSpecs)+workerOffset)
 	minMemberMap := map[string]wokerGroupReplicas{}
 
 	gangGroups[0] = generateGangGroupName(app, app.Spec.HeadGroupSpec.Template.Namespace, utils.RayNodeHeadGroupLabelValue)
@@ -31,10 +35,10 @@ func analyzeGangGroupsFromApp(app *rayv1.RayCluster) ([]string, map[string]woker
 	}
 
 	for i, workerGroupSepc := range app.Spec.WorkerGroupSpecs {
-		gangGroups[1+i] = generateGangGroupName(app, workerGroupSepc.Template.Namespace, workerGroupSepc.GroupName)
+		gangGroups[i+workerOffset] = generateGangGroupName(app, workerGroupSepc.Template.Namespace, workerGroupSepc.GroupName)
 		minMemberMap[workerGroupSepc.GroupName] = wokerGroupReplicas{
-			Replicas:    *(workerGroupSepc.Replicas),
-			MinReplicas: *(workerGroupSepc.MinReplicas),
+			Replicas:    *workerGroupSepc.Replicas,
+			MinReplicas: *workerGroupSepc.MinReplicas,
 		}
 	}
 
