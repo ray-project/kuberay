@@ -50,10 +50,12 @@ func TestValidateRayServiceSpec(t *testing.T) {
 	var upgradeStrat rayv1.RayServiceUpgradeStrategy = "invalidStrategy"
 	err = validateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
-			UpgradeStrategy: &upgradeStrat,
+			UpgradeSpec: &rayv1.RayServiceUpgradeSpec{
+				Type: &upgradeStrat,
+			},
 		},
 	})
-	assert.Error(t, err, "spec.UpgradeStrategy is invalid")
+	assert.Error(t, err, "spec.UpgradeSpec.Type is invalid")
 }
 
 func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
@@ -888,8 +890,9 @@ func TestReconcileRayCluster(t *testing.T) {
 				Recorder: record.NewFakeRecorder(1),
 			}
 			service := rayService.DeepCopy()
+			service.Spec.UpgradeSpec = &rayv1.RayServiceUpgradeSpec{}
 			if tc.rayServiceUpgradeStrategy != "" {
-				service.Spec.UpgradeStrategy = &tc.rayServiceUpgradeStrategy
+				service.Spec.UpgradeSpec.Type = &tc.rayServiceUpgradeStrategy
 			}
 			if tc.updateRayClusterSpec {
 				service.Spec.RayClusterSpec.RayVersion = "new-version"

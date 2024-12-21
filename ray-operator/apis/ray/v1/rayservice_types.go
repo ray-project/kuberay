@@ -58,6 +58,11 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
+type RayServiceUpgradeSpec struct {
+	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
+	Type *RayServiceUpgradeStrategy `json:"type,omitempty"`
+}
+
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
@@ -66,8 +71,8 @@ type RayServiceSpec struct {
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *corev1.Service `json:"serveService,omitempty"`
-	// UpgradeStrategy represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`
-	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
+	// UpgradeSpec defines the scaling policy used when upgrading the RayService.
+	UpgradeSpec *RayServiceUpgradeSpec `json:"upgradeSpec,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
