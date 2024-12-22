@@ -668,7 +668,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if suspendStatus == rayv1.RayClusterSuspending ||
 		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePod),
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)

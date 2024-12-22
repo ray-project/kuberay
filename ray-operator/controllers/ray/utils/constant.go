@@ -272,8 +272,9 @@ const (
 	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
 
 	// Generic Pod event list
-	DeletedPod        K8sEventType = "DeletedPod"
-	FailedToDeletePod K8sEventType = "FailedToDeletePod"
+	DeletedPod                  K8sEventType = "DeletedPod"
+	FailedToDeletePod           K8sEventType = "FailedToDeletePod"
+	FailedToDeletePodCollection K8sEventType = "FailedToDeletePodCollection"
 
 	// Ingress event list
 	CreatedIngress        K8sEventType = "CreatedIngress"
