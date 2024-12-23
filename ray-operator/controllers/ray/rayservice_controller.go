@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/utils/lru"
 
 	networkingv1 "k8s.io/api/networking/v1"
 
@@ -57,9 +58,9 @@ type RayServiceReconciler struct {
 	Recorder record.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve application config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
-	// Stores map of cacheKey to map of RayCluster name to Serve application config,
-	// where cacheKey is the combination of RayService namespace and name.
-	ServeConfigs                 cmap.ConcurrentMap[string, cmap.ConcurrentMap[string, string]]
+	// Cache key is the combination of RayService namespace and name.
+	// Cache value is map of RayCluster name to Serve application config.
+	ServeConfigs                 *lru.Cache
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 	dashboardClientFunc          func() utils.RayDashboardClientInterface
 	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
@@ -73,7 +74,7 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
-		ServeConfigs:                 cmap.New[cmap.ConcurrentMap[string, string]](),
+		ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
 		RayClusterDeletionTimestamps: cmap.New[time.Time](),
 
 		dashboardClientFunc: dashboardClientFunc,
@@ -540,10 +541,11 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(ctx context.Context, rayS
 	pendingRayClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
 
 	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
-	serveConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	cacheValue, exist := r.ServeConfigs.Get(cacheKey)
 	if !exist {
 		return
 	}
+	serveConfigs := cacheValue.(cmap.ConcurrentMap[string, string])
 
 	for key := range serveConfigs.Items() {
 		if key == activeRayClusterName || key == pendingRayClusterName {
@@ -965,10 +967,11 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 
 func (r *RayServiceReconciler) getServeConfigFromCache(rayServiceInstance *rayv1.RayService, clusterName string) string {
 	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
-	serveConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	cacheValue, exist := r.ServeConfigs.Get(cacheKey)
 	if !exist {
 		return ""
 	}
+	serveConfigs := cacheValue.(cmap.ConcurrentMap[string, string])
 	serveConfig, exist := serveConfigs.Get(clusterName)
 	if !exist {
 		return ""
@@ -982,10 +985,13 @@ func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RaySer
 		return
 	}
 	cacheKey := rayServiceInstance.Namespace + "/" + rayServiceInstance.Name
-	rayServiceServeConfigs, exist := r.ServeConfigs.Get(cacheKey)
+	cacheValue, exist := r.ServeConfigs.Get(cacheKey)
+	var rayServiceServeConfigs cmap.ConcurrentMap[string, string]
 	if !exist {
 		rayServiceServeConfigs = cmap.New[string]()
-		r.ServeConfigs.Set(cacheKey, rayServiceServeConfigs)
+		r.ServeConfigs.Add(cacheKey, rayServiceServeConfigs)
+	} else {
+		rayServiceServeConfigs = cacheValue.(cmap.ConcurrentMap[string, string])
 	}
 	rayServiceServeConfigs.Set(clusterName, serveConfig)
 }

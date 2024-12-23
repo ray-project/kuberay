@@ -191,6 +191,8 @@ const (
 
 	// KubeRayController represents the value of the default job controller
 	KubeRayController = "ray.io/kuberay-operator"
+
+	ServeConfigLRUSize = 1000
 )
 
 type ServiceType string

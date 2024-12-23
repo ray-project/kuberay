@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	cmap "github.com/orcaman/concurrent-map/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -669,7 +669,7 @@ func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
 		Client:       fakeClient,
 		Recorder:     &record.FakeRecorder{},
 		Scheme:       scheme.Scheme,
-		ServeConfigs: cmap.New[cmap.ConcurrentMap[string, string]](),
+		ServeConfigs: lru.New(utils.ServeConfigLRUSize),
 	}
 
 	namespace := "ray"
