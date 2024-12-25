@@ -66,7 +66,8 @@ make clean
 kind create cluster --image=kindest/node:v1.24.0
 
 # Step 2: Modify KubeRay source code
-# For example, add a log "Hello KubeRay" in the function `Reconcile` in `raycluster_controller.go`.
+# For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
+
 
 # Step 3: Build an image
 #         This command will copy the source code directory into the image, and build it.
@@ -91,7 +92,7 @@ helm install kuberay-operator --set image.repository=kuberay/operator --set imag
 
 # Step 7: Check the log of KubeRay operator
 kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
-# 2022-12-09T04:41:59.946Z        INFO    controllers.RayCluster  Hello KubeRay
+# {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
 # ...
 ```
 
