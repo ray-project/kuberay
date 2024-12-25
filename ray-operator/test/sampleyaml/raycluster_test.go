@@ -106,24 +106,6 @@ func TestRayCluster(t *testing.T) {
 			// Check that all pods can submit jobs
 			g.Eventually(SubmitJobsToAllPods(test, rayCluster), TestTimeoutShort).Should(Succeed())
 
-			// Suspend RayCluster
-			KubectlSetRayClusterSuspend(test, namespace.Name, rayCluster.Name, true)
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionFalse, rayv1.HeadPodNotFound)))
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionFalse, rayv1.RayClusterPodsProvisioning)))
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
-
-			// Resume RayCluster
-			KubectlSetRayClusterSuspend(test, namespace.Name, rayCluster.Name, false)
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
-			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-				Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionFalse, string(rayv1.RayClusterSuspended))))
-
 			// Delete all pods after setting quota to 0 to avoid recreating pods
 			KubectlApplyQuota(test, namespace.Name, "--hard=cpu=0,memory=0G,pods=0")
 			KubectlDeleteAllPods(test, namespace.Name)
@@ -136,6 +118,58 @@ func TestRayCluster(t *testing.T) {
 			// The RayClusterReplicaFailure condition now be True with a FailedCreateHeadPod reason due to the quota limit.
 			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 				Should(WithTransform(StatusCondition(rayv1.RayClusterReplicaFailure), MatchCondition(metav1.ConditionTrue, "FailedCreateHeadPod")))
+		})
+	}
+}
+
+func TestRayClusterSuspend(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "ray-cluster.complete.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test := With(t)
+			g := NewWithT(t)
+
+			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
+			namespace := test.NewTestNamespace()
+			rayClusterFromYaml := DeserializeRayClusterYAML(test, yamlFilePath)
+			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
+
+			rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterFromYaml.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(rayCluster).NotTo(BeNil())
+
+			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+			rayCluster, err = GetRayCluster(test, namespace.Name, rayCluster.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			// Suspend RayCluster
+			KubectlSetRayClusterSuspend(test, namespace.Name, rayCluster.Name, true)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionFalse, rayv1.HeadPodNotFound)))
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionFalse, rayv1.RayClusterPodsProvisioning)))
+
+			// Resume RayCluster
+			KubectlSetRayClusterSuspend(test, namespace.Name, rayCluster.Name, false)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionFalse, string(rayv1.RayClusterSuspended))))
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
 		})
 	}
 }
