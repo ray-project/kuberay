@@ -520,6 +520,16 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	}
 
+	updateRayClusterWorkerGroupSuspendField := func(ctx context.Context, rayCluster *rayv1.RayCluster, suspend bool) error {
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
+			rayCluster.Spec.WorkerGroupSpecs[0].Suspend = &suspend
+			return k8sClient.Update(ctx, rayCluster)
+		})
+	}
+
 	findRayClusterSuspendStatus := func(ctx context.Context, rayCluster *rayv1.RayCluster) (rayv1.RayClusterConditionType, error) {
 		if err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster)(); err != nil {
 			return "", err
@@ -801,6 +811,48 @@ var _ = Context("Inside the default namespace", func() {
 				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
 			Consistently(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
 				WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspended))
+		})
+
+		It("Delete the cluster", func() {
+			err := k8sClient.Delete(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("Suspend RayCluster worker group", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-suspend-workergroup", namespace)
+		allPods := corev1.PodList{}
+		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of Pods and add finalizers", func() {
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(4), fmt.Sprintf("all pods %v", allPods.Items))
+		})
+
+		It("Setting suspend=true in first worker group should not fail", func() {
+			// suspend the Raycluster worker group
+			err := updateRayClusterWorkerGroupSuspendField(ctx, rayCluster, true)
+			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
+		})
+
+		It("Worker pods should be deleted but head pod should still be running", func() {
+			Eventually(listResourceFunc(ctx, &allPods, workerFilters...), time.Second*5, time.Millisecond*500).
+				Should(Equal(0), fmt.Sprintf("all pods %v", allPods.Items))
+			Eventually(listResourceFunc(ctx, &allPods, headFilters...), time.Second*5, time.Millisecond*500).
+				Should(Equal(1), fmt.Sprintf("all pods %v", allPods.Items))
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*5, time.Millisecond*500).
+				Should(Equal(1), fmt.Sprintf("all pods %v", allPods.Items))
 		})
 
 		It("Delete the cluster", func() {
