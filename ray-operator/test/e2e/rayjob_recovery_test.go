@@ -67,12 +67,6 @@ env_vars:
 			g.Expect(err).NotTo(HaveOccurred())
 		}
 
-		// Get old pod names for comparison
-		oldPodNames := make([]string, len(jobpods.Items))
-		for i, pod := range jobpods.Items {
-			oldPodNames[i] = pod.Name
-		}
-
 		test.T().Logf("Waiting for new pod to be created and running for RayJob %s/%s", namespace.Name, rayJob.Name)
 		g.Eventually(func() ([]corev1.Pod, error) {
 			pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(
