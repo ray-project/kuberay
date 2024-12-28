@@ -71,15 +71,3 @@ func KubectlDeleteAllPods(t Test, namespace string) {
 	require.NoError(t.T(), err, "Failed to delete pods in %s", namespace)
 	t.T().Logf("Successfully delete pods in %s", namespace)
 }
-
-func KubectlSetRayClusterSuspend(t Test, namespace, raycluster string, suspend bool) {
-	t.T().Helper()
-	patch := `{"spec":{"suspend":false}}`
-	if suspend {
-		patch = `{"spec":{"suspend":true}}`
-	}
-	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "patch", "raycluster", raycluster, "-n", namespace, "--type=merge", "-p", patch)
-	err := kubectlCmd.Run()
-	require.NoError(t.T(), err, "Failed to set suspend=%t to %s in %s", suspend, raycluster, namespace)
-	t.T().Logf("Successfully set suspend=%t to %s in %s", suspend, raycluster, namespace)
-}
