@@ -246,10 +246,11 @@ const (
 	FailedToDeleteHeadPod K8sEventType = "FailedToDeleteHeadPod"
 
 	// Worker Pod event list
-	CreatedWorkerPod        K8sEventType = "CreatedWorkerPod"
-	FailedToCreateWorkerPod K8sEventType = "FailedToCreateWorkerPod"
-	DeletedWorkerPod        K8sEventType = "DeletedWorkerPod"
-	FailedToDeleteWorkerPod K8sEventType = "FailedToDeleteWorkerPod"
+	CreatedWorkerPod                  K8sEventType = "CreatedWorkerPod"
+	FailedToCreateWorkerPod           K8sEventType = "FailedToCreateWorkerPod"
+	DeletedWorkerPod                  K8sEventType = "DeletedWorkerPod"
+	FailedToDeleteWorkerPod           K8sEventType = "FailedToDeleteWorkerPod"
+	FailedToDeleteWorkerPodCollection K8sEventType = "FailedToDeleteWorkerPodCollection"
 
 	// Redis Cleanup Job event list
 	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
@@ -271,8 +272,9 @@ const (
 	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
 
 	// Generic Pod event list
-	DeletedPod        K8sEventType = "DeletedPod"
-	FailedToDeletePod K8sEventType = "FailedToDeletePod"
+	DeletedPod                  K8sEventType = "DeletedPod"
+	FailedToDeletePod           K8sEventType = "FailedToDeletePod"
+	FailedToDeletePodCollection K8sEventType = "FailedToDeletePodCollection"
 
 	// Ingress event list
 	CreatedIngress        K8sEventType = "CreatedIngress"
