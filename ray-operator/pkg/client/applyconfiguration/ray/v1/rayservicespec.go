@@ -9,13 +9,13 @@ import (
 // RayServiceSpecApplyConfiguration represents an declarative configuration of the RayServiceSpec type for use
 // with apply.
 type RayServiceSpecApplyConfiguration struct {
-	ServiceUnhealthySecondThreshold    *int32                                   `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                                   `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	ServeService                       *v1.Service                              `json:"serveService,omitempty"`
-	UpgradeSpec                        *RayServiceUpgradeSpecApplyConfiguration `json:"upgradeSpec,omitempty"`
-	ServeConfigV2                      *string                                  `json:"serveConfigV2,omitempty"`
-	RayClusterSpec                     *RayClusterSpecApplyConfiguration        `json:"rayClusterConfig,omitempty"`
-	ExcludeHeadPodFromServeSvc         *bool                                    `json:"excludeHeadPodFromServeSvc,omitempty"`
+	ServiceUnhealthySecondThreshold    *int32                                       `json:"serviceUnhealthySecondThreshold,omitempty"`
+	DeploymentUnhealthySecondThreshold *int32                                       `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	ServeService                       *v1.Service                                  `json:"serveService,omitempty"`
+	UpgradeStrategy                    *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
+	ServeConfigV2                      *string                                      `json:"serveConfigV2,omitempty"`
+	RayClusterSpec                     *RayClusterSpecApplyConfiguration            `json:"rayClusterConfig,omitempty"`
+	ExcludeHeadPodFromServeSvc         *bool                                        `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
 
 // RayServiceSpecApplyConfiguration constructs an declarative configuration of the RayServiceSpec type for use with
@@ -48,11 +48,11 @@ func (b *RayServiceSpecApplyConfiguration) WithServeService(value v1.Service) *R
 	return b
 }
 
-// WithUpgradeSpec sets the UpgradeSpec field in the declarative configuration to the given value
+// WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the UpgradeSpec field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithUpgradeSpec(value *RayServiceUpgradeSpecApplyConfiguration) *RayServiceSpecApplyConfiguration {
-	b.UpgradeSpec = value
+// If called multiple times, the UpgradeStrategy field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithUpgradeStrategy(value *RayServiceUpgradeStrategyApplyConfiguration) *RayServiceSpecApplyConfiguration {
+	b.UpgradeStrategy = value
 	return b
 }
 

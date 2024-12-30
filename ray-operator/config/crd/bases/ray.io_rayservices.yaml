@@ -7943,7 +7943,7 @@ spec:
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
-              upgradeSpec:
+              upgradeStrategy:
                 properties:
                   type:
                     type: string
