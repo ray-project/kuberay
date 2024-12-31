@@ -3,7 +3,10 @@ package session
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -11,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
-	"k8s.io/kubectl/pkg/cmd/portforward"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 )
@@ -171,21 +173,32 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
-	args := []string{"service/" + svcName}
+	kubectlArgs := []string{"port-forward", "-n", options.Namespace, "service/" + svcName}
 	for _, appPort := range appPorts {
-		args = append(args, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
+		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
-	portForwardCmd.SetArgs(args)
 
 	for _, appPort := range appPorts {
 		fmt.Printf("%s: http://localhost:%d\n", appPort.name, appPort.port)
 	}
 	fmt.Println()
 
-	if err := portForwardCmd.ExecuteContext(ctx); err != nil {
-		return fmt.Errorf("failed to port-forward: %w", err)
-	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			const reconnectDelay = 100
+			var err error
+			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+			if err = portforwardCmd.Run(); err == nil {
+				return
+			}
+			fmt.Printf("failed to port-forward: %v, try to reconnect after %d miliseconds...\n", err, reconnectDelay)
+			time.Sleep(reconnectDelay * time.Millisecond)
+		}
+	}()
 
+	wg.Wait()
 	return nil
 }
