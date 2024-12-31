@@ -129,8 +129,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	}
 }
 
-var _ reconcile.Reconciler = &RayClusterReconciler{}
-
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
