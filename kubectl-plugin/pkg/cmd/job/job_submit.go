@@ -3,7 +3,6 @@ package job
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,8 +15,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	k8syaml "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/kubectl/pkg/cmd/portforward"
@@ -31,7 +28,8 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
 
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
 const (
@@ -43,7 +41,7 @@ const (
 type SubmitJobOptions struct {
 	ioStreams          *genericiooptions.IOStreams
 	configFlags        *genericclioptions.ConfigFlags
-	RayJob             *unstructured.Unstructured
+	RayJob             *rayv1.RayJob
 	submissionID       string
 	entryPoint         string
 	fileName           string
@@ -71,10 +69,6 @@ type SubmitJobOptions struct {
 	workerReplicas     int32
 	noWait             bool
 	dryRun             bool
-}
-
-type RayJob struct {
-	*rayv1api.RayJob
 }
 
 var (
@@ -230,20 +224,13 @@ func (options *SubmitJobOptions) Validate() error {
 			return fmt.Errorf("Failed to decode RayJob Yaml: %w", err)
 		}
 
-		submissionMode, ok := options.RayJob.Object["spec"].(map[string]interface{})["submissionMode"]
-		if !ok {
-			return fmt.Errorf("RayJob does not have `submissionMode` field set")
-		}
-		if submissionMode != nil {
-			if submissionMode != "InteractiveMode" {
-				return fmt.Errorf("Submission mode of the Ray Job is not supported")
-			}
-		} else {
-			return fmt.Errorf("Submission mode must be set to 'InteractiveMode'")
+		submissionMode := options.RayJob.Spec.SubmissionMode
+		if submissionMode != rayv1.InteractiveMode {
+			return fmt.Errorf("Submission mode of the Ray Job must be set to 'InteractiveMode'")
 		}
 
-		runtimeEnvYaml, ok := options.RayJob.Object["spec"].(map[string]interface{})["runtimeEnvYAML"].(string)
-		if ok && options.runtimeEnv == "" && options.runtimeEnvJson == "" {
+		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
+		if options.runtimeEnv == "" && options.runtimeEnvJson == "" {
 			runtimeJson, err := yaml.YAMLToJSON([]byte(runtimeEnvYaml))
 			if err != nil {
 				return fmt.Errorf("Failed to convert runtime env to json: %w", err)
@@ -304,10 +291,10 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		if err != nil {
 			return fmt.Errorf("Failed to apply generated yaml: %w", err)
 		}
-		options.RayJob = &unstructured.Unstructured{}
+		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -316,21 +303,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?
-		for options.RayJob.Object["status"] == nil {
-			options.RayJob, err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+		for len(options.RayJob.Status.RayClusterName) == 0 {
+			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("Failed to get Ray Job status")
 			}
 			time.Sleep(2 * time.Second)
 		}
-		clusterName, ok := options.RayJob.Object["status"].(map[string]interface{})["rayClusterName"].(string)
-		if !ok {
-			return fmt.Errorf("Unable to find ray cluster status")
-		}
-		if len(clusterName) == 0 {
-			return fmt.Errorf("No cluster name available even after status of Ray Job is set")
-		}
-		options.cluster = clusterName
+		options.cluster = options.RayJob.Status.RayClusterName
 	} else {
 		return fmt.Errorf("Unknown cluster and did not provide Ray Job. One of the fields must be set")
 	}
@@ -343,12 +323,12 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	fmt.Printf("Checking Cluster Status for cluster %s...\n", options.cluster)
 	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= clusterTimeout {
 		time.Sleep(2 * time.Second)
-		currCluster, err := k8sClients.DynamicClient().Resource(util.RayClusterGVR).Namespace(*options.configFlags.Namespace).Get(ctx, options.cluster, v1.GetOptions{})
+		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.cluster, v1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to get cluster information with error: %w", err)
 		}
-		clusterReady, err = isRayClusterReady(currCluster)
-		if err != nil {
+		clusterReady = isRayClusterReady(currCluster)
+		if !clusterReady {
 			err = fmt.Errorf("Cluster is not ready: %w", err)
 			fmt.Println(err)
 		}
@@ -357,7 +337,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 
 	if !clusterReady {
 		fmt.Printf("Deleting RayJob...\n")
-		err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+		err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to clean up ray job after time out.: %w", err)
 		}
@@ -490,17 +470,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		rayJobID = <-rayJobIDChan
 	}
 	// Add annotation to RayJob with the correct ray job id and update the CR
-	options.RayJob, err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to get latest version of Ray Job")
 	}
 
-	err = unstructured.SetNestedField(options.RayJob.Object, rayJobID, "spec", "jobId")
-	if err != nil {
-		return fmt.Errorf("Error occurred while trying to set RayJob ID in RayJob Spec: %w", err)
-	}
+	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.DynamicClient().Resource(util.RayJobGVR).Namespace(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to rayJob: %w", err)
 	}
@@ -570,16 +547,16 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 }
 
 // Decode rayjob yaml if we decide to submit job using kube client
-func decodeRayJobYaml(rayJobFilePath string) (*unstructured.Unstructured, error) {
-	decodedRayJob := &unstructured.Unstructured{}
-	decUnstructured := k8syaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
+func decodeRayJobYaml(rayJobFilePath string) (*rayv1.RayJob, error) {
+	decodedRayJob := &rayv1.RayJob{}
 
 	rayJobYamlContent, err := os.ReadFile(rayJobFilePath)
 	if err != nil {
 		return nil, err
 	}
+	decoder := rayscheme.Codecs.UniversalDecoder()
 
-	_, _, err = decUnstructured.Decode(rayJobYamlContent, nil, decodedRayJob)
+	_, _, err = decoder.Decode(rayJobYamlContent, nil, decodedRayJob)
 	if err != nil {
 		return nil, err
 	}
@@ -607,21 +584,6 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 	return "", nil
 }
 
-func isRayClusterReady(rayCluster *unstructured.Unstructured) (bool, error) {
-	var isReady bool
-	rayClusterConditions, ok := rayCluster.Object["status"].(map[string]interface{})["conditions"].([]v1.Condition)
-	if ok {
-		isReady = meta.IsStatusConditionTrue(rayClusterConditions, "Ready")
-	}
-
-	rayClusterState, ok := rayCluster.Object["status"].(map[string]interface{})["state"].(string)
-	if ok {
-		isReady = isReady || rayClusterState == "ready"
-	}
-
-	if isReady {
-		return isReady, nil
-	}
-
-	return false, errors.New("Cannot determine cluster state")
+func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
+	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready //nolint:staticcheck // Still need to check State even though it is deprecated
 }

@@ -6,15 +6,16 @@ import (
 	"io"
 	"time"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type GetClusterOptions struct {
@@ -49,7 +50,11 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				return err
 			}
 			// running cmd.Execute or cmd.ExecuteE sets the context, which will be done by root
-			return options.Run(cmd.Context(), cmdFactory)
+			k8sClient, err := client.NewClient(cmdFactory)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
+			return options.Run(cmd.Context(), k8sClient)
 		},
 	}
 	cmd.Flags().BoolVarP(&options.AllNamespaces, "all-namespaces", "A", options.AllNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
@@ -81,20 +86,9 @@ func (options *GetClusterOptions) Validate() error {
 	return nil
 }
 
-func (options *GetClusterOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-	// Retrieves the dynamic client with factory.
-	dynamicClient, err := factory.DynamicClient()
-	if err != nil {
-		return fmt.Errorf("dynamic client failed to initialize: %w", err)
-	}
-
-	rayResourceSchema := schema.GroupVersionResource{
-		Group:    "ray.io",
-		Version:  "v1",
-		Resource: "rayclusters",
-	}
-
-	var rayclustersList *unstructured.UnstructuredList
+func (options *GetClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
+	var err error
+	var rayclusterList *rayv1.RayClusterList
 
 	listopts := v1.ListOptions{}
 	if len(options.args) == 1 {
@@ -104,21 +98,21 @@ func (options *GetClusterOptions) Run(ctx context.Context, factory cmdutil.Facto
 	}
 
 	if options.AllNamespaces {
-		rayclustersList, err = dynamicClient.Resource(rayResourceSchema).List(ctx, listopts)
+		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters("").List(ctx, listopts)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve raycluster for all namespaces: %w", err)
 		}
 	} else {
-		rayclustersList, err = dynamicClient.Resource(rayResourceSchema).Namespace(*options.configFlags.Namespace).List(ctx, listopts)
+		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).List(ctx, listopts)
 		if err != nil {
 			return fmt.Errorf("unable to retrieve raycluster for namespace %s: %w", *options.configFlags.Namespace, err)
 		}
 	}
 
-	return printClusters(rayclustersList, options.ioStreams.Out)
+	return printClusters(rayclusterList, options.ioStreams.Out)
 }
 
-func printClusters(rayclustersList *unstructured.UnstructuredList, output io.Writer) error {
+func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error {
 	resultTablePrinter := printers.NewTablePrinter(printers.PrintOptions{})
 
 	resTable := &v1.Table{
@@ -135,7 +129,7 @@ func printClusters(rayclustersList *unstructured.UnstructuredList, output io.Wri
 		},
 	}
 
-	for _, raycluster := range rayclustersList.Items {
+	for _, raycluster := range rayclusterList.Items {
 		age := duration.HumanDuration(time.Since(raycluster.GetCreationTimestamp().Time))
 		if raycluster.GetCreationTimestamp().Time.IsZero() {
 			age = "<unknown>"
@@ -144,12 +138,12 @@ func printClusters(rayclustersList *unstructured.UnstructuredList, output io.Wri
 			Cells: []interface{}{
 				raycluster.GetName(),
 				raycluster.GetNamespace(),
-				raycluster.Object["status"].(map[string]interface{})["desiredWorkerReplicas"],
-				raycluster.Object["status"].(map[string]interface{})["availableWorkerReplicas"],
-				raycluster.Object["status"].(map[string]interface{})["desiredCPU"],
-				raycluster.Object["status"].(map[string]interface{})["desiredGPU"],
-				raycluster.Object["status"].(map[string]interface{})["desiredTPU"],
-				raycluster.Object["status"].(map[string]interface{})["desiredMemory"],
+				raycluster.Status.DesiredWorkerReplicas,
+				raycluster.Status.AvailableWorkerReplicas,
+				raycluster.Status.DesiredCPU.String(),
+				raycluster.Status.DesiredGPU.String(),
+				raycluster.Status.DesiredTPU.String(),
+				raycluster.Status.DesiredMemory.String(),
 				age,
 			},
 		})
