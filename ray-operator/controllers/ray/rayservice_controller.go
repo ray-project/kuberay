@@ -507,14 +507,13 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context, clusterKey client.ObjectKey) (*rayv1.RayCluster, error) {
+	if clusterKey.Name == "" {
+		return nil, nil
+	}
+
 	rayCluster := &rayv1.RayCluster{}
-	if clusterKey.Name != "" {
-		// Ignore not found since in that case we should return RayCluster as nil.
-		if err := r.Get(ctx, clusterKey, rayCluster); client.IgnoreNotFound(err) != nil {
-			return nil, err
-		}
-	} else {
-		rayCluster = nil
+	if err := r.Get(ctx, clusterKey, rayCluster); client.IgnoreNotFound(err) != nil {
+		return nil, err
 	}
 
 	return rayCluster, nil
