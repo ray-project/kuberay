@@ -11,13 +11,9 @@ import (
 type ServiceStatus string
 
 const (
-	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
-	WaitForServeDeploymentReady      ServiceStatus = "WaitForServeDeploymentReady"
-	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
-	Running                          ServiceStatus = "Running"
-	Restarting                       ServiceStatus = "Restarting"
-	FailedToUpdateServingPodLabel    ServiceStatus = "FailedToUpdateServingPodLabel"
-	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
+	WaitForServeDeploymentReady ServiceStatus = "WaitForServeDeploymentReady"
+	Running                     ServiceStatus = "Running"
+	Restarting                  ServiceStatus = "Restarting"
 )
 
 type RayServiceUpgradeStrategy string
