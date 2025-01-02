@@ -47,10 +47,10 @@ func TestValidateRayServiceSpec(t *testing.T) {
 	})
 	assert.NoError(t, err, "The RayService spec is valid.")
 
-	var upgradeStrat rayv1.RayServiceUpgradeStrategy = "invalidStrategy"
+	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
 	err = validateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
-			UpgradeSpec: &rayv1.RayServiceUpgradeSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 				Type: &upgradeStrat,
 			},
 		},
@@ -773,13 +773,13 @@ func TestReconcileRayCluster(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		activeCluster             *rayv1.RayCluster
-		rayServiceUpgradeStrategy rayv1.RayServiceUpgradeStrategy
-		kubeRayVersion            string
-		updateRayClusterSpec      bool
-		enableZeroDowntime        bool
-		shouldPrepareNewCluster   bool
-		updateKubeRayVersion      bool
+		activeCluster           *rayv1.RayCluster
+		rayServiceUpgradeType   rayv1.RayServiceUpgradeType
+		kubeRayVersion          string
+		updateRayClusterSpec    bool
+		enableZeroDowntime      bool
+		shouldPrepareNewCluster bool
+		updateKubeRayVersion    bool
 	}{
 		// Test 1: Neither active nor pending clusters exist. The `markRestart` function will be called, so the `PendingServiceStatus.RayClusterName` should be set.
 		"Zero-downtime upgrade is enabled. Neither active nor pending clusters exist.": {
@@ -829,42 +829,42 @@ func TestReconcileRayCluster(t *testing.T) {
 		},
 		// Test 7: Zero downtime upgrade is enabled, but is enabled through the RayServiceSpec
 		"Zero-downtime upgrade enabled. The active cluster exist. Zero-downtime upgrade is triggered through RayServiceSpec.": {
-			activeCluster:             activeCluster.DeepCopy(),
-			updateRayClusterSpec:      true,
-			enableZeroDowntime:        true,
-			shouldPrepareNewCluster:   true,
-			rayServiceUpgradeStrategy: rayv1.NewCluster,
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: true,
+			rayServiceUpgradeType:   rayv1.NewCluster,
 		},
 		// Test 8: Zero downtime upgrade is enabled. Env var is set to false but RayServiceSpec is set to NewCluster. Trigger the zero-downtime upgrade.
 		"Zero-downtime upgrade is enabled through RayServiceSpec and not through env var. Active cluster exist. Trigger the zero-downtime upgrade.": {
-			activeCluster:             activeCluster.DeepCopy(),
-			updateRayClusterSpec:      true,
-			enableZeroDowntime:        false,
-			shouldPrepareNewCluster:   true,
-			rayServiceUpgradeStrategy: rayv1.NewCluster,
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      false,
+			shouldPrepareNewCluster: true,
+			rayServiceUpgradeType:   rayv1.NewCluster,
 		},
 		// Test 9: Zero downtime upgrade is disabled. Env var is set to true but RayServiceSpec is set to None.
 		"Zero-downtime upgrade is disabled. Env var is set to true but RayServiceSpec is set to None.": {
-			activeCluster:             activeCluster.DeepCopy(),
-			updateRayClusterSpec:      true,
-			enableZeroDowntime:        true,
-			shouldPrepareNewCluster:   false,
-			rayServiceUpgradeStrategy: rayv1.None,
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      true,
+			shouldPrepareNewCluster: false,
+			rayServiceUpgradeType:   rayv1.None,
 		},
 		// Test 10: Zero downtime upgrade is enabled. Neither the env var nor the RayServiceSpec is set. Trigger the zero-downtime upgrade.
 		"Zero-downtime upgrade is enabled. Neither the env var nor the RayServiceSpec is set.": {
-			activeCluster:             nil,
-			updateRayClusterSpec:      true,
-			shouldPrepareNewCluster:   true,
-			rayServiceUpgradeStrategy: "",
+			activeCluster:           nil,
+			updateRayClusterSpec:    true,
+			shouldPrepareNewCluster: true,
+			rayServiceUpgradeType:   "",
 		},
 		// Test 11: Zero downtime upgrade is disabled. Both the env var and the RayServiceSpec is set to disable zero-downtime upgrade.
 		"Zero-downtime upgrade is disabled by both env var and RayServiceSpec.": {
-			activeCluster:             activeCluster.DeepCopy(),
-			updateRayClusterSpec:      true,
-			enableZeroDowntime:        false,
-			shouldPrepareNewCluster:   false,
-			rayServiceUpgradeStrategy: rayv1.None,
+			activeCluster:           activeCluster.DeepCopy(),
+			updateRayClusterSpec:    true,
+			enableZeroDowntime:      false,
+			shouldPrepareNewCluster: false,
+			rayServiceUpgradeType:   rayv1.None,
 		},
 	}
 
@@ -890,9 +890,9 @@ func TestReconcileRayCluster(t *testing.T) {
 				Recorder: record.NewFakeRecorder(1),
 			}
 			service := rayService.DeepCopy()
-			service.Spec.UpgradeSpec = &rayv1.RayServiceUpgradeSpec{}
-			if tc.rayServiceUpgradeStrategy != "" {
-				service.Spec.UpgradeSpec.Type = &tc.rayServiceUpgradeStrategy
+			service.Spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{}
+			if tc.rayServiceUpgradeType != "" {
+				service.Spec.UpgradeStrategy.Type = &tc.rayServiceUpgradeType
 			}
 			if tc.updateRayClusterSpec {
 				service.Spec.RayClusterSpec.RayVersion = "new-version"
