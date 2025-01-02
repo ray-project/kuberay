@@ -15,8 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/lru"
 
-	networkingv1 "k8s.io/api/networking/v1"
-
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -96,9 +94,6 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
-// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
@@ -196,19 +191,19 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
-	// Get the ready Ray cluster instance for service and ingress update.
+	// Get the ready Ray cluster instance for service update.
 	var rayClusterInstance *rayv1.RayCluster
 	if pendingRayClusterInstance != nil {
 		rayClusterInstance = pendingRayClusterInstance
-		logger.Info("Reconciling the ingress and service resources " +
+		logger.Info("Reconciling the service resources " +
 			"on the pending Ray cluster.")
 	} else if activeRayClusterInstance != nil {
 		rayClusterInstance = activeRayClusterInstance
-		logger.Info("Reconciling the ingress and service resources " +
+		logger.Info("Reconciling the service resources " +
 			"on the active Ray cluster. No pending Ray cluster found.")
 	} else {
 		rayClusterInstance = nil
-		logger.Info("No Ray cluster found. Skipping ingress and service reconciliation.")
+		logger.Info("No Ray cluster found. Skipping service reconciliation.")
 	}
 
 	if rayClusterInstance != nil {
@@ -362,7 +357,6 @@ func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
-		Owns(&networkingv1.Ingress{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
@@ -473,7 +467,6 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	}
 
 	// Clean up RayCluster instances. Each instance is deleted 60 seconds
-	// after becoming inactive to give the ingress time to update.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
