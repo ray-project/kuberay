@@ -1532,9 +1532,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 			actionableMessage := fmt.Sprintf("If users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
 				"However, ServiceAccount %s is not found. Please create one. See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name)
 
-			logger.Error(
-				err,
-				actionableMessage)
+			logger.Error(err, actionableMessage)
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.AutoscalerServiceAccountNotFound), "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
 			return err
 		}
