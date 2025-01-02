@@ -11,14 +11,9 @@ import (
 type ServiceStatus string
 
 const (
-	FailedToGetOrCreateRayCluster    ServiceStatus = "FailedToGetOrCreateRayCluster"
-	WaitForServeDeploymentReady      ServiceStatus = "WaitForServeDeploymentReady"
-	FailedToGetServeDeploymentStatus ServiceStatus = "FailedToGetServeDeploymentStatus"
-	Running                          ServiceStatus = "Running"
-	Restarting                       ServiceStatus = "Restarting"
-	FailedToUpdateIngress            ServiceStatus = "FailedToUpdateIngress"
-	FailedToUpdateServingPodLabel    ServiceStatus = "FailedToUpdateServingPodLabel"
-	FailedToUpdateService            ServiceStatus = "FailedToUpdateService"
+	WaitForServeDeploymentReady ServiceStatus = "WaitForServeDeploymentReady"
+	Running                     ServiceStatus = "Running"
+	Restarting                  ServiceStatus = "Restarting"
 )
 
 // These statuses should match Ray Serve's application statuses

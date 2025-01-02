@@ -23,7 +23,6 @@ import (
 	cmap "github.com/orcaman/concurrent-map/v2"
 
 	"github.com/go-logr/logr"
-	fmtErrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -142,7 +141,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	var activeRayClusterInstance *rayv1.RayCluster
 	var pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetOrCreateRayCluster, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
 
@@ -215,15 +213,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	if rayClusterInstance != nil {
 		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 		if err := r.labelHeadPodForServeStatus(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
-			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateServingPodLabel, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
-			err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToUpdateService, err)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
@@ -395,15 +390,6 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 	return rayServiceInstance, nil
 }
 
-func (r *RayServiceReconciler) updateState(ctx context.Context, rayServiceInstance *rayv1.RayService, status rayv1.ServiceStatus, err error) error {
-	rayServiceInstance.Status.ServiceStatus = status
-	if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-		return fmtErrors.Errorf("combined error: %v %v", err, errStatus)
-	}
-	r.Recorder.Event(rayServiceInstance, "Normal", string(status), err.Error())
-	return err
-}
-
 // reconcileRayCluster checks the active and pending ray cluster instances. It includes 3 parts.
 // 1. It will decide whether to generate a pending cluster name.
 // 2. It will delete the old pending ray cluster instance.
@@ -545,14 +531,14 @@ func (r *RayServiceReconciler) cleanUpServeConfigCache(ctx context.Context, rayS
 	if !exist {
 		return
 	}
-	serveConfigs := cacheValue.(cmap.ConcurrentMap[string, string])
+	clusterNameToServeConfig := cacheValue.(cmap.ConcurrentMap[string, string])
 
-	for key := range serveConfigs.Items() {
+	for key := range clusterNameToServeConfig.Items() {
 		if key == activeRayClusterName || key == pendingRayClusterName {
 			continue
 		}
-		logger.Info("cleanUpServeConfigCache", "activeRayClusterName", activeRayClusterName, "pendingRayClusterName", pendingRayClusterName, "remove key", key)
-		serveConfigs.Remove(key)
+		logger.Info("Remove stale serve application config", "remove key", key, "activeRayClusterName", activeRayClusterName, "pendingRayClusterName", pendingRayClusterName)
+		clusterNameToServeConfig.Remove(key)
 	}
 }
 
@@ -1162,14 +1148,12 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	shouldUpdate := r.checkIfNeedSubmitServeDeployment(ctx, rayServiceInstance, rayClusterInstance, rayServiceStatus)
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
-			err = r.updateState(ctx, rayServiceInstance, rayv1.WaitForServeDeploymentReady, err)
 			return false, err
 		}
 	}
 
 	var isReady bool
 	if isReady, err = r.getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
-		err = r.updateState(ctx, rayServiceInstance, rayv1.FailedToGetServeDeploymentStatus, err)
 		return false, err
 	}
 
