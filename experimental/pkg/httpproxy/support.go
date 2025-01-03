@@ -18,7 +18,7 @@ type authorization struct {
 
 // Create Unauthorized response
 func WriteUnauthorisedResponse(w http.ResponseWriter) {
-	w.WriteHeader(401)
+	w.WriteHeader(http.StatusUnauthorized)
 	_, err := w.Write([]byte("Unauthorized\n"))
 	if err != nil {
 		klog.Info("failed writing unauthorized response ", err)
@@ -27,7 +27,7 @@ func WriteUnauthorisedResponse(w http.ResponseWriter) {
 
 // Create bad request response
 func WriteBadRequestResponse(w http.ResponseWriter) {
-	w.WriteHeader(400)
+	w.WriteHeader(http.StatusBadRequest)
 	_, err := w.Write([]byte("Bad Request\n"))
 	if err != nil {
 		klog.Info("failed writing bad request response ", err)
@@ -36,7 +36,7 @@ func WriteBadRequestResponse(w http.ResponseWriter) {
 
 // Create internal error response
 func WriteInternalErrorResponse(w http.ResponseWriter) {
-	w.WriteHeader(500)
+	w.WriteHeader(http.StatusInternalServerError)
 	_, err := w.Write([]byte("Internal Server Error\n"))
 	if err != nil {
 		klog.Info("failed writing internal error response ", err)
