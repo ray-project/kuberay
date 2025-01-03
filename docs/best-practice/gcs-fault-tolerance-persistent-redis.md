@@ -31,9 +31,9 @@ replica) Redis, so clustering is omitted.
 
 ## Persistent storage
 
-Specialty storage volumes (like Google Cloud Storage FUSE or S3) are not
-recommended because append operations are not supported, which Redis uses to
-efficiently write its Append Only File (AOF) log.
+Specialty storage volumes (like Google Cloud Storage FUSE or S3) do not support
+append operations, which Redis uses to efficiently write its Append Only File
+(AOF) log. When using using these options, it is recommended to disable AOF.
 
 With GCP GKE and Azure AKS, the default storage classes are [persistent
 disks](https://cloud.google.com/kubernetes-engine/docs/concepts/persistent-volumes)
@@ -97,7 +97,7 @@ auto-aof-rewrite-min-size 64mb
 ```
 
 You can view the full reference for 5.0.8
-[here](https://raw.githubusercontent.com/redis/redis/refs/tags/5.0.8/redis.conf).
+[here](https://raw.githubusercontent.com/redis/redis/refs/tags/7.4.0/redis.conf).
 
 
 If your job is generally idempotent and can resume from several minutes of state
