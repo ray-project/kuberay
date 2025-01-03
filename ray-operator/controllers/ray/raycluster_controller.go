@@ -1109,7 +1109,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
-	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
+	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.GcsFaultToleranceOptions, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1136,7 +1136,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
 	creatorCRDType := getCreatorCRDType(instance)
-	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
+	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, instance.Spec.GcsFaultToleranceOptions, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
