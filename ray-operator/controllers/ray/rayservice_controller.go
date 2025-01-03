@@ -238,10 +238,12 @@ func validateRayServiceSpec(rayService *rayv1.RayService) error {
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
-
-	if upgradeStrategy := rayService.Spec.UpgradeStrategy; upgradeStrategy != nil {
-		if *upgradeStrategy != rayv1.NewCluster && *upgradeStrategy != rayv1.None {
-			return fmt.Errorf("spec.UpgradeStrategy value %s is invalid, valid options are %s or %s", *upgradeStrategy, rayv1.NewCluster, rayv1.None)
+	if rayService.Spec.UpgradeStrategy == nil {
+		return nil
+	}
+	if upgradeType := rayService.Spec.UpgradeStrategy.Type; upgradeType != nil {
+		if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.None {
+			return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *upgradeType, rayv1.NewCluster, rayv1.None)
 		}
 	}
 	return nil
@@ -411,24 +413,27 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 		// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
 		zeroDowntimeEnvVar := os.Getenv(ENABLE_ZERO_DOWNTIME)
-		rayServiceSpecUpgradeStrategy := rayServiceInstance.Spec.UpgradeStrategy
-		// There are two ways to enable zero downtime upgrade. Through ENABLE_ZERO_DOWNTIME env var or setting Spec.UpgradeStrategy.
+		var rayServiceSpecUpgradeType *rayv1.RayServiceUpgradeType
+		if rayServiceInstance.Spec.UpgradeStrategy != nil {
+			rayServiceSpecUpgradeType = rayServiceInstance.Spec.UpgradeStrategy.Type
+		}
+		// There are two ways to enable zero downtime upgrade. Through ENABLE_ZERO_DOWNTIME env var or setting Spec.UpgradeStrategy.Type.
 		// If no fields are set, zero downtime upgrade by default is enabled.
-		// Spec.UpgradeStrategy takes precedence over ENABLE_ZERO_DOWNTIME.
+		// Spec.UpgradeStrategy.Type takes precedence over ENABLE_ZERO_DOWNTIME.
 		enableZeroDowntime := true
-		strategyMessage := ""
+		typeMessage := ""
 		if zeroDowntimeEnvVar != "" {
 			enableZeroDowntime = strings.ToLower(zeroDowntimeEnvVar) != "false"
-			strategyMessage = fmt.Sprintf("ENABLE_ZERO_DOWNTIME environmental variable is set to %q", strings.ToLower(zeroDowntimeEnvVar))
+			typeMessage = fmt.Sprintf("ENABLE_ZERO_DOWNTIME environmental variable is set to %q", strings.ToLower(zeroDowntimeEnvVar))
 		}
-		if rayServiceSpecUpgradeStrategy != nil {
-			enableZeroDowntime = *rayServiceSpecUpgradeStrategy == rayv1.NewCluster
-			strategyMessage = fmt.Sprintf("Upgrade Strategy is set to %q", *rayServiceSpecUpgradeStrategy)
+		if rayServiceSpecUpgradeType != nil {
+			enableZeroDowntime = *rayServiceSpecUpgradeType == rayv1.NewCluster
+			typeMessage = fmt.Sprintf("Upgrade Type is set to %q", *rayServiceSpecUpgradeType)
 		}
 
 		if enableZeroDowntime || !enableZeroDowntime && activeRayCluster == nil {
 			if enableZeroDowntime && activeRayCluster != nil {
-				r.Recorder.Event(rayServiceInstance, "Normal", "UpgradeStrategy", strategyMessage)
+				r.Recorder.Event(rayServiceInstance, "Normal", "UpgradeStrategy.Type", typeMessage)
 			}
 			// Add a pending cluster name. In the next reconcile loop, shouldPrepareNewRayCluster will return DoNothing and we will
 			// actually create the pending RayCluster instance.

@@ -41,6 +41,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayServiceStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayServiceStatuses"):
 		return &rayv1.RayServiceStatusesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayServiceUpgradeStrategy"):
+		return &rayv1.RayServiceUpgradeStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ScaleStrategy"):
 		return &rayv1.ScaleStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ServeDeploymentStatus"):

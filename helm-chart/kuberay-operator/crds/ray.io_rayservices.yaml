@@ -7946,7 +7946,10 @@ spec:
                 format: int32
                 type: integer
               upgradeStrategy:
-                type: string
+                properties:
+                  type:
+                    type: string
+                type: object
             type: object
           status:
             properties:
