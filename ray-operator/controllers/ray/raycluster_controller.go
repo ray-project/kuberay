@@ -29,7 +29,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
-	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/client-go/discovery"
@@ -1166,9 +1165,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			"redis_address = redis_address if '://' in redis_address else 'redis://' + redis_address; " +
 			"parsed = urlparse(redis_address); ",
 	}
-	constraint, _ := semver.NewConstraint(">= 2.41.0")
-	v, err := semver.NewVersion(instance.Spec.RayVersion)
-	if err == nil && constraint.Check(v) {
+	if utils.EnvVarExists(utils.REDIS_USERNAME, pod.Spec.Containers[utils.RayContainerIndex].Env) {
 		pod.Spec.Containers[utils.RayContainerIndex].Args[0] += "sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, username=os.getenv('REDIS_USERNAME', parsed.username), password=os.getenv('REDIS_PASSWORD', parsed.password), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\""
 	} else {
 		pod.Spec.Containers[utils.RayContainerIndex].Args[0] += "sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, password=os.getenv('REDIS_PASSWORD', parsed.password), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\""

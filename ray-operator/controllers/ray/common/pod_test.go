@@ -652,6 +652,7 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+
 	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, "myns")
 	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
 	checkContainerEnv(t, rayContainer, utils.REDIS_USERNAME, "myuser")
