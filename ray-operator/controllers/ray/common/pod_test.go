@@ -657,11 +657,12 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
 	checkContainerEnv(t, rayContainer, utils.REDIS_USERNAME, "myuser")
 	checkContainerEnv(t, rayContainer, utils.REDIS_PASSWORD, "mypass")
-	if v := cluster.Spec.HeadGroupSpec.RayStartParams["redis-username"]; v != "$REDIS_USERNAME" {
-		t.Fatalf("Expected `%v` but got `%v`", "$REDIS_USERNAME", v)
+
+	if !strings.Contains(rayContainer.Args[0], "--redis-username=$REDIS_USERNAME") {
+		t.Fatalf("redis username not found in the ray start command %s", rayContainer.Args[0])
 	}
-	if v := cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"]; v != "$REDIS_PASSWORD" {
-		t.Fatalf("Expected `%v` but got `%v`", "$REDIS_PASSWORD", v)
+	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
+		t.Fatalf("redis password not found in the ray start command %s", rayContainer.Args[0])
 	}
 }
 

@@ -368,6 +368,15 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		cmd += convertCmdToString(pod.Spec.Containers[utils.RayContainerIndex].Args)
 	}
 
+	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
+		if gcsOptions.RedisUsername != nil {
+			rayStartParams["redis-username"] = "$REDIS_USERNAME"
+		}
+		if gcsOptions.RedisPassword != nil {
+			rayStartParams["redis-password"] = "$REDIS_PASSWORD"
+		}
+	}
+
 	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
 	ulimitCmd := "ulimit -n 65536"
 	// Generate the `ray start` command.
@@ -659,11 +668,9 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 	}
 	if !utils.EnvVarExists(utils.REDIS_USERNAME, container.Env) {
 		// setting the REDIS_USERNAME env var from the params
-		redisUsernameEnv := corev1.EnvVar{Name: utils.REDIS_USERNAME}
 		if value, ok := rayStartParams["redis-username"]; ok {
-			redisUsernameEnv.Value = value
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.REDIS_USERNAME, Value: value})
 		}
-		container.Env = append(container.Env, redisUsernameEnv)
 	}
 	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 		// setting the REDIS_PASSWORD env var from the params
@@ -705,7 +712,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 				Value:     gcsOptions.RedisUsername.Value,
 				ValueFrom: gcsOptions.RedisUsername.ValueFrom,
 			})
-			rayStartParams["redis-username"] = "$REDIS_USERNAME"
 		}
 		if gcsOptions.RedisPassword != nil {
 			container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
@@ -713,7 +719,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 				Value:     gcsOptions.RedisPassword.Value,
 				ValueFrom: gcsOptions.RedisPassword.ValueFrom,
 			})
-			rayStartParams["redis-password"] = "$REDIS_PASSWORD"
 		}
 	}
 
