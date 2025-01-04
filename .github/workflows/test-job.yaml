@@ -10,7 +10,7 @@ on:
 jobs:
   lint:
     name: Lint (pre-commit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Install golangci-lint
         run: |
@@ -32,7 +32,7 @@ jobs:
     env:
       working-directory: ./apiserver
     name: Build Apiserver and Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -108,7 +108,7 @@ jobs:
     env:
       working-directory: ./experimental
     name: Build security proxy Binaries and Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
       - name: Set up Go
@@ -182,7 +182,7 @@ jobs:
     env:
       working-directory: ./ray-operator
     name: Build Operator Binaries and Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
     - name: Set up Go
@@ -292,7 +292,7 @@ jobs:
     env:
       working-directory: ./kubectl-plugin
     name: Build Ray Kubectl plugin
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -324,7 +324,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.7.0
     steps:
       - name: Check out code into the Go module directory
@@ -344,7 +344,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.8.0
     steps:
       - name: Check out code into the Go module directory
@@ -364,7 +364,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.9.0
     steps:
       - name: Check out code into the Go module directory
@@ -384,7 +384,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - Nightly
     steps:
       - name: Check out code into the Go module directory
@@ -400,7 +400,7 @@ jobs:
           ray_version: nightly
 
   python-client-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Python Client Test
     steps:
       - name: Set up Docker
