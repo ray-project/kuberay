@@ -238,13 +238,13 @@ func validateRayServiceSpec(rayService *rayv1.RayService) error {
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
-	if rayService.Spec.UpgradeStrategy == nil {
-		return nil
-	}
-	if upgradeType := rayService.Spec.UpgradeStrategy.Type; upgradeType != nil {
-		if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.None {
-			return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *upgradeType, rayv1.NewCluster, rayv1.None)
-		}
+
+	// only NewCluster and None are valid upgradeType
+	if rayService.Spec.UpgradeStrategy != nil &&
+		rayService.Spec.UpgradeStrategy.Type != nil &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
 	}
 	return nil
 }
