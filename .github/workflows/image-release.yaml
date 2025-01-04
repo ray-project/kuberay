@@ -15,7 +15,7 @@ jobs:
     env:
       working-directory: ./apiserver
     name: Release APIServer Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
     - name: Set up Go
@@ -75,7 +75,7 @@ jobs:
     env:
       working-directory: ./ray-operator
     name: Release Operator Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
     - name: Set up Go
