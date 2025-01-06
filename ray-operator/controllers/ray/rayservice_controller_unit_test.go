@@ -93,102 +93,241 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	assert.NotEqual(t, hash1, hash3)
 }
 
-func TestGetClusterAction(t *testing.T) {
-	clusterSpec1 := rayv1.RayClusterSpec{
-		RayVersion: support.GetRayVersion(),
-		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-			{
-				Replicas:    ptr.To[int32](2),
-				MinReplicas: ptr.To[int32](1),
-				MaxReplicas: ptr.To[int32](4),
-				GroupName:   "worker-group-1",
+func TestDecideClusterAction(t *testing.T) {
+	r := &RayServiceReconciler{}
+	ctx := context.TODO()
+
+	fillAnnotations := func(rayCluster *rayv1.RayCluster) {
+		hash, _ := generateHashWithoutReplicasAndWorkersToDelete(rayCluster.Spec)
+		rayCluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = hash
+		rayCluster.ObjectMeta.Annotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayCluster.Spec.WorkerGroupSpecs))
+	}
+
+	rayServiceStatusWithPendingCluster := rayv1.RayServiceStatuses{
+		PendingServiceStatus: rayv1.RayServiceStatus{
+			RayClusterName: "new-cluster",
+		},
+	}
+
+	rayClusterBase := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				utils.KubeRayVersion: utils.KUBERAY_VERSION,
+			},
+		},
+		Spec: rayv1.RayClusterSpec{
+			RayVersion: "1.0.0",
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					Replicas:    ptr.To[int32](2),
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
+					GroupName:   "worker-group-1",
+					ScaleStrategy: rayv1.ScaleStrategy{
+						WorkersToDelete: []string{"worker-1", "worker-2"},
+					},
+				},
 			},
 		},
 	}
-	clusterSpec2 := clusterSpec1.DeepCopy()
-	clusterSpec2.RayVersion = "2.100.0"
+	fillAnnotations(rayClusterBase)
 
-	// Test Case 1: Different RayVersions should lead to RolloutNew.
-	action, err := getClusterAction(clusterSpec1, *clusterSpec2)
-	assert.Nil(t, err)
-	assert.Equal(t, RolloutNew, action)
+	rayClusterDifferentRayVersion := rayClusterBase.DeepCopy()
+	rayClusterDifferentRayVersion.Spec.RayVersion = "2.0.0"
+	fillAnnotations(rayClusterDifferentRayVersion)
 
-	// Test Case 2: Same spec should lead to DoNothing.
-	action, err = getClusterAction(clusterSpec1, clusterSpec1)
-	assert.Nil(t, err)
-	assert.Equal(t, DoNothing, action)
+	rayClusterDifferentReplicasAndWorkersToDelete := rayClusterBase.DeepCopy()
+	rayClusterDifferentReplicasAndWorkersToDelete.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
+	rayClusterDifferentReplicasAndWorkersToDelete.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{"worker-3", "worker-4"}
+	fillAnnotations(rayClusterDifferentReplicasAndWorkersToDelete)
 
-	// Test Case 3: Different WorkerGroupSpecs should lead to RolloutNew.
-	clusterSpec3 := clusterSpec1.DeepCopy()
-	clusterSpec3.WorkerGroupSpecs[0].GroupName = "worker-group-2"
-	action, err = getClusterAction(clusterSpec1, *clusterSpec3)
-	assert.Nil(t, err)
-	assert.Equal(t, RolloutNew, action)
+	rayClusterDifferentWorkerGroup := rayClusterBase.DeepCopy()
+	rayClusterDifferentWorkerGroup.Spec.WorkerGroupSpecs[0].GroupName = "worker-group-2"
+	fillAnnotations(rayClusterDifferentWorkerGroup)
 
-	// Test Case 4: Adding a new WorkerGroupSpec should lead to Update.
-	clusterSpec4 := clusterSpec1.DeepCopy()
-	clusterSpec4.WorkerGroupSpecs = append(clusterSpec4.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    ptr.To[int32](2),
-		MinReplicas: ptr.To[int32](1),
-		MaxReplicas: ptr.To[int32](4),
-	})
-	action, err = getClusterAction(clusterSpec1, *clusterSpec4)
-	assert.Nil(t, err)
-	assert.Equal(t, Update, action)
-
-	// Test Case 5: Removing a WorkerGroupSpec should lead to RolloutNew.
-	clusterSpec5 := clusterSpec1.DeepCopy()
-	clusterSpec5.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
-	action, err = getClusterAction(clusterSpec1, *clusterSpec5)
-	assert.Nil(t, err)
-	assert.Equal(t, RolloutNew, action)
-
-	// Test Case 6: Only changing the number of replicas should lead to DoNothing.
-	clusterSpec6 := clusterSpec1.DeepCopy()
-	clusterSpec6.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
-	action, err = getClusterAction(clusterSpec1, *clusterSpec6)
-	assert.Nil(t, err)
-	assert.Equal(t, DoNothing, action)
-
-	// Test Case 7: Only changing the number of replicas in an existing WorkerGroupSpec *and* adding a new WorkerGroupSpec should lead to Update.
-	clusterSpec7 := clusterSpec1.DeepCopy()
-	clusterSpec7.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
-	clusterSpec7.WorkerGroupSpecs = append(clusterSpec7.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    ptr.To[int32](2),
-		MinReplicas: ptr.To[int32](1),
-		MaxReplicas: ptr.To[int32](4),
-	})
-	action, err = getClusterAction(clusterSpec1, *clusterSpec7)
-	assert.Nil(t, err)
-	assert.Equal(t, Update, action)
-
-	// Test Case 8: Adding two new WorkerGroupSpecs should lead to Update.
-	clusterSpec8 := clusterSpec1.DeepCopy()
-	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    ptr.To[int32](2),
-		MinReplicas: ptr.To[int32](1),
-		MaxReplicas: ptr.To[int32](4),
-	})
-	clusterSpec8.WorkerGroupSpecs = append(clusterSpec8.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+	rayClusterAdditionalWorkerGroup := rayClusterBase.DeepCopy()
+	rayClusterAdditionalWorkerGroup.Spec.WorkerGroupSpecs = append(rayClusterAdditionalWorkerGroup.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		Replicas:    ptr.To[int32](3),
 		MinReplicas: ptr.To[int32](2),
 		MaxReplicas: ptr.To[int32](5),
+		GroupName:   "worker-group-2",
 	})
-	action, err = getClusterAction(clusterSpec1, *clusterSpec8)
-	assert.Nil(t, err)
-	assert.Equal(t, Update, action)
+	fillAnnotations(rayClusterAdditionalWorkerGroup)
 
-	// Test Case 9: Changing an existing WorkerGroupSpec outside of Replicas/WorkersToDelete *and* adding a new WorkerGroupSpec should lead to RolloutNew.
-	clusterSpec9 := clusterSpec1.DeepCopy()
-	clusterSpec9.WorkerGroupSpecs[0].GroupName = "worker-group-3"
-	clusterSpec9.WorkerGroupSpecs = append(clusterSpec9.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		Replicas:    ptr.To[int32](2),
-		MinReplicas: ptr.To[int32](1),
-		MaxReplicas: ptr.To[int32](4),
-	})
-	action, err = getClusterAction(clusterSpec1, *clusterSpec9)
-	assert.Nil(t, err)
-	assert.Equal(t, RolloutNew, action)
+	rayClusterWorkerGroupRemoved := rayClusterBase.DeepCopy()
+	rayClusterWorkerGroupRemoved.Spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{}
+	fillAnnotations(rayClusterWorkerGroupRemoved)
+
+	rayClusterDifferentKubeRayVersion := rayClusterBase.DeepCopy()
+	rayClusterDifferentKubeRayVersion.ObjectMeta.Annotations[utils.KubeRayVersion] = "some-other-version"
+
+	tests := []struct {
+		rayService        *rayv1.RayService
+		activeRayCluster  *rayv1.RayCluster
+		pendingRayCluster *rayv1.RayCluster
+		name              string
+		expectedAction    ClusterAction
+	}{
+		{
+			name: "Has pending cluster name and cluster spec is the same",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterBase.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    DoNothing,
+		},
+		{
+			name: "Has pending cluster name and cluster spec has different Ray version",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentRayVersion.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    CreatePendingCluster,
+		},
+		{
+			name: "Has pending cluster name and cluster spec has different replicas and workers to delete",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentReplicasAndWorkersToDelete.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    DoNothing,
+		},
+		{
+			name: "Has pending cluster name and cluster spec has different worker group name",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentWorkerGroup.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    CreatePendingCluster,
+		},
+		{
+			name: "Has pending cluster name and cluster spec has additional worker group",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterAdditionalWorkerGroup.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    UpdatePendingCluster,
+		},
+		{
+			name: "Has pending cluster name and cluster spec has no worker group",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterWorkerGroupRemoved.Spec,
+				},
+				Status: rayServiceStatusWithPendingCluster,
+			},
+			activeRayCluster:  nil,
+			pendingRayCluster: rayClusterBase,
+			expectedAction:    CreatePendingCluster,
+		},
+		{
+			name:              "No pending cluster name and no active cluster",
+			rayService:        &rayv1.RayService{},
+			activeRayCluster:  nil,
+			pendingRayCluster: nil,
+			expectedAction:    GeneratePendingClusterName,
+		},
+		{
+			name:              "No pending cluster name and active cluster has different kubeRayVersion",
+			rayService:        &rayv1.RayService{},
+			activeRayCluster:  rayClusterDifferentKubeRayVersion,
+			pendingRayCluster: nil,
+			expectedAction:    UpdateActiveCluster,
+		},
+		{
+			name: "No pending cluster name and cluster spec is the same",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterBase.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    DoNothing,
+		},
+		{
+			name: "No pending cluster name and cluster spec has different Ray version",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentRayVersion.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    GeneratePendingClusterName,
+		},
+		{
+			name: "No pending cluster name and cluster spec has different replicas and workers to delete",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentReplicasAndWorkersToDelete.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    DoNothing,
+		},
+		{
+			name: "No pending cluster name and cluster spec has different worker group name",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterDifferentWorkerGroup.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    GeneratePendingClusterName,
+		},
+		{
+			name: "No pending cluster name and cluster spec has additional worker group",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterAdditionalWorkerGroup.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    UpdateActiveCluster,
+		},
+		{
+			name: "No pending cluster name and cluster spec has no worker group",
+			rayService: &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayClusterWorkerGroupRemoved.Spec,
+				},
+			},
+			activeRayCluster:  rayClusterBase,
+			pendingRayCluster: nil,
+			expectedAction:    GeneratePendingClusterName,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := r.decideClusterAction(ctx, tt.rayService, tt.activeRayCluster, tt.pendingRayCluster)
+			assert.Equal(t, tt.expectedAction, action)
+		})
+	}
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
