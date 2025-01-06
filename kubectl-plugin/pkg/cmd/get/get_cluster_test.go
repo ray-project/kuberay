@@ -12,7 +12,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
-	kubeFake "k8s.io/client-go/kubernetes/fake"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -167,7 +167,7 @@ func TestRayClusterGetRun(t *testing.T) {
 		},
 	}
 
-	kubeClientSet := kubeFake.NewClientset()
+	kubeClientSet := kubefake.NewClientset()
 	rayClient := rayClientFake.NewSimpleClientset(rayCluster)
 	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
