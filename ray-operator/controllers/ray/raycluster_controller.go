@@ -501,8 +501,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 			return err
 		}
 
-		err = r.createHeadRoute(ctx, route, instance)
-		if err != nil {
+		if err := r.createHeadRoute(ctx, route, instance); err != nil {
 			return err
 		}
 	}
@@ -533,8 +532,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 			return err
 		}
 
-		err = r.createHeadIngress(ctx, ingress, instance)
-		if err != nil {
+		if err := r.createHeadIngress(ctx, ingress, instance); err != nil {
 			return err
 		}
 	}
