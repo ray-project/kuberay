@@ -248,7 +248,7 @@ func TestDecideClusterAction(t *testing.T) {
 			expectedAction:    GeneratePendingClusterName,
 		},
 		{
-			name:              "No pending cluster name and active cluster has different kubeRayVersion",
+			name:              "No pending cluster name and active cluster has different KubeRay version",
 			rayService:        &rayv1.RayService{},
 			activeRayCluster:  rayClusterDifferentKubeRayVersion,
 			pendingRayCluster: nil,
