@@ -17,6 +17,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
+		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
@@ -43,6 +45,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayServiceStatusesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayServiceUpgradeStrategy"):
 		return &rayv1.RayServiceUpgradeStrategyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RedisCredential"):
+		return &rayv1.RedisCredentialApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ScaleStrategy"):
 		return &rayv1.ScaleStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ServeDeploymentStatus"):

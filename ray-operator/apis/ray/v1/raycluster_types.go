@@ -28,6 +28,8 @@ type RayClusterSpec struct {
 	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// GcsFaultToleranceOptions for enabling GCS FT
+	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// HeadGroupSpecs are the spec for the head pod
@@ -36,6 +38,20 @@ type RayClusterSpec struct {
 	RayVersion string `json:"rayVersion,omitempty"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// GcsFaultToleranceOptions contains configs for GCS FT
+type GcsFaultToleranceOptions struct {
+	RedisUsername            *RedisCredential `json:"redisUsername,omitempty"`
+	RedisPassword            *RedisCredential `json:"redisPassword,omitempty"`
+	ExternalStorageNamespace string           `json:"externalStorageNamespace,omitempty"`
+	RedisAddress             string           `json:"redisAddress"`
+}
+
+// RedisCredential is the redis username/password or a reference to the source containing the username/password
+type RedisCredential struct {
+	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
+	Value     string               `json:"value,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod

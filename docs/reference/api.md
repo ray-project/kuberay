@@ -42,6 +42,25 @@ _Appears in:_
 
 
 
+#### GcsFaultToleranceOptions
+
+
+
+GcsFaultToleranceOptions contains configs for GCS FT
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
+| `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
+| `externalStorageNamespace` _string_ |  |  |  |
+| `redisAddress` _string_ |  |  |  |
+
+
 #### HeadGroupSpec
 
 
@@ -117,6 +136,7 @@ _Appears in:_
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |  |  |
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
+| `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file<br />HeadGroupSpecs are the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
@@ -244,6 +264,23 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
+
+
+#### RedisCredential
+
+
+
+RedisCredential is the redis username/password or a reference to the source containing the username/password
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `valueFrom` _[EnvVarSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvarsource-v1-core)_ |  |  |  |
+| `value` _string_ |  |  |  |
 
 
 #### ScaleStrategy
