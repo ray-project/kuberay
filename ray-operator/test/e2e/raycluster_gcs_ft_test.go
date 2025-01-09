@@ -6,13 +6,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	// "k8s.io/utils/ptr"
-
-	// k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1 "k8s.io/api/core/v1"
-
-	// "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
