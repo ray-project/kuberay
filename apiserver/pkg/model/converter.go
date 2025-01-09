@@ -328,6 +328,8 @@ func convertSecurityContext(securityCtx *corev1.SecurityContext) *api.SecurityCo
 	result := &api.SecurityContext{
 		Privileged:   securityCtx.Privileged,
 		Capabilities: &api.Capabilities{},
+		RunAsUser:    *securityCtx.RunAsUser,
+		RunAsGroup:   *securityCtx.RunAsGroup,
 	}
 	if securityCtx.Capabilities != nil {
 		for _, cap := range securityCtx.Capabilities.Add {

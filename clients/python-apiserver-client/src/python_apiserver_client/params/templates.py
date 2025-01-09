@@ -143,11 +143,11 @@ class Template:
         if self.gpu > 0:
             val = val + f", gpu {self.gpu}"
         if self.gpu_accelerator is not None:
-            val = val + f", gpu accelerator {self.gpu_accelerator}"
+            val = val + f", gpu_accelerator {self.gpu_accelerator}"
         if self.extended_resources is not None:
-            val = val + f", extended resources {self.extended_resources}"
+            val = val + f", extended_resources {self.extended_resources}"
         if self.node_selector is not None:
-            val = val + f", node selector {str(self.node_selector)}"
+            val = val + f", node_selector {self.node_selector}"
         if self.tolerations is None:
             return val
         val = val + ", tolerations ["

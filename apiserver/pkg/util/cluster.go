@@ -829,6 +829,8 @@ func buildSecurityContext(securityCtx *api.SecurityContext) *corev1.SecurityCont
 	result := &corev1.SecurityContext{
 		Privileged:   securityCtx.Privileged,
 		Capabilities: &corev1.Capabilities{},
+		RunAsUser:    &securityCtx.RunAsUser,
+		RunAsGroup:   &securityCtx.RunAsGroup,
 	}
 	if securityCtx.Capabilities != nil {
 		for _, cap := range securityCtx.Capabilities.Add {

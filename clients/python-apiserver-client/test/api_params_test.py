@@ -23,6 +23,7 @@ from python_apiserver_client.params import (
     RayJobInfo,
     RayJobRequest,
     SecretVolume,
+    SecurityContext,
     ServiceType,
     Template,
     Toleration,
@@ -195,6 +196,7 @@ def test_head_node_spec():
         volumes=volumes,
         environment=env_s,
         image_pull_policy="Always",
+        security_context=SecurityContext(),
     )
     print(f"\nhead node: {head.to_string()}")
     head_json = json.dumps(head.to_dict())
@@ -229,6 +231,7 @@ def test_worker_node_spec():
         environment=env_s,
         labels={"key": "value"},
         image_pull_policy="IfNotPresent",
+        security_context=SecurityContext(),
     )
     print(f"\nworker node: {worker.to_string()}")
     worker_json = json.dumps(worker.to_dict())

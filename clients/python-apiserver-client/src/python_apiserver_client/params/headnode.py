@@ -40,6 +40,7 @@ class HeadNodeSpec:
         annotations - optional, annotations for head node
         labels - optional, labels for head node
         image_pull_policy - optional, head node pull image policy. Default IfNotPresent
+        security_context - optional, security context for head node
     """
 
     def __init__(
@@ -56,6 +57,7 @@ class HeadNodeSpec:
             annotations: dict[str, str] = None,
             labels: dict[str, str] = None,
             image_pull_policy: str = None,
+            security_context = None,
     ):
         """
         Initialization
@@ -71,6 +73,7 @@ class HeadNodeSpec:
         :param annotations: head node annotation
         :param labels: labels
         :param image_pull_policy: image pull policy
+        :param security_context: head node security context
         """
 
         self.compute_template = compute_template
@@ -86,6 +89,7 @@ class HeadNodeSpec:
         self.annotations = annotations
         self.labels = labels
         self.image_pull_policy = image_pull_policy
+        self.security_context = security_context
 
     def to_string(self) -> str:
         """
@@ -117,6 +121,8 @@ class HeadNodeSpec:
             val = val + "]"
         if self.environment is not None:
             val = val + f",\n environment = {self.environment.to_string()}"
+        if self.security_context is not None:
+            val = val + f",\n security_context = {self.security_context.to_string()}"
         if self.annotations is not None:
             val = val + f",\n annotations = {str(self.annotations)}"
         if self.labels is not None:
@@ -145,6 +151,8 @@ class HeadNodeSpec:
             dct["volumes"] = [v.to_dict() for v in self.volumes]
         if self.environment is not None:
             dct["environment"] = self.environment.to_dict()
+        if self.security_context is not None:
+            dct["securityContext"] = self.security_context.to_dict()
         if self.annotations is not None:
             dct["annotations"] = self.annotations
         if self.labels is not None:
@@ -173,6 +181,10 @@ def head_node_spec_decoder(dct: dict[str, Any]) -> HeadNodeSpec:
     environments = None
     if "environment" in dct and len(dct.get("environment")) > 0:
         environments = environment_variables_decoder(dct.get("environment"))
+    security_context = None
+    if "securityContext" in dct and len(dct.get("securityContext")) > 0:
+        from .securitycontext import security_context_decoder
+        security_context = security_context_decoder(dct["securityContext"])
     return HeadNodeSpec(
         compute_template=dct.get("computeTemplate"),
         ray_start_params=dct.get("rayStartParams"),
@@ -184,6 +196,7 @@ def head_node_spec_decoder(dct: dict[str, Any]) -> HeadNodeSpec:
         image_pull_secret=dct.get("imagePullSecret", None),
         image_pull_policy=dct.get("imagePullPolicy", None),
         environment=environments,
+        security_context=security_context,
         annotations=dct.get("annotations", None),
         labels=dct.get("labels", None),
     )

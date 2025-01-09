@@ -1379,6 +1379,16 @@
         "privileged": {
           "type": "boolean",
           "description": "Optional. Run container in privileged mode - essentially equivalent to root on the host. Default is false."
+        },
+        "runAsUser": {
+          "type": "string",
+          "format": "int64",
+          "description": "Optional. The UID to run the entrypoint of the container process."
+        },
+        "runAsGroup": {
+          "type": "string",
+          "format": "int64",
+          "description": "Optional. The GID to run the entrypoint of the container process."
         }
       },
       "description": "SecurityContext holds security configuration that will be applied to a container.\nSome fields are present in both SecurityContext and PodSecurityContext.  When both\nare set, the values in SecurityContext take precedence."
