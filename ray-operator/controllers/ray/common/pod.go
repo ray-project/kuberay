@@ -63,7 +63,7 @@ func GetHeadPort(headStartParams map[string]string) string {
 // Check if the RayCluster has GCS fault tolerance enabled.
 func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
 	v, ok := instance.Annotations[utils.RayFTEnabledAnnotationKey]
-	return ok && strings.ToLower(v) == "true"
+	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
 }
 
 // Check if overwrites the container command.
@@ -95,6 +95,9 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 		if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
 			podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = v
 		}
+	}
+	if options := instance.Spec.GcsFaultToleranceOptions; options != nil && options.ExternalStorageNamespace != "" {
+		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = options.ExternalStorageNamespace
 	}
 }
 
@@ -322,7 +325,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -396,7 +399,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
+	setContainerEnvVars(&pod, rayNodeType, gcsOptions, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -559,7 +562,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if len(container.Env) == 0 {
@@ -677,11 +680,19 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, rayStar
 		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
 		// crash if the GCS server is down for more than 60s. Typically, the new GCS server will be available
 		// in 120 seconds, so we set the timeout to 600s to avoid the worker nodes crashing.
-		if ftEnabled := pod.Annotations[utils.RayFTEnabledAnnotationKey] == "true"; ftEnabled {
+		if ftEnabled := pod.Annotations[utils.RayFTEnabledAnnotationKey] == "true"; ftEnabled || gcsOptions != nil {
 			gcsTimeout := corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: utils.DefaultWorkerRayGcsReconnectTimeoutS}
 			container.Env = append(container.Env, gcsTimeout)
 		}
 	}
+
+	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
+		container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_REDIS_ADDRESS,
+			Value: gcsOptions.RedisAddress,
+		})
+	}
+
 	if !utils.EnvVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
 		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
 		container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})

@@ -98,6 +98,7 @@ const (
 	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
+	RAY_REDIS_ADDRESS                       = "RAY_REDIS_ADDRESS"
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
