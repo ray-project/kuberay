@@ -135,4 +135,3 @@ spec:
             requests:
               cpu: 14
               memory: 54Gi
-
