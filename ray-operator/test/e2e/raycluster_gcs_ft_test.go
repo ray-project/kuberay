@@ -1,12 +1,12 @@
 package e2e
 
 import (
-	"os/exec"
 	"testing"
 
 	. "github.com/onsi/gomega"
-
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -32,7 +32,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
-	test.T().Run("Test Detached Actor", func(t *testing.T) {
+	test.T().Run("Test Detached Actor", func(_ *testing.T) {
 		headPod, err := GetHeadPod(test, rayClusterFromYaml)
 		g.Expect(err).NotTo(HaveOccurred())
 
@@ -67,9 +67,11 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_2.py", rayNamespace, expectedOutput})
 
 		// Test 2: Delete the head Pod
-		kubectlCmd := exec.CommandContext(test.Ctx(), "kubectl", "delete", "pod", headPod.Name, "-n", namespace.Name)
-		kubectlCmd.Run()
-
+		propagationPolicy := metav1.DeletePropagationBackground
+		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{
+			PropagationPolicy: &propagationPolicy,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
 		// Will get 2 head pods while one is terminating and another is creating, so wait until one is left
 		g.Eventually(func() error {
 			_, err := GetHeadPod(test, rayClusterFromYaml)
@@ -81,5 +83,4 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		expectedOutput = "4"
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_2.py", rayNamespace, expectedOutput})
 	})
-
 }
