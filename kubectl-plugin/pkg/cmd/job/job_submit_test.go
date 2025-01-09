@@ -9,6 +9,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestRayJobSubmitComplete(t *testing.T) {
@@ -140,12 +142,9 @@ spec:
 	assert.Nil(t, err)
 
 	assert.Equal(t, "rayjob-sample", rayJobYamlActual.GetName())
-	assert.Equal(t, "RayJob", rayJobYamlActual.GetKind())
-	assert.Equal(t, "ray.io/v1", rayJobYamlActual.GetAPIVersion())
 
-	submissionMode, ok := rayJobYamlActual.Object["spec"].(map[string]interface{})["submissionMode"]
-	assert.True(t, ok)
-	assert.Equal(t, "InteractiveMode", submissionMode)
+	submissionMode := rayJobYamlActual.Spec.SubmissionMode
+	assert.Equal(t, rayv1.InteractiveMode, submissionMode)
 }
 
 func TestRuntimeEnvHasWorkingDir(t *testing.T) {

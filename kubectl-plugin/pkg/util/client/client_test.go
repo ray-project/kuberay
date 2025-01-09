@@ -9,11 +9,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	dynamicFake "k8s.io/client-go/dynamic/fake"
 	kubeFake "k8s.io/client-go/kubernetes/fake"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
@@ -91,8 +90,8 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			kubeClientSet := kubeFake.NewSimpleClientset(tc.kubeObjects...)
-			client := NewClientForTesting(kubeClientSet, nil, nil)
+			kubeClientSet := kubeFake.NewClientset(tc.kubeObjects...)
+			client := NewClientForTesting(kubeClientSet, nil)
 
 			version, err := client.GetKubeRayOperatorVersion(context.Background())
 
@@ -109,43 +108,34 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 	kubeObjects := []runtime.Object{}
 
-	dynamicObjects := []runtime.Object{
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayCluster",
-				"metadata": map[string]interface{}{
-					"name":      "raycluster-default",
-					"namespace": "default",
-				},
-				"status": map[string]interface{}{
-					"head": map[string]interface{}{
-						"serviceName": "raycluster-default-head-svc",
-					},
+	rayObjects := []runtime.Object{
+		&rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "raycluster-default",
+				Namespace: "default",
+			},
+			Status: rayv1.RayClusterStatus{
+				Head: rayv1.HeadInfo{
+					ServiceName: "raycluster-default-head-svc",
 				},
 			},
 		},
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayCluster",
-				"metadata": map[string]interface{}{
-					"name":      "raycluster-test",
-					"namespace": "test",
-				},
-				"status": map[string]interface{}{
-					"head": map[string]interface{}{
-						"serviceName": "raycluster-test-head-svc",
-					},
+		&rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "raycluster-test",
+				Namespace: "test",
+			},
+			Status: rayv1.RayClusterStatus{
+				Head: rayv1.HeadInfo{
+					ServiceName: "raycluster-test-head-svc",
 				},
 			},
 		},
 	}
 
-	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
-	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	rayClient := rayClientFake.NewSimpleClientset()
-	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
+	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
+	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
 		name         string
@@ -189,47 +179,38 @@ func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 	kubeObjects := []runtime.Object{}
 
-	dynamicObjects := []runtime.Object{
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayJob",
-				"metadata": map[string]interface{}{
-					"name":      "rayjob-default",
-					"namespace": "default",
-				},
-				"status": map[string]interface{}{
-					"rayClusterStatus": map[string]interface{}{
-						"head": map[string]interface{}{
-							"serviceName": "rayjob-default-raycluster-xxxxx-head-svc",
-						},
+	rayObjects := []runtime.Object{
+		&rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "rayjob-default",
+				Namespace: "default",
+			},
+			Status: rayv1.RayJobStatus{
+				RayClusterStatus: rayv1.RayClusterStatus{
+					Head: rayv1.HeadInfo{
+						ServiceName: "rayjob-default-raycluster-xxxxx-head-svc",
 					},
 				},
 			},
 		},
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayJob",
-				"metadata": map[string]interface{}{
-					"name":      "rayjob-test",
-					"namespace": "test",
-				},
-				"status": map[string]interface{}{
-					"rayClusterStatus": map[string]interface{}{
-						"head": map[string]interface{}{
-							"serviceName": "rayjob-test-raycluster-xxxxx-head-svc",
-						},
+		&rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "rayjob-test",
+				Namespace: "test",
+			},
+			Status: rayv1.RayJobStatus{
+				RayClusterStatus: rayv1.RayClusterStatus{
+					Head: rayv1.HeadInfo{
+						ServiceName: "rayjob-test-raycluster-xxxxx-head-svc",
 					},
 				},
 			},
 		},
 	}
 
-	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
-	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	rayClient := rayClientFake.NewSimpleClientset()
-	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
+	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
+	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
 		name         string
@@ -273,40 +254,32 @@ func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 	kubeObjects := []runtime.Object{}
 
-	dynamicObjects := []runtime.Object{
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayService",
-				"metadata": map[string]interface{}{
-					"name":      "rayservice-default",
-					"namespace": "default",
-				},
-				"status": map[string]interface{}{
-					"activeServiceStatus": map[string]interface{}{
-						"rayClusterStatus": map[string]interface{}{
-							"head": map[string]interface{}{
-								"serviceName": "rayservice-default-raycluster-xxxxx-head-svc",
-							},
+	rayObjects := []runtime.Object{
+		&rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "rayservice-default",
+				Namespace: "default",
+			},
+			Status: rayv1.RayServiceStatuses{
+				ActiveServiceStatus: rayv1.RayServiceStatus{
+					RayClusterStatus: rayv1.RayClusterStatus{
+						Head: rayv1.HeadInfo{
+							ServiceName: "rayservice-default-raycluster-xxxxx-head-svc",
 						},
 					},
 				},
 			},
 		},
-		&unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "ray.io/v1",
-				"kind":       "RayService",
-				"metadata": map[string]interface{}{
-					"name":      "rayservice-test",
-					"namespace": "test",
-				},
-				"status": map[string]interface{}{
-					"activeServiceStatus": map[string]interface{}{
-						"rayClusterStatus": map[string]interface{}{
-							"head": map[string]interface{}{
-								"serviceName": "rayservice-test-raycluster-xxxxx-head-svc",
-							},
+		&rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "rayservice-test",
+				Namespace: "test",
+			},
+			Status: rayv1.RayServiceStatuses{
+				ActiveServiceStatus: rayv1.RayServiceStatus{
+					RayClusterStatus: rayv1.RayClusterStatus{
+						Head: rayv1.HeadInfo{
+							ServiceName: "rayservice-test-raycluster-xxxxx-head-svc",
 						},
 					},
 				},
@@ -314,10 +287,9 @@ func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 		},
 	}
 
-	kubeClientSet := kubeFake.NewSimpleClientset(kubeObjects...)
-	dynamicClient := dynamicFake.NewSimpleDynamicClient(runtime.NewScheme(), dynamicObjects...)
-	rayClient := rayClientFake.NewSimpleClientset()
-	client := NewClientForTesting(kubeClientSet, dynamicClient, rayClient)
+	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
+	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
 		name         string

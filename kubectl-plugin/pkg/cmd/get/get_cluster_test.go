@@ -8,15 +8,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
-	fakedynamic "k8s.io/client-go/dynamic/fake"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 // This is to test Complete() and ensure that it is setting the namespace and arguments correctly
@@ -129,9 +133,10 @@ func TestRayClusterGetValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
+				assert.Error(t, err)
 				assert.Equal(t, tc.expectError, err.Error())
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -146,28 +151,25 @@ func TestRayClusterGetRun(t *testing.T) {
 
 	fakeClusterGetOptions := NewGetClusterOptions(testStreams)
 
-	// Create fake ray cluster unstructured object for fake rest response
-	raycluster := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "ray.io/v1",
-			"kind":       "RayCluster",
-			"name":       "raycluster-kuberay",
-			"namespace":  "test",
-			"metadata": map[string]interface{}{
-				"name":      "raycluster-kuberay",
-				"namespace": "test",
-			},
-			"status": map[string]interface{}{
-				"desiredWorkerReplicas":   "2",
-				"availableWorkerReplicas": "2",
-				"desiredCPU":              "6",
-				"desiredGPU":              "1",
-				"desiredTPU":              "1",
-				"desiredMemory":           "24Gi",
-				"state":                   "ready",
-			},
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "raycluster-kuberay",
+			Namespace: "test",
+		},
+		Status: rayv1.RayClusterStatus{
+			DesiredWorkerReplicas:   2,
+			AvailableWorkerReplicas: 2,
+			DesiredCPU:              resource.MustParse("6"),
+			DesiredGPU:              resource.MustParse("1"),
+			DesiredTPU:              resource.MustParse("1"),
+			DesiredMemory:           resource.MustParse("24Gi"),
+			State:                   rayv1.Ready,
 		},
 	}
+
+	kubeClientSet := kubefake.NewClientset()
+	rayClient := rayClientFake.NewSimpleClientset(rayCluster)
+	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 	// Initialize the printer with an empty print options since we are setting the column definition later
 	expectedTestResultTable := printers.NewTablePrinter(printers.PrintOptions{})
@@ -206,10 +208,7 @@ func TestRayClusterGetRun(t *testing.T) {
 	err := expectedTestResultTable.PrintObj(testResTable, &resbuffer)
 	assert.Nil(t, err)
 
-	// Create fake dynmaic with the rayscluster
-	tf.FakeDynamicClient = fakedynamic.NewSimpleDynamicClient(runtime.NewScheme(), raycluster)
-
-	err = fakeClusterGetOptions.Run(context.Background(), tf)
+	err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
 	assert.Nil(t, err)
 
 	if e, a := resbuffer.String(), resBuf.String(); e != a {

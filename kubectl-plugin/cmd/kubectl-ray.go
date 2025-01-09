@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	cmd "github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd"
 	flag "github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 )
