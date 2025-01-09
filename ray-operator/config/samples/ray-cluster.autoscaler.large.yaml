@@ -91,10 +91,6 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -139,7 +135,4 @@ spec:
             requests:
               cpu: 14
               memory: 54Gi
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
+

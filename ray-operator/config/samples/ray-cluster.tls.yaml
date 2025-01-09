@@ -79,10 +79,6 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
@@ -160,10 +156,6 @@ spec:
         containers:
         - name: ray-worker
           image: rayproject/ray:2.9.0
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
