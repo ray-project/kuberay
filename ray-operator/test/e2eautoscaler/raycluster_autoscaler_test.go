@@ -370,16 +370,16 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Minimum Ray Version for custom idleTimeoutSeconds
-	IDLE_TIMEOUT_MIN_RAY_VERSION := "2.40.0"
-	os.Setenv(KuberayTestRayImage, IDLE_TIMEOUT_MIN_RAY_VERSION)
+	idleTimeoutMinRayVersion := "2.40.0"
+	os.Setenv(KuberayTestRayImage, idleTimeoutMinRayVersion)
 
-	customIdleTimeoutSeconds := 30
-	defaultIdleTimeoutSeconds := 60
+	customIdleTimeoutSeconds := int32(30)
+	defaultIdleTimeoutSeconds := int32(60)
 
 	test.T().Run(name, func(_ *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
-			WithRayVersion(IDLE_TIMEOUT_MIN_RAY_VERSION).
+			WithRayVersion(idleTimeoutMinRayVersion).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
 				WithTemplate(tc.HeadPodTemplateGetter())).
@@ -395,7 +395,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 					WithReplicas(2).
 					WithMinReplicas(0).
 					WithMaxReplicas(4).
-					WithIdleTimeoutSeconds(int32(customIdleTimeoutSeconds)).
+					WithIdleTimeoutSeconds(customIdleTimeoutSeconds).
 					WithGroupName("custom-idle-timeout-group").
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()),
