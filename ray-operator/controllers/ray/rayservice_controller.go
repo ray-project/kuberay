@@ -879,7 +879,7 @@ func (r *RayServiceReconciler) getAndCheckServeStatus(ctx context.Context, dashb
 	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 		err = fmt.Errorf(
 			"failed to get Serve application statuses from the dashboard. "+
-				"If you observe this error consistently, please check https://docs.ray.io/en/latest/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
+				"If you observe this error consistently, please check https://docs.ray.io/en/latest/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html for more details. "+
 				"err: %v", err)
 		return false, err
 	}
