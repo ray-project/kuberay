@@ -76,7 +76,10 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}
-
+	// Validation for invalid case: FT explicitly enabled and GcsFaultToleranceOptions is not nil
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
+		panic("Invalid configuration: GCS Fault Tolerance is explicitly disabled (ray.io/ft-enabled: false) while GcsFaultToleranceOptions is set")
+	}
 	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
 	// This may need to be updated in the future.
 	if IsGCSFaultToleranceEnabled(instance) {
