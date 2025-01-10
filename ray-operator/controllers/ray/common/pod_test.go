@@ -14,6 +14,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -284,7 +285,7 @@ func TestInitTemplateAnnotations_GcsFtAndGcsFaultToleranceOptions(t *testing.T) 
 		gcsFaultToleranceOpts *rayv1.GcsFaultToleranceOptions
 		name                  string
 		rayFTEnabled          string
-		expectPanic           bool
+		expectedCondition     metav1.Condition
 	}{
 		{
 			gcsFaultToleranceOpts: &rayv1.GcsFaultToleranceOptions{
@@ -292,27 +293,31 @@ func TestInitTemplateAnnotations_GcsFtAndGcsFaultToleranceOptions(t *testing.T) 
 			},
 			name:         "FTEnabled=false with GcsFaultToleranceOptions",
 			rayFTEnabled: "false",
-			expectPanic:  true,
+			expectedCondition: metav1.Condition{
+				Type:   string(rayv1.Failed),
+				Status: metav1.ConditionFalse,
+				Reason: rayv1.InvalidConfiguration,
+			},
 		},
 		{
 			gcsFaultToleranceOpts: nil,
 			name:                  "FTEnabled=false without GcsFaultToleranceOptions",
 			rayFTEnabled:          "false",
-			expectPanic:           false,
+			expectedCondition:     metav1.Condition{},
 		},
 		{
 			gcsFaultToleranceOpts: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress: "redis://127.0.0.1:6379",
 			},
-			name:         "FTEnabled=true with GcsFaultToleranceOptions",
-			rayFTEnabled: "true",
-			expectPanic:  false,
+			name:              "FTEnabled=true with GcsFaultToleranceOptions",
+			rayFTEnabled:      "true",
+			expectedCondition: metav1.Condition{},
 		},
 		{
 			gcsFaultToleranceOpts: nil,
 			name:                  "FTEnabled=true without GcsFaultToleranceOptions",
 			rayFTEnabled:          "true",
-			expectPanic:           false,
+			expectedCondition:     metav1.Condition{},
 		},
 	}
 
@@ -325,15 +330,15 @@ func TestInitTemplateAnnotations_GcsFtAndGcsFaultToleranceOptions(t *testing.T) 
 			}
 			cluster.Spec.GcsFaultToleranceOptions = tt.gcsFaultToleranceOpts
 
-			if tt.expectPanic {
-				// Only panic if the annotation is set to false and GcsFaultToleranceOptions is not nil
-				assert.Panics(t, func() {
-					initTemplateAnnotations(*cluster, &cluster.Spec.HeadGroupSpec.Template)
-				}, "expected panic but got none")
+			initTemplateAnnotations(cluster, &cluster.Spec.HeadGroupSpec.Template)
+			// Validate the condition
+			if tt.expectedCondition.Type != "" {
+				condition := meta.FindStatusCondition(cluster.Status.Conditions, tt.expectedCondition.Type)
+				assert.NotNil(t, condition)
+				assert.Equal(t, tt.expectedCondition.Status, condition.Status)
+				assert.Equal(t, tt.expectedCondition.Reason, condition.Reason)
 			} else {
-				assert.NotPanics(t, func() {
-					initTemplateAnnotations(*cluster, &cluster.Spec.HeadGroupSpec.Template)
-				}, "expected no panic but got one")
+				assert.Nil(t, cluster.Status.Conditions, metav1.ConditionTrue)
 			}
 		})
 	}

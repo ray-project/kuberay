@@ -205,6 +205,7 @@ const (
 	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
+	InvalidConfiguration           = "InvalidConfiguration"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )

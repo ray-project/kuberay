@@ -72,17 +72,21 @@ func isOverwriteRayContainerCmd(instance rayv1.RayCluster) bool {
 	return ok && strings.ToLower(v) == "true"
 }
 
-func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodTemplateSpec) {
+func initTemplateAnnotations(instance *rayv1.RayCluster, podTemplate *corev1.PodTemplateSpec) {
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}
 	// Validation for invalid case: FT explicitly enabled and GcsFaultToleranceOptions is not nil
 	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
-		panic("Invalid configuration: GCS Fault Tolerance is explicitly disabled (ray.io/ft-enabled: false) while GcsFaultToleranceOptions is set")
+		instance.Status.Conditions = append(instance.Status.Conditions, metav1.Condition{
+			Type:   string(rayv1.Failed),
+			Status: metav1.ConditionFalse,
+			Reason: rayv1.InvalidConfiguration,
+		})
 	}
 	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
 	// This may need to be updated in the future.
-	if IsGCSFaultToleranceEnabled(instance) {
+	if IsGCSFaultToleranceEnabled(*instance) {
 		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
 		// if we have FT enabled, we need to set up a default external storage namespace.
 		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = string(instance.UID)
@@ -90,7 +94,7 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = "false"
 	}
 
-	if isOverwriteRayContainerCmd(instance) {
+	if isOverwriteRayContainerCmd(*instance) {
 		podTemplate.Annotations[utils.RayOverwriteContainerCmdAnnotationKey] = "true"
 	}
 	// set ray external storage namespace if user specified one.
@@ -121,7 +125,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
-	initTemplateAnnotations(instance, &podTemplate)
+	initTemplateAnnotations(&instance, &podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
 	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
@@ -241,7 +245,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
-	initTemplateAnnotations(instance, &podTemplate)
+	initTemplateAnnotations(&instance, &podTemplate)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
