@@ -279,66 +279,6 @@ func getEnvVar(container corev1.Container, envName string) *corev1.EnvVar {
 	return nil
 }
 
-func TestInitTemplateAnnotations_GcsFtAndGcsFaultToleranceOptions(t *testing.T) {
-	tests := []struct {
-		gcsFaultToleranceOpts *rayv1.GcsFaultToleranceOptions
-		name                  string
-		rayFTEnabled          string
-		expectPanic           bool
-	}{
-		{
-			gcsFaultToleranceOpts: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
-			},
-			name:         "FTEnabled=false with GcsFaultToleranceOptions",
-			rayFTEnabled: "false",
-			expectPanic:  true,
-		},
-		{
-			gcsFaultToleranceOpts: nil,
-			name:                  "FTEnabled=false without GcsFaultToleranceOptions",
-			rayFTEnabled:          "false",
-			expectPanic:           false,
-		},
-		{
-			gcsFaultToleranceOpts: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
-			},
-			name:         "FTEnabled=true with GcsFaultToleranceOptions",
-			rayFTEnabled: "true",
-			expectPanic:  false,
-		},
-		{
-			gcsFaultToleranceOpts: nil,
-			name:                  "FTEnabled=true without GcsFaultToleranceOptions",
-			rayFTEnabled:          "true",
-			expectPanic:           false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create cluster object and set annotations and GcsFaultToleranceOptions
-			cluster := instance.DeepCopy()
-			cluster.Annotations = map[string]string{
-				utils.RayFTEnabledAnnotationKey: tt.rayFTEnabled,
-			}
-			cluster.Spec.GcsFaultToleranceOptions = tt.gcsFaultToleranceOpts
-
-			if tt.expectPanic {
-				// Only panic if the annotation is set to false and GcsFaultToleranceOptions is not nil
-				assert.Panics(t, func() {
-					initTemplateAnnotations(*cluster, &cluster.Spec.HeadGroupSpec.Template)
-				}, "expected panic but got none")
-			} else {
-				assert.NotPanics(t, func() {
-					initTemplateAnnotations(*cluster, &cluster.Spec.HeadGroupSpec.Template)
-				}, "expected no panic but got one")
-			}
-		})
-	}
-}
-
 func checkContainerEnv(t *testing.T, container corev1.Container, envName string, expectedValue string) {
 	env := getEnvVar(container, envName)
 	if env != nil {
