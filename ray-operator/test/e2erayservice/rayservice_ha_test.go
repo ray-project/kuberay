@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 func TestStaticRayService(t *testing.T) {
+	fmt.Println("--- Start: TestStaticRayService")
 	rayserviceYamlFile := "testdata/rayservice.static.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
@@ -65,6 +67,7 @@ func TestStaticRayService(t *testing.T) {
 }
 
 func TestAutoscalingRayService(t *testing.T) {
+	fmt.Println("--- Start: TestAutoscalingRayService")
 	rayserviceYamlFile := "testdata/rayservice.autoscaling.yaml"
 	locustYamlFile := "testdata/locust-cluster.burst.yaml"
 	numberOfPodsWhenSteady := 1
@@ -132,6 +135,7 @@ func TestAutoscalingRayService(t *testing.T) {
 }
 
 func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
+	fmt.Println("--- Start: TestRayServiceZeroDowntimeUpgrade")
 	rayserviceYamlFile := "testdata/rayservice.static.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
@@ -208,6 +212,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 }
 
 func TestRayServiceGCSFaultTolerance(t *testing.T) {
+	fmt.Println("--- Start: TestRayServiceGCSFaultTolerance")
 	rayserviceYamlFile := "testdata/ray-service.ft.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
