@@ -220,9 +220,25 @@ func (r *RayClusterReconciler) validateRayClusterStatus(instance *rayv1.RayClust
 	return nil
 }
 
+// Validation for invalid Ray Cluster configurations.
+func (r *RayClusterReconciler) validateRayClusterSpec(instance *rayv1.RayCluster) error {
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
+		return fmt.Errorf("GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled")
+	}
+	return nil
+}
+
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
+
+	// Validate that GcsFaultToleranceOptions is nil when FT is explicitly disabled
+	if err := r.validateRayClusterSpec(instance); err != nil {
+		logger.Error(err, "The RayCluster spec is invalid")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
 
 	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
 		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)

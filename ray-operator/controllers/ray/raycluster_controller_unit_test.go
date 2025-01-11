@@ -3404,3 +3404,74 @@ func Test_ReconcileManagedBy(t *testing.T) {
 		})
 	}
 }
+
+func TestRayClusterReconcile_ValidateRayClusterSpec(t *testing.T) {
+	tests := []struct {
+		name              string
+		errorMessage      string
+		annotations       map[string]string
+		gcsFaultTolerance *rayv1.GcsFaultToleranceOptions
+		expectError       bool
+	}{
+		{
+			name:        "FT disabled, GcsFaultToleranceOptions nil",
+			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "false"},
+			expectError: false,
+		},
+		{
+			name:        "FT disabled, GcsFaultToleranceOptions not nil",
+			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "false"},
+			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis://127.0.0.1:6379",
+			},
+			expectError:  true,
+			errorMessage: "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
+		},
+		{
+			name:        "FT enabled, GcsFaultToleranceOptions nil",
+			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
+			expectError: false,
+		},
+		{
+			name:        "FT enabled, GcsFaultToleranceOptions not nil",
+			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
+			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis://127.0.0.1:6379",
+			},
+			expectError: false,
+		},
+		{
+			name:        "FT annotation absent, GcsFaultToleranceOptions nil",
+			expectError: false,
+		},
+		{
+			name: "FT annotation absent, GcsFaultToleranceOptions not nil",
+			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis://127.0.0.1:6379",
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reconciler := &RayClusterReconciler{}
+			rayCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.annotations,
+				},
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultTolerance,
+				},
+			}
+
+			err := reconciler.validateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
