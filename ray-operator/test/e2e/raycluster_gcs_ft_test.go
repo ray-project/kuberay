@@ -30,21 +30,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 	testScriptAC := newConfigMap(namespace.Name, files(test, "test_detached_actor_1.py", "test_detached_actor_2.py"))
-	testScriptAC = testScriptAC.WithName("test-script")
 	testScriptCM, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	t.Log(testScriptCM.Name)
-	redisCM := corev1ac.ConfigMap("redis-config", namespace.Name).WithLabels(map[string]string{"app": "redis"}).
-		WithData(map[string]string{
-			"redis.conf": `dir /data
-							port 6379
-							bind 0.0.0.0
-							appendonly yes
-							protected-mode no
-							requirepass 5241590000000000
-							pidfile /data/redis-6379.pid`,
-		})
-	_, err = test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), redisCM, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	redisDM := appsv1ac.Deployment("redis", namespace.Name).
@@ -58,18 +44,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 						WithName("redis").
 						WithImage("redis:7.4").
 						WithPorts(corev1ac.ContainerPort().WithContainerPort(6379)).
-						WithVolumeMounts(corev1ac.VolumeMount().
-							WithName("config").
-							WithMountPath("/usr/local/etc/redis/redis.conf").
-							WithSubPath("redis.conf"),
-						).
-						WithCommand("sh", "-c", "redis-server /usr/local/etc/redis/redis.conf"),
-					).
-					WithVolumes(corev1ac.Volume().
-						WithName("config").
-						WithConfigMap(corev1ac.ConfigMapVolumeSource().
-							WithName("redis-config"),
-						),
+						WithCommand("redis-server", "--requirepass", "5241590000000000"),
 					),
 				),
 			),
@@ -123,7 +98,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 							WithVolumes(corev1ac.Volume().
 								WithName("test-script-configmap").
 								WithConfigMap(corev1ac.ConfigMapVolumeSource().
-									WithName("test-script").
+									WithName("jobs").
 									WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_1.py").WithPath("test_detached_actor_1.py")).
 									WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_2.py").WithPath("test_detached_actor_2.py")),
 								),
