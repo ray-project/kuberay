@@ -3407,10 +3407,10 @@ func Test_ReconcileManagedBy(t *testing.T) {
 
 func TestRayClusterReconcile_ValidateRayClusterSpec(t *testing.T) {
 	tests := []struct {
-		name              string
-		errorMessage      string
-		annotations       map[string]string
 		gcsFaultTolerance *rayv1.GcsFaultToleranceOptions
+		name              string
+		annotations       map[string]string
+		errorMessage      string
 		expectError       bool
 	}{
 		{
