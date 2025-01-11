@@ -12,7 +12,9 @@
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START: Running e2e (nightly operator) tests"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay && exit 1)
+    - echo "--- END: e2e (nightly operator) tests finished"
 
 - label: 'Test E2E rayservice (nightly operator)'
   instance_size: large
@@ -28,7 +30,9 @@
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START: Running e2e rayservice (nightly operator) tests"    
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayservice || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay && exit 1)
+    - echo "--- END: e2e rayservice (nightly operator) tests finished"
 
 - label: 'Test Autoscaler E2E (nightly operator)'
   instance_size: large
@@ -44,4 +48,7 @@
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START: Running Autoscaler e2e (nightly operator) tests"    
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2eautoscaler || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay && exit 1)
+    - echo "--- END: Autoscaler e2e (nightly operator) tests finished"
+
