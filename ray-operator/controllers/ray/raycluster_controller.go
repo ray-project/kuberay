@@ -225,6 +225,13 @@ func (r *RayClusterReconciler) validateRayClusterSpec(instance *rayv1.RayCluster
 	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
 		return fmt.Errorf("GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled")
 	}
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" && instance.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env != nil {
+		for _, env := range instance.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
+			if env.Name == "RAY_REDIS_ADDRESS" {
+				return fmt.Errorf("RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled")
+			}
+		}
+	}
 	return nil
 }
 
@@ -237,7 +244,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		logger.Error(err, "The RayCluster spec is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		return ctrl.Result{}, err
 	}
 
 	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {

@@ -3404,50 +3404,110 @@ func Test_ReconcileManagedBy(t *testing.T) {
 		})
 	}
 }
-
-func TestRayClusterReconcile_ValidateRayClusterSpec(t *testing.T) {
+func TestValidateRayClusterSpec(t *testing.T) {
 	tests := []struct {
-		gcsFaultTolerance *rayv1.GcsFaultToleranceOptions
-		name              string
-		annotations       map[string]string
-		errorMessage      string
-		expectError       bool
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		name                     string
+		annotations              map[string]string
+		envVars                  []corev1.EnvVar
+		errorMessage             string
+		expectError              bool
 	}{
 		{
-			name:        "FT disabled, GcsFaultToleranceOptions nil",
-			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "false"},
-			expectError: false,
+			name: "FT disabled with GcsFaultToleranceOptions set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
 		},
 		{
-			name:        "FT disabled, GcsFaultToleranceOptions not nil",
-			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "false"},
-			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
+			name: "FT disabled with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "RAY_REDIS_ADDRESS",
+					Value: "redis://127.0.0.1:6379",
+				},
 			},
 			expectError:  true,
-			errorMessage: "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
+			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
 		},
 		{
-			name:        "FT enabled, GcsFaultToleranceOptions nil",
-			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
+			name:        "FT not set with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "RAY_REDIS_ADDRESS",
+					Value: "redis://127.0.0.1:6379",
+				},
+			},
+			expectError:  true,
+			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
+		},
+		{
+			name: "FT disabled with other environment variables set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "SOME_OTHER_ENV",
+					Value: "some-value",
+				},
+			},
 			expectError: false,
 		},
 		{
-			name:        "FT enabled, GcsFaultToleranceOptions not nil",
-			annotations: map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
-			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
+			name: "FT enabled, GcsFaultToleranceOptions not nil",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress: "redis://127.0.0.1:6379",
 			},
 			expectError: false,
 		},
 		{
-			name:        "FT annotation absent, GcsFaultToleranceOptions nil",
+			name: "FT enabled, GcsFaultToleranceOptions is nil",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
 			expectError: false,
 		},
 		{
-			name: "FT annotation absent, GcsFaultToleranceOptions not nil",
-			gcsFaultTolerance: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
+			name: "FT enabled with with other environment variables set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "SOME_OTHER_ENV",
+					Value: "some-value",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "FT enabled with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "RAY_REDIS_ADDRESS",
+					Value: "redis://127.0.0.1:6379",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "FT disabled with no GcsFaultToleranceOptions and no RAY_REDIS_ADDRESS",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			expectError: false,
 		},
@@ -3461,10 +3521,20 @@ func TestRayClusterReconcile_ValidateRayClusterSpec(t *testing.T) {
 					Annotations: tt.annotations,
 				},
 				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultTolerance,
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
 				},
 			}
-
 			err := reconciler.validateRayClusterSpec(rayCluster)
 			if tt.expectError {
 				assert.Error(t, err)
