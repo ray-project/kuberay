@@ -132,7 +132,7 @@ func TestRayClusterGCSFT(t *testing.T) {
 
 	_, err := test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(
 		test.Ctx(),
-		redisDeploymentApplyConfiguration(namespace.Name, ""),
+		redisDeploymentApplyConfigurationWithoutPassword(namespace.Name),
 		TestApplyOptions,
 	)
 	g.Expect(err).NotTo(HaveOccurred())

@@ -180,6 +180,10 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
+func redisDeploymentApplyConfigurationWithoutPassword(namespace string) *appsv1ac.DeploymentApplyConfiguration {
+	return redisDeploymentApplyConfiguration(namespace, "")
+}
+
 func redisDeploymentApplyConfiguration(namespace string, password string) *appsv1ac.DeploymentApplyConfiguration {
 	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
 		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
