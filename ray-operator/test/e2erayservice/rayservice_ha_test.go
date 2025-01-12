@@ -17,7 +17,7 @@ import (
 )
 
 func TestStaticRayService(t *testing.T) {
-	fmt.Println("--- Start: TestStaticRayService")
+	fmt.Println("--- e2eRayService:TestStaticRayService")
 	rayserviceYamlFile := "testdata/rayservice.static.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
@@ -67,7 +67,7 @@ func TestStaticRayService(t *testing.T) {
 }
 
 func TestAutoscalingRayService(t *testing.T) {
-	fmt.Println("--- Start: TestAutoscalingRayService")
+	fmt.Println("--- e2eRayService:TestAutoscalingRayService")
 	rayserviceYamlFile := "testdata/rayservice.autoscaling.yaml"
 	locustYamlFile := "testdata/locust-cluster.burst.yaml"
 	numberOfPodsWhenSteady := 1
@@ -135,7 +135,7 @@ func TestAutoscalingRayService(t *testing.T) {
 }
 
 func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
-	fmt.Println("--- Start: TestRayServiceZeroDowntimeUpgrade")
+	fmt.Println("--- e2eRayService:TestRayServiceZeroDowntimeUpgrade")
 	rayserviceYamlFile := "testdata/rayservice.static.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
@@ -212,7 +212,8 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 }
 
 func TestRayServiceGCSFaultTolerance(t *testing.T) {
-	fmt.Println("--- Start: TestRayServiceGCSFaultTolerance")
+	fmt.Println("--- e2eRayService:TestRayServiceGCSFaultTolerance")
+
 	rayserviceYamlFile := "testdata/ray-service.ft.yaml"
 	locustYamlFile := "testdata/locust-cluster.const-rate.yaml"
 
