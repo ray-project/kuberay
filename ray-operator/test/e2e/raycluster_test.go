@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 func TestRayClusterManagedBy(t *testing.T) {
+	fmt.Println("--- RUN	TestRayClusterManagedBy")
+
 	test := With(t)
 	g := NewWithT(t)
 
@@ -78,6 +81,8 @@ func TestRayClusterManagedBy(t *testing.T) {
 }
 
 func TestRayClusterSuspend(t *testing.T) {
+	fmt.Println("--- RUN	TestRayClusterSuspend")
+
 	test := With(t)
 	g := NewWithT(t)
 	// Create a namespace

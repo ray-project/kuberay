@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -14,6 +15,8 @@ import (
 )
 
 func TestRayJobRetry(t *testing.T) {
+	fmt.Println("--- RUN	TestRayJobRetry")
+
 	test := With(t)
 	g := NewWithT(t)
 

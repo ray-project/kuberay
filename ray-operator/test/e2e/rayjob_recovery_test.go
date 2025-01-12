@@ -15,6 +15,8 @@ import (
 )
 
 func TestRayJobRecovery(t *testing.T) {
+	fmt.Println("--- RUN	TestRayJobRecovery")
+
 	test := With(t)
 	g := NewWithT(t)
 
