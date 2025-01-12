@@ -42,77 +42,77 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
 		rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/ft-enabled": "true"}).
-		WithSpec(
-			newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScriptCM, "/home/ray/samples")).
-				WithGcsFaultToleranceOptions(
-					rayv1ac.GcsFaultToleranceOptions().WithRedisAddress("redis:6379")).
-				WithRayVersion(rayVersion).
-				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-					WithRayStartParams(map[string]string{
-						"num-cpus":       "0",
-						"redis-password": "5241590000000000",
-					}).
-					WithTemplate(corev1ac.PodTemplateSpec().
-						WithSpec(corev1ac.PodSpec().
-							WithContainers(corev1ac.Container().
-								WithName("ray-head").
-								WithImage(rayImage).
-								WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("20")).
-								WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("redis")).
-								WithPorts(corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard")).
-								WithPorts(corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")).
-								WithVolumeMounts(corev1ac.VolumeMount().
-									WithMountPath("/home/ray/samples").
-									WithName("test-script-configmap"),
+			WithAnnotations(map[string]string{"ray.io/ft-enabled": "true"}).
+			WithSpec(
+				newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScriptCM, "/home/ray/samples")).
+					WithGcsFaultToleranceOptions(
+						rayv1ac.GcsFaultToleranceOptions().WithRedisAddress("redis:6379")).
+					WithRayVersion(rayVersion).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{
+							"num-cpus":       "0",
+							"redis-password": "5241590000000000",
+						}).
+						WithTemplate(corev1ac.PodTemplateSpec().
+							WithSpec(corev1ac.PodSpec().
+								WithContainers(corev1ac.Container().
+									WithName("ray-head").
+									WithImage(rayImage).
+									WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("20")).
+									WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("redis")).
+									WithPorts(corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard")).
+									WithPorts(corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")).
+									WithVolumeMounts(corev1ac.VolumeMount().
+										WithMountPath("/home/ray/samples").
+										WithName("test-script-configmap"),
+									),
+								).
+								WithVolumes(corev1ac.Volume().
+									WithName("test-script-configmap").
+									WithConfigMap(corev1ac.ConfigMapVolumeSource().
+										WithName("jobs").
+										WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_1.py").WithPath("test_detached_actor_1.py")).
+										WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_2.py").WithPath("test_detached_actor_2.py")),
+									),
 								),
-							).
-							WithVolumes(corev1ac.Volume().
-								WithName("test-script-configmap").
-								WithConfigMap(corev1ac.ConfigMapVolumeSource().
-									WithName("jobs").
-									WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_1.py").WithPath("test_detached_actor_1.py")).
-									WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_2.py").WithPath("test_detached_actor_2.py")),
+							),
+						),
+					).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithRayStartParams(map[string]string{
+							"num-cpus": "1",
+						}).
+						WithGroupName("small-group").
+						WithReplicas(1).
+						WithMinReplicas(1).
+						WithMaxReplicas(2).
+						WithTemplate(corev1ac.PodTemplateSpec().
+							WithSpec(corev1ac.PodSpec().
+								WithContainers(corev1ac.Container().
+									WithName("ray-worker").
+									WithImage(rayImage).
+									WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("120")).
+									WithResources(corev1ac.ResourceRequirements().
+										WithLimits(corev1.ResourceList{
+											corev1.ResourceCPU: resource.MustParse("300m"),
+										}).
+										WithRequests(corev1.ResourceList{
+											corev1.ResourceCPU: resource.MustParse("300m"),
+										}),
+									),
 								),
 							),
 						),
 					),
-				).
-				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-					WithRayStartParams(map[string]string{
-						"num-cpus": "1",
-					}).
-					WithGroupName("small-group").
-					WithReplicas(1).
-					WithMinReplicas(1).
-					WithMaxReplicas(2).
-					WithTemplate(corev1ac.PodTemplateSpec().
-						WithSpec(corev1ac.PodSpec().
-							WithContainers(corev1ac.Container().
-								WithName("ray-worker").
-								WithImage(rayImage).
-								WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("120")).
-								WithResources(corev1ac.ResourceRequirements().
-									WithLimits(corev1.ResourceList{
-										corev1.ResourceCPU: resource.MustParse("300m"),
-									}).
-									WithRequests(corev1.ResourceList{
-										corev1.ResourceCPU: resource.MustParse("300m"),
-									}),
-								),
-							),
-						),
-					),
-				),
-		)
-	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			)
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 
-	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+		test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+		g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+			Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
 
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
