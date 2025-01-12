@@ -369,7 +369,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	}
 
 	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
-		// If gcsOptions.RedisPassword is present, it will be put into env vars later.
+		// If gcsOptions.RedisPassword is present, it will be put into the `REDIS_PASSWORD` env var later.
 		// Here, we add --redis-password flag to the ray start command with value "$REDIS_PASSWORD".
 		// $REDIS_PASSWORD will be replaced with the env var by the shell.
 		if gcsOptions.RedisPassword != nil {

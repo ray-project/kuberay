@@ -20,7 +20,6 @@ spec:
       num-cpus: "0"
       # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
       # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
-      # If gcsFaultToleranceOptions.redisPassword is set, it will override this value to $REDIS_PASSWORD.
       redis-password: $REDIS_PASSWORD
     # Pod template
     template:

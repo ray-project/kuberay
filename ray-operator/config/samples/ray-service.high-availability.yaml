@@ -47,7 +47,6 @@ spec:
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
-        # If gcsFaultToleranceOptions.redisPassword is set, it will override this value to $REDIS_PASSWORD.
         redis-password: $REDIS_PASSWORD
       #pod template
       template:
