@@ -7,13 +7,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	appsv1ac "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -33,38 +30,14 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	testScriptCM, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	redisDM := appsv1ac.Deployment("redis", namespace.Name).
-		WithSpec(appsv1ac.DeploymentSpec().
-			WithReplicas(1).
-			WithSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app": "redis"})).
-			WithTemplate(corev1ac.PodTemplateSpec().
-				WithLabels(map[string]string{"app": "redis"}).
-				WithSpec(corev1ac.PodSpec().
-					WithContainers(corev1ac.Container().
-						WithName("redis").
-						WithImage("redis:7.4").
-						WithPorts(corev1ac.ContainerPort().WithContainerPort(6379)).
-						WithCommand("redis-server", "--requirepass", "5241590000000000"),
-					),
-				),
-			),
-		)
+	redisDM := newRedisDeployment(namespace.Name)
 
 	_, err = test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(test.Ctx(), redisDM, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(
-		test.Ctx(),
-		corev1ac.Service("redis", namespace.Name).
-			WithSpec(corev1ac.ServiceSpec().
-				WithType(corev1.ServiceTypeClusterIP).
-				WithSelector(map[string]string{"app": "redis"}).
-				WithPorts(corev1ac.ServicePort().
-					WithPort(6379),
-				),
-			),
-		TestApplyOptions,
-	)
+	redisSvc := newRedisService(namespace.Name)
+
+	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(test.Ctx(), redisSvc, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
@@ -76,7 +49,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 				WithRayVersion(rayVersion).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{
-						"dashboard-host": "0.0.0.0",
 						"num-cpus":       "0",
 						"redis-password": "5241590000000000",
 					}).
@@ -85,7 +57,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 							WithContainers(corev1ac.Container().
 								WithName("ray-head").
 								WithImage(rayImage).
-								WithEnv(corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue("redis:6379")).
 								WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("20")).
 								WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("redis")).
 								WithPorts(corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard")).
@@ -108,7 +79,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 				).
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithRayStartParams(map[string]string{
-						"redis-password": "5241590000000000",
+						"num-cpus": "1",
 					}).
 					WithGroupName("small-group").
 					WithReplicas(1).
@@ -137,18 +108,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-
-	// Make sure the RAY_REDIS_ADDRESS env is set on the Head Pod.
-	g.Eventually(func(g Gomega) bool {
-		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-		g.Expect(err).NotTo(HaveOccurred())
-		if rayCluster.Status.Head.PodName != "" {
-			headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			return utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headPod.Spec.Containers[utils.RayContainerIndex].Env)
-		}
-		return false
-	}, TestTimeoutMedium).Should(BeTrue())
 
 	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
