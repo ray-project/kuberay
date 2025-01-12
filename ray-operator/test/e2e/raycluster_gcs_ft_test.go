@@ -40,7 +40,8 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(test.Ctx(), redisSvc, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
+	test.T().Run("Test Detached Actor", func(_ *testing.T) {
+		rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
 		WithAnnotations(map[string]string{"ray.io/ft-enabled": "true"}).
 		WithSpec(
 			newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScriptCM, "/home/ray/samples")).
@@ -113,7 +114,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
 
-	test.T().Run("Test Detached Actor", func(_ *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 
