@@ -13,10 +13,10 @@ import (
 func TestValidateRayClusterSpec(t *testing.T) {
 	tests := []struct {
 		gcsFaultToleranceOptions *GcsFaultToleranceOptions
-		name                     string
 		annotations              map[string]string
-		envVars                  []corev1.EnvVar
+		name                     string
 		errorMessage             string
+		envVars                  []corev1.EnvVar
 		expectError              bool
 	}{
 		{
@@ -152,14 +152,15 @@ func TestValidateRayClusterSpec(t *testing.T) {
 		})
 	}
 }
+
 func TestValidateRayCluster(t *testing.T) {
 	tests := []struct {
 		GcsFaultToleranceOptions *GcsFaultToleranceOptions
 		name                     string
+		errorMessage             string
 		ObjectMeta               metav1.ObjectMeta
 		WorkerGroupSpecs         []WorkerGroupSpec
 		expectError              bool
-		errorMessage             string
 	}{
 		{
 			name: "Invalid name",
@@ -241,8 +242,7 @@ func TestValidateRayCluster(t *testing.T) {
 			if tt.expectError {
 				assert.NotNil(t, err)
 				assert.IsType(t, &apierrors.StatusError{}, err)
-				statusErr := err.(*apierrors.StatusError)
-				assert.Contains(t, statusErr.ErrStatus.Details.Causes[0].Message, tt.errorMessage)
+				assert.Contains(t, err.Error(), tt.errorMessage)
 			} else {
 				assert.Nil(t, err)
 			}
