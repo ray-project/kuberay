@@ -16,7 +16,7 @@ import (
 )
 
 func TestRayServiceInPlaceUpdate(t *testing.T) {
-	fmt.Println("--- Start: TestRayServiceInPlaceUpdate")
+	fmt.Println("--- RUN 	TestRayServiceInPlaceUpdate")
 	test := With(t)
 	g := NewWithT(t)
 
