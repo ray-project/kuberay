@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -3404,13 +3405,14 @@ func Test_ReconcileManagedBy(t *testing.T) {
 		})
 	}
 }
+
 func TestValidateRayClusterSpec(t *testing.T) {
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
-		name                     string
 		annotations              map[string]string
-		envVars                  []corev1.EnvVar
+		name                     string
 		errorMessage             string
+		envVars                  []corev1.EnvVar
 		expectError              bool
 	}{
 		{
@@ -3420,7 +3422,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "FT disabled with RAY_REDIS_ADDRESS set",
@@ -3429,24 +3431,24 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  utils.RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
 			expectError:  true,
-			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
+			errorMessage: fmt.Sprintf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey),
 		},
 		{
 			name:        "FT not set with RAY_REDIS_ADDRESS set",
 			annotations: map[string]string{},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  utils.RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
 			expectError:  true,
-			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
+			errorMessage: fmt.Sprintf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "FT disabled with other environment variables set",
@@ -3498,7 +3500,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  utils.RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
@@ -3515,7 +3517,6 @@ func TestValidateRayClusterSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reconciler := &RayClusterReconciler{}
 			rayCluster := &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: tt.annotations,
@@ -3535,7 +3536,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 					},
 				},
 			}
-			err := reconciler.validateRayClusterSpec(rayCluster)
+			err := validateRayClusterSpec(rayCluster)
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)

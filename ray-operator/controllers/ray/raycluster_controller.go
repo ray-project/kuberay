@@ -221,15 +221,17 @@ func (r *RayClusterReconciler) validateRayClusterStatus(instance *rayv1.RayClust
 }
 
 // Validation for invalid Ray Cluster configurations.
-func (r *RayClusterReconciler) validateRayClusterSpec(instance *rayv1.RayCluster) error {
+func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
-		return fmt.Errorf("GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled")
+		return fmt.Errorf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey)
 	}
-	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" && instance.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env != nil {
-		for _, env := range instance.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == "RAY_REDIS_ADDRESS" {
-				return fmt.Errorf("RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled")
-			}
+
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" &&
+		len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 &&
+		instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env != nil {
+
+		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
+			return fmt.Errorf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey)
 		}
 	}
 	return nil
@@ -239,17 +241,16 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
 
-	// Validate that GcsFaultToleranceOptions is nil when FT is explicitly disabled
-	if err := r.validateRayClusterSpec(instance); err != nil {
+	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
+	if err := validateRayClusterSpec(instance); err != nil {
 		logger.Error(err, "The RayCluster spec is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, err
-	}
-
-	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
-		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
-		return ctrl.Result{}, nil
 	}
 
 	if err := r.validateRayClusterStatus(instance); err != nil {
