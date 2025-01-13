@@ -130,19 +130,7 @@ func TestRayClusterGCSFT(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	_, err := test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(
-		test.Ctx(),
-		redisDeploymentApplyConfigurationWithoutPassword(namespace.Name),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(
-		test.Ctx(),
-		redisServiceApplyConfiguration(namespace.Name),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
+	deployRedisWithoutPassword(test, g, namespace.Name)
 
 	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithSpec(
 		newRayClusterSpec().WithGcsFaultToleranceOptions(
@@ -170,19 +158,7 @@ func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	_, err := test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(
-		test.Ctx(),
-		redisDeploymentApplyConfiguration(namespace.Name, "5241590000000000"),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(
-		test.Ctx(),
-		redisServiceApplyConfiguration(namespace.Name),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
+	deployRedis(test, g, namespace.Name, "5241590000000000")
 
 	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithSpec(
 		newRayClusterSpec().WithGcsFaultToleranceOptions(
@@ -211,21 +187,9 @@ func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	_, err := test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(
-		test.Ctx(),
-		redisDeploymentApplyConfiguration(namespace.Name, "5241590000000000"),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
+	deployRedis(test, g, namespace.Name, "5241590000000000")
 
-	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(
-		test.Ctx(),
-		redisServiceApplyConfiguration(namespace.Name),
-		TestApplyOptions,
-	)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Apply(
+	_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Apply(
 		test.Ctx(),
 		corev1ac.Secret("redis-password-secret", namespace.Name).
 			WithStringData(map[string]string{"password": "5241590000000000"}),

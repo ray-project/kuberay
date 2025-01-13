@@ -180,40 +180,6 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
-func redisDeploymentApplyConfigurationWithoutPassword(namespace string) *appsv1ac.DeploymentApplyConfiguration {
-	return redisDeploymentApplyConfiguration(namespace, "")
-}
-
-func redisDeploymentApplyConfiguration(namespace string, password string) *appsv1ac.DeploymentApplyConfiguration {
-	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
-		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
-	if password != "" {
-		redisContainer.WithCommand("redis-server", "--requirepass", password)
-	}
-
-	return appsv1ac.Deployment("redis", namespace).
-		WithSpec(appsv1ac.DeploymentSpec().
-			WithReplicas(1).
-			WithSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app": "redis"})).
-			WithTemplate(corev1ac.PodTemplateSpec().
-				WithLabels(map[string]string{"app": "redis"}).
-				WithSpec(corev1ac.PodSpec().
-					WithContainers(redisContainer),
-				),
-			),
-		)
-}
-
-func redisServiceApplyConfiguration(namespace string) *corev1ac.ServiceApplyConfiguration {
-	return corev1ac.Service("redis", namespace).
-		WithSpec(corev1ac.ServiceSpec().
-			WithSelector(map[string]string{"app": "redis"}).
-			WithPorts(corev1ac.ServicePort().
-				WithPort(6379),
-			),
-		)
-}
-
 func checkEnv(test Test, namespace string, env string, rayClusterAC *rayv1ac.RayClusterApplyConfiguration) func(g Gomega) bool {
 	return func(g Gomega) bool {
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -225,4 +191,46 @@ func checkEnv(test Test, namespace string, env string, rayClusterAC *rayv1ac.Ray
 		}
 		return false
 	}
+}
+
+func deployRedisWithoutPassword(test Test, g *WithT, namespace string) {
+	deployRedis(test, g, namespace, "")
+}
+
+func deployRedis(test Test, g *WithT, namespace string, password string) {
+	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
+		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
+	if password != "" {
+		redisContainer.WithCommand("redis-server", "--requirepass", password)
+	}
+
+	_, err := test.Client().Core().AppsV1().Deployments(namespace).Apply(
+		test.Ctx(),
+		appsv1ac.Deployment("redis", namespace).
+			WithSpec(appsv1ac.DeploymentSpec().
+				WithReplicas(1).
+				WithSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app": "redis"})).
+				WithTemplate(corev1ac.PodTemplateSpec().
+					WithLabels(map[string]string{"app": "redis"}).
+					WithSpec(corev1ac.PodSpec().
+						WithContainers(redisContainer),
+					),
+				),
+			),
+		TestApplyOptions,
+	)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	_, err = test.Client().Core().CoreV1().Services(namespace).Apply(
+		test.Ctx(),
+		corev1ac.Service("redis", namespace).
+			WithSpec(corev1ac.ServiceSpec().
+				WithSelector(map[string]string{"app": "redis"}).
+				WithPorts(corev1ac.ServicePort().
+					WithPort(6379),
+				),
+			),
+		TestApplyOptions,
+	)
+	g.Expect(err).NotTo(HaveOccurred())
 }
