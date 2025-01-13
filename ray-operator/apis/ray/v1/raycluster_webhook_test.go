@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			gcsFaultToleranceOptions: &GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "FT disabled with RAY_REDIS_ADDRESS set",
@@ -35,24 +36,24 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
 			expectError:  true,
-			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
+			errorMessage: fmt.Sprintf("%s should not be set when %s is disabled", RAY_REDIS_ADDRESS, RayFTEnabledAnnotationKey),
 		},
 		{
 			name:        "FT not set with RAY_REDIS_ADDRESS set",
 			annotations: map[string]string{},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
 			expectError:  true,
-			errorMessage: "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled",
+			errorMessage: fmt.Sprintf("%s should not be set when %s is disabled", RAY_REDIS_ADDRESS, RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "FT disabled with other environment variables set",
@@ -104,7 +105,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			envVars: []corev1.EnvVar{
 				{
-					Name:  "RAY_REDIS_ADDRESS",
+					Name:  RAY_REDIS_ADDRESS,
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
@@ -196,7 +197,7 @@ func TestValidateRayCluster(t *testing.T) {
 			},
 			GcsFaultToleranceOptions: &GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled",
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "Valid RayCluster",

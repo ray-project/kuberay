@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"regexp"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,8 +19,6 @@ var (
 	rayclusterlog = logf.Log.WithName("raycluster-resource")
 	nameRegex, _  = regexp.Compile("^[a-z]([-a-z0-9]*[a-z0-9])?$")
 )
-
-const RayFTEnabledAnnotationKey = "ray.io/ft-enabled"
 
 func (r *RayCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -96,13 +95,22 @@ func (r *RayCluster) validateWorkerGroups() *field.Error {
 
 func (r *RayCluster) ValidateRayClusterSpec() *field.Error {
 	if r.Annotations[RayFTEnabledAnnotationKey] == "false" && r.Spec.GcsFaultToleranceOptions != nil {
-		return field.Invalid(field.NewPath("spec").Child("gcsFaultToleranceOptions"), r.Spec.GcsFaultToleranceOptions, "GcsFaultToleranceOptions should be nil when ray.io/ft-enabled is disabled")
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions"),
+			r.Spec.GcsFaultToleranceOptions,
+			fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
+		)
 	}
-	if r.Annotations[RayFTEnabledAnnotationKey] != "true" && r.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env != nil {
-		for _, env := range r.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == "RAY_REDIS_ADDRESS" {
-				return field.Invalid(field.NewPath("spec").Child("headGroupSpec").Child("template").Child("spec").Child("containers").Index(0).Child("env"), env.Name, "RAY_REDIS_ADDRESS should not be set when ray.io/ft-enabled is disabled")
-			}
+	if r.Annotations[RayFTEnabledAnnotationKey] != "true" &&
+		len(r.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 &&
+		r.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env != nil {
+
+		if EnvVarExists(RAY_REDIS_ADDRESS, r.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
+			return field.Invalid(
+				field.NewPath("spec").Child("headGroupSpec").Child("template").Child("spec").Child("containers").Index(0).Child("env"),
+				RAY_REDIS_ADDRESS,
+				fmt.Sprintf("%s should not be set when %s is disabled", RAY_REDIS_ADDRESS, RayFTEnabledAnnotationKey),
+			)
 		}
 	}
 	return nil
