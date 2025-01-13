@@ -184,3 +184,11 @@ func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *r
 	}
 	return &runtimePods.Items[0], nil
 }
+
+func GetFilteredRayClusterLabel(instance *rayv1.RayCluster) client.MatchingLabels {
+	return client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
+}
+
+func GetFilteredRayClusterHeadPodLabel(instance *rayv1.RayCluster, nodeType string) client.MatchingLabels {
+	return client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: nodeType}
+}
