@@ -1,6 +1,10 @@
 package utils
 
-import "errors"
+import (
+	"errors"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+)
 
 const (
 
@@ -28,7 +32,7 @@ const (
 	KubeRayVersion                           = "ray.io/kuberay-version"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
-	RayContainerIndex = 0
+	RayContainerIndex = rayv1.RayContainerIndex
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
@@ -37,7 +41,7 @@ const (
 	RayClusterGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
 	// Ray GCS FT related annotations
-	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
+	RayFTEnabledAnnotationKey         = rayv1.RayFTEnabledAnnotationKey
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
@@ -95,7 +99,7 @@ const (
 	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
-	RAY_REDIS_ADDRESS                       = "RAY_REDIS_ADDRESS"
+	RAY_REDIS_ADDRESS                       = rayv1.RAY_REDIS_ADDRESS
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"

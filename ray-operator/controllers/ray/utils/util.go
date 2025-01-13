@@ -589,14 +589,7 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 	return "", false
 }
 
-func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
-	for _, env := range envVars {
-		if env.Name == envName {
-			return true
-		}
-	}
-	return false
-}
+var EnvVarExists func(envName string, envVars []corev1.EnvVar) bool = rayv1.EnvVarExists
 
 func UpsertEnvVar(envVars []corev1.EnvVar, newEnvVar corev1.EnvVar) []corev1.EnvVar {
 	overridden := false
