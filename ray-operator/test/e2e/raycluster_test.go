@@ -144,12 +144,18 @@ func TestRayClusterGCSFT(t *testing.T) {
 	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	// Make sure the RAY_REDIS_ADDRESS env is set on the Head Pod.
-	g.Eventually(checkEnv(test, namespace.Name, utils.RAY_REDIS_ADDRESS, rayClusterAC),
-		TestTimeoutMedium).Should(BeTrue())
+	// g.Eventually(checkEnv(test, namespace.Name, utils.RAY_REDIS_ADDRESS, rayClusterAC),
+	// 	TestTimeoutMedium).Should(BeTrue())
 
 	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(IsEnvVarExisted(utils.RAY_REDIS_ADDRESS, headPod)).Should(BeTrue())
 }
 
 func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
@@ -172,13 +178,19 @@ func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-	// Make sure the REDIS_PASSWORD env is set on the Head Pod.
-	g.Eventually(checkEnv(test, namespace.Name, utils.REDIS_PASSWORD, rayClusterAC),
-		TestTimeoutMedium).Should(BeTrue())
-
 	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+	// Make sure the REDIS_PASSWORD env is set on the Head Pod.
+	// g.Eventually(checkEnv(test, namespace.Name, utils.REDIS_PASSWORD, rayClusterAC),
+	// 	TestTimeoutMedium).Should(BeTrue())
+
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(IsEnvVarExisted(utils.REDIS_PASSWORD, headPod)).Should(BeTrue())
 }
 
 func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
@@ -217,10 +229,16 @@ func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
 	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	// Make sure the REDIS_PASSWORD env is set on the Head Pod.
-	g.Eventually(checkEnv(test, namespace.Name, utils.REDIS_PASSWORD, rayClusterAC),
-		TestTimeoutMedium).Should(BeTrue())
+	// g.Eventually(checkEnv(test, namespace.Name, utils.REDIS_PASSWORD, rayClusterAC),
+	// 	TestTimeoutMedium).Should(BeTrue())
 
 	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(IsEnvVarExisted(utils.REDIS_PASSWORD, headPod)).Should(BeTrue())
 }

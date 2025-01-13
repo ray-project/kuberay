@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsv1ac "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -180,17 +179,13 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
-func checkEnv(test Test, namespace string, env string, rayClusterAC *rayv1ac.RayClusterApplyConfiguration) func(g Gomega) bool {
-	return func(g Gomega) bool {
-		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-		g.Expect(err).NotTo(HaveOccurred())
-		if rayCluster.Status.Head.PodName != "" {
-			headPod, err := test.Client().Core().CoreV1().Pods(namespace).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			return utils.EnvVarExists(env, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+func IsEnvVarExisted(env string, pod *corev1.Pod) bool {
+	for _, envVar := range pod.Spec.Containers[utils.RayContainerIndex].Env {
+		if envVar.Name == env {
+			return true
 		}
-		return false
 	}
+	return false
 }
 
 func deployRedisWithoutPassword(test Test, g *WithT, namespace string) {
