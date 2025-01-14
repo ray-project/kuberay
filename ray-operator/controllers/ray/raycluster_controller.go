@@ -222,18 +222,34 @@ func validateRayClusterStatus(instance *rayv1.RayCluster) error {
 
 // Validation for invalid Ray Cluster configurations.
 func validateRayClusterSpec(instance *rayv1.RayCluster) error {
-	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
-		return fmt.Errorf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey)
+	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
-	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" && len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
-		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
-			return fmt.Errorf(
-				"%s environment variable should not be set when %s annotation is not set to true",
-				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
-			)
+	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		if len(workerGroup.Template.Spec.Containers) == 0 {
+			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 	}
+
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "" && instance.Spec.GcsFaultToleranceOptions != nil {
+		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
+			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
+	}
+
+	if !common.IsGCSFaultToleranceEnabled(*instance) {
+		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
+			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
+				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
+		}
+	}
+
+	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
+	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisPassword` instead of `RAY_REDIS_PASSWORD`
+	// or `redis-password` in rayStartParams.
+	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
+	// the annotation `ray.io/external-storage-namespace`.
 	return nil
 }
 

@@ -3473,7 +3473,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec(t *testing.T) {
+func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
@@ -3482,107 +3482,77 @@ func TestValidateRayClusterSpec(t *testing.T) {
 		envVars                  []corev1.EnvVar
 		expectError              bool
 	}{
+		// GcsFaultToleranceOptions and ray.io/ft-enabled should not be both set.
 		{
-			name: "FT disabled with GcsFaultToleranceOptions set",
+			name: "ray.io/ft-enabled is set to false and GcsFaultToleranceOptions is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey),
+			errorMessage: fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
+				"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey),
 		},
 		{
-			name: "FT disabled with RAY_REDIS_ADDRESS set",
+			name: "ray.io/ft-enabled is set to true and GcsFaultToleranceOptions is set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage: fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
+				"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey),
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              false,
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is not set",
+			gcsFaultToleranceOptions: nil,
+			expectError:              false,
+		},
+		// RAY_REDIS_ADDRESS should not be set if KubeRay is not aware that GCS fault tolerance is enabled.
+		{
+			name: "ray.io/ft-enabled is set to false and RAY_REDIS_ADDRESS is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
 			},
 			expectError: true,
-			errorMessage: fmt.Sprintf(
-				"%s environment variable should not be set when %s annotation is not set to true",
-				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
-			),
+			errorMessage: fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
+				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS),
 		},
 		{
-			name:        "FT not set with RAY_REDIS_ADDRESS set",
-			annotations: map[string]string{},
+			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
 			},
 			expectError: true,
-			errorMessage: fmt.Sprintf(
-				"%s environment variable should not be set when %s annotation is not set to true",
-				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
-			),
+			errorMessage: fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
+				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS),
 		},
 		{
-			name: "FT disabled with other environment variables set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  "SOME_OTHER_ENV",
-					Value: "some-value",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled, GcsFaultToleranceOptions not nil",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled, GcsFaultToleranceOptions is nil",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled with with other environment variables set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  "SOME_OTHER_ENV",
-					Value: "some-value",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled with RAY_REDIS_ADDRESS set",
+			name: "ray.io/ft-enabled is set to true and RAY_REDIS_ADDRESS is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "true",
 			},
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT disabled with no GcsFaultToleranceOptions and no RAY_REDIS_ADDRESS",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			expectError: false,
 		},
