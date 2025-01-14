@@ -3,7 +3,6 @@ package e2e
 import (
 	"embed"
 
-	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -11,7 +10,6 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -179,28 +177,15 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
-func IsEnvVarExisted(env string, pod *corev1.Pod) bool {
-	for _, envVar := range pod.Spec.Containers[utils.RayContainerIndex].Env {
-		if envVar.Name == env {
-			return true
-		}
-	}
-	return false
-}
-
-func deployRedisWithoutPassword(test Test, g *WithT, namespace string) {
-	deployRedis(test, g, namespace, "")
-}
-
-func deployRedis(test Test, g *WithT, namespace string, password string) {
+func deployRedis(t Test, namespace string, password string) {
 	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
 		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
 	if password != "" {
 		redisContainer.WithCommand("redis-server", "--requirepass", password)
 	}
 
-	_, err := test.Client().Core().AppsV1().Deployments(namespace).Apply(
-		test.Ctx(),
+	_, err := t.Client().Core().AppsV1().Deployments(namespace).Apply(
+		t.Ctx(),
 		appsv1ac.Deployment("redis", namespace).
 			WithSpec(appsv1ac.DeploymentSpec().
 				WithReplicas(1).
@@ -214,10 +199,10 @@ func deployRedis(test Test, g *WithT, namespace string, password string) {
 			),
 		TestApplyOptions,
 	)
-	g.Expect(err).NotTo(HaveOccurred())
+	assert.NoError(t.T(), err)
 
-	_, err = test.Client().Core().CoreV1().Services(namespace).Apply(
-		test.Ctx(),
+	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
+		t.Ctx(),
 		corev1ac.Service("redis", namespace).
 			WithSpec(corev1ac.ServiceSpec().
 				WithSelector(map[string]string{"app": "redis"}).
@@ -227,5 +212,5 @@ func deployRedis(test Test, g *WithT, namespace string, password string) {
 			),
 		TestApplyOptions,
 	)
-	g.Expect(err).NotTo(HaveOccurred())
+	assert.NoError(t.T(), err)
 }

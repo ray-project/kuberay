@@ -130,7 +130,7 @@ func TestRayClusterGCSFT(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	deployRedisWithoutPassword(test, g, namespace.Name)
+	deployRedis(test, namespace.Name, "")
 
 	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithSpec(
 		newRayClusterSpec().WithGcsFaultToleranceOptions(
@@ -152,7 +152,7 @@ func TestRayClusterGCSFT(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(IsEnvVarExisted(utils.RAY_REDIS_ADDRESS, headPod)).Should(BeTrue())
+	g.Expect(utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 }
 
 func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
@@ -161,7 +161,7 @@ func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	deployRedis(test, g, namespace.Name, "5241590000000000")
+	deployRedis(test, namespace.Name, "5241590000000000")
 
 	rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithSpec(
 		newRayClusterSpec().WithGcsFaultToleranceOptions(
@@ -184,7 +184,7 @@ func TestRayClusterGCSFTWithRedisPassword(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(IsEnvVarExisted(utils.REDIS_PASSWORD, headPod)).Should(BeTrue())
+	g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 }
 
 func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
@@ -193,7 +193,7 @@ func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	deployRedis(test, g, namespace.Name, "5241590000000000")
+	deployRedis(test, namespace.Name, "5241590000000000")
 
 	_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Apply(
 		test.Ctx(),
@@ -231,5 +231,5 @@ func TestRayClusterGCSFTWithRedisPasswordInSecret(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(IsEnvVarExisted(utils.REDIS_PASSWORD, headPod)).Should(BeTrue())
+	g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 }
