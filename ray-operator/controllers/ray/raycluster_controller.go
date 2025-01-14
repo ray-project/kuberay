@@ -226,12 +226,12 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 		return fmt.Errorf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey)
 	}
 
-	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" &&
-		len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 &&
-		instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env != nil {
-
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" && len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
 		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
-			return fmt.Errorf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey)
+			return fmt.Errorf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			)
 		}
 	}
 	return nil

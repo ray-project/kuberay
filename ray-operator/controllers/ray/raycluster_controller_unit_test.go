@@ -3502,8 +3502,11 @@ func TestValidateRayClusterSpec(t *testing.T) {
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
-			expectError:  true,
-			errorMessage: fmt.Sprintf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey),
+			expectError: true,
+			errorMessage: fmt.Sprintf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			),
 		},
 		{
 			name:        "FT not set with RAY_REDIS_ADDRESS set",
@@ -3514,8 +3517,11 @@ func TestValidateRayClusterSpec(t *testing.T) {
 					Value: "redis://127.0.0.1:6379",
 				},
 			},
-			expectError:  true,
-			errorMessage: fmt.Sprintf("%s should not be set when %s is set to false", utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey),
+			expectError: true,
+			errorMessage: fmt.Sprintf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			),
 		},
 		{
 			name: "FT disabled with other environment variables set",
