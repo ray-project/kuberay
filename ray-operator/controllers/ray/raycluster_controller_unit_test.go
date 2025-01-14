@@ -3591,6 +3591,25 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 }
 
 func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
+	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+	workerGroupSpecWithNoContainers := *workerGroupSpecWithOneContainer.DeepCopy()
+	workerGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+
 	tests := []struct {
 		rayCluster   *rayv1.RayCluster
 		name         string
@@ -3601,11 +3620,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 			name: "headGroupSpec has no containers",
 			rayCluster: &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{}, // Empty containers slice
-						},
-					},
+					HeadGroupSpec: headGroupSpecWithNoContainers,
 				},
 			},
 			expectError:  true,
@@ -3615,18 +3630,8 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 			name: "workerGroupSpec has no containers",
 			rayCluster: &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{{Name: "ray-head"}},
-							},
-						},
-					},
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{}, // Empty containers slice
-						},
-					}},
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithNoContainers},
 				},
 			},
 			expectError:  true,
@@ -3636,30 +3641,8 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 			name: "valid cluster with containers in both head and worker groups",
 			rayCluster: &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name: "ray-head",
-									},
-								},
-							},
-						},
-					},
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-						{
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{
-										{
-											Name: "ray-worker",
-										},
-									},
-								},
-							},
-						},
-					},
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithOneContainer},
 				},
 			},
 			expectError: false,
