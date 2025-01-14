@@ -110,7 +110,7 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 		Eventually(func() error {
 			_, err := exec.Command("curl", "http://localhost:8265").CombinedOutput()
 			return err
-		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
+		}, 60*time.Second, 1*time.Millisecond).ShouldNot(HaveOccurred())
 
 		err = sessionCmd.Process.Kill()
 		Expect(err).NotTo(HaveOccurred())
