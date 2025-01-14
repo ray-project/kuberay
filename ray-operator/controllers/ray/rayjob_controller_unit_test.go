@@ -154,30 +154,29 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 	}
 
-	r := &RayJobReconciler{}
 	ctx := context.Background()
 
 	// Test 1: User provided template with command
-	submitterTemplate, err := r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 
 	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
@@ -185,7 +184,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.Equal(t, "1", envVar.Value)
 
 	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 
 	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
@@ -241,20 +240,8 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				},
 			}
 
-			// Initialize a fake client with newScheme and runtimeObjects.
-			fakeClient := clientFake.NewClientBuilder().
-				WithScheme(newScheme).
-				WithRuntimeObjects(rayJob).
-				WithStatusSubresource(rayJob).Build()
 			ctx := context.Background()
-
-			// Initialize a new RayClusterReconciler.
-			testRayJobReconciler := &RayJobReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   newScheme,
-			}
-			shouldUpdate := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
+			shouldUpdate := updateStatusToSuspendingIfNeeded(ctx, rayJob)
 			assert.Equal(t, tc.expectedShouldUpdate, shouldUpdate)
 
 			if tc.expectedShouldUpdate {

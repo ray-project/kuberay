@@ -94,7 +94,6 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 }
 
 func TestDecideClusterAction(t *testing.T) {
-	r := &RayServiceReconciler{}
 	ctx := context.TODO()
 
 	fillAnnotations := func(rayCluster *rayv1.RayCluster) {
@@ -324,15 +323,13 @@ func TestDecideClusterAction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			action := r.decideClusterAction(ctx, tt.rayService, tt.activeRayCluster, tt.pendingRayCluster)
+			action := decideClusterAction(ctx, tt.rayService, tt.activeRayCluster, tt.pendingRayCluster)
 			assert.Equal(t, tt.expectedAction, action)
 		})
 	}
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
-	r := &RayServiceReconciler{}
-
 	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatuses{
 		ActiveServiceStatus: rayv1.RayServiceStatus{
@@ -376,11 +373,11 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
 	newStatus.ServiceStatus = rayv1.WaitForServeDeploymentReady
-	assert.True(t, r.inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
+	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus
 	newStatus = oldStatus.DeepCopy()
-	assert.False(t, r.inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
+	assert.False(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 }
 
 func TestInconsistentRayServiceStatus(t *testing.T) {
@@ -415,7 +412,6 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		},
 	}
 
-	r := &RayServiceReconciler{}
 	ctx := context.Background()
 
 	// Test 1: Only HealthLastUpdateTime is updated.
@@ -424,7 +420,7 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 		newStatus.Applications[appName] = application
 	}
-	assert.False(t, r.inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
+	assert.False(t, inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -649,17 +645,8 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
 
-	// Initialize a fake client with newScheme and runtimeObjects.
-	runtimeObjects := []runtime.Object{}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-
 	// Initialize RayService reconciler.
 	ctx := context.TODO()
-	r := RayServiceReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-	}
 	serveAppName := "serve-app-1"
 	longPeriod := time.Duration(10000)
 	shortPeriod := time.Duration(1)
@@ -788,7 +775,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 				dashboardClient = &utils.FakeRayDashboardClient{}
 			}
 			prevRayServiceStatus := rayv1.RayServiceStatus{Applications: tc.applications}
-			isReady, err := r.getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus)
+			isReady, err := getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedReady, isReady)
 		})
