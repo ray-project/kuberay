@@ -220,12 +220,36 @@ func validateRayClusterStatus(instance *rayv1.RayCluster) error {
 	return nil
 }
 
+// Validation for invalid Ray Cluster configurations.
+func validateRayClusterSpec(instance *rayv1.RayCluster) error {
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] == "false" && instance.Spec.GcsFaultToleranceOptions != nil {
+		return fmt.Errorf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey)
+	}
+
+	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "true" && len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
+			return fmt.Errorf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			)
+		}
+	}
+	return nil
+}
+
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
 
 	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
 		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
+	if err := validateRayClusterSpec(instance); err != nil {
+		logger.Error(err, fmt.Sprintf("The RayCluster spec is invalid %s/%s", instance.Namespace, instance.Name))
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
 	}
 

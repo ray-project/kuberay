@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -3467,6 +3468,153 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			} else {
 				// skip reconciliation
 				assert.Equal(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds())
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec(t *testing.T) {
+	tests := []struct {
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		annotations              map[string]string
+		name                     string
+		errorMessage             string
+		envVars                  []corev1.EnvVar
+		expectError              bool
+	}{
+		{
+			name: "FT disabled with GcsFaultToleranceOptions set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey),
+		},
+		{
+			name: "FT disabled with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: "redis://127.0.0.1:6379",
+				},
+			},
+			expectError: true,
+			errorMessage: fmt.Sprintf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			),
+		},
+		{
+			name:        "FT not set with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: "redis://127.0.0.1:6379",
+				},
+			},
+			expectError: true,
+			errorMessage: fmt.Sprintf(
+				"%s environment variable should not be set when %s annotation is not set to true",
+				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
+			),
+		},
+		{
+			name: "FT disabled with other environment variables set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "SOME_OTHER_ENV",
+					Value: "some-value",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "FT enabled, GcsFaultToleranceOptions not nil",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis://127.0.0.1:6379",
+			},
+			expectError: false,
+		},
+		{
+			name: "FT enabled, GcsFaultToleranceOptions is nil",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			expectError: false,
+		},
+		{
+			name: "FT enabled with with other environment variables set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  "SOME_OTHER_ENV",
+					Value: "some-value",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "FT enabled with RAY_REDIS_ADDRESS set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: "redis://127.0.0.1:6379",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "FT disabled with no GcsFaultToleranceOptions and no RAY_REDIS_ADDRESS",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "false",
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.annotations,
+				},
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := validateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
 			}
 		})
 	}
