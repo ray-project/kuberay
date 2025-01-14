@@ -1865,6 +1865,73 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 }
 
+// TestCalculateStatusWithSuspendedWorkerGroups tests that the cluster CR should be marked as Ready without workers
+// and all desired resources are not counted with suspended workers
+func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
+	setupTest(t)
+
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To[bool](true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
+	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("100m"),
+		corev1.ResourceMemory: resource.MustParse("100Mi"),
+	}
+
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	headServiceIP := "aaa.bbb.ccc.ddd"
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	assert.Nil(t, err, "Failed to build head service.")
+	headService.Spec.ClusterIP = headServiceIP
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			PodIP: headNodeIP,
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+	runtimeObjects := []runtime.Object{headPod, headService}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+
+	// Initialize a RayCluster reconciler.
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
+	assert.Nil(t, err)
+	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, int32(0))
+	assert.Equal(t, newInstance.Status.MinWorkerReplicas, int32(0))
+	assert.Equal(t, newInstance.Status.MaxWorkerReplicas, int32(0))
+	assert.Equal(t, newInstance.Status.DesiredCPU, resource.Quantity{})
+	assert.Equal(t, newInstance.Status.DesiredMemory, resource.Quantity{})
+	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
+}
+
 // TestCalculateStatusWithReconcileErrorBackAndForth tests that the cluster CR should not be marked as Ready if reconcileErr != nil
 // and the Ready state should not be removed after being Ready even if reconcileErr != nil
 func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
@@ -3542,6 +3609,85 @@ func TestValidateRayClusterSpec(t *testing.T) {
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
 				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		conditions  []metav1.Condition
+		expectError bool
+	}{
+		{
+			name: "Both suspending and suspended are true",
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionTrue,
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "Only suspending is true",
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionFalse,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Only suspended is true",
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionFalse,
+				},
+				{
+					Type:   string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionTrue,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Both suspending and suspended are false",
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterSuspending),
+					Status: metav1.ConditionFalse,
+				},
+				{
+					Type:   string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionFalse,
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			instance := &rayv1.RayCluster{
+				Status: rayv1.RayClusterStatus{
+					Conditions: tt.conditions,
+				},
+			}
+			err := validateRayClusterStatus(instance)
+			if (err != nil) != tt.expectError {
+				t.Errorf("validateRayClusterStatus() error = %v, wantErr %v", err, tt.expectError)
 			}
 		})
 	}

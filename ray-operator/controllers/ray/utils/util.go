@@ -322,6 +322,9 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	log := ctrl.LoggerFrom(ctx)
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
+	if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
+		return 0
+	}
 	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
 		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
 			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
@@ -352,6 +355,9 @@ func CalculateDesiredReplicas(ctx context.Context, cluster *rayv1.RayCluster) in
 func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
+			continue
+		}
 		count += *nodeGroup.MinReplicas
 	}
 
@@ -362,6 +368,9 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
+			continue
+		}
 		count += *nodeGroup.MaxReplicas
 	}
 
@@ -405,6 +414,9 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
+			continue
+		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)

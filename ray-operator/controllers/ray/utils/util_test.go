@@ -513,6 +513,57 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), *workerGroupSpec.MaxReplicas)
+
+	// Test 6: `WorkerGroupSpec.Suspend` is true.
+	suspend := true
+	workerGroupSpec.MinReplicas = &maxReplicas
+	workerGroupSpec.MaxReplicas = &minReplicas
+	workerGroupSpec.Suspend = &suspend
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), int32(0))
+}
+
+func TestCalculateMinReplicas(t *testing.T) {
+	// Test 1
+	minReplicas := int32(1)
+	rayCluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					MinReplicas: &minReplicas,
+				},
+			},
+		},
+	}
+	assert.Equal(t, CalculateMinReplicas(rayCluster), minReplicas)
+
+	// Test 2
+	suspend := true
+	for i := range rayCluster.Spec.WorkerGroupSpecs {
+		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
+	}
+	assert.Equal(t, CalculateMinReplicas(rayCluster), int32(0))
+}
+
+func TestCalculateMaxReplicas(t *testing.T) {
+	// Test 1
+	maxReplicas := int32(1)
+	rayCluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					MaxReplicas: &maxReplicas,
+				},
+			},
+		},
+	}
+	assert.Equal(t, CalculateMaxReplicas(rayCluster), maxReplicas)
+
+	// Test 2
+	suspend := true
+	for i := range rayCluster.Spec.WorkerGroupSpecs {
+		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
+	}
+	assert.Equal(t, CalculateMaxReplicas(rayCluster), int32(0))
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
