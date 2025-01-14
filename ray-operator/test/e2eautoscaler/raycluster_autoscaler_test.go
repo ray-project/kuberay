@@ -2,7 +2,6 @@ package e2eautoscaler
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -371,7 +370,6 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 
 	// Minimum Ray Version for custom idleTimeoutSeconds
 	idleTimeoutMinRayVersion := "2.40.0"
-	os.Setenv(KuberayTestRayImage, idleTimeoutMinRayVersion)
 
 	customIdleTimeoutSeconds := int32(30)
 	defaultIdleTimeoutSeconds := int32(60)
@@ -385,14 +383,14 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 				WithTemplate(tc.HeadPodTemplateGetter())).
 			WithWorkerGroupSpecs(
 				rayv1ac.WorkerGroupSpec().
-					WithReplicas(2).
+					WithReplicas(1).
 					WithMinReplicas(0).
 					WithMaxReplicas(4).
 					WithGroupName("no-idle-timeout-group").
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 				rayv1ac.WorkerGroupSpec().
-					WithReplicas(2).
+					WithReplicas(1).
 					WithMinReplicas(0).
 					WithMaxReplicas(4).
 					WithIdleTimeoutSeconds(customIdleTimeoutSeconds).
@@ -400,27 +398,26 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 			)
-		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).WithSpec(apply(rayClusterSpecAC))
+		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).WithSpec((rayClusterSpecAC))
+
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 		// Wait for RayCluster to become ready and verify the number of available worker replicas.
-		// Each worker group should scale up two initial replicas before idle timeout.
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(4))))
+		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
 
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-		// After customIdleTimeoutSeconds, both replicas in the worker group with custom idleTimeoutSeconds set
-		// should be scaled down.
+		// After customIdleTimeoutSeconds, the replica in the worker group with custom idleTimeoutSeconds set should be scaled down.
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(customIdleTimeoutSeconds)*time.Second).
-			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
 
-		// After the default idleTimeoutSeconds applied by Ray, all worker replicas should be scaled down.
+		// After the default idleTimeoutSeconds, all worker replicas should be scaled down.
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(defaultIdleTimeoutSeconds)*time.Second).
 			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 	})
