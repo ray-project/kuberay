@@ -3590,6 +3590,95 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name: "headGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{}, // Empty containers slice
+						},
+					},
+				},
+			},
+			expectError:  true,
+			errorMessage: "headGroupSpec should have at least one container",
+		},
+		{
+			name: "workerGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "ray-head"}},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{}, // Empty containers slice
+						},
+					}},
+				},
+			},
+			expectError:  true,
+			errorMessage: "workerGroupSpec should have at least one container",
+		},
+		{
+			name: "valid cluster with containers in both head and worker groups",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name: "ray-head",
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name: "ray-worker",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRayClusterSpec(tt.rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterStatus(t *testing.T) {
 	tests := []struct {
 		name        string
