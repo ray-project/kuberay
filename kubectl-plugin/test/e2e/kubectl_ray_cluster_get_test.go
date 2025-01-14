@@ -11,9 +11,20 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 )
 
-var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
+var _ = Describe("Calling ray plugin `get` command", func() {
+	var namespace string
+
+	BeforeEach(func() {
+		namespace = createTestNamespace()
+		deployTestRayCluster(namespace)
+		DeferCleanup(func() {
+			deleteTestNamespace(namespace)
+			namespace = ""
+		})
+	})
+
 	It("succeed in getting ray cluster information", func() {
-		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", "default")
+		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", namespace)
 		output, err := cmd.CombinedOutput()
 
 		expectedOutputTablePrinter := printers.NewTablePrinter(printers.PrintOptions{})
@@ -34,7 +45,7 @@ var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 		expectedTestResultTable.Rows = append(expectedTestResultTable.Rows, v1.TableRow{
 			Cells: []interface{}{
 				"raycluster-kuberay",
-				"default",
+				namespace,
 				"1",
 				"1",
 				"2",
@@ -53,7 +64,7 @@ var _ = Describe("Calling ray plugin `get` command", Ordered, func() {
 	})
 
 	It("should not succeed", func() {
-		cmd := exec.Command("kubectl", "ray", "get", "cluster", "fakeclustername", "anotherfakeclustername")
+		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", namespace, "fakeclustername", "anotherfakeclustername")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())

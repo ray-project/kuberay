@@ -76,11 +76,6 @@ jobs:
             make deploy -e IMG="${IMG}"
             kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
 
-        - name: Deploy RayCluster
-          run: |
-            kubectl apply -f ./ray-operator/config/samples/ray-cluster.sample.yaml
-            kubectl wait --timeout=300s --for 'jsonpath={.status.state}=ready' raycluster/raycluster-kuberay
-
         - name: Run e2e tests
           run: |
             export KUBERAY_TEST_TIMEOUT_SHORT=1m

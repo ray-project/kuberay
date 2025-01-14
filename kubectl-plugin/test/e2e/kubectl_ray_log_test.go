@@ -15,12 +15,23 @@ var requiredFileSet = map[string]string{
 	"raylet.out": "Ray Event initialized for RAYLET",
 }
 
-var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, func() {
+var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
+	var namespace string
+
+	BeforeEach(func() {
+		namespace = createTestNamespace()
+		deployTestRayCluster(namespace)
+		DeferCleanup(func() {
+			deleteTestNamespace(namespace)
+			namespace = ""
+		})
+	})
+
 	It("succeed in retrieving all ray cluster logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
 		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
-		cmd := exec.Command("kubectl", "ray", "log", "raycluster-kuberay", "--node-type", "all")
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "all")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).NotTo(HaveOccurred())
@@ -75,7 +86,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, fun
 		expectedDirPath := "./raycluster-kuberay"
 		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only head node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+`
 
-		cmd := exec.Command("kubectl", "ray", "log", "raycluster-kuberay", "--node-type", "head")
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "head")
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.TrimSpace(string(output))).Should(MatchRegexp(expectedOutputStringFormat))
@@ -128,7 +139,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, fun
 		expectedDirPath := "./raycluster-kuberay"
 		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
-		cmd := exec.Command("kubectl", "ray", "log", "raycluster-kuberay", "--node-type", "worker")
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "worker")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).NotTo(HaveOccurred())
@@ -185,7 +196,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, fun
 		err := os.MkdirAll(expectedDirPath, 0o755)
 		Expect(err).NotTo(HaveOccurred())
 
-		cmd := exec.Command("kubectl", "ray", "log", "raycluster-kuberay", "--node-type", "all", "--out-dir", expectedDirPath)
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "all", "--out-dir", expectedDirPath)
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).NotTo(HaveOccurred())
@@ -202,7 +213,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, fun
 	})
 
 	It("should not succeed with non-existent cluster", func() {
-		cmd := exec.Command("kubectl", "ray", "log", "fakeclustername")
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "fakeclustername")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())
@@ -210,7 +221,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", Ordered, fun
 	})
 
 	It("should not succeed with non-existent directory set", func() {
-		cmd := exec.Command("kubectl", "ray", "log", "raycluster-kuberay", "--out-dir", "./fake-directory")
+		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--out-dir", "./fake-directory")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())

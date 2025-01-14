@@ -11,9 +11,20 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
+var _ = Describe("Calling ray plugin `session` command", func() {
+	var namespace string
+
+	BeforeEach(func() {
+		namespace = createTestNamespace()
+		deployTestRayCluster(namespace)
+		DeferCleanup(func() {
+			deleteTestNamespace(namespace)
+			namespace = ""
+		})
+	})
+
 	It("succeed in forwarding RayCluster and should be able to cancel", func() {
-		cmd := exec.Command("kubectl", "ray", "session", "raycluster-kuberay")
+		cmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -53,7 +64,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	})
 
 	It("should reconnect after pod connection is lost", func() {
-		sessionCmd := exec.Command("kubectl", "ray", "session", "raycluster-kuberay")
+		sessionCmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 
 		err := sessionCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
@@ -65,20 +76,20 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 		// Get the current head pod name
-		cmd := exec.Command("kubectl", "get", "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
+		cmd := exec.Command("kubectl", "get", "--namespace", namespace, "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		oldPodName := string(output)
 		var newPodName string
 
 		// Delete the pod
-		cmd = exec.Command("kubectl", "delete", "pod", oldPodName)
+		cmd = exec.Command("kubectl", "delete", "--namespace", namespace, "pod", oldPodName)
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the new pod to be created
 		Eventually(func() error {
-			cmd := exec.Command("kubectl", "get", "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
+			cmd := exec.Command("kubectl", "get", "--namespace", namespace, "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
 			output, err := cmd.CombinedOutput()
 			newPodName = string(output)
 			if err != nil {
@@ -91,7 +102,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the new pod to be ready
-		cmd = exec.Command("kubectl", "wait", "pod", newPodName, "--for=condition=Ready", "--timeout=60s")
+		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod", newPodName, "--for=condition=Ready", "--timeout=60s")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -107,7 +118,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	})
 
 	It("should not succeed", func() {
-		cmd := exec.Command("kubectl", "ray", "session", "fakeclustername")
+		cmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "fakeclustername")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())
