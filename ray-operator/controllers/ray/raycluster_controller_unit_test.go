@@ -3474,6 +3474,12 @@ func Test_ReconcileManagedBy(t *testing.T) {
 }
 
 func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
+	errorMessageBothSet := fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
+		"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
+	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
+		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+		"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
+
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
@@ -3490,8 +3496,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			},
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage: fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
-				"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey),
+			errorMessage:             errorMessageBothSet,
 		},
 		{
 			name: "ray.io/ft-enabled is set to true and GcsFaultToleranceOptions is set",
@@ -3500,8 +3505,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			},
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage: fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
-				"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey),
+			errorMessage:             errorMessageBothSet,
 		},
 		{
 			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
@@ -3525,10 +3529,8 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 					Value: "redis:6379",
 				},
 			},
-			expectError: true,
-			errorMessage: fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
-				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
-				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS),
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
 			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
@@ -3538,10 +3540,8 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 					Value: "redis:6379",
 				},
 			},
-			expectError: true,
-			errorMessage: fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
-				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
-				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS),
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
 			name: "ray.io/ft-enabled is set to true and RAY_REDIS_ADDRESS is set",
