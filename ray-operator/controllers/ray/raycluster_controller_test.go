@@ -861,6 +861,47 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 
+	Describe("Suspend RayCluster worker group with Autoscaler enabled", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-suspend-workergroup-autoscaler", namespace)
+		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		allPods := corev1.PodList{}
+		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of Pods and add finalizers", func() {
+			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
+				Should(Equal(4), fmt.Sprintf("all pods %v", allPods.Items))
+		})
+
+		It("Setting suspend=true in first worker group should not fail", func() {
+			// suspend the Raycluster worker group
+			err := updateRayClusterWorkerGroupSuspendField(ctx, rayCluster, true)
+			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
+		})
+
+		It("Worker pods should be not deleted and head pod should still be running", func() {
+			Consistently(listResourceFunc(ctx, &allPods, workerFilters...), time.Second*5, time.Millisecond*500).
+				Should(Equal(3), fmt.Sprintf("all pods %v", allPods.Items))
+			Consistently(listResourceFunc(ctx, &allPods, headFilters...), time.Second*5, time.Millisecond*500).
+				Should(Equal(1), fmt.Sprintf("all pods %v", allPods.Items))
+		})
+
+		It("Delete the cluster", func() {
+			err := k8sClient.Delete(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Describe("RayCluster with a multi-host worker group", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
