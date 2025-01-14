@@ -98,13 +98,10 @@ func (r *RayCluster) ValidateRayClusterSpec() *field.Error {
 		return field.Invalid(
 			field.NewPath("spec").Child("gcsFaultToleranceOptions"),
 			r.Spec.GcsFaultToleranceOptions,
-			fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
+			fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s annotation is set to false", RayFTEnabledAnnotationKey),
 		)
 	}
-	if r.Annotations[RayFTEnabledAnnotationKey] != "true" &&
-		len(r.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 &&
-		r.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env != nil {
-
+	if r.Annotations[RayFTEnabledAnnotationKey] != "true" && len(r.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
 		if EnvVarExists(RAY_REDIS_ADDRESS, r.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
 			return field.Invalid(
 				field.NewPath("spec").Child("headGroupSpec").Child("template").Child("spec").Child("containers").Index(0).Child("env"),

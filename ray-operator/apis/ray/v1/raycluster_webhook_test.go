@@ -27,7 +27,7 @@ func TestValidateRayClusterSpec(t *testing.T) {
 			},
 			gcsFaultToleranceOptions: &GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s annotation is set to false", RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "FT disabled with RAY_REDIS_ADDRESS set",
@@ -197,7 +197,7 @@ func TestValidateRayCluster(t *testing.T) {
 			},
 			GcsFaultToleranceOptions: &GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is disabled", RayFTEnabledAnnotationKey),
+			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s annotation is set to false", RayFTEnabledAnnotationKey),
 		},
 		{
 			name: "Valid RayCluster",
