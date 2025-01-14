@@ -292,3 +292,40 @@ func TestGetRayClusterHeadPod(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, ret, headPod)
 }
+
+func TestRayClusterRedisPodsAssociationOptions(t *testing.T) {
+	// Create a new scheme
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-example",
+			Namespace: "default",
+		},
+	}
+
+	_ = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "redis-pod",
+			Namespace: instance.ObjectMeta.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instance.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+			},
+		},
+	}
+
+	expected := []client.ListOption{
+		client.InNamespace(instance.ObjectMeta.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+		}),
+	}
+
+	listOpts := RayClusterRedisPodsAssociationOptions(instance).ToListOptions()
+
+	assert.Equal(t, expected, listOpts)
+}
