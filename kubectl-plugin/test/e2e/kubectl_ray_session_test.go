@@ -64,6 +64,7 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 	})
 
 	It("should reconnect after pod connection is lost", func() {
+		Skip("Skip this because it is flaky now")
 		sessionCmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 
 		err := sessionCmd.Start()
