@@ -409,7 +409,7 @@ func getPortsFromCluster(cluster rayv1.RayCluster) map[string]int32 {
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
 		utils.ClientPortName:    utils.DefaultClientPort,
-		utils.RedisPortName:     utils.DefaultRedisPort,
+		utils.GcsServerPortName: utils.DefaultGcsServerPort,
 		utils.DashboardPortName: utils.DefaultDashboardPort,
 		utils.MetricsPortName:   utils.DefaultMetricsPort,
 		utils.ServingPortName:   utils.DefaultServingPort,

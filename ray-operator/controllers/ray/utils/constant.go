@@ -63,18 +63,15 @@ const (
 	DashSymbol = "-"
 
 	// Use as default port
-	DefaultClientPort = 10001
-	// For Ray >= 1.11.0, "DefaultRedisPort" actually refers to the GCS server port.
-	// However, the role of this port is unchanged in Ray APIs like ray.init and ray start.
-	// This is the port used by Ray workers and drivers inside the Ray cluster to connect to the Ray head.
-	DefaultRedisPort                = 6379
+	DefaultClientPort               = 10001
+	DefaultGcsServerPort            = 6379
 	DefaultDashboardPort            = 8265
 	DefaultMetricsPort              = 8080
 	DefaultDashboardAgentListenPort = 52365
 	DefaultServingPort              = 8000
 
 	ClientPortName    = "client"
-	RedisPortName     = "redis"
+	GcsServerPortName = "gcs-server"
 	DashboardPortName = "dashboard"
 	MetricsPortName   = "metrics"
 	ServingPortName   = "serve"
