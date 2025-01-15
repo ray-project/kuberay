@@ -245,9 +245,20 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 		}
 	}
 
+	if instance.Spec.GcsFaultToleranceOptions != nil {
+		if redisPassword := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
+			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
+		}
+
+		headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+		if utils.EnvVarExists(utils.REDIS_PASSWORD, headContainer.Env) {
+			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
+		}
+	}
+
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisPassword` instead of `RAY_REDIS_PASSWORD`
-	// or `redis-password` in rayStartParams.
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
 	// the annotation `ray.io/external-storage-namespace`.
 	return nil
