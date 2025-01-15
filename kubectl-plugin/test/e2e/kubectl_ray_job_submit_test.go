@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"path"
 	"regexp"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,7 +20,7 @@ const (
 	runtimeEnvSampleFileName = "runtime-env-sample.yaml"
 )
 
-var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
+var _ = Describe("Calling ray plugin `job submit` command on Ray Job", Serial, func() {
 	var namespace string
 
 	BeforeEach(func() {
@@ -34,6 +36,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmd := exec.Command("kubectl", "ray", "job", "submit", "--namespace", namespace, "-f", rayJobFilePath, "--working-dir", kubectlRayJobWorkingDir, "--", "python", entrypointSampleFileName)
 		output, err := cmd.CombinedOutput()
 
+		fmt.Println(strings.TrimSpace(string(output)))
 		Expect(err).NotTo(HaveOccurred())
 		// Retrieve the Job ID from the output
 		regexExp := regexp.MustCompile(`'([^']*raysubmit[^']*)'`)
@@ -70,6 +73,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmd := exec.Command("kubectl", "ray", "job", "submit", "--namespace", namespace, "-f", rayJobNoEnvFilePath, "--runtime-env", runtimeEnvFilePath, "--", "python", entrypointSampleFileName)
 		output, err := cmd.CombinedOutput()
 
+		fmt.Println(strings.TrimSpace(string(output)))
 		Expect(err).NotTo(HaveOccurred())
 		// Retrieve the Job ID from the output
 		regexExp := regexp.MustCompile(`'([^']*raysubmit[^']*)'`)
