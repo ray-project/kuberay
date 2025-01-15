@@ -100,7 +100,7 @@ func RayClusterWorkerPodsAssociationOptions(instance *rayv1.RayCluster) Associat
 	}
 }
 
-func RayClusterRedisPodsAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
+func RayClusterRedisCleanupJobAssociationOptions(instance *rayv1.RayCluster) AssociationOptions {
 	return AssociationOptions{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{
@@ -193,4 +193,13 @@ func GetRayClusterHeadPod(ctx context.Context, reader client.Reader, instance *r
 		return nil, fmt.Errorf("found multiple heads. filter labels %v", filterLabels)
 	}
 	return &runtimePods.Items[0], nil
+}
+
+func RayClusterNetworkResourcesOptions(instance *rayv1.RayCluster) AssociationOptions {
+	return AssociationOptions{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey: instance.Name,
+		},
+	}
 }

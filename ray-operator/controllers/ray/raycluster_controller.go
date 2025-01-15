@@ -346,8 +346,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
 
-			// We can start the Redis cleanup process now because the head Pod has been terminated.
-			filterLabels := common.RayClusterRedisPodsAssociationOptions(instance).ToListOptions()
+			filterLabels := common.RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()
 			redisCleanupJobs := batchv1.JobList{}
 			if err := r.List(ctx, &redisCleanupJobs, filterLabels...); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
@@ -542,7 +541,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headRoutes := routev1.RouteList{}
-	filterLabels := common.RayClusterAllPodsAssociationOptions(instance).ToListOptions()
+	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
 	if err := r.List(ctx, &headRoutes, filterLabels...); err != nil {
 		return err
 	}
@@ -605,7 +604,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
-	filterLabels := common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()
+	filterLabels := common.RayClusterHeadServiceListOptions(instance)
 
 	if err := r.List(ctx, &services, filterLabels...); err != nil {
 		return err
@@ -1510,7 +1509,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	filterLabels := common.RayClusterAllPodsAssociationOptions(instance).ToListOptions()
+	filterLabels := common.RayClusterHeadServiceListOptions(instance)
 	if err := r.List(ctx, &rayHeadSvc, filterLabels...); err != nil {
 		return err
 	}

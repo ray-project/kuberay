@@ -325,7 +325,7 @@ func TestRayClusterRedisPodsAssociationOptions(t *testing.T) {
 		}),
 	}
 
-	listOpts := RayClusterRedisPodsAssociationOptions(instance).ToListOptions()
+	listOpts := RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()
 
 	assert.Equal(t, expected, listOpts)
 }
