@@ -132,6 +132,14 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
+	if gcsFtOptions := instance.Spec.GcsFaultToleranceOptions; gcsFtOptions != nil {
+		// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the `REDIS_PASSWORD` environment variable later.
+		// Here, we use `$REDIS_PASSWORD` in rayStartParams to refer to the environment variable.
+		if gcsFtOptions.RedisPassword != nil {
+			headSpec.RayStartParams["redis-password"] = "$REDIS_PASSWORD"
+		}
+	}
+
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
 	if !isMetricsPortExists {
@@ -363,15 +371,6 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		cmd += convertCmdToString(pod.Spec.Containers[utils.RayContainerIndex].Args)
 	}
 
-	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
-		// If gcsOptions.RedisPassword is present, it will be put into the `REDIS_PASSWORD` env var later.
-		// Here, we add --redis-password flag to the ray start command with value "$REDIS_PASSWORD".
-		// $REDIS_PASSWORD will be replaced with the env var by the shell.
-		if gcsOptions.RedisPassword != nil {
-			rayStartParams["redis-password"] = "$REDIS_PASSWORD"
-		}
-	}
-
 	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
 	ulimitCmd := "ulimit -n 65536"
 	// Generate the `ray start` command.
@@ -403,7 +402,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, gcsOptions, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
+	setContainerEnvVars(&pod, rayNodeType, gcsOptions, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -566,7 +565,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if len(container.Env) == 0 {
@@ -661,14 +660,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 		}
 		container.Env = append(container.Env, extraTagsEnv)
 	}
-	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
-		// setting the REDIS_PASSWORD env var from the params
-		redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
-		if value, ok := rayStartParams["redis-password"]; ok {
-			redisPasswordEnv.Value = value
-		}
-		container.Env = append(container.Env, redisPasswordEnv)
-	}
 	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
 		if pod.Annotations != nil {
@@ -691,12 +682,12 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 	}
 
 	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
-		container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
+		container.Env = append(container.Env, corev1.EnvVar{
 			Name:  utils.RAY_REDIS_ADDRESS,
 			Value: gcsOptions.RedisAddress,
 		})
 		if gcsOptions.RedisPassword != nil {
-			container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
+			container.Env = append(container.Env, corev1.EnvVar{
 				Name:      utils.REDIS_PASSWORD,
 				Value:     gcsOptions.RedisPassword.Value,
 				ValueFrom: gcsOptions.RedisPassword.ValueFrom,

@@ -598,21 +598,6 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	return false
 }
 
-func UpsertEnvVar(envVars []corev1.EnvVar, newEnvVar corev1.EnvVar) []corev1.EnvVar {
-	overridden := false
-	// override EVERY env vars with the same name.
-	for i, env := range envVars {
-		if env.Name == newEnvVar.Name {
-			envVars[i] = newEnvVar
-			overridden = true
-		}
-	}
-	if !overridden {
-		envVars = append(envVars, newEnvVar)
-	}
-	return envVars
-}
-
 // EnvVarByName returns an entry in []corev1.EnvVar that matches a name.
 // Also returns a bool for whether the env var exists.
 func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool) {
