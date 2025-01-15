@@ -4,10 +4,11 @@ import (
 	"embed"
 
 	"github.com/stretchr/testify/assert"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	appsv1ac "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -174,4 +175,42 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
+}
+
+func deployRedis(t Test, namespace string, password string) {
+	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
+		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
+	if password != "" {
+		redisContainer.WithCommand("redis-server", "--requirepass", password)
+	}
+
+	_, err := t.Client().Core().AppsV1().Deployments(namespace).Apply(
+		t.Ctx(),
+		appsv1ac.Deployment("redis", namespace).
+			WithSpec(appsv1ac.DeploymentSpec().
+				WithReplicas(1).
+				WithSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app": "redis"})).
+				WithTemplate(corev1ac.PodTemplateSpec().
+					WithLabels(map[string]string{"app": "redis"}).
+					WithSpec(corev1ac.PodSpec().
+						WithContainers(redisContainer),
+					),
+				),
+			),
+		TestApplyOptions,
+	)
+	assert.NoError(t.T(), err)
+
+	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
+		t.Ctx(),
+		corev1ac.Service("redis", namespace).
+			WithSpec(corev1ac.ServiceSpec().
+				WithSelector(map[string]string{"app": "redis"}).
+				WithPorts(corev1ac.ServicePort().
+					WithPort(6379),
+				),
+			),
+		TestApplyOptions,
+	)
+	assert.NoError(t.T(), err)
 }

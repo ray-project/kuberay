@@ -363,6 +363,15 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		cmd += convertCmdToString(pod.Spec.Containers[utils.RayContainerIndex].Args)
 	}
 
+	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
+		// If gcsOptions.RedisPassword is present, it will be put into the `REDIS_PASSWORD` env var later.
+		// Here, we add --redis-password flag to the ray start command with value "$REDIS_PASSWORD".
+		// $REDIS_PASSWORD will be replaced with the env var by the shell.
+		if gcsOptions.RedisPassword != nil {
+			rayStartParams["redis-password"] = "$REDIS_PASSWORD"
+		}
+	}
+
 	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
 	ulimitCmd := "ulimit -n 65536"
 	// Generate the `ray start` command.
@@ -686,6 +695,13 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 			Name:  utils.RAY_REDIS_ADDRESS,
 			Value: gcsOptions.RedisAddress,
 		})
+		if gcsOptions.RedisPassword != nil {
+			container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
+				Name:      utils.REDIS_PASSWORD,
+				Value:     gcsOptions.RedisPassword.Value,
+				ValueFrom: gcsOptions.RedisPassword.ValueFrom,
+			})
+		}
 	}
 
 	if !utils.EnvVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {

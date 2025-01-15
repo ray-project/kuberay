@@ -665,6 +665,59 @@ func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
 	}
 	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, "myns")
 	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
+
+	// Test 7 with a plain text redis password in GcsFaultToleranceOptions
+	cluster = instance.DeepCopy()
+	cluster.UID = "mycluster"
+	cluster.Annotations = map[string]string{}
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		RedisAddress:  "redis://127.0.0.1:6379",
+		RedisPassword: &rayv1.RedisCredential{Value: "mypassword"},
+	}
+
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+
+	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
+		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
+	}
+	checkContainerEnv(t, rayContainer, utils.REDIS_PASSWORD, "mypassword")
+
+	// Test 8 with a redis password from secret in GcsFaultToleranceOptions
+	cluster = instance.DeepCopy()
+	cluster.UID = "mycluster"
+	cluster.Annotations = map[string]string{}
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		RedisAddress: "redis://127.0.0.1:6379",
+		RedisPassword: &rayv1.RedisCredential{
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "redis-password-secret",
+					},
+					Key: "password",
+				},
+			},
+		},
+	}
+
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+
+	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
+		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
+	}
+
+	passwordEnv := getEnvVar(rayContainer, utils.REDIS_PASSWORD)
+	if passwordEnv == nil || passwordEnv.ValueFrom == nil || passwordEnv.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("Ray container expected env `%v` in `%v`", utils.REDIS_PASSWORD, rayContainer.Env)
+	}
+	if passwordEnv.ValueFrom.SecretKeyRef.LocalObjectReference.Name != "redis-password-secret" ||
+		passwordEnv.ValueFrom.SecretKeyRef.Key != "password" {
+		t.Fatalf("Ray container expected secret `redis-password-secret` with key `password` ")
+	}
 }
 
 // Check that autoscaler container overrides work as expected.
