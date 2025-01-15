@@ -6,7 +6,7 @@ const (
 
 	// Use as container env variable
 	RAY_REDIS_ADDRESS = "RAY_REDIS_ADDRESS"
-
+	REDIS_PASSWORD    = "REDIS_PASSWORD"
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey = "ray.io/ft-enabled"
 )

@@ -100,7 +100,7 @@ const (
 	RAY_PORT                                = "RAY_PORT"
 	RAY_ADDRESS                             = "RAY_ADDRESS"
 	RAY_REDIS_ADDRESS                       = rayv1.RAY_REDIS_ADDRESS
-	REDIS_PASSWORD                          = "REDIS_PASSWORD"
+	REDIS_PASSWORD                          = rayv1.REDIS_PASSWORD
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
 	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
