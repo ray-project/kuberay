@@ -60,7 +60,6 @@ type SubmitJobOptions struct {
 	image              string
 	headCPU            string
 	headMemory         string
-	workerGrpName      string
 	workerCPU          string
 	workerMemory       string
 	entryPointCPU      float32
@@ -95,10 +94,10 @@ var (
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
 
 		# Generate ray job with specifications and submit ray job with runtime Env file and working directory
-		kubectl ray job submit --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-grp-name worker-group1 --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+		kubectl ray job submit --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 
 		# Generate ray job with specifications and print out the generated rayjob in yaml format
-		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-grp-name worker-group1 --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 	`)
 )
 
@@ -154,7 +153,6 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().StringVar(&options.image, "image", "rayproject/ray:2.39.0", "Ray image to use in the Ray Cluster yaml")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "Number of CPU for the ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "Amount of memory to use for the ray head")
-	cmd.Flags().StringVar(&options.workerGrpName, "worker-grp-name", "default-group", "Name of the worker group for the Ray Cluster")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "Number of CPU for the ray worker")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "Amount of memory to use for the ray worker")
@@ -267,7 +265,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				Image:          options.image,
 				HeadCPU:        options.headCPU,
 				HeadMemory:     options.headMemory,
-				WorkerGrpName:  options.workerGrpName,
 				WorkerCPU:      options.workerCPU,
 				WorkerMemory:   options.workerMemory,
 				WorkerReplicas: options.workerReplicas,

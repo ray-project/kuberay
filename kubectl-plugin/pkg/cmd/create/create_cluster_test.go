@@ -93,7 +93,6 @@ func TestRayCreateClusterValidate(t *testing.T) {
 				image:          "ray-image",
 				headCPU:        "5",
 				headMemory:     "5Gi",
-				workerGrpName:  "fake-worker-grp-name",
 				workerReplicas: 3,
 				workerCPU:      "4",
 				workerMemory:   "5Gi",
