@@ -144,7 +144,8 @@ var _ = Describe("RayCluster validating webhook", func() {
 					},
 					WorkerGroupSpecs: []WorkerGroupSpec{
 						{
-							GroupName: "worker-group-1",
+							GroupName:      "worker-group-1",
+							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 							Template: corev1.PodTemplateSpec{
 								Spec: corev1.PodSpec{
 									Containers: []corev1.Container{
