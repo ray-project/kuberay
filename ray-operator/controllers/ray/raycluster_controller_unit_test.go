@@ -3533,7 +3533,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
-			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
+			name: "ray.io/ft-enabled is not set and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
