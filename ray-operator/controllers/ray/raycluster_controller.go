@@ -1331,8 +1331,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
 	runtimePods := corev1.PodList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: newInstance.Name}
-	if err := r.List(ctx, &runtimePods, client.InNamespace(newInstance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &runtimePods, common.RayClusterAllPodsAssociationOptions(newInstance).ToListOptions()...); err != nil {
 		return nil, err
 	}
 
