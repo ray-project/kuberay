@@ -137,7 +137,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if err := validateRayJobStatus(rayJobInstance); err != nil {
+	if err := utils.ValidateRayJobStatus(rayJobInstance); err != nil {
 		logger.Error(err, "The RayJob status is invalid")
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobStatus),
 			"The RayJob status is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
@@ -876,12 +876,4 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
-}
-
-func validateRayJobStatus(rayJob *rayv1.RayJob) error {
-	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusWaiting && rayJob.Spec.SubmissionMode != rayv1.InteractiveMode {
-		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode")
-	}
-
-	return nil
 }

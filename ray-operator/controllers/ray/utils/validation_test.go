@@ -87,6 +87,59 @@ func TestValidateRayJobSpec(t *testing.T) {
 	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 }
 
+func TestValidateRayJobStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		jobSpec     rayv1.RayJobSpec
+		jobStatus   rayv1.RayJobStatus
+		expectError bool
+	}{
+		{
+			name: "JobDeploymentStatus is Waiting and SubmissionMode is not InteractiveMode",
+			jobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusWaiting,
+			},
+			jobSpec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.K8sJobMode,
+			},
+			expectError: true,
+		},
+		{
+			name: "JobDeploymentStatus is Waiting and SubmissionMode is InteractiveMode",
+			jobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusWaiting,
+			},
+			jobSpec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.InteractiveMode,
+			},
+			expectError: false,
+		},
+		{
+			name: "JobDeploymentStatus is not Waiting and SubmissionMode is not InteractiveMode",
+			jobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+			jobSpec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.HTTPMode,
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayJob := &rayv1.RayJob{
+				Status: tt.jobStatus,
+				Spec:   tt.jobSpec,
+			}
+			err := ValidateRayJobStatus(rayJob)
+			if (err != nil) != tt.expectError {
+				t.Errorf("ValidateRayJobStatus() error = %v, wantErr %v", err, tt.expectError)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterStatus(t *testing.T) {
 	tests := []struct {
 		name        string
