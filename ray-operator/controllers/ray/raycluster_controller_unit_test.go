@@ -1327,11 +1327,11 @@ func TestUpdateEndpoints(t *testing.T) {
 	}
 
 	expected := map[string]string{
-		"client":    "10001",
-		"dashboard": "8265",
-		"metrics":   "8080",
-		"redis":     "6379",
-		"serve":     "8000",
+		"client":     "10001",
+		"dashboard":  "8265",
+		"metrics":    "8080",
+		"gcs-server": "6379",
+		"serve":      "8000",
 	}
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }

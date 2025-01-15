@@ -49,15 +49,10 @@ var customAcceleratorToRayResourceMap = map[string]string{
 // started within the cluster.
 // For Ray >= 1.11.0 this is the GCS server port. For Ray < 1.11.0 it is the Redis port.
 func GetHeadPort(headStartParams map[string]string) string {
-	var headPort string
-	if value, ok := headStartParams["port"]; !ok {
-		// using default port
-		headPort = strconv.Itoa(utils.DefaultRedisPort)
-	} else {
-		// setting port from the params
-		headPort = value
+	if value, ok := headStartParams["port"]; ok {
+		return value
 	}
-	return headPort
+	return strconv.Itoa(utils.DefaultGcsServerPort)
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.
