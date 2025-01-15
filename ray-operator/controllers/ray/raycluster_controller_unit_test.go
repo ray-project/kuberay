@@ -3473,7 +3473,13 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec(t *testing.T) {
+func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
+	errorMessageBothSet := fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
+		"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
+	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
+		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+		"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
+
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
@@ -3482,107 +3488,71 @@ func TestValidateRayClusterSpec(t *testing.T) {
 		envVars                  []corev1.EnvVar
 		expectError              bool
 	}{
+		// GcsFaultToleranceOptions and ray.io/ft-enabled should not be both set.
 		{
-			name: "FT disabled with GcsFaultToleranceOptions set",
+			name: "ray.io/ft-enabled is set to false and GcsFaultToleranceOptions is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
 			expectError:              true,
-			errorMessage:             fmt.Sprintf("GcsFaultToleranceOptions should be nil when %s is set to false", utils.RayFTEnabledAnnotationKey),
+			errorMessage:             errorMessageBothSet,
 		},
 		{
-			name: "FT disabled with RAY_REDIS_ADDRESS set",
+			name: "ray.io/ft-enabled is set to true and GcsFaultToleranceOptions is set",
+			annotations: map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageBothSet,
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              false,
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is not set",
+			gcsFaultToleranceOptions: nil,
+			expectError:              false,
+		},
+		// RAY_REDIS_ADDRESS should not be set if KubeRay is not aware that GCS fault tolerance is enabled.
+		{
+			name: "ray.io/ft-enabled is set to false and RAY_REDIS_ADDRESS is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
 			},
-			expectError: true,
-			errorMessage: fmt.Sprintf(
-				"%s environment variable should not be set when %s annotation is not set to true",
-				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
-			),
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
-			name:        "FT not set with RAY_REDIS_ADDRESS set",
-			annotations: map[string]string{},
+			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
 			},
-			expectError: true,
-			errorMessage: fmt.Sprintf(
-				"%s environment variable should not be set when %s annotation is not set to true",
-				utils.RAY_REDIS_ADDRESS, utils.RayFTEnabledAnnotationKey,
-			),
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
-			name: "FT disabled with other environment variables set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  "SOME_OTHER_ENV",
-					Value: "some-value",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled, GcsFaultToleranceOptions not nil",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis://127.0.0.1:6379",
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled, GcsFaultToleranceOptions is nil",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled with with other environment variables set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  "SOME_OTHER_ENV",
-					Value: "some-value",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT enabled with RAY_REDIS_ADDRESS set",
+			name: "ray.io/ft-enabled is set to true and RAY_REDIS_ADDRESS is set",
 			annotations: map[string]string{
 				utils.RayFTEnabledAnnotationKey: "true",
 			},
 			envVars: []corev1.EnvVar{
 				{
 					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis://127.0.0.1:6379",
+					Value: "redis:6379",
 				},
-			},
-			expectError: false,
-		},
-		{
-			name: "FT disabled with no GcsFaultToleranceOptions and no RAY_REDIS_ADDRESS",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
 			},
 			expectError: false,
 		},
@@ -3610,6 +3580,78 @@ func TestValidateRayClusterSpec(t *testing.T) {
 				},
 			}
 			err := validateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
+	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+	workerGroupSpecWithNoContainers := *workerGroupSpecWithOneContainer.DeepCopy()
+	workerGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name: "headGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: headGroupSpecWithNoContainers,
+				},
+			},
+			expectError:  true,
+			errorMessage: "headGroupSpec should have at least one container",
+		},
+		{
+			name: "workerGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithNoContainers},
+				},
+			},
+			expectError:  true,
+			errorMessage: "workerGroupSpec should have at least one container",
+		},
+		{
+			name: "valid cluster with containers in both head and worker groups",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithOneContainer},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRayClusterSpec(tt.rayCluster)
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
