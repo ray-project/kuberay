@@ -4,9 +4,88 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+
+	"github.com/stretchr/testify/assert"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
+
+func TestValidateRayJobSpec(t *testing.T) {
+	err := ValidateRayJobSpec(&rayv1.RayJob{})
+	assert.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: false,
+		},
+	})
+	assert.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: true,
+			ClusterSelector: map[string]string{
+				"key": "value",
+			},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RuntimeEnvYAML: "invalid_yaml_str",
+			RayClusterSpec: &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			BackoffLimit:   ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           nil,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+}
 
 func TestValidateRayClusterStatus(t *testing.T) {
 	tests := []struct {
