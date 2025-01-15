@@ -3590,6 +3590,73 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
+	tests := []struct {
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		name                     string
+		rayStartParams           map[string]string
+		envVars                  []corev1.EnvVar
+		expectError              bool
+	}{
+		{
+			name:                     "GcsFaultToleranceOptions is set and `redis-password` is also set in rayStartParams",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			rayStartParams: map[string]string{
+				"redis-password": "password",
+			},
+			expectError: true,
+		},
+		{
+			name:                     "GcsFaultToleranceOptions is set and `REDIS_PASSWORD` env var is also set in the head Pod",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.REDIS_PASSWORD,
+					Value: "password",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "GcsFaultToleranceOptions.RedisPassword is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisPassword: &rayv1.RedisCredential{
+					Value: "password",
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: tt.rayStartParams,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := validateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
 		Template: corev1.PodTemplateSpec{
