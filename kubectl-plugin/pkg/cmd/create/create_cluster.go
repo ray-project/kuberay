@@ -25,6 +25,7 @@ type CreateClusterOptions struct {
 	workerGrpName  string
 	workerCPU      string
 	workerMemory   string
+	workerGPU      string
 	workerReplicas int32
 	dryRun         bool
 }
@@ -76,6 +77,7 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas. Default of 1")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "Number of CPU for the ray worker. Default to 2")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "Amount of memory to use for the ray worker. Default to 4Gi")
+	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "Number of GPU for the ray worker. Default to 0")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "Will not apply the generated cluster and will print out the generated yaml")
 
 	options.configFlags.AddFlags(cmd.Flags())
@@ -130,6 +132,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 			WorkerReplicas: options.workerReplicas,
 			WorkerCPU:      options.workerCPU,
 			WorkerMemory:   options.workerMemory,
+			WorkerGPU:      options.workerGPU,
 		},
 	}
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -23,6 +24,7 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
+			WorkerGPU:      "1",
 		},
 	}
 
@@ -37,6 +39,7 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	assert.Equal(t, testRayClusterYamlObject.WorkerGrpName, *result.Spec.WorkerGroupSpecs[0].GroupName)
 	assert.Equal(t, testRayClusterYamlObject.WorkerReplicas, *result.Spec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerCPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
+	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerGPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerMemory), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
 }
 
@@ -54,6 +57,7 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
+			WorkerGPU:      "0",
 		},
 	}
 
@@ -85,6 +89,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
+			WorkerGPU:      "0",
 		},
 	}
 
