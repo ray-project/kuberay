@@ -293,10 +293,10 @@ func TestValidateRayCluster(t *testing.T) {
 	workerGroupSpecs := []WorkerGroupSpec{workerGroupSpec}
 
 	tests := []struct {
-		name         string
 		rayCluster   *RayCluster
-		expectError  bool
+		name         string
 		errorMessage string
+		expectError  bool
 	}{
 		{
 			name: "valid RayCluster",
