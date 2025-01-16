@@ -81,25 +81,15 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
 	// Note that both `podTemplate` and `instance` will be modified.
 	ftEnabled := IsGCSFaultToleranceEnabled(instance)
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
+	}
+
 	podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
 
 	if ftEnabled {
 		options := instance.Spec.GcsFaultToleranceOptions
 		container := &podTemplate.Spec.Containers[utils.RayContainerIndex]
-
-		// Configure the external storage namespace for GCS FT.
-		storageNS := string(instance.UID)
-		if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-			storageNS = v
-		}
-		if options != nil && options.ExternalStorageNamespace != "" {
-			storageNS = options.ExternalStorageNamespace
-		}
-		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
-		if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
-			storageNS := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
-			container.Env = append(container.Env, storageNS)
-		}
 
 		// Configure the GCS RPC server reconnect timeout for GCS FT.
 		if !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
@@ -114,6 +104,20 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 
 		// Configure the Redis address and password for GCS FT.
 		if rayNodeType == rayv1.HeadNode {
+			// Configure the external storage namespace for GCS FT.
+			storageNS := string(instance.UID)
+			if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+				storageNS = v
+			}
+			if options != nil && options.ExternalStorageNamespace != "" {
+				storageNS = options.ExternalStorageNamespace
+			}
+			podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+			if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
+				storageNS := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
+				container.Env = append(container.Env, storageNS)
+			}
+
 			if options != nil {
 				container.Env = append(container.Env, corev1.EnvVar{
 					Name:  utils.RAY_REDIS_ADDRESS,
