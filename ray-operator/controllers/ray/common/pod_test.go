@@ -438,6 +438,7 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 				assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
 				assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
 			} else {
+				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
 				if test.storageNS != "" {
 					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.storageNS)
 					assert.True(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
