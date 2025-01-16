@@ -312,7 +312,9 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 	tests := []struct {
 		name                        string
 		storageNS                   string
+		redisUsernameEnv            string
 		redisPasswordEnv            string
+		redisUsernameRayStartParams string
 		redisPasswordRayStartParams string
 		isHeadPod                   bool
 		gcsFTEnabled                bool
@@ -335,8 +337,22 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			isHeadPod:        true,
 		},
 		{
+			name:             "GCS FT enabled with redis username and password env",
+			gcsFTEnabled:     true,
+			redisUsernameEnv: "test-username",
+			redisPasswordEnv: "test-password",
+			isHeadPod:        true,
+		},
+		{
 			name:                        "GCS FT enabled with redis password ray start params",
 			gcsFTEnabled:                true,
+			redisPasswordRayStartParams: "test-password",
+			isHeadPod:                   true,
+		},
+		{
+			name:                        "GCS FT enabled with redis username and password ray start params",
+			gcsFTEnabled:                true,
+			redisUsernameRayStartParams: "test-username",
 			redisPasswordRayStartParams: "test-password",
 			isHeadPod:                   true,
 		},
@@ -344,6 +360,16 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			// The most common case.
 			name:                        "GCS FT enabled with redis password env and ray start params referring to env",
 			gcsFTEnabled:                true,
+			redisPasswordEnv:            "test-password",
+			redisPasswordRayStartParams: "$REDIS_PASSWORD",
+			isHeadPod:                   false,
+		},
+		{
+			// The most common case.
+			name:                        "GCS FT enabled with redis username and password env and ray start params referring to env",
+			gcsFTEnabled:                true,
+			redisUsernameEnv:            "test-username",
+			redisUsernameRayStartParams: "$REDIS_USERNAME",
 			redisPasswordEnv:            "test-password",
 			redisPasswordRayStartParams: "$REDIS_PASSWORD",
 			isHeadPod:                   false,
@@ -410,11 +436,20 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			if test.storageNS != "" {
 				cluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = test.storageNS
 			}
+			if test.redisUsernameEnv != "" {
+				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+					Name:  utils.REDIS_USERNAME,
+					Value: test.redisUsernameEnv,
+				})
+			}
 			if test.redisPasswordEnv != "" {
 				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 					Name:  utils.REDIS_PASSWORD,
 					Value: test.redisPasswordEnv,
 				})
+			}
+			if test.redisUsernameRayStartParams != "" {
+				cluster.Spec.HeadGroupSpec.RayStartParams["redis-username"] = test.redisUsernameRayStartParams
 			}
 			if test.redisPasswordRayStartParams != "" {
 				cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"] = test.redisPasswordRayStartParams
