@@ -102,11 +102,11 @@ func (r *RayCluster) ValidateRayClusterSpec() *field.Error {
 		)
 	}
 
-	for _, workerGroup := range r.Spec.WorkerGroupSpecs {
+	for i, workerGroup := range r.Spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return field.Invalid(
-				field.NewPath("spec").Child("workerGroupSpecs"),
-				r.Spec.WorkerGroupSpecs,
+				field.NewPath("spec").Child("workerGroupSpecs").Index(i),
+				workerGroup,
 				"workerGroupSpec should have at least one container",
 			)
 		}
