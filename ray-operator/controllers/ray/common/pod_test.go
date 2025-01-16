@@ -357,6 +357,14 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			redisPasswordRayStartParams: "",
 			isHeadPod:                   false,
 		},
+		{
+			name:                        "GCS FT disabled",
+			gcsFTEnabled:                false,
+			storageNS:                   "",
+			redisPasswordEnv:            "",
+			redisPasswordRayStartParams: "",
+			isHeadPod:                   true,
+		},
 	}
 
 	for _, test := range tests {
@@ -431,24 +439,26 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			}
 
 			// Check configurations for GCS fault tolerance
-			assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTEnabled))
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
 			if !test.isHeadPod {
 				assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
-				assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
-				assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
-				assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
-				assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
+				assert.Empty(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey])
+				assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+				assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+				assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
+				assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env))
 			} else {
-				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
+				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTEnabled))
 				if test.storageNS != "" {
 					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.storageNS)
-					assert.True(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
+					assert.True(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
 				}
 				if test.redisPasswordEnv != "" {
-					env := getEnvVar(podTemplate.Spec.Containers[utils.RayContainerIndex], utils.REDIS_PASSWORD)
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
 					assert.Equal(t, env.Value, test.redisPasswordEnv)
 				} else if test.redisPasswordRayStartParams != "" {
-					env := getEnvVar(podTemplate.Spec.Containers[utils.RayContainerIndex], utils.REDIS_PASSWORD)
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
 					assert.Equal(t, env.Value, test.redisPasswordRayStartParams)
 				}
 			}

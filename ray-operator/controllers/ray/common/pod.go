@@ -85,7 +85,9 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 		podTemplate.Annotations = make(map[string]string)
 	}
 
-	podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
+	if rayNodeType == rayv1.HeadNode {
+		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
+	}
 
 	if ftEnabled {
 		options := instance.Spec.GcsFaultToleranceOptions
