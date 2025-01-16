@@ -299,6 +299,15 @@ func checkContainerEnv(t *testing.T, container corev1.Container, envName string,
 	}
 }
 
+func assertWorkerGCSFaultToleranceConfig(t *testing.T, podTemplate *corev1.PodTemplateSpec, container corev1.Container) {
+	assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
+	assert.Empty(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey])
+	assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env))
+}
+
 func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 	tests := []struct {
 		name                        string
@@ -350,7 +359,7 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			isHeadPod:                   false,
 		},
 		{
-			name:                        "GCS FT enabled in worker Pod",
+			name:                        "GCS FT enabled / worker Pod",
 			gcsFTEnabled:                true,
 			storageNS:                   "",
 			redisPasswordEnv:            "",
@@ -440,14 +449,7 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 
 			// Check configurations for GCS fault tolerance
 			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
-			if !test.isHeadPod {
-				assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
-				assert.Empty(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey])
-				assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
-				assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
-				assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
-				assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env))
-			} else {
+			if test.isHeadPod {
 				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
 				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTEnabled))
 				if test.storageNS != "" {
@@ -461,6 +463,123 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 					env := getEnvVar(container, utils.REDIS_PASSWORD)
 					assert.Equal(t, env.Value, test.redisPasswordRayStartParams)
 				}
+			} else {
+				assertWorkerGCSFaultToleranceConfig(t, podTemplate, container)
+			}
+		})
+	}
+}
+
+func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
+	tests := []struct {
+		gcsFTOptions *rayv1.GcsFaultToleranceOptions
+		name         string
+		isHeadPod    bool
+	}{
+		{
+			name: "GCS FT enabled",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis password",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisPassword: &rayv1.RedisCredential{
+					Value: "test-password",
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis password in secret",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisPassword: &rayv1.RedisCredential{
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "spec.redisPassword",
+						},
+					},
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis password in secret",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress:             "redis:6379",
+				ExternalStorageNamespace: "test-ns",
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled / worker Pod",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+			},
+			isHeadPod: false,
+		},
+	}
+
+	emptyPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Env: []corev1.EnvVar{},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Prepare the cluster
+			cluster := rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: test.gcsFTOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template:       *emptyPodTemplate.DeepCopy(),
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							Template: *emptyPodTemplate.DeepCopy(),
+						},
+					},
+				},
+			}
+
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			nodeType := rayv1.HeadNode
+			if !test.isHeadPod {
+				podTemplate = &cluster.Spec.WorkerGroupSpecs[0].Template
+				nodeType = rayv1.WorkerNode
+			}
+			configureGCSFaultTolerance(podTemplate, cluster, nodeType)
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
+
+			if test.isHeadPod {
+				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTOptions != nil))
+
+				env := getEnvVar(container, utils.RAY_REDIS_ADDRESS)
+				assert.Equal(t, env.Value, "redis:6379")
+
+				if test.gcsFTOptions.RedisPassword != nil {
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
+					assert.Equal(t, env.Value, test.gcsFTOptions.RedisPassword.Value)
+					assert.Equal(t, env.ValueFrom, test.gcsFTOptions.RedisPassword.ValueFrom)
+				}
+				if test.gcsFTOptions.ExternalStorageNamespace != "" {
+					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.gcsFTOptions.ExternalStorageNamespace)
+					env := getEnvVar(container, utils.RAY_EXTERNAL_STORAGE_NS)
+					assert.Equal(t, env.Value, test.gcsFTOptions.ExternalStorageNamespace)
+				}
+			} else {
+				assertWorkerGCSFaultToleranceConfig(t, podTemplate, container)
 			}
 		})
 	}
