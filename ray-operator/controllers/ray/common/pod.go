@@ -78,15 +78,13 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 }
 
 func configurePodTemplateForGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
-	// RayCluster controller should validate the RayCluster spec to ensure that users
-	// don't configure both `annotations[utils.RayExternalStorageNSAnnotationKey]` and
-	// `spec.GcsFaultToleranceOptions.ExternalStorageNamespace` at the same time.
 	ftEnabled := IsGCSFaultToleranceEnabled(instance)
-	options := instance.Spec.GcsFaultToleranceOptions
-	container := podTemplate.Spec.Containers[utils.RayContainerIndex]
 	podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
 
 	if ftEnabled {
+		options := instance.Spec.GcsFaultToleranceOptions
+		container := &podTemplate.Spec.Containers[utils.RayContainerIndex]
+
 		// Configure the external storage namespace for GCS FT.
 		storageNS := string(instance.UID)
 		if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
@@ -132,8 +130,8 @@ func configurePodTemplateForGCSFaultTolerance(podTemplate *corev1.PodTemplateSpe
 				}
 			} else {
 				// If users directly set the `redis-password` in `rayStartParams` instead of referring
-				// to an env var, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
-				// job can connect to Redis using the password.
+				// to a K8s secret, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
+				// job can connect to Redis using the password. This is not recommended.
 				if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 					// setting the REDIS_PASSWORD env var from the params
 					redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
