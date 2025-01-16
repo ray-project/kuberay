@@ -433,6 +433,7 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			// Check configurations for GCS fault tolerance
 			assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTEnabled))
 			if !test.isHeadPod {
+				assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
 				assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
 				assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
 				assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, podTemplate.Spec.Containers[utils.RayContainerIndex].Env))
