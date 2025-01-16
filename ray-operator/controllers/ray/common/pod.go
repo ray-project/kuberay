@@ -77,7 +77,9 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 	}
 }
 
-func configurePodTemplateForGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
+	// Note that both `podTemplate` and `instance` will be modified.
 	ftEnabled := IsGCSFaultToleranceEnabled(instance)
 	podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
 
@@ -181,7 +183,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
 
-	configurePodTemplateForGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
+	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
@@ -285,7 +287,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
-	configurePodTemplateForGCSFaultTolerance(&podTemplate, instance, rayv1.WorkerNode)
+	configureGCSFaultTolerance(&podTemplate, instance, rayv1.WorkerNode)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
