@@ -383,7 +383,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(int32(maxReplicas)).
+					WithMaxReplicas(maxReplicas).
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
@@ -410,7 +410,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 			// Verify that the Autoscaler scales up to maxReplicas Pods
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(maxReplicas))))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(maxReplicas)))
 
 			// Check that replicas is set to maxReplicas (4)
 			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(int32(maxReplicas))))
@@ -418,14 +418,14 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 			// Update maxReplicas to half the previous value
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
-			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(int32(maxReplicas / 2))
+			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(maxReplicas / 2)
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			test.T().Logf("Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 			// Verify that KubeRay terminates half the worker Pods
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(maxReplicas/2))))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(maxReplicas/2)))
 		})
 	}
 }
