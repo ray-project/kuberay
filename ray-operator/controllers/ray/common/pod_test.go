@@ -305,7 +305,7 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
@@ -360,7 +360,7 @@ func TestBuildPod(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
 
 	// Check resources
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -423,7 +423,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
@@ -435,7 +435,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
 	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
@@ -459,7 +459,7 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
 	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, headContainer.Command, []string{"I am head"})
 	assert.Equal(t, headContainer.Args, []string{"I am head again"})
@@ -468,7 +468,7 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
 	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
@@ -480,7 +480,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
 
 	actualResult := pod.Labels[utils.RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -537,7 +537,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.RayServiceCRD, "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.RayServiceCRD, "")
 
 	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
@@ -548,176 +548,12 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.RayServiceCRD, fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", nil, utils.RayServiceCRD, fqdnRayIP)
 
 	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
 	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
-}
-
-func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
-	ctx := context.Background()
-	// Test 1
-	cluster := instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Build a head Pod.
-	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-
-	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-
-	// "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" should not be set on the head Pod by default
-	assert.True(t, !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
-
-	// Test 2
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the head group spec.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env,
-		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "60")
-
-	// Test 3
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Build a worker pod
-	worker := cluster.Spec.WorkerGroupSpecs[0]
-	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
-
-	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, utils.DefaultWorkerRayGcsReconnectTimeoutS)
-
-	// Test 4
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the worker group spec.
-	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env,
-		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
-	worker = cluster.Spec.WorkerGroupSpecs[0]
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
-
-	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "120")
-
-	// Test 5 with a minimal GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress: "redis://127.0.0.1:6379",
-	}
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if pod.Annotations[utils.RayFTEnabledAnnotationKey] != "true" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayFTEnabledAnnotationKey, pod.Annotations[utils.RayFTEnabledAnnotationKey])
-	}
-	if pod.Annotations[utils.RayExternalStorageNSAnnotationKey] != string(cluster.UID) {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayExternalStorageNSAnnotationKey, pod.Annotations[utils.RayExternalStorageNSAnnotationKey])
-	}
-	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
-	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, string(cluster.UID))
-
-	// Test 6 with a full GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		ExternalStorageNamespace: "myns",
-		RedisAddress:             "redis://127.0.0.1:6379",
-	}
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if pod.Annotations[utils.RayFTEnabledAnnotationKey] != "true" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayFTEnabledAnnotationKey, pod.Annotations[utils.RayFTEnabledAnnotationKey])
-	}
-	if pod.Annotations[utils.RayExternalStorageNSAnnotationKey] != "myns" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayExternalStorageNSAnnotationKey, pod.Annotations[utils.RayExternalStorageNSAnnotationKey])
-	}
-	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, "myns")
-	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
-
-	// Test 7 with a plain text redis password in GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress:  "redis://127.0.0.1:6379",
-		RedisPassword: &rayv1.RedisCredential{Value: "mypassword"},
-	}
-
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
-		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
-	}
-	checkContainerEnv(t, rayContainer, utils.REDIS_PASSWORD, "mypassword")
-
-	// Test 8 with a redis password from secret in GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress: "redis://127.0.0.1:6379",
-		RedisPassword: &rayv1.RedisCredential{
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "redis-password-secret",
-					},
-					Key: "password",
-				},
-			},
-		},
-	}
-
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
-		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
-	}
-
-	passwordEnv := getEnvVar(rayContainer, utils.REDIS_PASSWORD)
-	if passwordEnv == nil || passwordEnv.ValueFrom == nil || passwordEnv.ValueFrom.SecretKeyRef == nil {
-		t.Fatalf("Ray container expected env `%v` in `%v`", utils.REDIS_PASSWORD, rayContainer.Env)
-	}
-	if passwordEnv.ValueFrom.SecretKeyRef.LocalObjectReference.Name != "redis-password-secret" ||
-		passwordEnv.ValueFrom.SecretKeyRef.Key != "password" {
-		t.Fatalf("Ray container expected secret `redis-password-secret` with key `password` ")
-	}
 }
 
 // Check that autoscaler container overrides work as expected.
@@ -784,7 +620,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
