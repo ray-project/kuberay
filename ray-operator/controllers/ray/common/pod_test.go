@@ -365,7 +365,6 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 			isHeadPod:                   false,
 		},
 		{
-			// The most common case.
 			name:                        "GCS FT enabled with redis username and password env and ray start params referring to env",
 			gcsFTEnabled:                true,
 			redisUsernameEnv:            "test-username",
@@ -389,6 +388,9 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Validate the test input
+			if test.redisUsernameEnv != "" && test.redisUsernameRayStartParams != "" {
+				assert.True(t, test.redisUsernameRayStartParams == "$REDIS_USERNAME")
+			}
 			if test.redisPasswordEnv != "" && test.redisPasswordRayStartParams != "" {
 				assert.True(t, test.redisPasswordRayStartParams == "$REDIS_PASSWORD")
 			}
@@ -474,6 +476,10 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 				if test.storageNS != "" {
 					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.storageNS)
 					assert.True(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+				}
+				if test.redisUsernameEnv != "" {
+					env := getEnvVar(container, utils.REDIS_USERNAME)
+					assert.Equal(t, env.Value, test.redisUsernameEnv)
 				}
 				if test.redisPasswordEnv != "" {
 					env := getEnvVar(container, utils.REDIS_PASSWORD)

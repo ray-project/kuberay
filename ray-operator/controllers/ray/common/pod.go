@@ -148,6 +148,9 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					})
 				}
 			} else {
+				// If users directly set the `redis-username` in `rayStartParams` instead of referring
+				// to a K8s secret, we need to set the `REDIS_USERNAME` env var so that the Redis cleanup
+				// job can connect to Redis using the username.
 				if !utils.EnvVarExists(utils.REDIS_USERNAME, container.Env) {
 					// setting the REDIS_USERNAME env var from the params
 					redisUsernameEnv := corev1.EnvVar{Name: utils.REDIS_USERNAME}
