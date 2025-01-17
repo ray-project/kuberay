@@ -262,6 +262,14 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
 	// the annotation `ray.io/external-storage-namespace`.
 
+	if !features.Enabled(features.RayJobDeletionPolicy) {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
+			}
+		}
+	}
+
 	enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
 	if enableInTreeAutoscaling {
 		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {

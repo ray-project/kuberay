@@ -3751,7 +3751,20 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 		name         string
 		errorMessage string
 		expectError  bool
+		featureGate  bool
 	}{
+		{
+			name: "suspend without autoscaler and the feature gate",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			featureGate:  false,
+			expectError:  true,
+			errorMessage: "suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled",
+		},
 		{
 			name: "suspend without autoscaler",
 			rayCluster: &rayv1.RayCluster{
@@ -3760,6 +3773,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
 				},
 			},
+			featureGate: true,
 			expectError: false,
 		},
 		{
@@ -3772,6 +3786,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 					EnableInTreeAutoscaling: ptr.To[bool](true),
 				},
 			},
+			featureGate:  true,
 			expectError:  true,
 			errorMessage: "suspending worker groups is not currently supported with Autoscaler enabled",
 		},
@@ -3779,6 +3794,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
 			err := validateRayClusterSpec(tt.rayCluster)
 			if tt.expectError {
 				assert.Error(t, err)
