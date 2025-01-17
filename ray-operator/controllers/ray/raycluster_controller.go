@@ -261,6 +261,16 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
 	// the annotation `ray.io/external-storage-namespace`.
+
+	enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
+	if enableInTreeAutoscaling {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				// TODO(rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+				return fmt.Errorf("suspending worker groups is not supported with Autoscaler enabled")
+			}
+		}
+	}
 	return nil
 }
 
@@ -824,14 +834,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 
 		// Delete all workers if worker group is suspended and skip reconcile if enableInTreeAutoscaling is not enabled.
-		enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
 		if worker.Suspend != nil && *worker.Suspend {
-			if enableInTreeAutoscaling {
-				// TODO: This can be supported in future Ray. We should check the RayVersion on the CR once we know the future version.
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
-					"Suspending the worker group %s is not supported in RayCluster %s/%s because its Autoscaler is enabled", worker.GroupName, instance.Namespace, instance.Name)
-				continue
-			}
 			if _, err := r.deleteAllPods(ctx, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName)); err != nil {
 				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPodCollection),
 					"Failed deleting worker Pods for suspended group %s in RayCluster %s/%s, %v", worker.GroupName, instance.Namespace, instance.Name, err)
@@ -927,6 +930,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// diff < 0 indicates the need to delete some Pods to match the desired number of replicas. However,
 			// randomly deleting Pods is certainly not ideal. So, if autoscaling is enabled for the cluster, we
 			// will disable random Pod deletion, making Autoscaler the sole decision-maker for Pod deletions.
+			enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
+
 			// TODO (kevin85421): `enableRandomPodDelete` is a feature flag for KubeRay v0.6.0. If users want to use
 			// the old behavior, they can set the environment variable `ENABLE_RANDOM_POD_DELETE` to `true`. When the
 			// default behavior is stable enough, we can remove this feature flag.

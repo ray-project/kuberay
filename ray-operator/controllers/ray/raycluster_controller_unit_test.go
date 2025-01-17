@@ -3729,6 +3729,68 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
+	headGroupSpec := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpec := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	workerGroupSpecSuspended := *workerGroupSpec.DeepCopy()
+	workerGroupSpecSuspended.Suspend = ptr.To[bool](true)
+
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name: "suspend without autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			expectError: false,
+		},
+		{
+			// TODO(rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+			name: "suspend with autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:           headGroupSpec,
+					WorkerGroupSpecs:        []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+					EnableInTreeAutoscaling: ptr.To[bool](true),
+				},
+			},
+			expectError:  true,
+			errorMessage: "suspending worker groups is not supported with Autoscaler enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRayClusterSpec(tt.rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterStatus(t *testing.T) {
 	tests := []struct {
 		name        string
