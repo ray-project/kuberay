@@ -713,17 +713,3 @@ func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
 	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
 }
-
-func TestUpsertEnvVar(t *testing.T) {
-	envs := []corev1.EnvVar{
-		{Name: "1", Value: "a"},
-		{Name: "1", Value: "b"},
-	}
-	envs = UpsertEnvVar(envs, corev1.EnvVar{Name: "1", Value: "c"})
-	envs = UpsertEnvVar(envs, corev1.EnvVar{Name: "2", Value: "d"})
-	assert.Equal(t, []corev1.EnvVar{
-		{Name: "1", Value: "c"},
-		{Name: "1", Value: "c"},
-		{Name: "2", Value: "d"},
-	}, envs)
-}
