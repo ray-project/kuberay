@@ -885,10 +885,6 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 	}
-	if rayJob.Spec.Suspend && rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy != rayv1.DeleteClusterDeletionPolicy {
-		// This is a restriction for Kueue.
-		return fmt.Errorf("a RayJob can be suspended only when the deletion policy is 'DeleteCluster' or not set, but got %s", *rayJob.Spec.DeletionPolicy)
-	}
 	if rayJob.Spec.Suspend && len(rayJob.Spec.ClusterSelector) != 0 {
 		return fmt.Errorf("the ClusterSelector mode doesn't support the suspend operation")
 	}

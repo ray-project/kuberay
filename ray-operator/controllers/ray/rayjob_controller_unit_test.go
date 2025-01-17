@@ -370,7 +370,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
-			Suspend:                  true,
 			ShutdownAfterJobFinishes: true,
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
@@ -388,13 +387,12 @@ func TestValidateRayJobSpec(t *testing.T) {
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:           ptr.To(rayv1.DeleteSelfDeletionPolicy),
+			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			Suspend:                  true,
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.ErrorContains(t, err, "a RayJob can be suspended only when the deletion policy is 'DeleteCluster' or not set")
+	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 }
 
 func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
