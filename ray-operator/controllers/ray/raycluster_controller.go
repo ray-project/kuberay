@@ -833,7 +833,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 
-		// Delete all workers if worker group is suspended and skip reconcile if enableInTreeAutoscaling is not enabled.
+		// Delete all workers if worker group is suspended and skip reconcile
 		if worker.Suspend != nil && *worker.Suspend {
 			if _, err := r.deleteAllPods(ctx, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName)); err != nil {
 				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPodCollection),
