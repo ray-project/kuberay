@@ -173,19 +173,15 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 
 			deployRedis(test, namespace.Name, redisPassword)
 
-			podTemplateAC := podTemplateSpecApplyConfiguration(headPodTemplateApplyConfiguration(),
-				injectRayContainerEnv(
-					func() []corev1ac.EnvVarApplyConfiguration {
-						envs := []corev1ac.EnvVarApplyConfiguration{
-							*corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue("redis:6379"),
-						}
-						if tc.redisPasswordEnv != "" {
-							envs = append(envs, *corev1ac.EnvVar().WithName("REDIS_PASSWORD").WithValue(tc.redisPasswordEnv))
-						}
-						return envs
-					}(),
-				),
+			podTemplateAC := headPodTemplateApplyConfiguration()
+			podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
+				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue("redis:6379"),
 			)
+			if tc.redisPasswordEnv != "" {
+				podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
+					corev1ac.EnvVar().WithName("REDIS_PASSWORD").WithValue(tc.redisPasswordEnv),
+				)
+			}
 
 			rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithAnnotations(
 				func() map[string]string {
