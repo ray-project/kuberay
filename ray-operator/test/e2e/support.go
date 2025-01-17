@@ -100,6 +100,20 @@ func mountConfigMap[T rayv1ac.RayClusterSpecApplyConfiguration | corev1ac.PodTem
 	}
 }
 
+func injectRayStartParams(params map[string]string) option[rayv1ac.RayClusterSpecApplyConfiguration] {
+	return func(t *rayv1ac.RayClusterSpecApplyConfiguration) *rayv1ac.RayClusterSpecApplyConfiguration {
+		t.HeadGroupSpec.RayStartParams = params
+		return t
+	}
+}
+
+func injectRayContainerEnv(envs []corev1ac.EnvVarApplyConfiguration) option[corev1ac.PodTemplateSpecApplyConfiguration] {
+	return func(t *corev1ac.PodTemplateSpecApplyConfiguration) *corev1ac.PodTemplateSpecApplyConfiguration {
+		t.Spec.Containers[0].Env = envs
+		return t
+	}
+}
+
 func rayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
 	return rayv1ac.RayClusterSpec().
 		WithRayVersion(GetRayVersion()).
