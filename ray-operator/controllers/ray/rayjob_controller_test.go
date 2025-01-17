@@ -962,7 +962,6 @@ var _ = Context("RayJob with different submission modes", func() {
 	})
 
 	Describe("RayJob with DeletionPolicy=DeleteWorkers", Ordered, func() {
-
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deleteworkers", namespace)
@@ -1111,6 +1110,10 @@ var _ = Context("RayJob with different submission modes", func() {
 		rayJob.Spec.DeletionPolicy = &deletionPolicy
 		rayJob.Spec.ShutdownAfterJobFinishes = false
 		rayCluster := &rayv1.RayCluster{}
+
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
 
 		It("Create a RayJob custom resource", func() {
 			err := k8sClient.Create(ctx, rayJob)
