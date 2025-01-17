@@ -89,6 +89,8 @@ batchScheduler:
 featureGates:
   - name: RayClusterStatusConditions
     enabled: true
+  - name: RayJobDeletionPolicy
+    enabled: false
 
 # Path to the operator binary
 operatorComand: /manager
