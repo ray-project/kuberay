@@ -3764,7 +3764,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			expectError: false,
 		},
 		{
-			// TODO(rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+			// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
 			name: "suspend with autoscaler",
 			rayCluster: &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
