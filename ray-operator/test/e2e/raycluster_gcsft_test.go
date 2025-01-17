@@ -161,7 +161,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 
 			redisPassword := ""
 			if tc.redisPasswordEnv != "" && tc.redisPasswordInRayStartParams != "" && tc.redisPasswordInRayStartParams != "$REDIS_PASSWORD" {
-				t.Fatalf("redisPasswordEnv and redisPasswordInRayStartParams are mutually exclusive")
+				t.Fatalf("redisPasswordEnv and redisPasswordInRayStartParams are both set")
 			}
 
 			switch {
