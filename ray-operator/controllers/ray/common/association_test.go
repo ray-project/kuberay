@@ -294,7 +294,7 @@ func TestGetRayClusterHeadPod(t *testing.T) {
 	assert.Equal(t, ret, headPod)
 }
 
-func TestRayClusterRedisPodsAssociationOptions(t *testing.T) {
+func TestRayClusterRedisCleanupJobAssociationOptions(t *testing.T) {
 	// Create a new scheme
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -309,7 +309,7 @@ func TestRayClusterRedisPodsAssociationOptions(t *testing.T) {
 
 	_ = &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "redis-pod",
+			Name:      "redis-cleanup",
 			Namespace: instance.ObjectMeta.Namespace,
 			Labels: map[string]string{
 				utils.RayClusterLabelKey:  instance.Name,
