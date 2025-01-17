@@ -3737,14 +3737,13 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 		},
 	}
-	workerGroupSpec := rayv1.WorkerGroupSpec{
+	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "ray-worker"}},
 			},
 		},
 	}
-	workerGroupSpecSuspended := *workerGroupSpec.DeepCopy()
 	workerGroupSpecSuspended.Suspend = ptr.To[bool](true)
 
 	tests := []struct {
@@ -3774,7 +3773,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 				},
 			},
 			expectError:  true,
-			errorMessage: "suspending worker groups is not supported with Autoscaler enabled",
+			errorMessage: "suspending worker groups is not currently supported with Autoscaler enabled",
 		},
 	}
 

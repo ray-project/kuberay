@@ -878,7 +878,7 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
-		It("Check the number of Pods and add finalizers", func() {
+		It("Check the number of Pods", func() {
 			Eventually(listResourceFunc(ctx, &allPods, allFilters...), time.Second*3, time.Millisecond*500).
 				Should(Equal(4), fmt.Sprintf("all pods %v", allPods.Items))
 		})
@@ -889,7 +889,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
 		})
 
-		It("Worker pods should be not deleted and head pod should still be running", func() {
+		It("Worker pods should not be deleted and head pod should still be running", func() {
 			Consistently(listResourceFunc(ctx, &allPods, workerFilters...), time.Second*5, time.Millisecond*500).
 				Should(Equal(3), fmt.Sprintf("all pods %v", allPods.Items))
 			Consistently(listResourceFunc(ctx, &allPods, headFilters...), time.Second*5, time.Millisecond*500).

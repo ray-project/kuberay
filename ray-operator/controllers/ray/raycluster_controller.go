@@ -267,7 +267,7 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
-				return fmt.Errorf("suspending worker groups is not supported with Autoscaler enabled")
+				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
 			}
 		}
 	}
