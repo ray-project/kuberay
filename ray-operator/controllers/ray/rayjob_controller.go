@@ -902,6 +902,22 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
+	if !features.Enabled(features.RayJobDeletionPolicy) && rayJob.Spec.DeletionPolicy != nil {
+		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+	}
+	if rayJob.Spec.ClusterSelector != nil &&
+		rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy == rayv1.DeleteClusterDeletionPolicy {
+		return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
+	}
+	if rayJob.Spec.ClusterSelector != nil &&
+		rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy == rayv1.DeleteWorkersDeletionPolicy {
+		return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+	}
+	if rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy == rayv1.DeleteWorkersDeletionPolicy &&
+		rayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *rayJob.Spec.RayClusterSpec.EnableInTreeAutoscaling {
+		// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+		return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayClusterSpec.EnableInTreeAutoscaling")
+	}
 	if rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy == rayv1.DeleteNoneDeletionPolicy {
 		return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 	}
