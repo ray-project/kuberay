@@ -100,13 +100,6 @@ func mountConfigMap[T rayv1ac.RayClusterSpecApplyConfiguration | corev1ac.PodTem
 	}
 }
 
-func injectRayStartParams(params map[string]string) option[rayv1ac.RayClusterSpecApplyConfiguration] {
-	return func(t *rayv1ac.RayClusterSpecApplyConfiguration) *rayv1ac.RayClusterSpecApplyConfiguration {
-		t.HeadGroupSpec.RayStartParams = params
-		return t
-	}
-}
-
 func rayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
 	return rayv1ac.RayClusterSpec().
 		WithRayVersion(GetRayVersion()).

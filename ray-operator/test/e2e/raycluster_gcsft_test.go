@@ -173,6 +173,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 
 			deployRedis(test, namespace.Name, redisPassword)
 
+			// Prepare RayCluster ApplyConfiguration
 			podTemplateAC := headPodTemplateApplyConfiguration()
 			podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
 				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue("redis:6379"),
@@ -182,32 +183,26 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 					corev1ac.EnvVar().WithName("REDIS_PASSWORD").WithValue(tc.redisPasswordEnv),
 				)
 			}
-
 			rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithAnnotations(
-				func() map[string]string {
-					annotations := map[string]string{
-						utils.RayFTEnabledAnnotationKey: "true",
-					}
-					if tc.storageNS != "" {
-						annotations[utils.RayExternalStorageNSAnnotationKey] = tc.storageNS
-					}
-					return annotations
-				}(),
+				map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
 			).WithSpec(
 				rayClusterSpecWith(
 					rayv1ac.RayClusterSpec().
 						WithRayVersion(GetRayVersion()).
-						WithHeadGroupSpec(rayv1ac.HeadGroupSpec().WithTemplate(podTemplateAC)), injectRayStartParams(
-						func() map[string]string {
-							if tc.redisPasswordInRayStartParams != "" {
-								return map[string]string{"redis-password": tc.redisPasswordInRayStartParams}
-							}
+						WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 							// RayStartParams are not allowed to be empty.
-							return map[string]string{"dashboard-host": "0.0.0.0"}
-						}()),
+							WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+							WithTemplate(podTemplateAC)),
 				),
 			)
+			if tc.storageNS != "" {
+				rayClusterAC.WithAnnotations(map[string]string{utils.RayExternalStorageNSAnnotationKey: tc.storageNS})
+			}
+			if tc.redisPasswordInRayStartParams != "" {
+				rayClusterAC.Spec.HeadGroupSpec.WithRayStartParams(map[string]string{"redis-password": tc.redisPasswordInRayStartParams})
+			}
 
+			// Apply RayCluster
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(HaveOccurred())
 			test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
