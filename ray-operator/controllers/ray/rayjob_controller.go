@@ -350,7 +350,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
 		nowTime := time.Now()
 		shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
-		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus), "RayJob", rayJobInstance.Name,
+		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus),
 			"ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
 			"ClusterSelector", rayJobInstance.Spec.ClusterSelector,
 			"ttlSecondsAfterFinished", ttlSeconds,
@@ -362,14 +362,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Spec.DeletionPolicy != nil &&
 			*rayJobInstance.Spec.DeletionPolicy != rayv1.DeleteNoneDeletionPolicy &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			logger.Info(
-				"RayJob deployment status",
-				"jobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus,
-				"deletionPolicy", rayJobInstance.Spec.DeletionPolicy,
-				"ttlSecondsAfterFinished", ttlSeconds,
-				"Status.endTime", rayJobInstance.Status.EndTime,
-				"Now", nowTime,
-				"ShutdownTime", shutdownTime)
+			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionPolicy)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
@@ -394,14 +387,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionPolicy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			logger.Info(
-				"RayJob deployment status",
-				"jobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus,
-				"shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
-				"ttlSecondsAfterFinished", ttlSeconds,
-				"Status.endTime", rayJobInstance.Status.EndTime,
-				"Now", nowTime,
-				"ShutdownTime", shutdownTime)
+			logger.Info("Shutdown behavior is defined by the `ShutdownAfterJobFinishes` flag", "shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
@@ -675,7 +661,10 @@ func (r *RayJobReconciler) suspendWorkerGroups(ctx context.Context, rayJobInstan
 	}
 
 	if err := r.Update(ctx, &cluster); err != nil {
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update cluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning,
+			string(utils.FailedToUpdateRayCluster),
+			"Failed to suspend worker groups in cluster %s/%s: %v",
+			cluster.Namespace, cluster.Name, err)
 		return err
 	}
 
@@ -895,6 +884,10 @@ func validateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
+	}
+	if rayJob.Spec.Suspend && rayJob.Spec.DeletionPolicy != nil && *rayJob.Spec.DeletionPolicy != rayv1.DeleteClusterDeletionPolicy {
+		// This is a restriction for Kueue.
+		return fmt.Errorf("a RayJob can be suspended only when the deletion policy is 'DeleteCluster' or not set, but got %s", *rayJob.Spec.DeletionPolicy)
 	}
 	if rayJob.Spec.Suspend && len(rayJob.Spec.ClusterSelector) != 0 {
 		return fmt.Errorf("the ClusterSelector mode doesn't support the suspend operation")
