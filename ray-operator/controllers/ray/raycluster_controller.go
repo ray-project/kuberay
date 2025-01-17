@@ -261,6 +261,16 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
 	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
 	// the annotation `ray.io/external-storage-namespace`.
+
+	enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
+	if enableInTreeAutoscaling {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
+			}
+		}
+	}
 	return nil
 }
 
