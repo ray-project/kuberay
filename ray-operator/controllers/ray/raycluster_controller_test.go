@@ -828,6 +828,10 @@ var _ = Context("Inside the default namespace", func() {
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
+
 		It("Create a RayCluster custom resource", func() {
 			err := k8sClient.Create(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
@@ -870,6 +874,10 @@ var _ = Context("Inside the default namespace", func() {
 		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
 
 		It("Create a RayCluster custom resource", func() {
 			err := k8sClient.Create(ctx, rayCluster)
