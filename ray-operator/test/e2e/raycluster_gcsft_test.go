@@ -81,7 +81,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
 
-			deployRedis(test, namespace.Name, tc.redisPassword)
+			defer deployRedis(test, namespace.Name, tc.redisPassword)()
 
 			if tc.createSecret {
 				test.T().Logf("Creating Redis password secret")
@@ -116,6 +116,9 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
@@ -171,7 +174,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 				redisPassword = tc.redisPasswordInRayStartParams
 			}
 
-			deployRedis(test, namespace.Name, redisPassword)
+			defer deployRedis(test, namespace.Name, redisPassword)()
 
 			// Prepare RayCluster ApplyConfiguration
 			podTemplateAC := headPodTemplateApplyConfiguration()
@@ -224,6 +227,9 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
