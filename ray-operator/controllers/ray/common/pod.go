@@ -145,8 +145,8 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
 					if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; ok {
 						redisPasswordEnv.Value = value
+						container.Env = append(container.Env, redisPasswordEnv)
 					}
-					container.Env = append(container.Env, redisPasswordEnv)
 				}
 			}
 		}
