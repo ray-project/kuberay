@@ -1013,6 +1013,7 @@ func TestReconcileHeadService(t *testing.T) {
 			Labels: map[string]string{
 				utils.RayClusterLabelKey:  cluster.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 			},
 		},
 	}
@@ -1026,6 +1027,7 @@ func TestReconcileHeadService(t *testing.T) {
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
 		utils.RayClusterLabelKey:  cluster.Name,
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 	})
 
 	// Initialize RayCluster reconciler.
