@@ -572,7 +572,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headIngresses := networkingv1.IngressList{}
-	filterLabels := common.RayClusterAllPodsAssociationOptions(instance).ToListOptions()
+	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
 	if err := r.List(ctx, &headIngresses, filterLabels...); err != nil {
 		return err
 	}

@@ -325,9 +325,6 @@ func TestRayClusterRedisCleanupJobAssociationOptions(t *testing.T) {
 			utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
 		}),
 	}
-	for k, v := range expected {
-		t.Log(k, v)
-	}
 	result := RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()
 
 	assert.Equal(t, expected, result)
