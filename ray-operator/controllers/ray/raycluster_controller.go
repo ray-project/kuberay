@@ -220,68 +220,6 @@ func validateRayClusterStatus(instance *rayv1.RayCluster) error {
 	return nil
 }
 
-// Validation for invalid Ray Cluster configurations.
-func validateRayClusterSpec(instance *rayv1.RayCluster) error {
-	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("headGroupSpec should have at least one container")
-	}
-
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-		if len(workerGroup.Template.Spec.Containers) == 0 {
-			return fmt.Errorf("workerGroupSpec should have at least one container")
-		}
-	}
-
-	if instance.Annotations[utils.RayFTEnabledAnnotationKey] != "" && instance.Spec.GcsFaultToleranceOptions != nil {
-		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
-			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
-	}
-
-	if !common.IsGCSFaultToleranceEnabled(*instance) {
-		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
-			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
-				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
-				"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
-		}
-	}
-
-	if instance.Spec.GcsFaultToleranceOptions != nil {
-		if redisPassword := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
-			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
-		}
-
-		headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
-		if utils.EnvVarExists(utils.REDIS_PASSWORD, headContainer.Env) {
-			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
-		}
-	}
-
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
-	// the annotation `ray.io/external-storage-namespace`.
-
-	if !features.Enabled(features.RayJobDeletionPolicy) {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
-			}
-		}
-	}
-
-	enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
-	if enableInTreeAutoscaling {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
-				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
-			}
-		}
-	}
-	return nil
-}
-
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	var reconcileErr error
 	logger := ctrl.LoggerFrom(ctx)
@@ -291,7 +229,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
-	if err := validateRayClusterSpec(instance); err != nil {
+	if err := utils.ValidateRayClusterSpec(instance); err != nil {
 		logger.Error(err, fmt.Sprintf("The RayCluster spec is invalid %s/%s", instance.Namespace, instance.Name))
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)

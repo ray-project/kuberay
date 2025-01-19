@@ -56,10 +56,7 @@ func GetHeadPort(headStartParams map[string]string) string {
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.
-func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
-	v, ok := instance.Annotations[utils.RayFTEnabledAnnotationKey]
-	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
-}
+var IsGCSFaultToleranceEnabled func(instance rayv1.RayCluster) bool = rayv1.IsGCSFaultToleranceEnabled
 
 // Check if overwrites the container command.
 func isOverwriteRayContainerCmd(instance rayv1.RayCluster) bool {

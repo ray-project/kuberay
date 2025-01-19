@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestValidateRayJobSpec(t *testing.T) {
@@ -136,6 +138,339 @@ func TestValidateRayJobStatus(t *testing.T) {
 			err := ValidateRayJobStatus(rayJob)
 			if (err != nil) != tt.expectError {
 				t.Errorf("ValidateRayJobStatus() error = %v, wantErr %v", err, tt.expectError)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
+	errorMessageBothSet := fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
+		"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", RayFTEnabledAnnotationKey)
+	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
+		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+		"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
+
+	tests := []struct {
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		annotations              map[string]string
+		name                     string
+		errorMessage             string
+		envVars                  []corev1.EnvVar
+		expectError              bool
+	}{
+		// GcsFaultToleranceOptions and ray.io/ft-enabled should not be both set.
+		{
+			name: "ray.io/ft-enabled is set to false and GcsFaultToleranceOptions is set",
+			annotations: map[string]string{
+				RayFTEnabledAnnotationKey: "false",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageBothSet,
+		},
+		{
+			name: "ray.io/ft-enabled is set to true and GcsFaultToleranceOptions is set",
+			annotations: map[string]string{
+				RayFTEnabledAnnotationKey: "true",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageBothSet,
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              false,
+		},
+		{
+			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is not set",
+			gcsFaultToleranceOptions: nil,
+			expectError:              false,
+		},
+		// RAY_REDIS_ADDRESS should not be set if KubeRay is not aware that GCS fault tolerance is enabled.
+		{
+			name: "ray.io/ft-enabled is set to false and RAY_REDIS_ADDRESS is set",
+			annotations: map[string]string{
+				RayFTEnabledAnnotationKey: "false",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  RAY_REDIS_ADDRESS,
+					Value: "redis:6379",
+				},
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
+		},
+		{
+			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  RAY_REDIS_ADDRESS,
+					Value: "redis:6379",
+				},
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisAddressSet,
+		},
+		{
+			name: "ray.io/ft-enabled is set to true and RAY_REDIS_ADDRESS is set",
+			annotations: map[string]string{
+				RayFTEnabledAnnotationKey: "true",
+			},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  RAY_REDIS_ADDRESS,
+					Value: "redis:6379",
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.annotations,
+				},
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := ValidateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
+	tests := []struct {
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		name                     string
+		rayStartParams           map[string]string
+		envVars                  []corev1.EnvVar
+		expectError              bool
+	}{
+		{
+			name:                     "GcsFaultToleranceOptions is set and `redis-password` is also set in rayStartParams",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			rayStartParams: map[string]string{
+				"redis-password": "password",
+			},
+			expectError: true,
+		},
+		{
+			name:                     "GcsFaultToleranceOptions is set and `REDIS_PASSWORD` env var is also set in the head Pod",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_PASSWORD,
+					Value: "password",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "GcsFaultToleranceOptions.RedisPassword is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisPassword: &rayv1.RedisCredential{
+					Value: "password",
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: tt.rayStartParams,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := ValidateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
+	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+	workerGroupSpecWithNoContainers := *workerGroupSpecWithOneContainer.DeepCopy()
+	workerGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
+
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name: "headGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: headGroupSpecWithNoContainers,
+				},
+			},
+			expectError:  true,
+			errorMessage: "headGroupSpec should have at least one container",
+		},
+		{
+			name: "workerGroupSpec has no containers",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithNoContainers},
+				},
+			},
+			expectError:  true,
+			errorMessage: "workerGroupSpec should have at least one container",
+		},
+		{
+			name: "valid cluster with containers in both head and worker groups",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpecWithOneContainer,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithOneContainer},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(tt.rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
+	headGroupSpec := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	workerGroupSpecSuspended.Suspend = ptr.To[bool](true)
+
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+		featureGate  bool
+	}{
+		{
+			name: "suspend without autoscaler and the feature gate",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			featureGate:  false,
+			expectError:  true,
+			errorMessage: "suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled",
+		},
+		{
+			name: "suspend without autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			featureGate: true,
+			expectError: false,
+		},
+		{
+			// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+			name: "suspend with autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:           headGroupSpec,
+					WorkerGroupSpecs:        []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+					EnableInTreeAutoscaling: ptr.To[bool](true),
+				},
+			},
+			featureGate:  true,
+			expectError:  true,
+			errorMessage: "suspending worker groups is not currently supported with Autoscaler enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
+			err := ValidateRayClusterSpec(tt.rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
 			}
 		})
 	}

@@ -1,6 +1,9 @@
 package utils
 
-import "errors"
+import (
+	"errors"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+)
 
 const (
 
@@ -37,7 +40,7 @@ const (
 	RayClusterGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
 	// Ray GCS FT related annotations
-	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
+	RayFTEnabledAnnotationKey         = rayv1.RayFTEnabledAnnotationKey
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
