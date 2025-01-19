@@ -256,11 +256,17 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
 		}
-	}
 
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
-	// the annotation `ray.io/external-storage-namespace`.
+		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headContainer.Env) {
+			return fmt.Errorf("cannot set `RAY_REDIS_ADDRESS` env var in head Pod when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead")
+		}
+
+		if instance.Annotations[utils.RayExternalStorageNSAnnotationKey] != "" {
+			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
+		}
+	}
 
 	if !features.Enabled(features.RayJobDeletionPolicy) {
 		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {

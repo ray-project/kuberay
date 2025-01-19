@@ -3481,6 +3481,10 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
 		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
 		"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
+	errorMessageRedisAddressConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead", utils.RAY_REDIS_ADDRESS)
+	errorMessageExternalStorageNamespaceConflict := fmt.Sprintf("cannot set `%s` annotation when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", utils.RayExternalStorageNSAnnotationKey)
 
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
@@ -3535,6 +3539,18 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
+			name: "gcsFaultToleranceOptions is set and RAY_REDIS_ADDRESS is set",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: "redis:6379",
+				},
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisAddressConflict,
+		},
+		{
 			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
@@ -3557,6 +3573,15 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 				},
 			},
 			expectError: false,
+		},
+		{
+			name: "gcsFaultToleranceOptions is set and ray.io/external-storage-namespace is set",
+			annotations: map[string]string{
+				utils.RayExternalStorageNSAnnotationKey: "myns",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
 	}
 
