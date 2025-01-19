@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
