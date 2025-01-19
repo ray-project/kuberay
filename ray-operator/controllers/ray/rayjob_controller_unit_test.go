@@ -21,6 +21,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
@@ -366,6 +367,43 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+
+	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To[bool](true),
+			},
+		},
+	})
+	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayClusterSpec.EnableInTreeAutoscaling")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
