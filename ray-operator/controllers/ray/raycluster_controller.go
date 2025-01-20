@@ -237,7 +237,7 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
 	}
 
-	if !common.IsGCSFaultToleranceEnabled(*instance) {
+	if !utils.IsGCSFaultToleranceEnabled(*instance) {
 		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env) {
 			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
 				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
@@ -319,7 +319,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	// manually after the RayCluster CR deletion.
 	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
-	if enableGCSFTRedisCleanup && common.IsGCSFaultToleranceEnabled(*instance) {
+	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(*instance) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
 				logger.Info(

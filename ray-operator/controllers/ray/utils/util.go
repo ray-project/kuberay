@@ -633,3 +633,9 @@ func IsAutoscalingEnabled[T *rayv1.RayCluster | *rayv1.RayJob | *rayv1.RayServic
 		panic(fmt.Sprintf("unsupported type: %T", obj))
 	}
 }
+
+// Check if the RayCluster has GCS fault tolerance enabled.
+func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
+	v, ok := instance.Annotations[RayFTEnabledAnnotationKey]
+	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
+}
