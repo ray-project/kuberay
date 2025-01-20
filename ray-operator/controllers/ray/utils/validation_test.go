@@ -81,7 +81,7 @@ func TestValidateRayClusterStatus(t *testing.T) {
 			}
 			err := ValidateRayClusterStatus(instance)
 			if (err != nil) != tt.expectError {
-				t.Errorf("validateRayClusterStatus() error = %v, wantErr %v", err, tt.expectError)
+				t.Errorf("ValidateRayClusterStatus() error = %v, wantErr %v", err, tt.expectError)
 			}
 		})
 	}

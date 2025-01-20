@@ -211,15 +211,6 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, filters common
 	return pods, nil
 }
 
-func validateRayClusterStatus(instance *rayv1.RayCluster) error {
-	suspending := meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterSuspending))
-	suspended := meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterSuspended))
-	if suspending && suspended {
-		return errstd.New("invalid RayCluster State: rayv1.RayClusterSuspending and rayv1.RayClusterSuspended conditions should not be both true")
-	}
-	return nil
-}
-
 // Validation for invalid Ray Cluster configurations.
 func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
@@ -303,7 +294,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
-	if err := validateRayClusterStatus(instance); err != nil {
+	if err := utils.ValidateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
 			"The RayCluster status is invalid %s/%s, %v", instance.Namespace, instance.Name, err)
