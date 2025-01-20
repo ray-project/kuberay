@@ -147,11 +147,16 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	/*
-		Update ray cluster for 4 possible situations.
-		If a ray cluster does not exist, clear its status.
-		If only one ray cluster exists, do serve deployment if needed and check dashboard, serve deployment health.
-		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
+		Update Ray cluster for the following possible situations:
+		1. If a Ray cluster does not exist, clear its status.
+		2. If only one Ray cluster exists, perform Serve deployment if needed and check Dashboard and Serve deployment health.
+		3. If both Ray clusters exist, update active cluster status and perform pending cluster deployment and health check.
 	*/
+	if activeRayClusterInstance == nil && pendingRayClusterInstance == nil {
+		panic("Both active and pending Ray clusters are nil before reconcileServe. " +
+			"Please open a GitHub issue in the KubeRay repository.")
+	}
+
 	var isActiveClusterReady, isPendingClusterReady bool = false, false
 
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
@@ -178,10 +183,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
-	} else {
-		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
-		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
-		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
 
 	if !isActiveClusterReady && !isPendingClusterReady {
@@ -205,21 +206,16 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		rayClusterInstance = activeRayClusterInstance
 		logger.Info("Reconciling the service resources " +
 			"on the active Ray cluster. No pending Ray cluster found.")
-	} else {
-		rayClusterInstance = nil
-		logger.Info("No Ray cluster found. Skipping service reconciliation.")
 	}
 
-	if rayClusterInstance != nil {
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-		if err := r.updateHeadPodServeLabel(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	if err := r.updateHeadPodServeLabel(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
 	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
