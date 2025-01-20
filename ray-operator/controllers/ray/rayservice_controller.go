@@ -206,21 +206,16 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		rayClusterInstance = activeRayClusterInstance
 		logger.Info("Reconciling the service resources " +
 			"on the active Ray cluster. No pending Ray cluster found.")
-	} else {
-		rayClusterInstance = nil
-		logger.Info("No Ray cluster found. Skipping service reconciliation.")
 	}
 
-	if rayClusterInstance != nil {
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-		if err := r.updateHeadPodServeLabel(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-		if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	if err := r.updateHeadPodServeLabel(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
 	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
