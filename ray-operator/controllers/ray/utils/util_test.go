@@ -713,3 +713,42 @@ func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
 	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
 }
+
+func TestIsAutoscalingEnabled(t *testing.T) {
+	// Test: RayCluster
+	cluster := &rayv1.RayCluster{}
+	assert.False(t, IsAutoscalingEnabled(cluster))
+
+	cluster = &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			EnableInTreeAutoscaling: ptr.To[bool](true),
+		},
+	}
+	assert.True(t, IsAutoscalingEnabled(cluster))
+
+	// Test: RayJob
+	job := &rayv1.RayJob{}
+	assert.False(t, IsAutoscalingEnabled(job))
+
+	job = &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To[bool](true),
+			},
+		},
+	}
+	assert.True(t, IsAutoscalingEnabled(job))
+
+	// Test: RayService
+	service := &rayv1.RayService{}
+	assert.False(t, IsAutoscalingEnabled(service))
+
+	service = &rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To[bool](true),
+			},
+		},
+	}
+	assert.True(t, IsAutoscalingEnabled(service))
+}
