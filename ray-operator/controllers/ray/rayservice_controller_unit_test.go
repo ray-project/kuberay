@@ -1131,7 +1131,7 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 				},
 			}
 
-			err := r.labelHeadPodForServeStatus(ctx, &cluster, tc.excludeHeadPodFromServeSvc)
+			err := r.updateHeadPodServeLabel(ctx, &cluster, tc.excludeHeadPodFromServeSvc)
 			assert.NoError(t, err)
 			// Get latest headPod status
 			headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
