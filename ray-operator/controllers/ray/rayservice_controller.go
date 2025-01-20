@@ -154,6 +154,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		If only one ray cluster exists, do serve deployment if needed and check dashboard, serve deployment health.
 		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
 	*/
+	if activeRayClusterInstance == nil && pendingRayClusterInstance == nil {
+		panic("Both active and pending Ray clusters are nil before reconcileServe. " +
+			"Please open a GitHub issue in the KubeRay repository.")
+	}
+
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
 		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
@@ -178,10 +183,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
-	} else {
-		logger.Info("Reconciling the Serve component. No Ray cluster exists.")
-		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
-		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
 
 	if !isReady {
