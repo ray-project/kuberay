@@ -403,7 +403,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 		},
 	})
-	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayClusterSpec.EnableInTreeAutoscaling")
+	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{

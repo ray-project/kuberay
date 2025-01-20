@@ -276,8 +276,7 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 		}
 	}
 
-	enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
-	if enableInTreeAutoscaling {
+	if utils.IsAutoscalingEnabled(instance) {
 		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
@@ -943,7 +942,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// diff < 0 indicates the need to delete some Pods to match the desired number of replicas. However,
 			// randomly deleting Pods is certainly not ideal. So, if autoscaling is enabled for the cluster, we
 			// will disable random Pod deletion, making Autoscaler the sole decision-maker for Pod deletions.
-			enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
+			enableInTreeAutoscaling := utils.IsAutoscalingEnabled(instance)
 
 			// TODO (kevin85421): `enableRandomPodDelete` is a feature flag for KubeRay v0.6.0. If users want to use
 			// the old behavior, they can set the environment variable `ENABLE_RANDOM_POD_DELETE` to `true`. When the
@@ -1174,7 +1173,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
-	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
+	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	if len(r.headSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
@@ -1202,7 +1201,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
-	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
+	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
@@ -1580,7 +1579,7 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 
 func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
@@ -1637,7 +1636,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 
 func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
@@ -1679,7 +1678,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
