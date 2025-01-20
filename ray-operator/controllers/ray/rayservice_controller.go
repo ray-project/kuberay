@@ -190,6 +190,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		logger.Info("Ray Serve applications are not ready to serve requests")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
+	// Switch pending cluster to active cluster if needed.
+	switchClusterIfNeeded(ctx, rayServiceInstance)
 
 	// Get the ready Ray cluster instance for service update.
 	var rayClusterInstance *rayv1.RayCluster
@@ -226,7 +228,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if inconsistentRayServiceStatuses(ctx, originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-			logger.Error(errStatus, "Failed to update RayService status", "rayServiceInstance", rayServiceInstance)
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
 	}
@@ -672,8 +673,6 @@ func decideClusterAction(ctx context.Context, rayServiceInstance *rayv1.RayServi
 func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayClusterInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
-	// Printing the whole RayCluster is too noisy. Only print the spec.
-	logger.Info("updateRayClusterInstance", "rayClusterInstance.Spec", rayClusterInstance.Spec)
 
 	// Fetch the current state of the RayCluster
 	currentRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{
@@ -698,12 +697,7 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 	currentRayCluster.Annotations = rayClusterInstance.Annotations
 
 	// Update the RayCluster
-	if err = r.Update(ctx, currentRayCluster); err != nil {
-		return err
-	}
-
-	logger.Info("updated RayCluster", "rayClusterInstance", currentRayCluster)
-	return nil
+	return r.Update(ctx, currentRayCluster)
 }
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
@@ -994,13 +988,19 @@ func markRestartAndAddPendingClusterName(ctx context.Context, rayServiceInstance
 	}
 }
 
-func updateRayClusterInfo(ctx context.Context, rayServiceInstance *rayv1.RayService, healthyClusterName string) {
+func switchClusterIfNeeded(ctx context.Context, rayServiceInstance *rayv1.RayService) {
+	// Switch the pending cluster to active cluster if needed. Note that this function
+	// is called when the pending cluster is ready.
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("updateRayClusterInfo", "ActiveRayClusterName", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName, "healthyClusterName", healthyClusterName)
-	if rayServiceInstance.Status.ActiveServiceStatus.RayClusterName != healthyClusterName {
+
+	oldClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+	newClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+	logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", newClusterName)
+	if newClusterName != "" {
 		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
+	rayServiceInstance.Status.ServiceStatus = rayv1.Running
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
@@ -1160,10 +1160,8 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	logger.Info("Check serve health", "isReady", isReady, "isActive", isActive)
 
-	if isReady {
-		rayServiceInstance.Status.ServiceStatus = rayv1.Running
-		updateRayClusterInfo(ctx, rayServiceInstance, rayClusterInstance.Name)
-	} else {
+	if !isReady {
+		// TODO (kevin85421): avoid always updating status if the serve applications are not ready.
 		rayServiceInstance.Status.ServiceStatus = rayv1.WaitForServeDeploymentReady
 		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
 			return false, err
