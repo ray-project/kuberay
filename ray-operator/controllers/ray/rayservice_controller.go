@@ -191,7 +191,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
-	// Switch pending cluster to active cluster if needed.
+	// Switch pending cluster to active cluster if pending cluster is ready
+	// to serve requests.
 	if isPendingClusterReady {
 		promotePendingClusterToActiveCluster(ctx, rayServiceInstance)
 	}
