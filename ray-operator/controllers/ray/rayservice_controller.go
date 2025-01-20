@@ -147,10 +147,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	/*
-		Update ray cluster for 3 possible situations.
-		If a ray cluster does not exist, clear its status.
-		If only one ray cluster exists, do serve deployment if needed and check dashboard, serve deployment health.
-		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
+		Update Ray cluster for the following possible situations:
+		1. If a Ray cluster does not exist, clear its status.
+		2. If only one Ray cluster exists, perform Serve deployment if needed and check Dashboard and Serve deployment health.
+		3. If both Ray clusters exist, update active cluster status and perform pending cluster deployment and health check.
 	*/
 	if activeRayClusterInstance == nil && pendingRayClusterInstance == nil {
 		panic("Both active and pending Ray clusters are nil before reconcileServe. " +
