@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -81,7 +82,8 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
 
-			deployRedis(test, namespace.Name, tc.redisPassword)
+			checkRedisDBSize := deployRedis(test, namespace.Name, tc.redisPassword)
+			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			if tc.createSecret {
 				test.T().Logf("Creating Redis password secret")
@@ -116,6 +118,9 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
@@ -171,7 +176,8 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 				redisPassword = tc.redisPasswordInRayStartParams
 			}
 
-			deployRedis(test, namespace.Name, redisPassword)
+			checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			// Prepare RayCluster ApplyConfiguration
 			podTemplateAC := headPodTemplateApplyConfiguration()
@@ -224,6 +230,9 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
