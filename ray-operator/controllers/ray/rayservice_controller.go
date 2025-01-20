@@ -109,8 +109,6 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	isReady := false
-
 	var rayServiceInstance *rayv1.RayService
 	var err error
 
@@ -156,10 +154,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		If only one ray cluster exists, do serve deployment if needed and check dashboard, serve deployment health.
 		If both ray clusters exist, update active cluster status and do the pending cluster deployment and health check.
 	*/
+	var isActiveClusterReady, isPendingClusterReady bool = false, false
+
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
 		logger.Info("Reconciling the Serve component. Only the active Ray cluster exists.")
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true); err != nil {
+		if isActiveClusterReady, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance, true); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
@@ -170,13 +170,13 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Error(err, "Failed to update active Ray cluster's status.")
 		}
 
-		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
+		if isPendingClusterReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
 	} else if activeRayClusterInstance == nil && pendingRayClusterInstance != nil {
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
-		if isReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
+		if isPendingClusterReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 		}
@@ -186,12 +186,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
 
-	if !isReady {
+	if !isActiveClusterReady && !isPendingClusterReady {
 		logger.Info("Ray Serve applications are not ready to serve requests")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
+
 	// Switch pending cluster to active cluster if needed.
-	switchClusterIfNeeded(ctx, rayServiceInstance)
+	if isPendingClusterReady {
+		promotePendingClusterToActiveCluster(ctx, rayServiceInstance)
+	}
 
 	// Get the ready Ray cluster instance for service update.
 	var rayClusterInstance *rayv1.RayCluster
@@ -988,18 +991,17 @@ func markRestartAndAddPendingClusterName(ctx context.Context, rayServiceInstance
 	}
 }
 
-func switchClusterIfNeeded(ctx context.Context, rayServiceInstance *rayv1.RayService) {
+func promotePendingClusterToActiveCluster(ctx context.Context, rayServiceInstance *rayv1.RayService) {
 	// Switch the pending cluster to active cluster if needed. Note that this function
 	// is called when the pending cluster is ready.
 	logger := ctrl.LoggerFrom(ctx)
 
 	oldClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
 	newClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+
 	logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", newClusterName)
-	if newClusterName != "" {
-		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
-		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-	}
+	rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
+	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	rayServiceInstance.Status.ServiceStatus = rayv1.Running
 }
 
