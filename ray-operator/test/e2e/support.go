@@ -1,17 +1,13 @@
 package e2e
 
 import (
-	"bytes"
 	"embed"
 	"strings"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/remotecommand"
 
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -180,7 +176,7 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
-func deployRedis(t Test, namespace string, password string) func() {
+func deployRedis(t Test, namespace string, password string) func() string {
 	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
 		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
 	dbSizeCmd := []string{"redis-cli", "--no-auth-warning", "DBSIZE"}
@@ -189,7 +185,7 @@ func deployRedis(t Test, namespace string, password string) func() {
 		dbSizeCmd = []string{"redis-cli", "--no-auth-warning", "-a", password, "DBSIZE"}
 	}
 
-	_, err := t.Client().Core().CoreV1().Pods(namespace).Apply(
+	pod, err := t.Client().Core().CoreV1().Pods(namespace).Apply(
 		t.Ctx(),
 		corev1ac.Pod("redis", namespace).
 			WithLabels(map[string]string{"app": "redis"}).
@@ -211,45 +207,8 @@ func deployRedis(t Test, namespace string, password string) func() {
 	)
 	assert.NoError(t.T(), err)
 
-	checkDBSize := func() string {
-		req := t.Client().Core().CoreV1().RESTClient().Post().Resource("pods").
-			Namespace(namespace).Name("redis").SubResource("exec").
-			VersionedParams(&corev1.PodExecOptions{
-				Container: "redis",
-				Command:   dbSizeCmd,
-				Stdin:     false,
-				Stdout:    true,
-				Stderr:    true,
-			}, scheme.ParameterCodec)
-
-		stdout := bytes.NewBuffer(nil)
-		stderr := bytes.NewBuffer(nil)
-
-		config := t.Client().Config()
-
-		executor, err := remotecommand.NewSPDYExecutor(&config, "POST", req.URL())
-		if err != nil {
-			t.T().Fatalf("failed to create executor: %v", err)
-		}
-
-		err = executor.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
-			Stdout: stdout,
-			Stderr: stderr,
-		})
-		if err != nil {
-			t.T().Fatalf("failed to execute: %v", err)
-		}
-
+	return func() string {
+		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)
 		return strings.TrimSpace(stdout.String() + stderr.String())
-	}
-	return func() {
-		var output string
-		for i := 0; i < 30; i++ {
-			if output = checkDBSize(); output == "0" {
-				return
-			}
-			time.Sleep(time.Second)
-		}
-		t.T().Fatalf("failed cleanup redis expect 0 but got: %s", output)
 	}
 }
