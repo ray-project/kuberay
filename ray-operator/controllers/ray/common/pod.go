@@ -126,6 +126,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					Value: options.RedisAddress,
 				})
 				if options.RedisUsername != nil {
+					// Note that `redis-username` will be supported starting from Ray 2.41.
 					// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
 					// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
 					// rayStartParams to refer to the environment variable.
@@ -148,17 +149,6 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					})
 				}
 			} else {
-				// If users directly set the `redis-username` in `rayStartParams` instead of referring
-				// to a K8s secret, we need to set the `REDIS_USERNAME` env var so that the Redis cleanup
-				// job can connect to Redis using the username.
-				if !utils.EnvVarExists(utils.REDIS_USERNAME, container.Env) {
-					// setting the REDIS_USERNAME env var from the params
-					redisUsernameEnv := corev1.EnvVar{Name: utils.REDIS_USERNAME}
-					if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-username"]; ok {
-						redisUsernameEnv.Value = value
-					}
-					container.Env = append(container.Env, redisUsernameEnv)
-				}
 				// If users directly set the `redis-password` in `rayStartParams` instead of referring
 				// to a K8s secret, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
 				// job can connect to Redis using the password. This is not recommended.
