@@ -232,7 +232,7 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 
 			// Validate that the TPU slice is scaled down and another TPU worker is not created.
 			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(int32(0))))
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).Should(gomega.HaveLen(0))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).Should(gomega.BeEmpty())
 		})
 	}
 }
@@ -319,7 +319,7 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 			// Validate that both TPU workers in the slice are scaled down atomically.
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutLong).Should(gomega.HaveLen(0))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutLong).Should(gomega.BeEmpty())
 		})
 	}
 }
