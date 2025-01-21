@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/rest"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
@@ -54,6 +55,9 @@ func NewCreateWorkerGroupOptions(streams genericclioptions.IOStreams) *CreateWor
 func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	options := NewCreateWorkerGroupOptions(streams)
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
+	// Silence warnings to avoid messages like 'unknown field "spec.headGroupSpec.template.metadata.creationTimestamp"'
+	// See https://github.com/kubernetes/kubernetes/issues/67610 for more details.
+	rest.SetDefaultWarningHandler(rest.NoWarnings{})
 
 	cmd := &cobra.Command{
 		Use:          "workergroup [WORKERGROUP]",
