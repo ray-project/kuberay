@@ -98,7 +98,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 			container.Env = append(container.Env, gcsTimeout)
 		}
 
-		// Configure the Redis address and password for GCS FT.
+		// Configure the Redis address, username and password for GCS FT.
 		if rayNodeType == rayv1.HeadNode {
 			// Configure the external storage namespace for GCS FT.
 			storageNS := string(instance.UID)
@@ -119,6 +119,18 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					Name:  utils.RAY_REDIS_ADDRESS,
 					Value: options.RedisAddress,
 				})
+				if options.RedisUsername != nil {
+					// Note that `redis-username` will be supported starting from Ray 2.41.
+					// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
+					// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
+					// rayStartParams to refer to the environment variable.
+					instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] = "$REDIS_USERNAME"
+					container.Env = append(container.Env, corev1.EnvVar{
+						Name:      utils.REDIS_USERNAME,
+						Value:     options.RedisUsername.Value,
+						ValueFrom: options.RedisUsername.ValueFrom,
+					})
+				}
 				if options.RedisPassword != nil {
 					// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the
 					// `REDIS_PASSWORD` environment variable later. Here, we use `$REDIS_PASSWORD` in
