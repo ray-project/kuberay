@@ -373,7 +373,6 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 		test.T().Run(name, func(_ *testing.T) {
 			groupName := "test-group"
-			maxReplicas := 4
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
@@ -404,28 +403,27 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-			for i := 0; i < maxReplicas; i++ {
+			for i := 0; i < 4; i++ {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
 
-			// Verify that the Autoscaler scales up to maxReplicas Pods
+			// Verify that the Autoscaler scales up to maxReplicas (4) Pods
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(maxReplicas)))
-
-			// Check that replicas is set to maxReplicas (4)
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(4)))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(4))))
+			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(4))
 
 			// Update maxReplicas to half the previous value
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
-			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(int32(maxReplicas / 2))
+			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(int32(2))
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			test.T().Logf("Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 			// Verify that KubeRay terminates half the worker Pods
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(2)))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).Should(gomega.HaveLen(2))
 		})
 	}
 }
