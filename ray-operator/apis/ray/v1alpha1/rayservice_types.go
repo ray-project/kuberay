@@ -13,7 +13,7 @@ type ServiceStatus string
 const (
 	WaitForServeDeploymentReady ServiceStatus = "WaitForServeDeploymentReady"
 	Running                     ServiceStatus = "Running"
-	Restarting                  ServiceStatus = "Restarting"
+	PreparingNewCluster         ServiceStatus = "PreparingNewCluster"
 )
 
 // These statuses should match Ray Serve's application statuses

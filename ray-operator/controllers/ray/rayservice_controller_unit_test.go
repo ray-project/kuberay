@@ -366,7 +366,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.Restarting,
+		ServiceStatus: rayv1.PreparingNewCluster,
 	}
 	ctx := context.Background()
 
