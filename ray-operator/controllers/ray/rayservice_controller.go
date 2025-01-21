@@ -436,7 +436,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	clusterAction := decideClusterAction(ctx, rayServiceInstance, activeRayCluster, pendingRayCluster)
 	switch clusterAction {
 	case GeneratePendingClusterName:
-		markRestartAndAddPendingClusterName(ctx, rayServiceInstance)
+		markPreparingNewCluster(rayServiceInstance)
 		return activeRayCluster, nil, nil
 	case CreatePendingCluster:
 		logger.Info("Creating a new pending RayCluster instance.")
@@ -975,12 +975,8 @@ func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RaySer
 	rayServiceServeConfigs.Set(clusterName, serveConfig)
 }
 
-func markRestartAndAddPendingClusterName(ctx context.Context, rayServiceInstance *rayv1.RayService) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	// Generate RayCluster name for pending cluster.
-	logger.Info("Current cluster is unhealthy, prepare to restart.", "Status", rayServiceInstance.Status)
-	rayServiceInstance.Status.ServiceStatus = rayv1.Restarting
+func markPreparingNewCluster(rayServiceInstance *rayv1.RayService) {
+	rayServiceInstance.Status.ServiceStatus = rayv1.PreparingNewCluster
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 		RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 	}
