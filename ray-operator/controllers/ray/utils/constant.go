@@ -142,6 +142,9 @@ const (
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
+	// If set to true, publish exposing HeadService before Serve application is ready
+	ENABLE_RAYSERVICE_EAGER_EXPOSES_SERVICES = "ENABLE_RAYSERVICE_EAGER_EXPOSES_SERVICES"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
