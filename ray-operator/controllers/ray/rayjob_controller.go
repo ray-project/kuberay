@@ -110,20 +110,17 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			rayDashboardClient := r.dashboardClientFunc()
-			err = rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance)
-			if err != nil {
+			if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
 				logger.Error(err, "Failed to initialize dashboard client")
 			}
-			err = rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId)
-			if err != nil {
+			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 				logger.Error(err, "Failed to stop job for RayJob")
 			}
 		}
 
 		logger.Info("Remove the finalizer no matter StopJob() succeeds or not.", "finalizer", utils.RayJobStopJobFinalizer)
 		controllerutil.RemoveFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
-		err := r.Update(ctx, rayJobInstance)
-		if err != nil {
+		if err := r.Update(ctx, rayJobInstance); err != nil {
 			logger.Error(err, "Failed to remove finalizer for RayJob")
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
