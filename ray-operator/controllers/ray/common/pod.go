@@ -55,12 +55,6 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return strconv.Itoa(utils.DefaultGcsServerPort)
 }
 
-// Check if the RayCluster has GCS fault tolerance enabled.
-func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
-	v, ok := instance.Annotations[utils.RayFTEnabledAnnotationKey]
-	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
-}
-
 // Check if overwrites the container command.
 func isOverwriteRayContainerCmd(instance rayv1.RayCluster) bool {
 	v, ok := instance.Annotations[utils.RayOverwriteContainerCmdAnnotationKey]
@@ -80,7 +74,7 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
 	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
 	// Note that both `podTemplate` and `instance` will be modified.
-	ftEnabled := IsGCSFaultToleranceEnabled(instance)
+	ftEnabled := utils.IsGCSFaultToleranceEnabled(instance)
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}

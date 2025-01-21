@@ -752,3 +752,70 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	}
 	assert.True(t, IsAutoscalingEnabled(service))
 }
+
+func TestIsGCSFaultToleranceEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		instance rayv1.RayCluster
+		expected bool
+	}{
+		{
+			name: "ray.io/ft-enabled is true",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						RayFTEnabledAnnotationKey: "true",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
+			instance: rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray.io/ft-enabled is false",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						RayFTEnabledAnnotationKey: "false",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is not set",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "ray.io/ft-enabled is using uppercase true",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						RayFTEnabledAnnotationKey: "TRUE",
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := IsGCSFaultToleranceEnabled(test.instance)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
