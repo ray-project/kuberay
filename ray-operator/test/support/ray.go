@@ -170,6 +170,7 @@ func AllPodsRunning(pods []corev1.Pod) bool {
 
 func RateLimitedPendingPods(pods []corev1.Pod) bool {
 	// The number of Pending Pods must be less than or equal to the size of the RayCluster.
+	// The minimum number of pending launches is 5 regardless of RayCluster size and upscaling_speed.
 	numRunning := 0
 	numPending := 0
 	for _, pod := range pods {
@@ -180,7 +181,7 @@ func RateLimitedPendingPods(pods []corev1.Pod) bool {
 			numPending++
 		}
 	}
-	return numRunning+1 >= numPending
+	return (numPending <= 5) || (numRunning >= numPending)
 }
 
 func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {

@@ -456,7 +456,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(4).
+					WithMaxReplicas(10).
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
@@ -467,36 +467,25 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-			// Wait for RayCluster to become ready
+			// Wait for the RayCluster to become ready
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
 			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
-			// Create detached actors to trigger autoscaling of 1 worker Pod
+			// Scale up 10 workers. The Conservative UpscalingMode should rate-limit the number of pending Pods with upscaling_speed = 1.
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
-
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor0"})
-
-			// Wait for worker Pod to connect to the RayCluster with Phase "Running"
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).
-				Should(gomega.WithTransform(AllPodsRunning, gomega.BeTrue()))
-			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(1))
-
-			// Scale up three additional workers. The Conservative UpscalingMode should rate-limit the number of pending Pods at one time.
-			for i := 1; i < 4; i++ {
+			for i := 0; i < 10; i++ {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
+			//Check that upscaling is rate-limited to the size of the RayCluster. The minimum number of pending launches is 5 regardless of upscaling_speed.
 			g.Consistently(WorkerPods(test, rayCluster), TestTimeoutShort).
 				Should(gomega.WithTransform(RateLimitedPendingPods, gomega.BeTrue()))
-
-			// All worker Pods should connect to the RayCluster
+			// All worker Pods should connect to the RayCluster.
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(4))))
-			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(4))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(10))))
+			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(10))
 		})
 	}
 }
