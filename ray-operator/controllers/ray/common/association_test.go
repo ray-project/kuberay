@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -291,4 +292,75 @@ func TestGetRayClusterHeadPod(t *testing.T) {
 	ret, err := GetRayClusterHeadPod(ctx, fakeClient, &cluster)
 	assert.Nil(t, err)
 	assert.Equal(t, ret, headPod)
+}
+
+func TestRayClusterRedisCleanupJobAssociationOptions(t *testing.T) {
+	// Create a new scheme
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-example",
+			Namespace: "default",
+		},
+	}
+
+	_ = &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "redis-cleanup",
+			Namespace: instance.ObjectMeta.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instance.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+			},
+		},
+	}
+
+	expected := []client.ListOption{
+		client.InNamespace(instance.ObjectMeta.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode),
+		}),
+	}
+	result := RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()
+
+	assert.Equal(t, expected, result)
+}
+
+func TestRayClusterNetworkResourcesOptions(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = routev1.AddToScheme(newScheme)
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-example",
+			Namespace: "default",
+			Annotations: map[string]string{
+				IngressClassAnnotationKey: "nginx",
+			},
+		},
+	}
+	_ = &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateRouteName(instance.Name),
+			Namespace: instance.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: instance.Name,
+			},
+		},
+	}
+	expected := []client.ListOption{
+		client.InNamespace(instance.ObjectMeta.Namespace),
+		client.MatchingLabels(map[string]string{
+			utils.RayClusterLabelKey: instance.Name,
+		}),
+	}
+
+	result := RayClusterNetworkResourcesOptions(instance).ToListOptions()
+
+	assert.Equal(t, expected, result)
 }

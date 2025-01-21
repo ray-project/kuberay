@@ -1013,6 +1013,7 @@ func TestReconcileHeadService(t *testing.T) {
 			Labels: map[string]string{
 				utils.RayClusterLabelKey:  cluster.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 			},
 		},
 	}
@@ -1026,6 +1027,7 @@ func TestReconcileHeadService(t *testing.T) {
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
 		utils.RayClusterLabelKey:  cluster.Name,
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 	})
 
 	// Initialize RayCluster reconciler.
@@ -3479,6 +3481,10 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
 		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
 		"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
+	errorMessageRedisAddressConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead", utils.RAY_REDIS_ADDRESS)
+	errorMessageExternalStorageNamespaceConflict := fmt.Sprintf("cannot set `%s` annotation when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", utils.RayExternalStorageNSAnnotationKey)
 
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
@@ -3533,6 +3539,18 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
+			name: "gcsFaultToleranceOptions is set and RAY_REDIS_ADDRESS is set",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: "redis:6379",
+				},
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisAddressConflict,
+		},
+		{
 			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
@@ -3555,6 +3573,15 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 				},
 			},
 			expectError: false,
+		},
+		{
+			name: "gcsFaultToleranceOptions is set and ray.io/external-storage-namespace is set",
+			annotations: map[string]string{
+				utils.RayExternalStorageNSAnnotationKey: "myns",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
 	}
 
@@ -3718,6 +3745,83 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			err := validateRayClusterSpec(tt.rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
+	headGroupSpec := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-worker"}},
+			},
+		},
+	}
+	workerGroupSpecSuspended.Suspend = ptr.To[bool](true)
+
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+		featureGate  bool
+	}{
+		{
+			name: "suspend without autoscaler and the feature gate",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			featureGate:  false,
+			expectError:  true,
+			errorMessage: "suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled",
+		},
+		{
+			name: "suspend without autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+				},
+			},
+			featureGate: true,
+			expectError: false,
+		},
+		{
+			// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+			name: "suspend with autoscaler",
+			rayCluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec:           headGroupSpec,
+					WorkerGroupSpecs:        []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
+					EnableInTreeAutoscaling: ptr.To[bool](true),
+				},
+			},
+			featureGate:  true,
+			expectError:  true,
+			errorMessage: "suspending worker groups is not currently supported with Autoscaler enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
 			err := validateRayClusterSpec(tt.rayCluster)
 			if tt.expectError {
 				assert.Error(t, err)

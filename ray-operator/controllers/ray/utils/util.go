@@ -620,3 +620,16 @@ func ManagedByExternalController(controllerName *string) *string {
 	}
 	return nil
 }
+
+func IsAutoscalingEnabled[T *rayv1.RayCluster | *rayv1.RayJob | *rayv1.RayService](obj T) bool {
+	switch obj := (interface{})(obj).(type) {
+	case *rayv1.RayCluster:
+		return obj.Spec.EnableInTreeAutoscaling != nil && *obj.Spec.EnableInTreeAutoscaling
+	case *rayv1.RayJob:
+		return obj.Spec.RayClusterSpec != nil && obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
+	case *rayv1.RayService:
+		return obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", obj))
+	}
+}

@@ -838,8 +838,6 @@ var _ = Context("RayJob with different submission modes", func() {
 	})
 
 	Describe("RayJob with DeletionPolicy=DeleteCluster", Ordered, func() {
-		features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true)
-
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletecluster", namespace)
@@ -847,6 +845,10 @@ var _ = Context("RayJob with different submission modes", func() {
 		rayJob.Spec.DeletionPolicy = &deletionPolicy
 		rayJob.Spec.ShutdownAfterJobFinishes = false
 		rayCluster := &rayv1.RayCluster{}
+
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
 
 		It("Verify RayJob spec", func() {
 			Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteClusterDeletionPolicy))
@@ -960,8 +962,6 @@ var _ = Context("RayJob with different submission modes", func() {
 	})
 
 	Describe("RayJob with DeletionPolicy=DeleteWorkers", Ordered, func() {
-		features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true)
-
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deleteworkers", namespace)
@@ -969,6 +969,10 @@ var _ = Context("RayJob with different submission modes", func() {
 		rayJob.Spec.DeletionPolicy = &deletionPolicy
 		rayJob.Spec.ShutdownAfterJobFinishes = false
 		rayCluster := &rayv1.RayCluster{}
+
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
 
 		It("Verify RayJob spec", func() {
 			Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteWorkersDeletionPolicy))
@@ -1107,6 +1111,10 @@ var _ = Context("RayJob with different submission modes", func() {
 		rayJob.Spec.ShutdownAfterJobFinishes = false
 		rayCluster := &rayv1.RayCluster{}
 
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
+
 		It("Create a RayJob custom resource", func() {
 			err := k8sClient.Create(ctx, rayJob)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
@@ -1203,8 +1211,6 @@ var _ = Context("RayJob with different submission modes", func() {
 	})
 
 	Describe("RayJob with DeletionPolicy=DeleteNone", Ordered, func() {
-		features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true)
-
 		ctx := context.Background()
 		namespace := "default"
 		rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletenone", namespace)
@@ -1212,6 +1218,10 @@ var _ = Context("RayJob with different submission modes", func() {
 		rayJob.Spec.DeletionPolicy = &deletionPolicy
 		rayJob.Spec.ShutdownAfterJobFinishes = false
 		rayCluster := &rayv1.RayCluster{}
+
+		BeforeAll(func() {
+			DeferCleanup(features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true))
+		})
 
 		It("Verify RayJob spec", func() {
 			Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteNoneDeletionPolicy))

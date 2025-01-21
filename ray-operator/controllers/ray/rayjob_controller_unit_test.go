@@ -21,6 +21,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
@@ -321,7 +322,7 @@ func TestUpdateRayJobStatus(t *testing.T) {
 
 func TestValidateRayJobSpec(t *testing.T) {
 	err := validateRayJobSpec(&rayv1.RayJob{})
-	assert.Error(t, err, "The RayJob is invalid because both `RayClusterSpec` and `ClusterSelector` are empty")
+	assert.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -329,7 +330,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			ShutdownAfterJobFinishes: false,
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended.")
+	assert.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -338,31 +339,98 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.NoError(t, err, "The RayJob is valid.")
+	assert.NoError(t, err)
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Suspend: true,
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: true,
 			ClusterSelector: map[string]string{
 				"key": "value",
 			},
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
+			RayClusterSpec: &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
+	assert.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			BackoffLimit: ptr.To[int32](-1),
+			BackoffLimit:   ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because the backoffLimit must be a positive integer.")
+	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+
+	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To[bool](true),
+			},
+		},
+	})
+	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           nil,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 }
 
 func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {

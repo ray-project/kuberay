@@ -2,13 +2,12 @@ package e2e
 
 import (
 	"embed"
+	"strings"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	appsv1ac "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -177,26 +176,20 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 					}))))
 }
 
-func deployRedis(t Test, namespace string, password string) {
+func deployRedis(t Test, namespace string, password string) func() string {
 	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
 		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
+	dbSizeCmd := []string{"redis-cli", "--no-auth-warning", "DBSIZE"}
 	if password != "" {
 		redisContainer.WithCommand("redis-server", "--requirepass", password)
+		dbSizeCmd = []string{"redis-cli", "--no-auth-warning", "-a", password, "DBSIZE"}
 	}
 
-	_, err := t.Client().Core().AppsV1().Deployments(namespace).Apply(
+	pod, err := t.Client().Core().CoreV1().Pods(namespace).Apply(
 		t.Ctx(),
-		appsv1ac.Deployment("redis", namespace).
-			WithSpec(appsv1ac.DeploymentSpec().
-				WithReplicas(1).
-				WithSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app": "redis"})).
-				WithTemplate(corev1ac.PodTemplateSpec().
-					WithLabels(map[string]string{"app": "redis"}).
-					WithSpec(corev1ac.PodSpec().
-						WithContainers(redisContainer),
-					),
-				),
-			),
+		corev1ac.Pod("redis", namespace).
+			WithLabels(map[string]string{"app": "redis"}).
+			WithSpec(corev1ac.PodSpec().WithContainers(redisContainer)),
 		TestApplyOptions,
 	)
 	assert.NoError(t.T(), err)
@@ -213,4 +206,9 @@ func deployRedis(t Test, namespace string, password string) {
 		TestApplyOptions,
 	)
 	assert.NoError(t.T(), err)
+
+	return func() string {
+		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)
+		return strings.TrimSpace(stdout.String() + stderr.String())
+	}
 }

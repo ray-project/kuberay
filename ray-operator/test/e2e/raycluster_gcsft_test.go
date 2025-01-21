@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -81,7 +82,8 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
 
-			deployRedis(test, namespace.Name, tc.redisPassword)
+			checkRedisDBSize := deployRedis(test, namespace.Name, tc.redisPassword)
+			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			if tc.createSecret {
 				test.T().Logf("Creating Redis password secret")
@@ -116,6 +118,121 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+		})
+	}
+}
+
+func TestGcsFaultToleranceAnnotations(t *testing.T) {
+	tests := []struct {
+		name                          string
+		storageNS                     string
+		redisPasswordEnv              string
+		redisPasswordInRayStartParams string
+	}{
+		{
+			name:                          "GCS FT without redis password",
+			storageNS:                     "",
+			redisPasswordEnv:              "",
+			redisPasswordInRayStartParams: "",
+		},
+		{
+			name:                          "GCS FT with redis password in ray start params",
+			storageNS:                     "",
+			redisPasswordEnv:              "",
+			redisPasswordInRayStartParams: "5241590000000000",
+		},
+		{
+			name:                          "GCS FT with redis password in ray start params referring to env",
+			storageNS:                     "",
+			redisPasswordEnv:              "5241590000000000",
+			redisPasswordInRayStartParams: "$REDIS_PASSWORD",
+		},
+		{
+			name:                          "GCS FT with storage namespace",
+			storageNS:                     "test-storage-ns",
+			redisPasswordEnv:              "5241590000000000",
+			redisPasswordInRayStartParams: "$REDIS_PASSWORD",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			test := With(t)
+			g := NewWithT(t)
+			namespace := test.NewTestNamespace()
+
+			redisPassword := ""
+			if tc.redisPasswordEnv != "" && tc.redisPasswordInRayStartParams != "" && tc.redisPasswordInRayStartParams != "$REDIS_PASSWORD" {
+				t.Fatalf("redisPasswordEnv and redisPasswordInRayStartParams are both set")
+			}
+
+			switch {
+			case tc.redisPasswordEnv != "":
+				redisPassword = tc.redisPasswordEnv
+			case tc.redisPasswordInRayStartParams != "":
+				redisPassword = tc.redisPasswordInRayStartParams
+			}
+
+			checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
+
+			// Prepare RayCluster ApplyConfiguration
+			podTemplateAC := headPodTemplateApplyConfiguration()
+			podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
+				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue("redis:6379"),
+			)
+			if tc.redisPasswordEnv != "" {
+				podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
+					corev1ac.EnvVar().WithName("REDIS_PASSWORD").WithValue(tc.redisPasswordEnv),
+				)
+			}
+			rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithAnnotations(
+				map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
+			).WithSpec(
+				rayClusterSpecWith(
+					rayv1ac.RayClusterSpec().
+						WithRayVersion(GetRayVersion()).
+						WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+							// RayStartParams are not allowed to be empty.
+							WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+							WithTemplate(podTemplateAC)),
+				),
+			)
+			if tc.storageNS != "" {
+				rayClusterAC.WithAnnotations(map[string]string{utils.RayExternalStorageNSAnnotationKey: tc.storageNS})
+			}
+			if tc.redisPasswordInRayStartParams != "" {
+				rayClusterAC.Spec.HeadGroupSpec.WithRayStartParams(map[string]string{"redis-password": tc.redisPasswordInRayStartParams})
+			}
+
+			// Apply RayCluster
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(HaveOccurred())
+			test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+			test.T().Logf("Verifying environment variables on Head Pod")
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+			headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayCluster.Status.Head.PodName, metav1.GetOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+
+			g.Expect(utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
+			g.Expect(utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
+			if redisPassword == "" {
+				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeFalse())
+			} else {
+				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
+			}
+
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }

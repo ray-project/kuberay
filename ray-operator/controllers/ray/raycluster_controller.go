@@ -256,11 +256,34 @@ func validateRayClusterSpec(instance *rayv1.RayCluster) error {
 			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
 		}
+
+		if utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headContainer.Env) {
+			return fmt.Errorf("cannot set `RAY_REDIS_ADDRESS` env var in head Pod when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead")
+		}
+
+		if instance.Annotations[utils.RayExternalStorageNSAnnotationKey] != "" {
+			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
+		}
 	}
 
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.RedisAddress` instead of `RAY_REDIS_ADDRESS`.
-	// TODO (kevin85421): If GcsFaultToleranceOptions is set, users should use `GcsFaultToleranceOptions.ExternalStorageNamespace` instead of
-	// the annotation `ray.io/external-storage-namespace`.
+	if !features.Enabled(features.RayJobDeletionPolicy) {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
+			}
+		}
+	}
+
+	if utils.IsAutoscalingEnabled(instance) {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
+			}
+		}
+	}
 	return nil
 }
 
@@ -336,10 +359,9 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
 
-			// We can start the Redis cleanup process now because the head Pod has been terminated.
-			filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.RedisCleanupNode)}
+			filterLabels := common.RayClusterRedisCleanupJobAssociationOptions(instance).ToListOptions()
 			redisCleanupJobs := batchv1.JobList{}
-			if err := r.List(ctx, &redisCleanupJobs, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+			if err := r.List(ctx, &redisCleanupJobs, filterLabels...); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 
@@ -532,8 +554,8 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headRoutes := routev1.RouteList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
-	if err := r.List(ctx, &headRoutes, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
+	if err := r.List(ctx, &headRoutes, filterLabels...); err != nil {
 		return err
 	}
 
@@ -563,8 +585,8 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	headIngresses := networkingv1.IngressList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name}
-	if err := r.List(ctx, &headIngresses, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
+	if err := r.List(ctx, &headIngresses, filterLabels...); err != nil {
 		return err
 	}
 
@@ -595,9 +617,9 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{utils.RayClusterLabelKey: instance.Name, utils.RayNodeTypeLabelKey: string(rayv1.HeadNode)}
+	filterLabels := common.RayClusterHeadServiceListOptions(instance)
 
-	if err := r.List(ctx, &services, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	if err := r.List(ctx, &services, filterLabels...); err != nil {
 		return err
 	}
 
@@ -920,7 +942,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// diff < 0 indicates the need to delete some Pods to match the desired number of replicas. However,
 			// randomly deleting Pods is certainly not ideal. So, if autoscaling is enabled for the cluster, we
 			// will disable random Pod deletion, making Autoscaler the sole decision-maker for Pod deletions.
-			enableInTreeAutoscaling := (instance.Spec.EnableInTreeAutoscaling != nil) && (*instance.Spec.EnableInTreeAutoscaling)
+			enableInTreeAutoscaling := utils.IsAutoscalingEnabled(instance)
 
 			// TODO (kevin85421): `enableRandomPodDelete` is a feature flag for KubeRay v0.6.0. If users want to use
 			// the old behavior, they can set the environment variable `ENABLE_RANDOM_POD_DELETE` to `true`. When the
@@ -1151,7 +1173,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
-	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
+	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
 	if len(r.headSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
@@ -1179,7 +1201,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
-	autoscalingEnabled := instance.Spec.EnableInTreeAutoscaling
+	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
@@ -1213,7 +1235,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			"redis_address = os.getenv('RAY_REDIS_ADDRESS', '').split(',')[0]; " +
 			"redis_address = redis_address if '://' in redis_address else 'redis://' + redis_address; " +
 			"parsed = urlparse(redis_address); " +
-			"sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, password=os.getenv('REDIS_PASSWORD', parsed.password), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
+			"sys.exit(1) if not cleanup_redis_storage(host=parsed.hostname, port=parsed.port, password=os.getenv('REDIS_PASSWORD', parsed.password or ''), use_ssl=parsed.scheme=='rediss', storage_namespace=os.getenv('RAY_external_storage_namespace')) else None\"",
 	}
 
 	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
@@ -1500,11 +1522,8 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	filterLabels := client.MatchingLabels{
-		utils.RayClusterLabelKey:  instance.Name,
-		utils.RayNodeTypeLabelKey: "head",
-	}
-	if err := r.List(ctx, &rayHeadSvc, client.InNamespace(instance.Namespace), filterLabels); err != nil {
+	filterLabels := common.RayClusterHeadServiceListOptions(instance)
+	if err := r.List(ctx, &rayHeadSvc, filterLabels...); err != nil {
 		return err
 	}
 
@@ -1560,7 +1579,7 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 
 func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
@@ -1617,7 +1636,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 
 func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
@@ -1659,7 +1678,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	if instance.Spec.EnableInTreeAutoscaling == nil || !*instance.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(instance) {
 		return nil
 	}
 
