@@ -169,7 +169,7 @@ func AllPodsRunning(pods []corev1.Pod) bool {
 }
 
 func RateLimitedPendingPods(pods []corev1.Pod) bool {
-	//The number of Pending Pods must be less than or equal to the size of the RayCluster.
+	// The number of Pending Pods must be less than or equal to the size of the RayCluster.
 	numRunning := 0
 	numPending := 0
 	for _, pod := range pods {

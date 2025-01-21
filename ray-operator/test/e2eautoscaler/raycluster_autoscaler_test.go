@@ -383,7 +383,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(int32(maxReplicas)).
+					WithMaxReplicas(4).
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
@@ -413,7 +413,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(maxReplicas)))
 
 			// Check that replicas is set to maxReplicas (4)
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(int32(maxReplicas))))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(4)))
 
 			// Update maxReplicas to half the previous value
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
@@ -425,7 +425,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 			// Verify that KubeRay terminates half the worker Pods
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(maxReplicas/2)))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(2)))
 		})
 	}
 }
