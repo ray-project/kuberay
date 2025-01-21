@@ -146,17 +146,27 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
+	if activeRayClusterInstance == nil && pendingRayClusterInstance == nil {
+		panic("Both active and pending Ray clusters are nil before reconcileServe. " +
+			"Please open a GitHub issue in the KubeRay repository.")
+	}
+
+	// Check both active and pending Ray clusters to see if the head Pod is ready to serve requests.
+	// This is important to ensure the reliability of the serve service because the head Pod cannot
+	// rely on readiness probes to determine serve readiness.
+	if err := r.updateHeadPodServeLabel(ctx, activeRayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	if err := r.updateHeadPodServeLabel(ctx, pendingRayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
 	/*
 		Update Ray cluster for the following possible situations:
 		1. If a Ray cluster does not exist, clear its status.
 		2. If only one Ray cluster exists, perform Serve deployment if needed and check Dashboard and Serve deployment health.
 		3. If both Ray clusters exist, update active cluster status and perform pending cluster deployment and health check.
 	*/
-	if activeRayClusterInstance == nil && pendingRayClusterInstance == nil {
-		panic("Both active and pending Ray clusters are nil before reconcileServe. " +
-			"Please open a GitHub issue in the KubeRay repository.")
-	}
-
 	var isActiveClusterReady, isPendingClusterReady bool = false, false
 
 	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
@@ -194,6 +204,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// to serve requests.
 	if isPendingClusterReady {
 		promotePendingClusterToActiveCluster(ctx, rayServiceInstance)
+		// TODO: update K8s service to switch the RayCluster to pending cluster.
 	}
 
 	// Get the ready Ray cluster instance for service update.
@@ -209,9 +220,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-	}
-	if err := r.updateHeadPodServeLabel(ctx, rayClusterInstance, rayServiceInstance.Spec.ExcludeHeadPodFromServeSvc); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
@@ -1015,13 +1023,12 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	case utils.ServingService:
 		newSvc, err = common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
 	default:
-		return fmt.Errorf("unknown service type %v", serviceType)
+		panic(fmt.Sprintf("unknown service type %v. This should never happen. Please open an issue in the KubeRay repository.", serviceType))
 	}
 
 	if err != nil {
 		return err
 	}
-	logger.Info("reconcileServices", "newSvc", newSvc)
 
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
 	oldSvc := &corev1.Service{}
@@ -1038,8 +1045,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
 		// with older versions of Kubernetes, we need to assign the ClusterIP here.
 		newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
-
-		// TODO (kevin85421): Consider not only the updates of the Spec but also the ObjectMeta.
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
 		logger.Info("Update Kubernetes Service", "serviceType", serviceType)
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
@@ -1172,6 +1177,10 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayC
 	// If `excludeHeadPodFromServeSvc` is true, the head Pod will not be used to serve requests, regardless of proxy actor health.
 	// If `excludeHeadPodFromServeSvc` is false, the head Pod's serve label will be set based on the health check result.
 	// The label is used by the Kubernetes serve service to determine whether to include the head Pod in the service endpoints.
+	if rayClusterInstance == nil {
+		return nil
+	}
+
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, rayClusterInstance)
 	if err != nil {
 		return err
