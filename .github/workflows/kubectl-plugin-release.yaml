@@ -1,15 +1,21 @@
-name: release
+name: release-kubectl-plugin
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Desired release version tag (e.g. v1.1.0-rc.1).'
+        required: true
 jobs:
   release-kubectl-plugin:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+          fetch-tags: 'true'
+      - name: Show tag
+        run: git show-ref --head --dereference | grep "$(git rev-parse HEAD)"
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -23,6 +29,5 @@ jobs:
           workdir: 'kubectl-plugin'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # TODO(MortalHappiness): This won't work now. The first version of plugin has to be submitted manually by use to the krew-index repo, so I'll submit a PR to the krew-index repo once a release candidate is created.
       - name: Update new version in krew-index
         uses: rajatjindal/krew-release-bot@v0.0.46
