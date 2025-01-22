@@ -371,6 +371,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 		})
 	}
 }
+
 func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
 		Template: corev1.PodTemplateSpec{
