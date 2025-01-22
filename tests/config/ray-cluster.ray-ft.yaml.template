@@ -65,18 +65,16 @@ spec:
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-  annotations:
-    ray.io/ft-enabled: "true" # enable Ray GCS FT
   name: raycluster-external-redis
 spec:
   rayVersion: '$ray_version'
+  gcsFaultToleranceOptions:
+    redisAddress: "redis:6379"
+    redisPassword:
+      value: "5241590000000000"
   headGroupSpec:
     rayStartParams:
-      dashboard-host: "0.0.0.0"
       num-cpus: "0"
-      redis-password: "5241590000000000"
     #pod template
     template:
       spec:
@@ -84,9 +82,6 @@ spec:
           - name: ray-head
             image: $ray_image
             env:
-              # RAY_REDIS_ADDRESS can force ray to use external redis
-              - name: RAY_REDIS_ADDRESS
-                value: redis:6379
               - name: RAY_gcs_rpc_server_reconnect_timeout_s
                 value: "20"
             ports:
@@ -150,7 +145,7 @@ data:
 
     # 0: Wait until only 1 head Pod is alive
     print("Wait until only 1 head Pod is alive", flush=True)
-    for i in range(90): 
+    for i in range(90):
       nodes = list_nodes()
       num_alive_heads = 0
       for node in nodes:

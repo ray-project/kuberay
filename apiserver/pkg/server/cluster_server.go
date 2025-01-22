@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -119,7 +118,7 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 // Deletes an Cluster without deleting the Cluster's runs and jobs. To
 // avoid unexpected behaviors, delete an Cluster's runs and jobs before
 // deleting the Cluster.
-func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*empty.Empty, error) {
+func (s *ClusterServer) DeleteCluster(ctx context.Context, request *api.DeleteClusterRequest) (*emptypb.Empty, error) {
 	if request.Name == "" {
 		return nil, util.NewInvalidInputError("Cluster name is empty. Please specify a valid value.")
 	}

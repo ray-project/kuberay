@@ -1,5 +1,5 @@
 # This example shows how to configure a custom Kubernetes service for Ray Serve
-# by specifying the `serveService` field in the RayService CRD. 
+# by specifying the `serveService` field in the RayService CRD.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -96,10 +96,6 @@ spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
                 image: rayproject/ray:2.9.0
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: ["/bin/sh","-c","ray stop"]
                 resources:
                   limits:
                     cpu: "1"

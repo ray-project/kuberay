@@ -27,7 +27,7 @@
 KubeRay is a powerful, open-source Kubernetes operator that simplifies the deployment and management of [Ray](https://github.com/ray-project/ray) applications on Kubernetes. It offers several key components:
 
 **KubeRay core**: This is the official, fully-maintained component of KubeRay that provides three custom resource definitions, RayCluster, RayJob, and RayService. These resources are designed to help you run a wide range of workloads with ease.
-    
+
 * **RayCluster**: KubeRay fully manages the lifecycle of RayCluster, including cluster creation/deletion, autoscaling, and ensuring fault tolerance.
 
 * **RayJob**: With RayJob, KubeRay automatically creates a RayCluster and submits a job when the cluster is ready. You can also configure RayJob to automatically delete the RayCluster once the job finishes.
@@ -41,16 +41,14 @@ by some organizations to back user interfaces for KubeRay resource management.
 
 * **KubeRay Python client**: This Python client library provides APIs to handle RayCluster from your Python application.
 
-* **KubeRay CLI**: KubeRay CLI provides the ability to manage KubeRay resources through command-line interface.
-
 ## KubeRay ecosystem
 
-* [AWS Application Load Balancer](guidance/ingress/#example-aws-application-load-balancer-alb-ingress-support-on-aws-eks)
-* [Nginx](guidance/ingress/#example-manually-setting-up-nginx-ingress-on-kind)
-* [Prometheus and Grafana](guidance/prometheus-grafana/) 
-* [Volcano](guidance/volcano-integration/)
-* [MCAD](guidance/kuberay-with-MCAD/)
-* [Kubeflow](guidance/kubeflow-integration/)
+* [AWS Application Load Balancer](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#aws-application-load-balancer-alb-ingress-support-on-aws-eks)
+* [Nginx](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#manually-setting-up-nginx-ingress-on-kind)
+* [Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
+* [Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html)
+* [MCAD](guidance/kuberay-with-MCAD.md)
+* [Kubeflow](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html)
 
 ## Security
 

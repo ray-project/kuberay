@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -96,7 +97,7 @@ var (
 			},
 		},
 	}
-	instanceForServeSvc = &rayv1.RayCluster{
+	instanceForSvc = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample-svc",
 			Namespace: "default",
@@ -130,7 +131,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceWithWrongSvc.Name)
+	expectedResult := instanceWithWrongSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -153,6 +154,21 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
+	}
+	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
+	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
+		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
+}
+
+func TestBuildClusterIPServiceForHeadPod(t *testing.T) {
+	os.Setenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE, "true")
+	defer os.Unsetenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)
+	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
+	assert.Nil(t, err)
+	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE is set.
+	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
+		t.Fatalf("Not expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
 	}
 }
 
@@ -191,8 +207,7 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 }
 
 func TestGetPortsFromCluster(t *testing.T) {
-	svcPorts, err := getPortsFromCluster(*instanceWithWrongSvc)
-	assert.Nil(t, err)
+	svcPorts := getPortsFromCluster(*instanceWithWrongSvc)
 
 	// getPortsFromCluster creates service ports based on the container ports.
 	// It will assign a generated service port name if the container port name
@@ -270,6 +285,8 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	userSelector := map[string]string{"userSelectorKey": "userSelectorValue", utils.RayClusterLabelKey: "userSelectorClusterName"}
 	// Specify a "LoadBalancer" type, which differs from the default "ClusterIP" type.
 	userType := corev1.ServiceTypeLoadBalancer
+	// Specify an empty ClusterIP, which differs from the default "None" used by the BuildServeServiceForRayService.
+	userClusterIP := ""
 	testRayClusterWithHeadService.Spec.HeadGroupSpec.HeadService = &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        userName,
@@ -278,52 +295,58 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 			Annotations: userAnnotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports:    userPorts,
-			Selector: userSelector,
-			Type:     userType,
+			Ports:     userPorts,
+			Selector:  userSelector,
+			Type:      userType,
+			ClusterIP: userClusterIP,
 		},
 	}
 	// These labels originate from HeadGroupSpec.Template.ObjectMeta.Labels
 	userTemplateClusterName := "userTemplateClusterName"
-	template_labels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
-	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, template_labels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
+	templateLabels := map[string]string{utils.RayClusterLabelKey: userTemplateClusterName}
+	headService, err := BuildServiceForHeadPod(context.Background(), *testRayClusterWithHeadService, templateLabels, testRayClusterWithHeadService.Spec.HeadServiceAnnotations)
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
 
+	// BuildServiceForHeadPod should respect the ClusterIP specified by users.
+	if headService.Spec.ClusterIP != userClusterIP {
+		t.Fatalf("Expected `%v` but got `%v`", userClusterIP, headService.Spec.ClusterIP)
+	}
+
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
-	default_labels := HeadServiceLabels(*testRayClusterWithHeadService)
+	defaultLabels := HeadServiceLabels(*testRayClusterWithHeadService)
 	// Make sure this test isn't spuriously passing. Check that RayClusterLabelKey is in the default labels.
-	if _, ok := default_labels[utils.RayClusterLabelKey]; !ok {
+	if _, ok := defaultLabels[utils.RayClusterLabelKey]; !ok {
 		t.Errorf("utils.RayClusterLabelKey=%s should be in the default labels", utils.RayClusterLabelKey)
 	}
 	for k, v := range headService.Spec.Selector {
 		// If k is not in the default labels, then the selector field should not contain it.
-		if _, ok := default_labels[k]; !ok {
+		if _, ok := defaultLabels[k]; !ok {
 			t.Errorf("Selector field should not contain key=%s", k)
 		}
 		// If k is in the template labels, then the selector field should contain it with the value from the template labels.
 		// Otherwise, it should contain the value from the default labels.
-		if _, ok := template_labels[k]; ok {
-			if v != template_labels[k] {
-				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, template_labels[k], v)
+		if _, ok := templateLabels[k]; ok {
+			if v != templateLabels[k] {
+				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, templateLabels[k], v)
 			}
 		} else {
-			if v != default_labels[k] {
-				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, default_labels[k], v)
+			if v != defaultLabels[k] {
+				t.Errorf("Selector field should contain key=%s with value=%s, actual value=%s", k, defaultLabels[k], v)
 			}
 		}
 	}
 	// The selector field should have every key from the default labels.
-	for k := range default_labels {
+	for k := range defaultLabels {
 		if _, ok := headService.Spec.Selector[k]; !ok {
 			t.Errorf("Selector field should contain key=%s", k)
 		}
 	}
 
 	// Print default labels for debugging
-	for k, v := range default_labels {
+	for k, v := range defaultLabels {
 		fmt.Printf("default label: key=%s, value=%s\n", k, v)
 	}
 
@@ -427,12 +450,55 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	}
 }
 
+func TestBuildHeadlessServiceForRayCluster(t *testing.T) {
+	svc := BuildHeadlessServiceForRayCluster(*instanceForSvc)
+
+	actualSelector := svc.Spec.Selector[utils.RayClusterLabelKey]
+	expectedSelector := instanceForSvc.Name
+	if !reflect.DeepEqual(expectedSelector, actualSelector) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedSelector, actualSelector)
+	}
+
+	actualSelector = svc.Spec.Selector[utils.RayNodeTypeLabelKey]
+	expectedSelector = string(rayv1.WorkerNode)
+	if !reflect.DeepEqual(expectedSelector, actualSelector) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedSelector, actualSelector)
+	}
+
+	actualLabel := svc.Labels[utils.RayClusterHeadlessServiceLabelKey]
+	expectedLabel := instanceForSvc.Name
+	if !reflect.DeepEqual(expectedLabel, actualLabel) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedLabel, actualLabel)
+	}
+
+	actualType := svc.Spec.Type
+	expectedType := corev1.ServiceTypeClusterIP
+	if !reflect.DeepEqual(expectedType, actualType) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
+	}
+
+	actualClusterIP := svc.Spec.ClusterIP
+	expectedClusterIP := corev1.ClusterIPNone
+	if !reflect.DeepEqual(expectedClusterIP, actualClusterIP) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedClusterIP, actualClusterIP)
+	}
+
+	actualPublishNotReadyAddresses := svc.Spec.PublishNotReadyAddresses
+	expectedPublishNotReadyAddresses := true
+	if !reflect.DeepEqual(expectedClusterIP, actualClusterIP) {
+		t.Fatalf("Expected `%v` but got `%v`", expectedPublishNotReadyAddresses, actualPublishNotReadyAddresses)
+	}
+
+	expectedName := fmt.Sprintf("%s-%s", instanceForSvc.Name, utils.HeadlessServiceSuffix)
+	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
+}
+
 func TestBuildServeServiceForRayService(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceWithWrongSvc.Name)
+	expectedResult := instanceWithWrongSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
@@ -460,17 +526,17 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 }
 
 func TestBuildServeServiceForRayCluster(t *testing.T) {
-	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForServeSvc)
+	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForSvc)
 	assert.Nil(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
-	expectedResult := string(instanceForServeSvc.Name)
+	expectedResult := instanceForSvc.Name
 	if !reflect.DeepEqual(expectedResult, actualResult) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
 	actualLabel := svc.Labels[utils.RayOriginatedFromCRNameLabelKey]
-	expectedLabel := instanceForServeSvc.Name
+	expectedLabel := instanceForSvc.Name
 	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualLabel = svc.Labels[utils.RayOriginatedFromCRDLabelKey]
@@ -478,12 +544,12 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 	assert.Equal(t, expectedLabel, actualLabel)
 
 	actualType := svc.Spec.Type
-	expectedType := instanceForServeSvc.Spec.HeadGroupSpec.ServiceType
+	expectedType := instanceForSvc.Spec.HeadGroupSpec.ServiceType
 	if !reflect.DeepEqual(expectedType, actualType) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedType, actualType)
 	}
 
-	expectedName := fmt.Sprintf("%s-%s-%s", instanceForServeSvc.Name, "serve", "svc")
+	expectedName := fmt.Sprintf("%s-%s-%s", instanceForSvc.Name, "serve", "svc")
 	validateNameAndNamespaceForUserSpecifiedService(svc, serviceInstance.ObjectMeta.Namespace, expectedName, t)
 }
 
@@ -593,7 +659,7 @@ func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType co
 	}
 }
 
-func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, default_namespace string, userName string, t *testing.T) {
+func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, defaultNamespace string, userName string, t *testing.T) {
 	// Test name and namespace are generated if not specified
 	if svc.ObjectMeta.Name == "" {
 		t.Errorf("Generated service name is empty")
@@ -602,8 +668,8 @@ func validateNameAndNamespaceForUserSpecifiedService(svc *corev1.Service, defaul
 		t.Errorf("Generated service namespace is empty")
 	}
 	// The user-provided namespace should be ignored, but the name should be respected
-	if svc.ObjectMeta.Namespace != default_namespace {
-		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", default_namespace, svc.ObjectMeta.Namespace)
+	if svc.ObjectMeta.Namespace != defaultNamespace {
+		t.Errorf("User-provided namespace should be ignored: expected namespace=%s, actual namespace=%s", defaultNamespace, svc.ObjectMeta.Namespace)
 	}
 	if svc.ObjectMeta.Name != userName {
 		t.Errorf("User-provided name should be respected: expected name=%s, actual name=%s", userName, svc.ObjectMeta.Name)

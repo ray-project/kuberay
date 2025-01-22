@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func TestCreatePodGroup(t *testing.T) {
@@ -69,9 +70,9 @@ func TestCreatePodGroup(t *testing.T) {
 					Template: corev1.PodTemplateSpec{
 						Spec: workerSpec,
 					},
-					Replicas:    pointer.Int32(2),
-					MinReplicas: pointer.Int32(1),
-					MaxReplicas: pointer.Int32(4),
+					Replicas:    ptr.To[int32](2),
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](4),
 				},
 			},
 		},

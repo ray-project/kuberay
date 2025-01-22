@@ -12,17 +12,19 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/go-logr/logr"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	volcanov1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
 
-	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 const (
@@ -49,7 +51,7 @@ func (v *VolcanoBatchScheduler) Name() string {
 func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
 	var minMember int32
 	var totalResource corev1.ResourceList
-	if app.Spec.EnableInTreeAutoscaling == nil || !*app.Spec.EnableInTreeAutoscaling {
+	if !utils.IsAutoscalingEnabled(app) {
 		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
 		totalResource = utils.CalculateDesiredResources(app)
 	} else {
@@ -57,10 +59,7 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 		totalResource = utils.CalculateMinResources(app)
 	}
 
-	if err := v.syncPodGroup(app, minMember, totalResource); err != nil {
-		return err
-	}
-	return nil
+	return v.syncPodGroup(app, minMember, totalResource)
 }
 
 func getAppPodGroupName(app *rayv1.RayCluster) string {
@@ -135,7 +134,7 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
@@ -150,12 +149,12 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(app *rayv1.RayCluster, groupNam
 func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinterface.BatchScheduler, error) {
 	vkClient, err := volcanoclient.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize volcano client with error %v", err)
+		return nil, fmt.Errorf("failed to initialize volcano client with error %w", err)
 	}
 
 	extClient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize k8s extension client with error %v", err)
+		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
 	}
 
 	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
@@ -168,7 +167,7 @@ func (vf *VolcanoBatchSchedulerFactory) New(config *rest.Config) (schedulerinter
 			PodGroupName,
 			metav1.GetOptions{},
 		); err != nil {
-			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %s", err)
+			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
 		}
 	}
 	return &VolcanoBatchScheduler{

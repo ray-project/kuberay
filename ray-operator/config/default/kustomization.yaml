@@ -1,5 +1,5 @@
 # Adds namespace to all resources.
-namespace: ray-system
+namespace: default
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
@@ -12,11 +12,6 @@ namespace: ray-system
 #commonLabels:
 #  someName: someValue
 
-bases:
-- ../crd
-- ../rbac
-- ../manager
-- namespace.yaml
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
 
@@ -24,4 +19,9 @@ images:
 - name: kuberay/operator
   newName: quay.io/kuberay/operator
   newTag: nightly
-
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../crd
+- ../rbac
+- ../manager

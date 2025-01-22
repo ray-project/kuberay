@@ -2,10 +2,10 @@ package ray
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,10 +13,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
-func TestCreateK8sJobIfNeed(t *testing.T) {
+func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
@@ -147,28 +155,29 @@ func TestGetSubmitterTemplate(t *testing.T) {
 		},
 	}
 
-	r := &RayJobReconciler{}
 	ctx := context.Background()
 
 	// Test 1: User provided template with command
-	submitterTemplate, err := r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"ray", "job", "submit", "--address", "http://test-url", "--submission-id", "test-job-id", "--", "echo", "hello", "world"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	assert.NoError(t, err)
 
 	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
@@ -176,7 +185,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.Equal(t, "1", envVar.Value)
 
 	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
-	submitterTemplate, err = r.getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	assert.NoError(t, err)
 
 	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
@@ -193,8 +202,8 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	tests := map[string]struct {
-		suspend              bool
 		status               rayv1.JobDeploymentStatus
+		suspend              bool
 		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
@@ -232,20 +241,8 @@ func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 				},
 			}
 
-			// Initialize a fake client with newScheme and runtimeObjects.
-			fakeClient := clientFake.NewClientBuilder().
-				WithScheme(newScheme).
-				WithRuntimeObjects(rayJob).
-				WithStatusSubresource(rayJob).Build()
 			ctx := context.Background()
-
-			// Initialize a new RayClusterReconciler.
-			testRayJobReconciler := &RayJobReconciler{
-				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
-				Scheme:   newScheme,
-			}
-			shouldUpdate := testRayJobReconciler.updateStatusToSuspendingIfNeeded(ctx, rayJob)
+			shouldUpdate := updateStatusToSuspendingIfNeeded(ctx, rayJob)
 			assert.Equal(t, tc.expectedShouldUpdate, shouldUpdate)
 
 			if tc.expectedShouldUpdate {
@@ -325,7 +322,7 @@ func TestUpdateRayJobStatus(t *testing.T) {
 
 func TestValidateRayJobSpec(t *testing.T) {
 	err := validateRayJobSpec(&rayv1.RayJob{})
-	assert.Error(t, err, "The RayJob is invalid because both `RayClusterSpec` and `ClusterSelector` are empty")
+	assert.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -333,7 +330,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			ShutdownAfterJobFinishes: false,
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended.")
+	assert.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -342,22 +339,296 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.NoError(t, err, "The RayJob is valid.")
+	assert.NoError(t, err)
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Suspend: true,
+			Suspend:                  true,
+			ShutdownAfterJobFinishes: true,
 			ClusterSelector: map[string]string{
 				"key": "value",
 			},
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
 
 	err = validateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
+			RayClusterSpec: &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
+	assert.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			BackoffLimit:   ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+
+	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:  ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			ClusterSelector: map[string]string{"key": "value"},
+		},
+	})
+	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To[bool](true),
+			},
+		},
+	})
+	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           nil,
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.NoError(t, err)
+
+	err = validateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
+			ShutdownAfterJobFinishes: true,
+			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		},
+	})
+	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+}
+
+func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+	}
+
+	submitterTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-submit-pod",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "ray-submit",
+					Image: "rayproject/ray:latest",
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+			return errors.New("random")
+		},
+	}).WithScheme(scheme.Scheme).Build()
+
+	recorder := record.NewFakeRecorder(100)
+
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: recorder,
+		Scheme:   scheme.Scheme,
+	}
+
+	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
+
+	assert.NotNil(t, err, "Expected error due to simulated job creation failure")
+
+	var foundFailureEvent bool
+	events := []string{}
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "Failed to create new Kubernetes Job") {
+			foundFailureEvent = true
+			break
+		}
+		events = append(events, event)
+	}
+
+	assert.Truef(t, foundFailureEvent, "Expected event to be generated for job creation failure, got events: %s", strings.Join(events, "\n"))
+}
+
+func TestFailedCreateRayClusterEvent(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
+			return errors.New("random")
+		},
+	}).WithScheme(scheme.Scheme).Build()
+
+	recorder := record.NewFakeRecorder(100)
+
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: recorder,
+		Scheme:   scheme.Scheme,
+	}
+
+	_, err := reconciler.getOrCreateRayClusterInstance(context.Background(), rayJob)
+
+	assert.NotNil(t, err, "Expected error due to cluster creation failure")
+
+	var foundFailureEvent bool
+	events := []string{}
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "Failed to create RayCluster") {
+			foundFailureEvent = true
+			break
+		}
+		events = append(events, event)
+	}
+
+	assert.Truef(t, foundFailureEvent, "Expected event to be generated for cluster creation failure, got events: %s", strings.Join(events, "\n"))
+}
+
+func TestFailedDeleteRayJobSubmitterEvent(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(newScheme)
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+	}
+	submitter := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+			return errors.New("random")
+		},
+	}).WithScheme(newScheme).WithRuntimeObjects(submitter).Build()
+
+	recorder := record.NewFakeRecorder(100)
+
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: recorder,
+		Scheme:   scheme.Scheme,
+	}
+
+	_, err := reconciler.deleteSubmitterJob(context.Background(), rayJob)
+
+	assert.NotNil(t, err, "Expected error due to job deletion failure")
+
+	var foundFailureEvent bool
+	events := []string{}
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "Failed to delete submitter K8s Job") {
+			foundFailureEvent = true
+			break
+		}
+		events = append(events, event)
+	}
+
+	assert.Truef(t, foundFailureEvent, "Expected event to be generated for cluster deletion failure, got events: %s", strings.Join(events, "\n"))
+}
+
+func TestFailedDeleteRayClusterEvent(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+	}
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Status: rayv1.RayJobStatus{
+			RayClusterName: "test-raycluster",
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+			return errors.New("random")
+		},
+	}).WithScheme(newScheme).WithRuntimeObjects(rayCluster).Build()
+
+	recorder := record.NewFakeRecorder(100)
+
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: recorder,
+		Scheme:   scheme.Scheme,
+	}
+
+	_, err := reconciler.deleteClusterResources(context.Background(), rayJob)
+
+	assert.NotNil(t, err, "Expected error due to cluster deletion failure")
+
+	var foundFailureEvent bool
+	events := []string{}
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "Failed to delete cluster") {
+			foundFailureEvent = true
+			break
+		}
+		events = append(events, event)
+	}
+
+	assert.Truef(t, foundFailureEvent, "Expected event to be generated for cluster deletion failure, got events: %s", strings.Join(events, "\n"))
 }

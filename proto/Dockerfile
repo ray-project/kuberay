@@ -1,5 +1,5 @@
 # Generate client code (go & json) from API protocol buffers
-FROM registry.access.redhat.com/ubi9/go-toolset:1.20.10 as generator
+FROM golang:1.22.4-bullseye as generator
 
 ENV PROTOC_VERSION 3.17.3
 ENV GOLANG_PROTOBUF_VERSION v1.5.2

@@ -34,7 +34,7 @@ __install prerequisites__
 `pip install coverage`
 
 __To gather data__
-`python -m coverage run -m unittest`  
+`python -m coverage run -m unittest`
 
 __to generate a coverage report__
 `python -m coverage report`

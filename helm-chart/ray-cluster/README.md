@@ -10,7 +10,7 @@ See [kuberay-operator/README.md](https://github.com/ray-project/kuberay/blob/mas
 ## End-to-end example
 
 ```sh
-# Step 1: Create a KinD cluster 
+# Step 1: Create a KinD cluster
 kind create cluster
 
 # Step 2: Register a Helm chart repo
@@ -26,7 +26,7 @@ helm install raycluster kuberay/ray-cluster --version 1.1.0
 # See here for all available arm64 images: https://hub.docker.com/r/rayproject/ray/tags?page=1&name=aarch64
 helm install raycluster kuberay/ray-cluster --version 1.1.0 --set image.tag=nightly-aarch64
 
-# Step 5: Verify the installation of KubeRay operator and RayCluster 
+# Step 5: Verify the installation of KubeRay operator and RayCluster
 kubectl get pods
 # NAME                                          READY   STATUS    RESTARTS   AGE
 # kuberay-operator-6fcbb94f64-gkpc9             1/1     Running   0          89s

@@ -114,7 +114,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
         "environment": {
            "values": {
              "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-           } 
+           }
         },
         "volumes": [
           {
@@ -131,7 +131,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
       }
     ]
   }
-}'  
+}'
 ```
 
 Note that computeTemplate here has to be created using this [command](test/cluster//template/simple)
@@ -140,7 +140,7 @@ Lets discuss the important pieces here:
 You need to specify annotation, that tells Ray that this is cluster with GCS fault tolerance
 
 ```sh
-ray.io/ft-enabled: "true" 
+ray.io/ft-enabled: "true"
 ```
 
 For the `headGroupSpec` you need the following. In the `rayStartParams` you need to add information about Redis
@@ -177,7 +177,7 @@ environment variable:
         "environment": {
            "values": {
              "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-           } 
+           }
         },
 ```
 

@@ -22,8 +22,3 @@ func Job(t Test, namespace, name string) func(g gomega.Gomega) *batchv1.Job {
 		return job
 	}
 }
-
-func GetJob(t Test, namespace, name string) *batchv1.Job {
-	t.T().Helper()
-	return Job(t, namespace, name)(t)
-}

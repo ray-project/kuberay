@@ -18,14 +18,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.20
+### Use go v1.22
 
-Currently, KubeRay uses go v1.20 for development.
+Currently, KubeRay uses go v1.22 for development.
 
 ```bash
-go install golang.org/dl/go1.20.11@latest
-go1.20.11 download
-export GOROOT=$(go1.20.11 env GOROOT)
+go install golang.org/dl/go1.22.4@latest
+go1.22.4 download
+export GOROOT=$(go1.22.4 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -59,12 +59,15 @@ make clean
 
 ### End-to-end local development process on Kind
 
+#### Run the operator inside the cluster
+
 ```bash
 # Step 1: Create a Kind cluster
 kind create cluster --image=kindest/node:v1.24.0
 
 # Step 2: Modify KubeRay source code
-# For example, add a log "Hello KubeRay" in the function `Reconcile` in `raycluster_controller.go`.
+# For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
+
 
 # Step 3: Build an image
 #         This command will copy the source code directory into the image, and build it.
@@ -89,13 +92,31 @@ helm install kuberay-operator --set image.repository=kuberay/operator --set imag
 
 # Step 7: Check the log of KubeRay operator
 kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
-# 2022-12-09T04:41:59.946Z        INFO    controllers.RayCluster  Hello KubeRay
+# {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
 # ...
 ```
 
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
 * The command `make docker-build` (Step 3) will also run `make test` (unit tests).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
+
+#### Run the operator outside the cluster
+
+> Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
+
+```bash
+# Step 1: Create a Kind cluster
+kind create cluster --image=kindest/node:v1.24.0
+
+# Step 2: Install CRDs
+make -C ray-operator install
+
+# Step 3: Compile the source code
+make -C ray-operator build
+
+# Step 4: Run the KubeRay operator
+./ray-operator/bin/manager -leader-election-namespace default -use-kubernetes-proxy
+```
 
 ### Running the tests
 
@@ -180,43 +201,14 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 > Note: remember to replace with your own image
 
+## pre-commit hooks
+
+1. Install [golangci-lint](https://github.com/golangci/golangci-lint/releases).
+2. Install [kubeconform](https://github.com/yannh/kubeconform/releases).
+3. Install [pre-commit](https://pre-commit.com/).
+4. Run `pre-commit install` to install the pre-commit hooks.
+
 ## CI/CD
-
-### Linting
-
-KubeRay uses the gofumpt linter.
-
-Download gofumpt version **0.5.0**. At the time of writing, v0.5.0 is the latest version compatible with go1.20. Run this command to download it:
-
-```bash
-go install mvdan.cc/gofumpt@v0.5.0
-```
-
-As a backup, [here’s the link to the source](https://github.com/mvdan/gofumpt/releases/tag/v0.2.1) (if you installed gofumpt with `go install`, you don’t need this).
-
-Check that the `gofumpt` version is 0.5.0:
-
-```bash
-gofumpt --version
-# v0.5.0 (go1.19)
-```
-
-Make sure your `go` version is still 1.20:
-
-```bash
-go version
-# go version go1.20 darwin/amd64
-```
-
-If your `go` version isn’t 1.20 any more, you may have installed a different `gofumpt` version (e.g. by downloading with Homebrew). If you accidentally installed `gofumpt` using Homebrew, run `brew uninstall gofumpt` and then `brew uninstall go`. Then check `brew install go@1.20`. It should be back to 1.20.x.
-
-Whenever you edit KubeRay code, run the `gofumpt` linter inside the KubeRay directory:
-
-```bash
-gofumpt -w .
-```
-
-The `-w` flag will overwrite any unformatted code.
 
 ### Helm chart linter
 

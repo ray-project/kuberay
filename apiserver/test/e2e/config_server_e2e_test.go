@@ -207,14 +207,14 @@ func TestGetAllComputeTemplates(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.ComputeTemplates, "A list of compute templates is required")
-	found_name := false
+	foundName := false
 	for _, template := range response.ComputeTemplates {
 		if tCtx.GetComputeTemplateName() == template.Name && tCtx.GetNamespaceName() == template.Namespace {
-			found_name = true
+			foundName = true
 			break
 		}
 	}
-	require.Equal(t, found_name, true)
+	require.Equal(t, foundName, true)
 }
 
 // TestGetTemplatesInNamespace get all compute templates in namespace endpoint
@@ -236,14 +236,14 @@ func TestGetTemplatesInNamespace(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.ComputeTemplates, "A list of compute templates is required")
-	found_name := false
+	foundName := false
 	for _, template := range response.ComputeTemplates {
 		if tCtx.GetComputeTemplateName() == template.Name && tCtx.GetNamespaceName() == template.Namespace {
-			found_name = true
+			foundName = true
 			break
 		}
 	}
-	require.Equal(t, found_name, true)
+	require.Equal(t, foundName, true)
 }
 
 // TestDeleteTemplate sequentially iterates over the delete compute template endpoint

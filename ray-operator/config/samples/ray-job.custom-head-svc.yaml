@@ -16,7 +16,7 @@ spec:
       - requests==2.26.0
       - pendulum==2.1.2
     env_vars:
-      counter_name: "test_counter"  
+      counter_name: "test_counter"
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
@@ -76,10 +76,6 @@ spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
                 image: rayproject/ray:2.9.0
-                lifecycle:
-                  preStop:
-                    exec:
-                      command: [ "/bin/sh","-c","ray stop" ]
                 resources:
                   limits:
                     cpu: "1"

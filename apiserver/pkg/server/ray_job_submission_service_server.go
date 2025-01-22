@@ -12,12 +12,13 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zerologr"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type RayJobSubmissionServiceServerOptions struct {
@@ -38,7 +39,7 @@ type RayJobSubmissionServiceServer struct {
 // Create RayJobSubmissionServiceServer
 func NewRayJobSubmissionServiceServer(clusterServer *ClusterServer, options *RayJobSubmissionServiceServerOptions) *RayJobSubmissionServiceServer {
 	zl := zerolog.New(os.Stdout).Level(zerolog.DebugLevel)
-	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClient}
+	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClientFunc(nil, false)}
 }
 
 // Submit Ray job
@@ -50,7 +51,10 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	request := &utils.RayJobRequest{Entrypoint: req.Jobsubmission.Entrypoint}
 	if req.Jobsubmission.SubmissionId != "" {
 		request.SubmissionId = req.Jobsubmission.SubmissionId
@@ -102,7 +106,10 @@ func (s *RayJobSubmissionServiceServer) GetJobDetails(ctx context.Context, req *
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	nodeInfo, err := rayDashboardClient.GetJobInfo(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
@@ -122,7 +129,10 @@ func (s *RayJobSubmissionServiceServer) GetJobLog(ctx context.Context, req *api.
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	jlog, err := rayDashboardClient.GetJobLog(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
@@ -142,7 +152,10 @@ func (s *RayJobSubmissionServiceServer) ListJobDetails(ctx context.Context, req 
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	nodesInfo, err := rayDashboardClient.ListJobs(ctx)
 	if err != nil {
 		return nil, err
@@ -163,7 +176,10 @@ func (s *RayJobSubmissionServiceServer) StopRayJob(ctx context.Context, req *api
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	err = rayDashboardClient.StopJob(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
@@ -180,7 +196,10 @@ func (s *RayJobSubmissionServiceServer) DeleteRayJob(ctx context.Context, req *a
 		return nil, err
 	}
 	rayDashboardClient := s.dashboardClientFunc()
-	rayDashboardClient.InitClient(*url)
+	// TODO: support proxy subresources in kuberay-apiserver
+	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
+		return nil, err
+	}
 	err = rayDashboardClient.DeleteJob(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err

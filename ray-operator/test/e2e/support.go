@@ -2,9 +2,9 @@ package e2e
 
 import (
 	"embed"
+	"strings"
 
-	"github.com/onsi/gomega"
-
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -19,7 +19,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 	return file
 }
 
@@ -41,8 +41,8 @@ func options[T any](options ...option[T]) option[T] {
 	}
 }
 
-func newConfigMap(namespace, name string, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
-	cmAC := corev1ac.ConfigMap(name, namespace).
+func newConfigMap(namespace string, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
+	cmAC := corev1ac.ConfigMap("jobs", namespace).
 		WithBinaryData(map[string][]byte{}).
 		WithImmutable(true)
 
@@ -126,13 +126,10 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithImage(GetRayImage()).
 				WithPorts(
 					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
 					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
 					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
 				).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),
@@ -150,10 +147,6 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 			WithContainers(corev1ac.Container().
 				WithName("ray-worker").
 				WithImage(GetRayImage()).
-				WithLifecycle(corev1ac.Lifecycle().
-					WithPreStop(corev1ac.LifecycleHandler().
-						WithExec(corev1ac.ExecAction().
-							WithCommand("/bin/sh", "-c", "ray stop")))).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),
@@ -181,4 +174,41 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
+}
+
+func deployRedis(t Test, namespace string, password string) func() string {
+	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
+		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
+	dbSizeCmd := []string{"redis-cli", "--no-auth-warning", "DBSIZE"}
+	if password != "" {
+		redisContainer.WithCommand("redis-server", "--requirepass", password)
+		dbSizeCmd = []string{"redis-cli", "--no-auth-warning", "-a", password, "DBSIZE"}
+	}
+
+	pod, err := t.Client().Core().CoreV1().Pods(namespace).Apply(
+		t.Ctx(),
+		corev1ac.Pod("redis", namespace).
+			WithLabels(map[string]string{"app": "redis"}).
+			WithSpec(corev1ac.PodSpec().WithContainers(redisContainer)),
+		TestApplyOptions,
+	)
+	assert.NoError(t.T(), err)
+
+	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
+		t.Ctx(),
+		corev1ac.Service("redis", namespace).
+			WithSpec(corev1ac.ServiceSpec().
+				WithSelector(map[string]string{"app": "redis"}).
+				WithPorts(corev1ac.ServicePort().
+					WithPort(6379),
+				),
+			),
+		TestApplyOptions,
+	)
+	assert.NoError(t.T(), err)
+
+	return func() string {
+		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)
+		return strings.TrimSpace(stdout.String() + stderr.String())
+	}
 }

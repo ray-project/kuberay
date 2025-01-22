@@ -9,117 +9,35 @@ on:
 
 jobs:
   lint:
-    name: Lint
-    runs-on: ubuntu-latest
+    name: Lint (pre-commit)
+    runs-on: ubuntu-22.04
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        # Use the same go version with build job
-        go-version: v1.20
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
+          mv ./bin/golangci-lint /usr/local/bin/golangci-lint
+        shell: bash
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-      with:
-        # When checking out the repository that
-        # triggered a workflow, this defaults to the reference or SHA for that event.
-        # Default value should work for both pull_request and merge(push) event.
-        ref: ${{github.event.pull_request.head.sha}}
+      - name: Install kubeconform
+        run: |
+          curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
+          tar -xzf kubeconform.tar.gz
+          mv kubeconform /usr/local/bin/
 
-    - name: Install goimports and gofumpt
-      run: |
-        go install golang.org/x/tools/cmd/goimports@latest
-        go install mvdan.cc/gofumpt@v0.3.1
-
-    - name: Run gofmt
-      uses: Jerome1337/gofmt-action@v1.0.4
-      with:
-        gofmt-path: 'apiserver cli ray-operator'
-        gofmt-flags: '-l -d -s'
-
-    - name: Run linter against ray operator
-      uses: golangci/golangci-lint-action@v2
-      with:
-          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v1.54.1
-
-          # Optional: working directory, useful for monorepos
-          working-directory: ./ray-operator
-
-          # Optional: golangci-lint command line arguments.
-          # args: --issues-exit-code=0
-          args: --timeout=3m
-
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
-          # only-new-issues: true
-
-          # Optional: if set to true then the action will use pre-installed Go.
-          skip-go-installation: true
-
-          # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          skip-pkg-cache: true
-
-          # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
-          # skip-build-cache: true
-
-    - name: Run linter against apiserver
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.54.1
-        working-directory: ./apiserver
-        args: --timeout=3m --exclude='SA1019'
-        skip-go-installation: true
-        skip-pkg-cache: true
-
-    - name: Run linter against security proxy
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.54.1
-        working-directory: ./experimental
-        args: --timeout=3m
-        skip-go-installation: true
-        skip-pkg-cache: true
-
-    - name: Run linter against cli
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.54.1
-        working-directory: ./cli
-        args: --timeout=3m
-        skip-go-installation: true
-        skip-pkg-cache: true
-
-    - name: Run goimports
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/goimports -l apiserver/ cli/ $(find ./ray-operator -name "*.go" | grep -v zz_generated.deepcopy.go) | tee goimports.out)" || { cat goimports.out && exit 1; }
-
-    - name: Open this to see how to fix goimports if it fails
-      run: |
-        echo "Run command 'goimports -w apiserver/ cli/ $(find ./ray-operator -name "*.go" | grep -v zz_generated.deepcopy.go)' to correct your code format."
-        echo "Proposed format changes:"
-        $(go env GOPATH)/bin/goimports -d apiserver/ cli/ $(find ./ray-operator -name "*.go" | grep -v zz_generated.deepcopy.go)
-      if: failure()
-
-    - name: Run gofumpt
-      run: test -z "$(set -o pipefail && $(go env GOPATH)/bin/gofumpt -l apiserver/ ray-operator/ cli/ | tee gofumpt.out)" || { cat gofumpt.out && exit 1; }
-
-    - name: Open this to see how to fix gofumpt if it fails
-      run: |
-        echo "Run command 'gofumpt -w apiserver/ ray-operator/ cli/' to correct your code format."
-        echo "Proposed format changes:"
-        $(go env GOPATH)/bin/gofumpt -d apiserver/ ray-operator/ cli/
-      if: failure()
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - uses: pre-commit/action@v3.0.1
 
   build_apiserver:
     env:
       working-directory: ./apiserver
-      cli-working-directory: ./cli
-    name: Build Apiserver, CLI Binaries and Docker Images
-    runs-on: ubuntu-latest
+    name: Build Apiserver and Docker Images
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -165,7 +83,7 @@ jobs:
           docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
 
       - name: Upload Artifact Apiserver
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: apiserver_img
           path: /tmp/apiserver.tar
@@ -186,21 +104,17 @@ jobs:
           docker push quay.io/kuberay/apiserver:nightly
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Build CLI
-        run: go build -o kuberay -a main.go
-        working-directory: ${{env.cli-working-directory}}
-
   build_security_proxy:
     env:
       working-directory: ./experimental
     name: Build security proxy Binaries and Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -243,7 +157,7 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Upload security proxy artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: security-proxy_img
           path: /tmp/security-proxy.tar
@@ -268,13 +182,13 @@ jobs:
     env:
       working-directory: ./ray-operator
     name: Build Operator Binaries and Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
 
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: v1.20
+        go-version: v1.22
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -321,7 +235,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Upload Artifact Operator
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: operator_img
         path: /tmp/operator.tar
@@ -374,12 +288,43 @@ jobs:
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
       if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
+  build_kubectl-plugin:
+    env:
+      working-directory: ./kubectl-plugin
+    name: Build Ray Kubectl plugin
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: v1.22
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          # When checking out the repository that
+          # triggered a workflow, this defaults to the reference or SHA for that event.
+          # Default value should work for both pull_request and merge(push) event.
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - name: Get dependencies
+        run: go mod download
+        working-directory: ${{env.working-directory}}
+
+      - name: Build CLI
+        run: go build -o kubectl-ray -a ./cmd/kubectl-ray.go
+        working-directory: ${{env.working-directory}}
+
+      - name: Test
+        run: go test ./pkg/... -race -parallel 4
+        working-directory: ${{env.working-directory}}
+
   test-compatibility-2_7_0:
     needs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.7.0
     steps:
       - name: Check out code into the Go module directory
@@ -399,7 +344,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.8.0
     steps:
       - name: Check out code into the Go module directory
@@ -419,7 +364,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - 2.9.0
     steps:
       - name: Check out code into the Go module directory
@@ -439,7 +384,7 @@ jobs:
       - build_operator
       - build_apiserver
       - lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Compatibility Test - Nightly
     steps:
       - name: Check out code into the Go module directory
@@ -455,7 +400,7 @@ jobs:
           ray_version: nightly
 
   python-client-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Python Client Test
     steps:
       - name: Set up Docker

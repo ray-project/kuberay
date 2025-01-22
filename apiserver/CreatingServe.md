@@ -88,7 +88,7 @@ kubectl get service
 that should return the following:
 
 ```shell
-test-cluster-head-svc    ClusterIP   10.96.19.185    <none>        8265/TCP,52365/TCP,10001/TCP,8080/TCP,6379/TCP,8000/TCP 
+test-cluster-head-svc    ClusterIP   10.96.19.185    <none>        8265/TCP,52365/TCP,10001/TCP,8080/TCP,6379/TCP,8000/TCP
 test-cluster-serve-svc   ClusterIP   10.96.144.162   <none>        8000/TCP
 ```
 

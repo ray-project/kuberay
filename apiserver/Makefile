@@ -4,19 +4,19 @@ REPO_ROOT	    := $(shell dirname ${PWD})
 REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
-IMG_REPO ?= kuberay/apiserver
+IMG_REPO ?= quay.io/kuberay/apiserver
 IMG_TAG ?=latest
 IMG ?= $(IMG_REPO):$(IMG_TAG)
 
 # Allow for additional test flags (-v, etc)
-GO_TEST_FLAGS ?= 
+GO_TEST_FLAGS ?=
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64,$(shell go env GOARCH))
 E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.9.0-py310-aarch64
-else 
+else
 E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.9.0-py310
-endif 
+endif
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?=http://localhost:31888
 
@@ -70,12 +70,12 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 
 .PHONY: imports
 imports: goimports ## Run goimports against code.
-	$(GOIMPORTS) -l -w .	
+	$(GOIMPORTS) -l -w .
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
-	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019'
+	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019' --no-config
 
 build: fmt vet fumpt imports lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -96,7 +96,7 @@ test: fmt vet fumpt imports lint  ## Run all unit tests.
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
-	
+
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
 local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
 
@@ -119,15 +119,15 @@ load-image: ## Load the api server image to the kind cluster created with create
 
 .PHONY: operator-image
 operator-image: ## Build the operator image to be loaded in your kind cluster.
-	cd ../ray-operator && $(MAKE) docker-image -e IMG=kuberay/operator:$(OPERATOR_IMAGE_TAG)
+	cd ../ray-operator && $(MAKE) docker-image -e IMG=quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
 .PHONY: security-proxy-image
 security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
+	cd ../experimental && $(MAKE) docker-image -e IMG=quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
-deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config. 
-# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
+deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
+# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
 # If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
 	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
@@ -139,17 +139,17 @@ undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified 
 .PHONY: load-operator-image
 load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
 ifneq (${OPERATOR_IMAGE_TAG}, latest)
-	$(ENGINE) pull kuberay/operator:$(OPERATOR_IMAGE_TAG)
-endif	
-	$(KIND) load docker-image kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(ENGINE) pull quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
+endif
+	$(KIND) load docker-image quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
 ifneq (${SECURITY_IMAGE_TAG}, latest)
 	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
-endif	
+endif
 	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
-	
+
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
@@ -184,8 +184,8 @@ uninstall-secure: ## Remove the kuberay api server with security server from the
 	$(KUSTOMIZE) build deploy/local/secure | kubectl delete -f -
 
 .PHONY: deploy
-deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config. 
-# Note that you should make your KubeRay APIServer image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. 
+deploy: ## Deploy via helm the kuberay api server to the K8s cluster specified in ~/.kube/config.
+# Note that you should make your KubeRay APIServer image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
 # If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait \
 	--set image.repository=${IMG_REPO},image.tag=${IMG_TAG} --set image.pullPolicy=IfNotPresent
@@ -210,7 +210,7 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
+KUSTOMIZE_VERSION ?= v5.4.3
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.54.1
@@ -227,10 +227,10 @@ $(KUSTOMIZE): $(REPO_ROOT_BIN)
 goimports: $(GOIMPORTS) ## Download goimports locally if necessary
 $(GOIMPORTS): $(REPO_ROOT_BIN)
 	test -s $(GOIMPORTS) || GOBIN=$(REPO_ROOT_BIN) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
-	
+
 .PHONY: gofumpt
 gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
-$(GOFUMPT): $(REPO_ROOT_BIN)	
+$(GOFUMPT): $(REPO_ROOT_BIN)
 	test -s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
 .PHONY: golangci-lint
@@ -240,7 +240,7 @@ $(GOLANGCI_LINT): $(REPO_ROOT_BIN)
 
 .PHONY: kind
 kind: $(KIND) ## Download kind locally if necessary.
-$(KIND): $(REPO_ROOT_BIN)	
+$(KIND): $(REPO_ROOT_BIN)
 	test -s $(KIND) || GOBIN=$(REPO_ROOT_BIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
 
 .PHONY: go-bindata

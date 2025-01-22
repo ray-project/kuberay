@@ -43,41 +43,41 @@ const (
 
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
+	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	// Metadata is data to store along with this job.
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// RayClusterSpec is the cluster template to run the job
+	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
+	// ClusterSelector is used to select running rayclusters by labels
+	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Entrypoint string `json:"entrypoint"`
-	// Metadata is data to store along with this job.
-	Metadata map[string]string `json:"metadata,omitempty"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.
 	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
-	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
-	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources string `json:"entrypointResources,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	// +kubebuilder:default:=0
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
-	// RayClusterSpec is the cluster template to run the job
-	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
-	// clusterSelector is used to select running rayclusters by labels
-	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
-	// suspend specifies whether the RayJob controller should create a RayCluster instance
+	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
+	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
+	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
+	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
+	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// Suspend specifies whether the RayJob controller should create a RayCluster instance
 	// If a job is applied with the suspend field set to true,
 	// the RayCluster will not be created and will wait for the transition to false.
 	// If the RayCluster is already created, it will be deleted.
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
-	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
-	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
-	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
-	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
-	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
-	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
-	// EntrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
-	EntrypointResources string `json:"entrypointResources,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob

@@ -9,7 +9,7 @@ on:
 
 jobs:
   lint-test-helm-3-4:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -35,7 +35,7 @@ jobs:
         run: ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 
   lint-test-helm-3-9:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3

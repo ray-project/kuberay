@@ -1,12 +1,22 @@
 package support
 
 import (
+	"bytes"
+	"fmt"
 	"io"
+	"net/http"
+	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 )
 
 func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func(g gomega.Gomega) []corev1.Pod {
@@ -14,7 +24,7 @@ func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func
 		listOptions := &metav1.ListOptions{}
 
 		for _, option := range options {
-			t.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
+			g.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
 		}
 
 		pods, err := t.Client().Core().CoreV1().Pods(namespace).List(t.Ctx(), *listOptions)
@@ -27,7 +37,7 @@ func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
 	pods, err := t.Client().Core().CoreV1().Pods(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
@@ -46,15 +56,114 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 		t.T().Logf("Error getting logs from container %s/%s/%s", namespace.Name, podName, containerName)
 		return
 	}
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	defer func() {
-		t.Expect(stream.Close()).To(gomega.Succeed())
+		assert.NoError(t.T(), stream.Close())
 	}()
 
 	bytes, err := io.ReadAll(stream)
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	containerLogFileName := "pod-" + podName + "-" + containerName
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
+}
+
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer) {
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: containerName,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, clientgoscheme.ParameterCodec)
+
+	t.T().Logf("Executing command: %s", cmd)
+	cfg := t.Client().Config()
+	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
+	assert.NoError(t.T(), err)
+	// Capture the output streams
+	var stdout, stderr bytes.Buffer
+	// Execute the command in the pod
+	err = exec.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+	t.T().Logf("Command stdout: %s", stdout.String())
+	t.T().Logf("Command stderr: %s", stderr.String())
+	assert.NoError(t.T(), err)
+	return stdout, stderr
+}
+
+func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {
+	cfg := t.Client().Config()
+
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward")
+
+	transport, upgrader, err := spdy.RoundTripperFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{}, 1)
+	out := new(strings.Builder)
+	errOut := new(strings.Builder)
+
+	// create port forward
+	forwarder, err := portforward.New(
+		spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, req.URL()),
+		[]string{fmt.Sprintf("%d:%d", localPort, remotePort)},
+		stopChan,
+		readyChan,
+		out,
+		errOut,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// launch Port Forward
+	go func() {
+		defer GinkgoRecover()
+		err := forwarder.ForwardPorts()
+		assert.NoError(t.T(), err)
+	}()
+	<-readyChan // wait for port forward to finish
+
+	return stopChan, nil
+}
+
+func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
+	// Define the podSpec spec
+	podSpec := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    containerName,
+					Image:   "rancher/curl",
+					Command: []string{"/bin/sh", "-c", "tail -f /dev/null"},
+				},
+			},
+		},
+	}
+	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
 }

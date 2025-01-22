@@ -10,7 +10,7 @@
 			"path": "apiserver"
 		},
 		{
-			"path": "cli"
+			"path": "kubectl-plugin"
 		},
 		{
 			"path": "proto"

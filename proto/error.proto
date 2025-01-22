@@ -12,4 +12,3 @@ message Status {
   int32 code = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   repeated google.protobuf.Any details = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
-

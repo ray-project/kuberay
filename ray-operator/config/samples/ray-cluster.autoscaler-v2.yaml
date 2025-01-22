@@ -41,10 +41,6 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh","-c","ray stop"]
           resources:
             limits:
               cpu: "1"

@@ -10,7 +10,7 @@ on:
 jobs:
   # Check consistency between types.go and generated API.
   ray-operator-verify-codegen:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -37,7 +37,7 @@ jobs:
 
   # Check consistency between types.go and generated API reference.
   ray-operator-verify-api-docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
@@ -48,7 +48,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Check golang version
         working-directory: ./ray-operator
@@ -61,7 +61,7 @@ jobs:
   # 1. Check consistency between types.go and CRD YAML files.
   # 2. Check consistency between kubebuilder markers and RBAC.
   ray-operator-verify-crd-rbac:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
@@ -72,7 +72,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           # Use the same go version with build job
-          go-version: v1.20
+          go-version: v1.22
 
       - name: Update CRD/RBAC YAML files
         working-directory: ./ray-operator
@@ -96,7 +96,7 @@ jobs:
   # and in helm-chart/kuberay-operator/crds
   helm-chart-verify-crd:
     needs: ray-operator-verify-crd-rbac
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2
@@ -125,7 +125,7 @@ jobs:
   # and in helm-chart/kuberay-operator/templates
   helm-chart-verify-rbac:
     needs: ray-operator-verify-crd-rbac
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v2

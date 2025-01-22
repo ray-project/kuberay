@@ -77,7 +77,7 @@ spec:
     #  workersToDelete:
     #  - raycluster-complete-worker-large-group-bdtwh
     #  - raycluster-complete-worker-large-group-hv457
-    #  - raycluster-complete-worker-large-group-k8tj7 
+    #  - raycluster-complete-worker-large-group-k8tj7
     # the following params are used to complete the ray start: ray start --block
     rayStartParams: {}
     #pod template

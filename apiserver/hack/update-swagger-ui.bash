@@ -12,9 +12,8 @@ fi
 echo "Downloading '${SWAGGER_UI_TAR_URL}' to update ${TARGET_DIR}"
 tmp="$(mktemp -d)"
 #pushd .
-curl --output-dir ${tmp} --fail --silent --location --remote-header-name --remote-name ${SWAGGER_UI_TAR_URL} 
+curl --output-dir ${tmp} --fail --silent --location --remote-header-name --remote-name ${SWAGGER_UI_TAR_URL}
 tar -xzvf ${tmp}/swagger-ui-${SWAGGER_UI_VERSION}.tar.gz -C ${tmp}
 #popd
 cp -rv "$tmp/swagger-ui-${SWAGGER_UI_VERSION}/dist/"* "${TARGET_DIR}"
 rm -rf "$tmp"
-

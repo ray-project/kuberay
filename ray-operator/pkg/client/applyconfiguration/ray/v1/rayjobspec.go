@@ -10,21 +10,25 @@ import (
 // RayJobSpecApplyConfiguration represents an declarative configuration of the RayJobSpec type for use
 // with apply.
 type RayJobSpecApplyConfiguration struct {
-	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
+	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
+	BackoffLimit             *int32                                    `json:"backoffLimit,omitempty"`
+	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
+	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
 	Metadata                 map[string]string                         `json:"metadata,omitempty"`
+	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
+	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
+	ManagedBy                *string                                   `json:"managedBy,omitempty"`
+	DeletionPolicy           *rayv1.DeletionPolicy                     `json:"deletionPolicy,omitempty"`
+	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
 	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
 	JobId                    *string                                   `json:"jobId,omitempty"`
-	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
-	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
-	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
-	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
-	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
-	Suspend                  *bool                                     `json:"suspend,omitempty"`
-	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
 	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
 	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
-	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
+	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
+	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
+	Suspend                  *bool                                     `json:"suspend,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs an declarative configuration of the RayJobSpec type for use with
@@ -33,11 +37,35 @@ func RayJobSpec() *RayJobSpecApplyConfiguration {
 	return &RayJobSpecApplyConfiguration{}
 }
 
-// WithEntrypoint sets the Entrypoint field in the declarative configuration to the given value
+// WithActiveDeadlineSeconds sets the ActiveDeadlineSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Entrypoint field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithEntrypoint(value string) *RayJobSpecApplyConfiguration {
-	b.Entrypoint = &value
+// If called multiple times, the ActiveDeadlineSeconds field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithActiveDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
+	b.ActiveDeadlineSeconds = &value
+	return b
+}
+
+// WithBackoffLimit sets the BackoffLimit field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BackoffLimit field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithBackoffLimit(value int32) *RayJobSpecApplyConfiguration {
+	b.BackoffLimit = &value
+	return b
+}
+
+// WithRayClusterSpec sets the RayClusterSpec field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayClusterSpec field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
+	b.RayClusterSpec = value
+	return b
+}
+
+// WithSubmitterPodTemplate sets the SubmitterPodTemplate field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmitterPodTemplate field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
+	b.SubmitterPodTemplate = value
 	return b
 }
 
@@ -52,6 +80,52 @@ func (b *RayJobSpecApplyConfiguration) WithMetadata(entries map[string]string) *
 	for k, v := range entries {
 		b.Metadata[k] = v
 	}
+	return b
+}
+
+// WithClusterSelector puts the entries into the ClusterSelector field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the ClusterSelector field,
+// overwriting an existing map entries in ClusterSelector field with the same key.
+func (b *RayJobSpecApplyConfiguration) WithClusterSelector(entries map[string]string) *RayJobSpecApplyConfiguration {
+	if b.ClusterSelector == nil && len(entries) > 0 {
+		b.ClusterSelector = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.ClusterSelector[k] = v
+	}
+	return b
+}
+
+// WithSubmitterConfig sets the SubmitterConfig field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmitterConfig field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSubmitterConfig(value *SubmitterConfigApplyConfiguration) *RayJobSpecApplyConfiguration {
+	b.SubmitterConfig = value
+	return b
+}
+
+// WithManagedBy sets the ManagedBy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ManagedBy field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithManagedBy(value string) *RayJobSpecApplyConfiguration {
+	b.ManagedBy = &value
+	return b
+}
+
+// WithDeletionPolicy sets the DeletionPolicy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DeletionPolicy field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithDeletionPolicy(value rayv1.DeletionPolicy) *RayJobSpecApplyConfiguration {
+	b.DeletionPolicy = &value
+	return b
+}
+
+// WithEntrypoint sets the Entrypoint field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Entrypoint field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithEntrypoint(value string) *RayJobSpecApplyConfiguration {
+	b.Entrypoint = &value
 	return b
 }
 
@@ -71,52 +145,6 @@ func (b *RayJobSpecApplyConfiguration) WithJobId(value string) *RayJobSpecApplyC
 	return b
 }
 
-// WithShutdownAfterJobFinishes sets the ShutdownAfterJobFinishes field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ShutdownAfterJobFinishes field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithShutdownAfterJobFinishes(value bool) *RayJobSpecApplyConfiguration {
-	b.ShutdownAfterJobFinishes = &value
-	return b
-}
-
-// WithTTLSecondsAfterFinished sets the TTLSecondsAfterFinished field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TTLSecondsAfterFinished field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithTTLSecondsAfterFinished(value int32) *RayJobSpecApplyConfiguration {
-	b.TTLSecondsAfterFinished = &value
-	return b
-}
-
-// WithActiveDeadlineSeconds sets the ActiveDeadlineSeconds field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ActiveDeadlineSeconds field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithActiveDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
-	b.ActiveDeadlineSeconds = &value
-	return b
-}
-
-// WithRayClusterSpec sets the RayClusterSpec field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the RayClusterSpec field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
-	b.RayClusterSpec = value
-	return b
-}
-
-// WithClusterSelector puts the entries into the ClusterSelector field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, the entries provided by each call will be put on the ClusterSelector field,
-// overwriting an existing map entries in ClusterSelector field with the same key.
-func (b *RayJobSpecApplyConfiguration) WithClusterSelector(entries map[string]string) *RayJobSpecApplyConfiguration {
-	if b.ClusterSelector == nil && len(entries) > 0 {
-		b.ClusterSelector = make(map[string]string, len(entries))
-	}
-	for k, v := range entries {
-		b.ClusterSelector[k] = v
-	}
-	return b
-}
-
 // WithSubmissionMode sets the SubmissionMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the SubmissionMode field is set to the value of the last call.
@@ -125,19 +153,11 @@ func (b *RayJobSpecApplyConfiguration) WithSubmissionMode(value rayv1.JobSubmiss
 	return b
 }
 
-// WithSuspend sets the Suspend field in the declarative configuration to the given value
+// WithEntrypointResources sets the EntrypointResources field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Suspend field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithSuspend(value bool) *RayJobSpecApplyConfiguration {
-	b.Suspend = &value
-	return b
-}
-
-// WithSubmitterPodTemplate sets the SubmitterPodTemplate field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SubmitterPodTemplate field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
-	b.SubmitterPodTemplate = value
+// If called multiple times, the EntrypointResources field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithEntrypointResources(value string) *RayJobSpecApplyConfiguration {
+	b.EntrypointResources = &value
 	return b
 }
 
@@ -157,10 +177,26 @@ func (b *RayJobSpecApplyConfiguration) WithEntrypointNumGpus(value float32) *Ray
 	return b
 }
 
-// WithEntrypointResources sets the EntrypointResources field in the declarative configuration to the given value
+// WithTTLSecondsAfterFinished sets the TTLSecondsAfterFinished field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EntrypointResources field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithEntrypointResources(value string) *RayJobSpecApplyConfiguration {
-	b.EntrypointResources = &value
+// If called multiple times, the TTLSecondsAfterFinished field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithTTLSecondsAfterFinished(value int32) *RayJobSpecApplyConfiguration {
+	b.TTLSecondsAfterFinished = &value
+	return b
+}
+
+// WithShutdownAfterJobFinishes sets the ShutdownAfterJobFinishes field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ShutdownAfterJobFinishes field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithShutdownAfterJobFinishes(value bool) *RayJobSpecApplyConfiguration {
+	b.ShutdownAfterJobFinishes = &value
+	return b
+}
+
+// WithSuspend sets the Suspend field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Suspend field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSuspend(value bool) *RayJobSpecApplyConfiguration {
+	b.Suspend = &value
 	return b
 }

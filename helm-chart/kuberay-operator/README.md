@@ -44,7 +44,7 @@ helm version
 
   # Step 2: Install KubeRay operator only. (for developer)
   helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0 --skip-crds
-  ``` 
+  ```
 
 ## List the chart
 

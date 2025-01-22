@@ -44,7 +44,7 @@ In order to better define resources at the API level, a few proto files will be 
 - Some of the Kubernetes API like `tolerance` and `node affinity` are too complicated to be converted to an API.
 - We want to leave some flexibility to use database to store history data in the near future (for example, pagination, list options etc).
 
-To resolve these issues, we provide a simple API which can cover most common use-cases. 
+To resolve these issues, we provide a simple API which can cover most common use-cases.
 
 For example, the protobuf definition of the `RayCluster`:
 
@@ -92,7 +92,7 @@ service ClusterService {
 message CreateClusterRequest {
   // The cluster to be created.
   Cluster cluster = 1;
-  // The namespace of the cluster to be created. 
+  // The namespace of the cluster to be created.
   string namespace = 2;
 }
 
@@ -149,7 +149,7 @@ message Cluster {
     PRODUCTION = 3;
   }
   Environment environment = 5;
-  
+
   // Required field. This field indicates ray cluster configuration
   ClusterSpec cluster_spec = 6;
 
@@ -164,7 +164,7 @@ message Cluster {
 
   // Output. The list related to the cluster.
   repeated ClusterEvent events = 10;
-  
+
   // Output. The service endpoint of the cluster
   map<string, string> service_endpoint = 11;
 
@@ -189,8 +189,8 @@ message Volume {
   string name = 3;
   string source = 4;
   bool read_only = 5;
-  
-  // If indicate hostpath, we need to let user indicate which type 
+
+  // If indicate hostpath, we need to let user indicate which type
   // they would like to use.
   enum HostPathType {
     DIRECTORY = 0;
@@ -226,11 +226,11 @@ message WorkerGroupSpec {
   string compute_template = 2;
   // Optional field. This field will be used to retrieve right ray container
   string image = 3;
-  // Required. Desired replicas of the worker group 
+  // Required. Desired replicas of the worker group
   int32 replicas = 4;
-  // Optional. Min replicas of the worker group 
+  // Optional. Min replicas of the worker group
   int32 min_replicas = 5;
-  // Optional. Max replicas of the worker group 
+  // Optional. Max replicas of the worker group
   int32 max_replicas = 6;
   // Optional. The ray start parames of worker node group
   map<string, string> ray_start_params = 7;
@@ -245,7 +245,7 @@ message ClusterEvent {
   // Output. Human readable name for event.
   string name = 2;
 
-  // Output. The creation time of the event. 
+  // Output. The creation time of the event.
   google.protobuf.Timestamp created_at = 3;
 
   // Output. The last time the event occur.
@@ -262,7 +262,7 @@ message ClusterEvent {
 
   // Output. Type of this event (Normal, Warning), new types could be added in the future
   string type = 8;
-  
+
   // Output. The number of times this event has occurred.
   int32 count = 9;
 }

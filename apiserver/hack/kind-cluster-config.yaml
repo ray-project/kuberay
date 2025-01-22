@@ -13,8 +13,8 @@ nodes:
   - containerPort: 31888
     hostPort: 31888
     listenAddress: "0.0.0.0"
-  - containerPort: 31887 
-    hostPort: 31887 
+  - containerPort: 31887
+    hostPort: 31887
     listenAddress: "0.0.0.0"
 - role: worker
   image: kindest/node:v1.23.17@sha256:59c989ff8a517a93127d4a536e7014d28e235fb3529d9fba91b3951d461edfdb

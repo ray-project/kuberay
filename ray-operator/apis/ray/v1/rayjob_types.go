@@ -41,6 +41,8 @@ const (
 	JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
 	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
+	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
+	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -55,55 +57,92 @@ const (
 type JobSubmissionMode string
 
 const (
-	K8sJobMode JobSubmissionMode = "K8sJobMode" // Submit job via Kubernetes Job
-	HTTPMode   JobSubmissionMode = "HTTPMode"   // Submit job via HTTP request
+	K8sJobMode      JobSubmissionMode = "K8sJobMode"      // Submit job via Kubernetes Job
+	HTTPMode        JobSubmissionMode = "HTTPMode"        // Submit job via HTTP request
+	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
+
+type DeletionPolicy string
+
+const (
+	DeleteClusterDeletionPolicy DeletionPolicy = "DeleteCluster" // Deletion policy to delete the entire RayCluster custom resource on job completion.
+	DeleteWorkersDeletionPolicy DeletionPolicy = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
+	DeleteSelfDeletionPolicy    DeletionPolicy = "DeleteSelf"    // Deletion policy to delete the RayJob custom resource (and all associated resources) on job completion.
+	DeleteNoneDeletionPolicy    DeletionPolicy = "DeleteNone"    // Deletion policy to delete no resources on job completion.
+)
+
+type SubmitterConfig struct {
+	// BackoffLimit of the submitter k8s job.
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+}
 
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Entrypoint string `json:"entrypoint"`
+	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
+	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
+	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
+	// Specifies the number of retries before marking this job failed.
+	// Each retry creates a new RayCluster.
+	// +kubebuilder:default:=0
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// RayClusterSpec is the cluster template to run the job
+	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
+	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// clusterSelector is used to select running rayclusters by labels
+	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
+	// Configurations of submitter k8s job.
+	SubmitterConfig *SubmitterConfig `json:"submitterConfig,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayJob.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayJob which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	ManagedBy *string `json:"managedBy,omitempty"`
+	// DeletionPolicy indicates what resources of the RayJob are deleted upon job completion.
+	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
+	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
+	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deletionPolicy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
+	DeletionPolicy *DeletionPolicy `json:"deletionPolicy,omitempty"`
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	Entrypoint string `json:"entrypoint,omitempty"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.
 	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
-	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
-	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
+	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
+	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
+	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
+	// +kubebuilder:default:=K8sJobMode
+	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
+	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
+	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	// +kubebuilder:default:=0
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
-	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
-	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
-	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
-	// RayClusterSpec is the cluster template to run the job
-	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
-	// clusterSelector is used to select running rayclusters by labels
-	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
-	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
-	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
-	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
-	// +kubebuilder:default:=K8sJobMode
-	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
+	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
+	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
 	// If a job is applied with the suspend field set to true,
 	// the RayCluster will not be created and will wait for the transition to false.
 	// If the RayCluster is already created, it will be deleted.
 	// In case of transition to false a new RayCluster will be created.
 	Suspend bool `json:"suspend,omitempty"`
-	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
-	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
-	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
-	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
-	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
-	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
-	// EntrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
-	EntrypointResources string `json:"entrypointResources,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
@@ -122,8 +161,16 @@ type RayJobStatus struct {
 	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
 	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
 	// or the submitter Job has failed.
-	EndTime          *metav1.Time     `json:"endTime,omitempty"`
+	EndTime *metav1.Time `json:"endTime,omitempty"`
+	// Succeeded is the number of times this job succeeded.
+	// +kubebuilder:default:=0
+	Succeeded *int32 `json:"succeeded,omitempty"`
+	// Failed is the number of times this job failed.
+	// +kubebuilder:default:=0
+	Failed *int32 `json:"failed,omitempty"`
+	// RayClusterStatus is the status of the RayCluster running the job.
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
+
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

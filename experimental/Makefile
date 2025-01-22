@@ -57,7 +57,7 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt ## Run the linter.
-	$(GOLANGCI_LINT) run  --timeout=3m	
+	$(GOLANGCI_LINT) run  --timeout=3m --no-config
 
 build: fmt vet fumpt lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver-proxy cmd/main.go
@@ -91,7 +91,7 @@ GOBINDATA_VERSION ?= v4.0.2
 
 .PHONY: gofumpt
 gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
-$(GOFUMPT): $(REPO_ROOT_BIN)	
+$(GOFUMPT): $(REPO_ROOT_BIN)
 	-s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
 .PHONY: golangci-lint

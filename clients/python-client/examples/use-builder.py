@@ -4,8 +4,8 @@ from os import path
 import json
 
 
-""" 
-in case you are working directly with the source, and don't wish to 
+"""
+in case you are working directly with the source, and don't wish to
 install the module with pip install, you can directly import the packages by uncommenting the following code.
 """
 

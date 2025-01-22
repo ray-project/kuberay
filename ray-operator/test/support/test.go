@@ -1,17 +1,11 @@
 package support
 
 import (
-	"bufio"
 	"context"
 	"os"
 	"path"
 	"sync"
 	"testing"
-	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -22,10 +16,7 @@ type Test interface {
 	Client() Client
 	OutputDir() string
 
-	gomega.Gomega
-
 	NewTestNamespace(...Option[*corev1.Namespace]) *corev1.Namespace
-	StreamKubeRayOperatorLogs()
 }
 
 type Option[T any] interface {
@@ -34,8 +25,6 @@ type Option[T any] interface {
 
 type errorOption[T any] func(to T) error
 
-// nolint: unused
-// To be removed when the false-positivity is fixed.
 func (o errorOption[T]) applyTo(to T) error {
 	return o(to)
 }
@@ -52,16 +41,14 @@ func With(t *testing.T) Test {
 	}
 
 	return &T{
-		WithT: gomega.NewWithT(t),
-		t:     t,
-		ctx:   ctx,
+		t:   t,
+		ctx: ctx,
 	}
 }
 
 type T struct {
-	*gomega.WithT
 	t *testing.T
-	// nolint: containedctx
+	//nolint:containedctx //nolint:nolintlint // TODO: The reason for this lint is unknown
 	ctx       context.Context
 	client    Client
 	outputDir string
@@ -125,37 +112,4 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 		deleteTestNamespace(t, namespace)
 	})
 	return namespace
-}
-
-func (t *T) StreamKubeRayOperatorLogs() {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.T().Cleanup(cancel)
-	// By using `.Pods("")`, we list kuberay-operators from all namespaces
-	// because they may not always be installed in the "ray-system" namespace.
-	pods, err := t.Client().Core().CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=kuberay-operator",
-	})
-	t.Expect(err).ShouldNot(gomega.HaveOccurred())
-	t.Expect(pods.Items).ShouldNot(gomega.BeEmpty())
-	now := metav1.NewTime(time.Now())
-	for _, pod := range pods.Items {
-		go func(pod corev1.Pod, ts *metav1.Time) {
-			req := t.Client().Core().CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-				Follow:    true,
-				SinceTime: ts,
-			})
-			stream, err := req.Stream(ctx)
-			if err != nil {
-				t.T().Logf("Fail to tail logs from the pod %s/%s", pod.Namespace, pod.Name)
-				return
-			}
-			t.T().Logf("Start tailing logs from the pod %s/%s", pod.Namespace, pod.Name)
-			defer stream.Close()
-			scanner := bufio.NewScanner(stream)
-			for scanner.Scan() {
-				t.T().Log(scanner.Text())
-			}
-			t.T().Logf("Stop tailing logs from the pod %s/%s: %v", pod.Namespace, pod.Name, scanner.Err())
-		}(pod, &now)
-	}
 }

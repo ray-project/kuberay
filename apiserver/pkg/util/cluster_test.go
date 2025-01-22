@@ -125,6 +125,7 @@ var testAutoscalerOptions = api.AutoscalerOptions{
 var headGroup = api.HeadGroupSpec{
 	ComputeTemplate: "foo",
 	Image:           "bar",
+	ImagePullPolicy: "Always",
 	ServiceType:     "ClusterIP",
 	RayStartParams: map[string]string{
 		"dashboard-host":      "0.0.0.0",
@@ -166,12 +167,18 @@ var headGroup = api.HeadGroupSpec{
 	Labels: map[string]string{
 		"foo": "bar",
 	},
+	SecurityContext: &api.SecurityContext{
+		Capabilities: &api.Capabilities{
+			Add: []string{"SYS_PTRACE"},
+		},
+	},
 }
 
 var workerGroup = api.WorkerGroupSpec{
 	GroupName:       "wg",
 	ComputeTemplate: "foo",
 	Image:           "bar",
+	ImagePullPolicy: "Always",
 	Replicas:        5,
 	MinReplicas:     5,
 	MaxReplicas:     5,
@@ -190,6 +197,11 @@ var workerGroup = api.WorkerGroupSpec{
 	},
 	Labels: map[string]string{
 		"foo": "bar",
+	},
+	SecurityContext: &api.SecurityContext{
+		Capabilities: &api.Capabilities{
+			Add: []string{"SYS_PTRACE"},
+		},
 	},
 }
 
@@ -232,6 +244,22 @@ var template = api.ComputeTemplate{
 	Namespace: "",
 	Cpu:       2,
 	Memory:    8,
+	Tolerations: []*api.PodToleration{
+		{
+			Key:      "blah1",
+			Operator: "Exists",
+			Effect:   "NoExecute",
+		},
+	},
+}
+
+var templateWorker = api.ComputeTemplate{
+	Name:              "",
+	Namespace:         "",
+	Cpu:               2,
+	Memory:            8,
+	Gpu:               4,
+	ExtendedResources: map[string]uint32{"vpc.amazonaws.com/efa": 32},
 	Tolerations: []*api.PodToleration{
 		{
 			Key:      "blah1",
@@ -305,6 +333,14 @@ var expectedHeadNodeEnv = []corev1.EnvVar{
 	},
 }
 
+var expectedSecurityContext = corev1.SecurityContext{
+	Capabilities: &corev1.Capabilities{
+		Add: []corev1.Capability{
+			"SYS_PTRACE",
+		},
+	},
+}
+
 func TestBuildVolumes(t *testing.T) {
 	targetVolume := corev1.Volume{
 		Name: testVolume.Name,
@@ -349,7 +385,7 @@ func TestBuildVolumes(t *testing.T) {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse(testEphemeralVolume.Storage),
 							},
@@ -517,6 +553,9 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
 		t.Errorf("failed to propagate image pull secret")
 	}
+	if (string)(podSpec.Spec.Containers[0].ImagePullPolicy) != "Always" {
+		t.Errorf("failed to propagate image pull policy")
+	}
 	if len(podSpec.Spec.Containers[0].Env) != 6 {
 		t.Errorf("failed to propagate environment")
 	}
@@ -549,6 +588,10 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
 	}
 
+	if !reflect.DeepEqual(podSpec.Spec.Containers[0].SecurityContext, &expectedSecurityContext) {
+		t.Errorf("failed to convert security context, got %v, expected %v", podSpec.Spec.SecurityContext, &expectedSecurityContext)
+	}
+
 	podSpec, err = buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, true)
 	assert.Nil(t, err)
 	if len(podSpec.Spec.Containers[0].Ports) != 6 {
@@ -561,6 +604,7 @@ func TestConvertAutoscalerOptions(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, *options.IdleTimeoutSeconds, int32(25))
 	assert.Equal(t, (string)(*options.UpscalingMode), "Default")
+	assert.Equal(t, (string)(*options.ImagePullPolicy), "Always")
 	assert.Equal(t, len(options.Env), 1)
 	assert.Equal(t, len(options.EnvFrom), 2)
 	assert.Equal(t, len(options.VolumeMounts), 2)
@@ -585,36 +629,54 @@ func TestBuildRayCluster(t *testing.T) {
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
-	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &template)
+	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &templateWorker)
 	assert.Nil(t, err)
 
-	if podSpec.Spec.ServiceAccountName != "account" {
-		t.Errorf("failed to propagate service account")
-	}
-	if podSpec.Spec.ImagePullSecrets[0].Name != "foo" {
-		t.Errorf("failed to propagate image pull secret")
-	}
-	if !containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar") {
-		t.Errorf("failed to propagate environment")
-	}
-	if len(podSpec.Spec.Tolerations) != 1 {
-		t.Errorf("failed to propagate tolerations, expected 1, got %d", len(podSpec.Spec.Tolerations))
-	}
-	if !reflect.DeepEqual(podSpec.Spec.Tolerations[0], expectedToleration) {
-		t.Errorf("failed to propagate annotations, got %v, expected %v", tolerationToString(&podSpec.Spec.Tolerations[0]),
-			tolerationToString(&expectedToleration))
-	}
-	if val, exists := podSpec.Annotations["foo"]; !exists || val != "bar" {
-		t.Errorf("failed to convert annotations")
-	}
-	if !reflect.DeepEqual(podSpec.Labels, expectedLabels) {
-		t.Errorf("failed to convert labels, got %v, expected %v", podSpec.Labels, expectedLabels)
-	}
+	assert.Equal(t, "account", podSpec.Spec.ServiceAccountName, "failed to propagate service account")
+	assert.Equal(t, "foo", podSpec.Spec.ImagePullSecrets[0].Name, "failed to propagate image pull secret")
+	assert.Equal(t, corev1.PullAlways, podSpec.Spec.Containers[0].ImagePullPolicy, "failed to propagate image pull policy")
+	assert.True(t, containsEnv(podSpec.Spec.Containers[0].Env, "foo", "bar"), "failed to propagate environment")
+	assert.Len(t, podSpec.Spec.Tolerations, 1, "failed to propagate tolerations")
+	assert.Equal(t, expectedToleration, podSpec.Spec.Tolerations[0], "failed to propagate tolerations")
+	assert.Equal(t, "bar", podSpec.Annotations["foo"], "failed to convert annotations")
+	assert.Equal(t, expectedLabels, podSpec.Labels, "failed to convert labels")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_REQUEST", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.cpu"}}), "failed to propagate environment variable: CPU_REQUEST")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.cpu"}}), "failed to propagate environment variable: CPU_LIMITS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_REQUESTS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.memory"}}), "failed to propagate environment variable: MEMORY_REQUESTS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.memory"}}), "failed to propagate environment variable: MEMORY_LIMITS")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_NAME", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}), "failed to propagate environment variable: MY_POD_NAME")
+	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MY_POD_IP", &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"}}), "failed to propagate environment variable: MY_POD_IP")
+	assert.Equal(t, &expectedSecurityContext, podSpec.Spec.Containers[0].SecurityContext, "failed to convert security context")
+
+	// Check Resources
+	container := podSpec.Spec.Containers[0]
+	resources := container.Resources
+
+	assert.Equal(t, resource.MustParse("2"), resources.Limits[corev1.ResourceCPU], "CPU limit doesn't match")
+	assert.Equal(t, resource.MustParse("2"), resources.Requests[corev1.ResourceCPU], "CPU request doesn't match")
+
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Limits[corev1.ResourceMemory], "Memory limit doesn't match")
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Requests[corev1.ResourceMemory], "Memory request doesn't match")
+
+	assert.Equal(t, resource.MustParse("4"), resources.Limits["nvidia.com/gpu"], "GPU limit doesn't match")
+	assert.Equal(t, resource.MustParse("4"), resources.Requests["nvidia.com/gpu"], "GPU request doesn't match")
+
+	assert.Equal(t, resource.MustParse("32"), resources.Limits["vpc.amazonaws.com/efa"], "EFA limit doesn't match")
+	assert.Equal(t, resource.MustParse("32"), resources.Requests["vpc.amazonaws.com/efa"], "EFA request doesn't match")
 }
 
 func containsEnv(envs []corev1.EnvVar, key string, val string) bool {
 	for _, env := range envs {
 		if env.Name == key && env.Value == val {
+			return true
+		}
+	}
+	return false
+}
+
+func containsEnvValueFrom(envs []corev1.EnvVar, key string, valFrom *corev1.EnvVarSource) bool {
+	for _, env := range envs {
+		if env.Name == key && reflect.DeepEqual(env.ValueFrom, valFrom) {
 			return true
 		}
 	}

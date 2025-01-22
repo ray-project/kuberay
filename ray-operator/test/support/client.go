@@ -3,6 +3,7 @@ package support
 import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -16,12 +17,14 @@ type Client interface {
 	Core() kubernetes.Interface
 	Ray() rayclient.Interface
 	Dynamic() dynamic.Interface
+	Config() rest.Config
 }
 
 type testClient struct {
 	core    kubernetes.Interface
 	ray     rayclient.Interface
 	dynamic dynamic.Interface
+	config  rest.Config
 }
 
 var _ Client = (*testClient)(nil)
@@ -36,6 +39,10 @@ func (t *testClient) Ray() rayclient.Interface {
 
 func (t *testClient) Dynamic() dynamic.Interface {
 	return t.dynamic
+}
+
+func (t *testClient) Config() rest.Config {
+	return t.config
 }
 
 func newTestClient() (Client, error) {
@@ -66,5 +73,6 @@ func newTestClient() (Client, error) {
 		core:    kubeClient,
 		ray:     rayClient,
 		dynamic: dynamicClient,
+		config:  *cfg,
 	}, nil
 }

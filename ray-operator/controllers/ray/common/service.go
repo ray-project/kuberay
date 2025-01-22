@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,10 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
+
+func getEnableRayHeadClusterIPService() bool {
+	return strings.ToLower(os.Getenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)) == "true"
+}
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
 func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
@@ -33,40 +39,40 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		labels = make(map[string]string)
 	}
 
-	default_labels := HeadServiceLabels(cluster)
+	defaultLabels := HeadServiceLabels(cluster)
 
-	// selector consists of *only* the keys in default_labels, updated with the values in labels if they exist
+	// selector consists of *only* the keys in defaultLabels, updated with the values in labels if they exist
 	selector := make(map[string]string)
-	for k := range default_labels {
+	for k := range defaultLabels {
 		if _, ok := labels[k]; ok {
 			selector[k] = labels[k]
 		} else {
-			selector[k] = default_labels[k]
+			selector[k] = defaultLabels[k]
 		}
 	}
 
 	// Deep copy the selector to avoid modifying the original object
-	labels_for_service := make(map[string]string)
+	labelsForService := make(map[string]string)
 	for k, v := range selector {
-		labels_for_service[k] = v
+		labelsForService[k] = v
 	}
 
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
 
-	default_name, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	defaultName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
 	if err != nil {
 		return nil, err
 	}
-	default_namespace := cluster.Namespace
-	default_type := cluster.Spec.HeadGroupSpec.ServiceType
+	defaultNamespace := cluster.Namespace
+	defaultType := cluster.Spec.HeadGroupSpec.ServiceType
 
 	defaultAppProtocol := utils.DefaultServiceAppProtocol
-	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	ports_int := getServicePorts(cluster)
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	portsInt := getServicePorts(cluster)
 	ports := []corev1.ServicePort{}
-	for name, port := range ports_int {
+	for name, port := range portsInt {
 		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
 		ports = append(ports, svcPort)
 	}
@@ -97,26 +103,31 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		// Append default ports.
 		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
 
-		setLabelsforUserProvidedService(headService, labels_for_service)
-		setNameforUserProvidedService(ctx, headService, default_name)
-		setNamespaceforUserProvidedService(ctx, headService, default_namespace)
-		setServiceTypeForUserProvidedService(ctx, headService, default_type)
+		setLabelsforUserProvidedService(headService, labelsForService)
+		setNameforUserProvidedService(ctx, headService, defaultName)
+		setNamespaceforUserProvidedService(ctx, headService, defaultNamespace)
+		setServiceTypeForUserProvidedService(ctx, headService, defaultType)
 
 		return headService, nil
 	}
 
 	headService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        default_name,
-			Namespace:   default_namespace,
-			Labels:      labels_for_service,
+			Name:        defaultName,
+			Namespace:   defaultNamespace,
+			Labels:      labelsForService,
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selector,
 			Ports:    ports,
-			Type:     default_type,
+			Type:     defaultType,
 		},
+	}
+	if !getEnableRayHeadClusterIPService() && (defaultType == "" || defaultType == corev1.ServiceTypeClusterIP) {
+		// Make the head service headless by default, because a RayCluster should have at most one head Pod.
+		headService.Spec.ClusterIP = corev1.ClusterIPNone
+		headService.Spec.PublishNotReadyAddresses = true // We don't need to hide the Head address if its health checks failed.
 	}
 
 	// This change ensures that reconciliation in rayservice_controller will not update the Service spec due to change in ports order
@@ -191,17 +202,17 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		selectorLabels[utils.RayClusterServingServiceLabelKey] = utils.EnableRayClusterServingServiceTrue
 	}
 
-	default_name := utils.GenerateServeServiceName(name)
-	default_namespace := namespace
-	default_type := rayCluster.Spec.HeadGroupSpec.ServiceType
+	defaultName := utils.GenerateServeServiceName(name)
+	defaultNamespace := namespace
+	defaultType := rayCluster.Spec.HeadGroupSpec.ServiceType
 	if isRayService {
-		default_type = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
+		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// `ports_int` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	ports_int := getServicePorts(rayCluster)
-	ports := []corev1.ServicePort{}
-	for name, port := range ports_int {
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	portsInt := getServicePorts(rayCluster)
+	ports := make([]corev1.ServicePort, 0, 1)
+	for name, port := range portsInt {
 		if name == utils.ServingPortName {
 			svcPort := corev1.ServicePort{Name: name, Port: port}
 			ports = append(ports, svcPort)
@@ -234,7 +245,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
 				serveService.Spec.Ports = ports
 			} else {
-				ports := []corev1.ServicePort{}
+				ports := make([]corev1.ServicePort, 0, 1)
 				for _, port := range serveService.Spec.Ports {
 					if port.Name == utils.ServingPortName {
 						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
@@ -246,9 +257,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
-			setNameforUserProvidedService(ctx, serveService, default_name)
-			setNamespaceforUserProvidedService(ctx, serveService, default_namespace)
-			setServiceTypeForUserProvidedService(ctx, serveService, default_type)
+			setNameforUserProvidedService(ctx, serveService, defaultName)
+			setNamespaceforUserProvidedService(ctx, serveService, defaultNamespace)
+			setServiceTypeForUserProvidedService(ctx, serveService, defaultType)
 
 			return serveService, nil
 		}
@@ -262,14 +273,14 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 
 	serveService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      default_name,
-			Namespace: default_namespace,
+			Name:      defaultName,
+			Namespace: defaultNamespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
 			Ports:    ports,
-			Type:     default_type,
+			Type:     defaultType,
 		},
 	}
 
@@ -277,7 +288,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 }
 
 // BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
-func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Service {
 	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	namespace := rayCluster.Namespace
 
@@ -299,51 +310,54 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) (*corev1.Ser
 			ClusterIP: "None",
 			Selector:  selectorLabels,
 			Type:      corev1.ServiceTypeClusterIP,
+			// The headless worker service is used for peer communication between multi-host workers and should not be
+			// dependent on Proxy Actor placement to publish DNS addresses.
+			PublishNotReadyAddresses: true,
 		},
 	}
 
-	return headlessService, nil
+	return headlessService
 }
 
-func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, default_type corev1.ServiceType) {
+func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type
 	if service.Spec.Type == "" {
 		log.Info("Using default serviceType passed for the user provided service",
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.ObjectMeta.Name", service.ObjectMeta.Name)
-		service.Spec.Type = default_type
+		service.Spec.Type = defaultType
 	} else {
 		log.Info("Overriding default serviceType with user provided serviceType",
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.ObjectMeta.Name", service.ObjectMeta.Name,
-			"default_type passed", default_type,
+			"default_type passed", defaultType,
 			"service.Spec.Type", service.Spec.Type)
 	}
 }
 
-func setNamespaceforUserProvidedService(ctx context.Context, service *corev1.Service, default_namespace string) {
+func setNamespaceforUserProvidedService(ctx context.Context, service *corev1.Service, defaultNamespace string) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has specified a namespace, ignore it and raise a warning
-	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != default_namespace {
+	if service.ObjectMeta.Namespace != "" && service.ObjectMeta.Namespace != defaultNamespace {
 		log.Info("Ignoring namespace in user provided service",
 			"provided_namespace", service.ObjectMeta.Namespace,
 			"service_name", service.ObjectMeta.Name,
-			"default_namespace", default_namespace)
+			"default_namespace", defaultNamespace)
 	}
 
-	service.ObjectMeta.Namespace = default_namespace
+	service.ObjectMeta.Namespace = defaultNamespace
 }
 
-func setNameforUserProvidedService(ctx context.Context, service *corev1.Service, default_name string) {
+func setNameforUserProvidedService(ctx context.Context, service *corev1.Service, defaultName string) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a name, use the default name passed
 	if service.ObjectMeta.Name == "" {
-		log.Info("Using default name for user provided service.", "default_name", default_name)
-		service.ObjectMeta.Name = default_name
+		log.Info("Using default name for user provided service.", "default_name", defaultName)
+		service.ObjectMeta.Name = defaultName
 	} else {
 		log.Info("Overriding default name for user provided service with name in service.ObjectMeta.Name.",
-			"default_name", default_name,
+			"default_name", defaultName,
 			"provided_name", service.ObjectMeta.Name)
 	}
 }
@@ -361,9 +375,9 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
-	ports, err := getPortsFromCluster(cluster)
+	ports := getPortsFromCluster(cluster)
 	// Assign default ports
-	if err != nil || len(ports) == 0 {
+	if len(ports) == 0 {
 		ports = getDefaultPorts()
 	}
 
@@ -378,7 +392,7 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 // getPortsFromCluster get the ports from head container and directly map them in service
 // It's user's responsibility to maintain rayStartParam ports and container ports mapping
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
-func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
+func getPortsFromCluster(cluster rayv1.RayCluster) map[string]int32 {
 	svcPorts := map[string]int32{}
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
@@ -389,13 +403,13 @@ func getPortsFromCluster(cluster rayv1.RayCluster) (map[string]int32, error) {
 		svcPorts[port.Name] = port.ContainerPort
 	}
 
-	return svcPorts, nil
+	return svcPorts
 }
 
 func getDefaultPorts() map[string]int32 {
 	return map[string]int32{
 		utils.ClientPortName:    utils.DefaultClientPort,
-		utils.RedisPortName:     utils.DefaultRedisPort,
+		utils.GcsServerPortName: utils.DefaultGcsServerPort,
 		utils.DashboardPortName: utils.DefaultDashboardPort,
 		utils.MetricsPortName:   utils.DefaultMetricsPort,
 		utils.ServingPortName:   utils.DefaultServingPort,

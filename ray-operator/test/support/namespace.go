@@ -1,7 +1,7 @@
 package support
 
 import (
-	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,11 +20,11 @@ func createTestNamespace(t Test, options ...Option[*corev1.Namespace]) *corev1.N
 	}
 
 	for _, option := range options {
-		t.Expect(option.applyTo(namespace)).To(gomega.Succeed())
+		assert.NoError(t.T(), option.applyTo(namespace))
 	}
 
 	namespace, err := t.Client().Core().CoreV1().Namespaces().Create(t.Ctx(), namespace, metav1.CreateOptions{})
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 
 	return namespace
 }
@@ -35,5 +35,5 @@ func deleteTestNamespace(t Test, namespace *corev1.Namespace) {
 	err := t.Client().Core().CoreV1().Namespaces().Delete(t.Ctx(), namespace.Name, metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})
-	t.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.NoError(t.T(), err)
 }

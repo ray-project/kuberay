@@ -77,10 +77,10 @@ data:
         def __call__(self, batch: Dict[str, np.ndarray]):
             # Convert the numpy array of images into a list of PIL images which is the format the HF pipeline expects.
             outputs = self.classifier(
-                [Image.fromarray(image_array) for image_array in batch["image"]], 
-                top_k=1, 
+                [Image.fromarray(image_array) for image_array in batch["image"]],
+                top_k=1,
                 batch_size=BATCH_SIZE)
-            
+
             # `outputs` is a list of length-one lists. For example:
             # [[{'score': '...', 'label': '...'}], ..., [{'score': '...', 'label': '...'}]]
             batch["score"] = [output[0]["score"] for output in outputs]

@@ -19,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -31,8 +33,8 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -48,7 +50,6 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
-	batchscheduler.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -59,10 +60,15 @@ func main() {
 	var probeAddr string
 	var reconcileConcurrency int
 	var watchNamespace string
+	var forcedClusterUpgrade bool
 	var logFile string
 	var logFileEncoder string
 	var logStdoutEncoder string
+	var useKubernetesProxy bool
 	var configFile string
+	var featureGates string
+	var enableBatchScheduler bool
+	var batchScheduler string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -77,17 +83,22 @@ func main() {
 		"watch-namespace",
 		"",
 		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
-	flag.BoolVar(&ray.ForcedClusterUpgrade, "forced-cluster-upgrade", false,
-		"Forced cluster upgrade flag")
+	flag.BoolVar(&forcedClusterUpgrade, "forced-cluster-upgrade", false,
+		"(Deprecated) Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
 		"Synchronize logs to local file")
 	flag.StringVar(&logFileEncoder, "log-file-encoder", "json",
 		"Encoder to use for log file. Valid values are 'json' and 'console'. Defaults to 'json'")
 	flag.StringVar(&logStdoutEncoder, "log-stdout-encoder", "json",
 		"Encoder to use for logging stdout. Valid values are 'json' and 'console'. Defaults to 'json'")
-	flag.BoolVar(&ray.EnableBatchScheduler, "enable-batch-scheduler", false,
-		"Enable batch scheduler. Currently is volcano, which supports gang scheduler policy.")
+	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
+		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy. Please use --batch-scheduler instead.")
+	flag.StringVar(&batchScheduler, "batch-scheduler", "",
+		"Batch scheduler name, supported values are volcano and yunikorn.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
+		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
+	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -103,10 +114,6 @@ func main() {
 
 		config, err = decodeConfig(configData, scheme)
 		exitOnError(err, "failed to decode config file")
-
-		// TODO: remove globally-scoped variables
-		ray.ForcedClusterUpgrade = config.ForcedClusterUpgrade
-		ray.EnableBatchScheduler = config.EnableBatchScheduler
 	} else {
 		config.MetricsAddr = metricsAddr
 		config.ProbeAddr = probeAddr
@@ -114,11 +121,13 @@ func main() {
 		config.LeaderElectionNamespace = leaderElectionNamespace
 		config.ReconcileConcurrency = reconcileConcurrency
 		config.WatchNamespace = watchNamespace
-		config.ForcedClusterUpgrade = ray.ForcedClusterUpgrade
 		config.LogFile = logFile
 		config.LogFileEncoder = logFileEncoder
 		config.LogStdoutEncoder = logStdoutEncoder
-		config.EnableBatchScheduler = ray.EnableBatchScheduler
+		config.EnableBatchScheduler = enableBatchScheduler
+		config.BatchScheduler = batchScheduler
+		config.UseKubernetesProxy = useKubernetesProxy
+		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -145,16 +154,33 @@ func main() {
 		combineLoggerR := zapr.NewLogger(combineLogger)
 
 		ctrl.SetLogger(combineLoggerR)
+
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
+		klog.SetLogger(combineLoggerR)
 	} else {
-		ctrl.SetLogger(k8szap.New(k8szap.UseFlagOptions(&opts)))
+		k8sLogger := k8szap.New(k8szap.UseFlagOptions(&opts))
+		ctrl.SetLogger(k8sLogger)
+
+		// By default, the log from kubernetes/client-go is not json format.
+		// This will apply the logger to kubernetes/client-go and change it to json format.
+		klog.SetLogger(k8sLogger)
 	}
 
-	if ray.ForcedClusterUpgrade {
-		setupLog.Info("Feature flag forced-cluster-upgrade is enabled.")
+	if forcedClusterUpgrade {
+		setupLog.Info("Deprecated feature flag forced-cluster-upgrade is enabled, which has no effect.")
 	}
-	if ray.EnableBatchScheduler {
-		setupLog.Info("Feature flag enable-batch-scheduler is enabled.")
+
+	// validate the batch scheduler configs,
+	// exit with error if the configs is invalid.
+	if err := configapi.ValidateBatchSchedulerConfig(setupLog, config); err != nil {
+		exitOnError(err, "batch scheduler configs validation failed")
 	}
+
+	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {
+		exitOnError(err, "Unable to set flag gates for known features")
+	}
+	features.LogFeatureGates(setupLog)
 
 	// Manager options
 	options := ctrl.Options{
@@ -186,11 +212,11 @@ func main() {
 		if watchNamespaces[0] == "" {
 			setupLog.Info("Flag watchNamespace is not set. Watch custom resources in all namespaces.")
 		} else {
-			setupLog.Info(fmt.Sprintf("Only watch custom resources in the namespace: %s", watchNamespaces[0]))
+			setupLog.Info("Only watch custom resources in the namespace.", "namespace", watchNamespaces[0])
 			options.Cache.DefaultNamespaces[watchNamespaces[0]] = cache.Config{}
 		}
 	} else {
-		setupLog.Info(fmt.Sprintf("Only watch custom resources in multiple namespaces: %v", watchNamespaces))
+		setupLog.Info("Only watch custom resources in multiple namespaces.", "namespaces", watchNamespaces)
 		for _, namespace := range watchNamespaces {
 			options.Cache.DefaultNamespaces[namespace] = cache.Config{}
 		}
@@ -207,11 +233,11 @@ func main() {
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
 	}
 	ctx := ctrl.SetupSignalHandler()
-	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, utils.GetRayDashboardClient, utils.GetRayHttpProxyClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, utils.GetRayDashboardClient).SetupWithManager(mgr),
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
