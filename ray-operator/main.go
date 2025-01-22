@@ -241,7 +241,7 @@ func main() {
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
-		exitOnError((&rayv1.RayCluster{}).SetupWebhookWithManager(mgr),
+		exitOnError(rayv1.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
 	}
 	// +kubebuilder:scaffold:builder
