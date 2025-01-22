@@ -52,10 +52,16 @@ spec:
         initContainers: {{- toYaml .Values.head.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - {{ if .Values.head.volumeMounts }}
-            volumeMounts: {{- toYaml .Values.head.volumeMounts | nindent 12 }}
+          - name: ray-head
+            {{- if or .Values.head.volumeMounts .Values.common.volumeMounts }}
+            volumeMounts:
+            {{- with .Values.head.volumeMounts -}}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
-            name: ray-head
+            {{- with .Values.common.volumeMounts -}}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.head.image }}
             image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
             imagePullPolicy: {{ .Values.head.image.pullPolicy }}
@@ -89,8 +95,14 @@ spec:
           {{- if .Values.head.sidecarContainers }}
           {{- toYaml .Values.head.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if .Values.head.volumes }}
-        volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
+        {{ if or .Values.head.volumes .Values.common.volumes }}
+        volumes:
+        {{- with .Values.head.volumes }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.common.volumes }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- end }}
         {{- if .Values.head.topologySpreadConstraints.enabled }}
         topologySpreadConstraints: {{- toYaml .Values.head.topologySpreadConstraints | nindent 10 }}
@@ -155,10 +167,16 @@ spec:
         initContainers: {{- toYaml $values.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - {{ if $values.volumeMounts }}
-            volumeMounts: {{- toYaml $values.volumeMounts | nindent 12 }}
+          - name: ray-worker
+            {{- if or $values.volumeMounts $.Values.common.volumeMounts }}
+            volumeMounts:
+            {{- with $values.volumeMounts -}}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
-            name: ray-worker
+            {{- with $.Values.common.volumeMounts }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- end }}
             {{- if $values.image }}
             image: {{ $values.image.repository }}:{{ $values.image.tag }}
             imagePullPolicy: {{ $values.image.pullPolicy }}
@@ -192,8 +210,14 @@ spec:
           {{- if $values.sidecarContainers }}
           {{- toYaml $values.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if $values.volumes }}
-        volumes: {{- toYaml $values.volumes | nindent 10 }}
+        {{ if or $values.volumes $.Values.common.volumes }}
+        volumes:
+        {{- with $values.volumes }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $.Values.common.volumes }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- end }}
         {{- if $values.topologySpreadConstraints }}
         topologySpreadConstraints: {{- toYaml $values.topologySpreadConstraints | nindent 10 }}
@@ -258,10 +282,16 @@ spec:
         initContainers: {{- toYaml .Values.worker.initContainers | nindent 10 }}
         {{- end }}
         containers:
-          - {{ if .Values.worker.volumeMounts }}
-            volumeMounts: {{- toYaml .Values.worker.volumeMounts | nindent 12 }}
+          - name: ray-worker
+            {{- if or .Values.worker.volumeMounts .Values.common.volumeMounts }}
+            volumeMounts:
+            {{- with .Values.worker.volumeMounts }}
+            {{- toYaml . | nindent 14 }}
             {{- end }}
-            name: ray-worker
+            {{- with .Values.common.volumeMounts }}
+            {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.worker.image }}
             image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
             imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
@@ -295,8 +325,14 @@ spec:
           {{- if .Values.worker.sidecarContainers }}
           {{- toYaml .Values.worker.sidecarContainers | nindent 10 }}
           {{- end }}
-        {{ if .Values.worker.volumes }}
-        volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
+        {{ if or .Values.worker.volumes .Values.common.volumes }}
+        volumes:
+        {{- with .Values.worker.volumes}}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.common.volumes }}
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
         {{ if .Values.worker.priorityClassName }}
