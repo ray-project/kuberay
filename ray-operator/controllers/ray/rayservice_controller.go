@@ -203,42 +203,36 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Switch pending cluster to active cluster if pending cluster is ready
 	// to serve requests.
 	if isPendingClusterReady {
+		logger.Info("Reconciling the service resources on the pending Ray cluster.")
 		promotePendingClusterToActiveCluster(ctx, rayServiceInstance)
-		// TODO: update K8s service to switch the RayCluster to pending cluster.
+		err = r.reconcileWithReadyCluster(ctx, originalRayServiceInstance, rayServiceInstance, pendingRayClusterInstance)
+	} else {
+		logger.Info("Reconciling the service resources on the active Ray cluster. No valid pending Ray cluster found.")
+		err = r.reconcileWithReadyCluster(ctx, originalRayServiceInstance, rayServiceInstance, activeRayClusterInstance)
 	}
+	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+}
 
-	// Get the ready Ray cluster instance for service update.
-	var rayClusterInstance *rayv1.RayCluster
-	if pendingRayClusterInstance != nil {
-		rayClusterInstance = pendingRayClusterInstance
-		logger.Info("Reconciling the service resources " +
-			"on the pending Ray cluster.")
-	} else if activeRayClusterInstance != nil {
-		rayClusterInstance = activeRayClusterInstance
-		logger.Info("Reconciling the service resources " +
-			"on the active Ray cluster. No pending Ray cluster found.")
-	}
-
+func (r *RayServiceReconciler) reconcileWithReadyCluster(ctx context.Context, originalRayServiceInstance, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
 	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		return err
 	}
 	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		return err
 	}
 
 	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		return err
 	}
 
 	// Final status update for any CR modification.
 	if inconsistentRayServiceStatuses(ctx, originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
+			return errStatus
 		}
 	}
-
-	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	return nil
 }
 
 func validateRayServiceSpec(rayService *rayv1.RayService) error {
