@@ -418,6 +418,7 @@ func constructRayImage(containerImage string, version string) string {
 func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables, spec *api.WorkerGroupSpec, computeRuntime *api.ComputeTemplate) (*corev1.PodTemplateSpec, error) {
 	// If user doesn't provide the image, let's use the default image instead.
 	// TODO: verify the versions in the range
+	fmt.Println(spec)
 	image := constructRayImage(RayClusterDefaultImageRepository, imageVersion)
 	if len(spec.Image) != 0 {
 		image = spec.Image
@@ -439,6 +440,30 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 	vols, err := buildVols(spec.Volumes)
 	if err != nil {
 		return nil, err
+	}
+
+	// Build init containers
+	var initContainers []corev1.Container
+	for _, initContainerSpec := range spec.InitContainers {
+		// Map WorkerGroupSpec.InitContainer to corev1.Container
+		initContainer := corev1.Container{
+			Name:            initContainerSpec.Name,
+			Image:           initContainerSpec.Image,
+			ImagePullPolicy: corev1.PullIfNotPresent, // Default to IfNotPresent
+
+			// Add volumes
+			VolumeMounts: buildVolumeMounts(initContainerSpec.Volumes),
+
+			// Add environment variables, if present
+			Env: convertEnvironmentVariables(initContainerSpec.Environment),
+		}
+
+		// Set image pull policy if explicitly given
+		if len(initContainerSpec.ImagePullPolicy) > 0 && strings.ToLower(initContainerSpec.ImagePullPolicy) == "always" {
+			initContainer.ImagePullPolicy = corev1.PullAlways
+		}
+
+		initContainers = append(initContainers, initContainer)
 	}
 
 	podTemplateSpec := corev1.PodTemplateSpec{
@@ -543,7 +568,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 					SecurityContext: buildSecurityContext(spec.SecurityContext),
 				},
 			},
-			Volumes: vols,
+			InitContainers: initContainers,
+			Volumes:        vols,
 		},
 	}
 
