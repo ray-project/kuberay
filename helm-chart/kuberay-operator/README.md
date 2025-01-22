@@ -16,8 +16,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both CRDs and KubeRay operator v1.1.0.
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0
+  # Install both CRDs and KubeRay operator v1.1.1.
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.1.1
 
   # Check the KubeRay operator Pod in `default` namespace
   kubectl get pods
@@ -70,48 +70,24 @@ kubectl get pods
 ## Working with Argo CD
 
 If you are using [Argo CD](https://argoproj.github.io) to manage the operator, you will encounter the issue which complains the CRDs too long. Same with [this issue](https://github.com/prometheus-operator/prometheus-operator/issues/4439).
-The recommended solution is to split the operator into two Argo apps, such as:
-
-* The first app just for installing the CRDs with `Replace=true` directly, snippet:
+The recommended solution is to use `ServerSideApply=true`, such as:
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ray-operator-crds
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.0.0-rc.0
-    path: helm-chart/kuberay-operator/crds
-  destination:
-    server: https://kubernetes.default.svc
-  syncPolicy:
-    syncOptions:
-    - Replace=true
-...
-```
-
-* The second app that installs the Helm chart with `skipCrds=true` (new feature in Argo CD 2.3.0), snippet:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: ray-operator
+  name: kuberay-operator
 spec:
   source:
-    repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.0.0-rc.0
-    path: helm-chart/kuberay-operator
+    repoURL: https://ray-project.github.io/kuberay-helm
+    targetRevision: v1.1.1
+    chart: kuberay-operator
     helm:
-      skipCrds: true
+      releaseName: kuberay-operator
   destination:
     server: https://kubernetes.default.svc
-    namespace: ray-operator
+    namespace: default
   syncPolicy:
     syncOptions:
-    - CreateNamespace=true
-...
+      - ServerSideApply=true
 ```
