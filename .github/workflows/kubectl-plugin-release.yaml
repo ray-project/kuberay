@@ -1,5 +1,6 @@
 name: release-kubectl-plugin
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       tag:
