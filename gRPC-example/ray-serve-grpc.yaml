@@ -1,0 +1,83 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-grpc
+spec:
+  serveConfigV2: |
+    grpc_options:
+      port: 9012
+      grpc_servicer_functions:
+        - user_defined_protos_pb2_grpc.add_UserDefinedServiceServicer_to_server
+        - user_defined_protos_pb2_grpc.add_ImageClassificationServiceServicer_to_server
+    
+    applications:
+    - name: app1
+      route_prefix: /app1
+      import_path: test_deployment_v2:g
+      runtime_env: {}
+
+  rayClusterConfig:
+    rayVersion: '2.7.0' # should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # Ray head pod template.
+    headGroupSpec:
+      # The `rayStartParams` are used to configure the `ray start` command.
+      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+        num-cpus: '10'
+      #pod template
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: twilight1998/evalai-grpc-test:latest  # <---- Built my own image
+              imagePullPolicy: IfNotPresent
+              resources:
+                limits:
+                  cpu: 1
+                  memory: 4Gi
+                requests:
+                  cpu: 1
+                  memory: 4Gi
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265 # Ray dashboard
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+                - containerPort: 9012  # <---- Open port 9012 for gRPC
+                  name: serve-grpc
+    workerGroupSpecs:
+      # the pod replicas in this group typed worker
+      - replicas: 1
+        minReplicas: 1
+        maxReplicas: 5
+        # logical group name, for this called small-group, also can be functional
+        groupName: worker
+        # The `rayStartParams` are used to configure the `ray start` command.
+        # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+        # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+        rayStartParams: {}
+        #pod template
+        template:
+          spec:
+            containers:
+              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+                image: twilight1998/evalai-grpc-test:latest
+                imagePullPolicy: IfNotPresent
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: ["/bin/sh","-c","ray stop"]
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: "4Gi"
+                  requests:
+                    cpu: "1"
+                    memory: "4Gi"
