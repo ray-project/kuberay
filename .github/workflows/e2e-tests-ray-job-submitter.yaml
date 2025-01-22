@@ -1,0 +1,47 @@
+name: e2e-ray-job-submitter
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+  push:
+    branches:
+      - master
+      - 'release-*'
+
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  ray-job-submitter:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ray-version: [ '2.39.0' ]
+        go-version: [ '1.22.0' ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Ray
+        run: pip install ray[default]==${{ matrix.ray-version }}
+
+      - name: Run e2e tests
+        run: |
+          cd ray-operator
+          go test -timeout 30m -v ./test/e2erayjobsubmitter
