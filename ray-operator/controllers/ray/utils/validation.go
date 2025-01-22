@@ -3,9 +3,11 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
