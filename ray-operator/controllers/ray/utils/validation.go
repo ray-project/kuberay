@@ -44,13 +44,13 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 		}
 	}
 
+	headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
 	if instance.Spec.GcsFaultToleranceOptions != nil {
 		if redisPassword := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
 			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
 		}
 
-		headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
 		if EnvVarExists(REDIS_PASSWORD, headContainer.Env) {
 			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
@@ -65,6 +65,10 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
 		}
+	}
+	if instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
+		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
+			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}
 
 	if !features.Enabled(features.RayJobDeletionPolicy) {

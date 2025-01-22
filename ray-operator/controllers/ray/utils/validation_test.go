@@ -301,6 +301,76 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
+	errorMessageRedisUsername := "cannot set redis username in rayStartParams or environment variables - use GcsFaultToleranceOptions.RedisUsername instead"
+
+	tests := []struct {
+		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
+		name                     string
+		errorMessage             string
+		rayStartParams           map[string]string
+		envVars                  []corev1.EnvVar
+		expectError              bool
+	}{
+		{
+			name: "`redis-username` is set in rayStartParams of the Head Pod",
+			rayStartParams: map[string]string{
+				"redis-username": "username",
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
+		{
+			name: "`REDIS_USERNAME` env var is set in the Head Pod",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_USERNAME,
+					Value: "username",
+				},
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
+		{
+			name: "GcsFaultToleranceOptions.RedisUsername is set",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisUsername: &rayv1.RedisCredential{
+					Value: "username",
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayCluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: tt.rayStartParams,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: tt.envVars,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := ValidateRayClusterSpec(rayCluster)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
 func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
 		Template: corev1.PodTemplateSpec{
