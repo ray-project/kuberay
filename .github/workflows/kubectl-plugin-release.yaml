@@ -13,18 +13,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag }}
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-      - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: 'goreleaser'
-          version: latest
-          args: release --clean
-          workdir: 'kubectl-plugin'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Update new version in krew-index
-        uses: rajatjindal/krew-release-bot@v0.0.46
+          fetch-depth: 0
+      - name: Show tag
+        run: git show-ref --head --dereference | grep "$(git rev-parse HEAD)"
+#      - name: Setup Go
+#        uses: actions/setup-go@v5
+#        with:
+#          go-version: '1.22'
+#      - name: GoReleaser
+#        uses: goreleaser/goreleaser-action@v6
+#        with:
+#          distribution: 'goreleaser'
+#          version: latest
+#          args: release --clean
+#          workdir: 'kubectl-plugin'
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Update new version in krew-index
+#        uses: rajatjindal/krew-release-bot@v0.0.46
