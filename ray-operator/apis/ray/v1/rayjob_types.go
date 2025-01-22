@@ -110,8 +110,7 @@ type RayJobSpec struct {
 	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
 	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deletionPolicy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
 	DeletionPolicy *DeletionPolicy `json:"deletionPolicy,omitempty"`
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Entrypoint represents the command to start execution.
 	Entrypoint string `json:"entrypoint,omitempty"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.
