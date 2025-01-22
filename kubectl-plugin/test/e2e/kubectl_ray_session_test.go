@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Calling ray plugin `session` command", func() {
+var _ = Describe("Calling ray plugin `session` command", Serial, func() {
 	var namespace string
 
 	BeforeEach(func() {
