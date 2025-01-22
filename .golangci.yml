@@ -1,4 +1,14 @@
 linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/ray-project)
+      - blank
+      - dot
+      - localmodule
+    skip-generated: false
+    custom-order: true
   gofmt:
     simplify: true
   gosec:
@@ -83,6 +93,7 @@ linters:
     - unparam
     - unused
     - wastedassign
+    - gci
   disable-all: true
 issues:
   max-issues-per-linter: 0
