@@ -80,6 +80,12 @@ type RayServiceSpec struct {
 
 // RayServiceStatuses defines the observed state of RayService
 type RayServiceStatuses struct {
+	// Represents the latest available observations of a RayService's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// LastUpdateTime represents the timestamp when the RayService status was last updated.
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// ServiceStatus indicates the current RayService status.
@@ -121,6 +127,27 @@ type ServeDeploymentStatus struct {
 	Status  string `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`
 }
+
+type (
+	RayServiceConditionType   string
+	RayServiceConditionReason string
+)
+
+const (
+	// RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.
+	RayServiceReady RayServiceConditionType = "Ready"
+	// UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.
+	UpgradeInProgress RayServiceConditionType = "UpgradeInProgress"
+)
+
+const (
+	RayServiceInitializing         RayServiceConditionReason = "Initializing"
+	ZeroServeEndpoints             RayServiceConditionReason = "ZeroServeEndpoints"
+	NonZeroServeEndpoints          RayServiceConditionReason = "NonZeroServeEndpoints"
+	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"
+	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
+	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:categories=all
