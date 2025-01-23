@@ -479,7 +479,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
-			//Check that upscaling is rate-limited to the size of the RayCluster. The minimum number of pending launches is 5 regardless of upscaling_speed.
+			// Check that upscaling is rate-limited to the size of the RayCluster. The minimum number of pending launches is 5 regardless of upscaling_speed.
 			g.Consistently(WorkerPods(test, rayCluster), TestTimeoutShort).
 				Should(gomega.WithTransform(RateLimitedPendingPods, gomega.BeTrue()))
 			// All worker Pods should connect to the RayCluster.
