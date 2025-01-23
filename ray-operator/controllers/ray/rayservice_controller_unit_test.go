@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1105,6 +1107,143 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 			headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 			assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], tc.expectServeResult)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestCalculateConditions(t *testing.T) {
+	tests := []struct {
+		name                    string
+		conditionType           rayv1.RayServiceConditionType
+		originalConditionStatus metav1.ConditionStatus
+		originalReason          string
+		expectedConditionStatus metav1.ConditionStatus
+		expectedReason          string
+		rayServiceInstance      rayv1.RayService
+	}{
+		{
+			name: "Ready condition remains false unchanged",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints: 0,
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          "WhateverReason",
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          "WhateverReason",
+		},
+		{
+			name: "Ready condition remains true always has NonZeroServeEndPoints reason",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints: 1,
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionTrue,
+			originalReason:          "WhateverReason",
+			expectedConditionStatus: metav1.ConditionTrue,
+			expectedReason:          string(rayv1.NonZeroServeEndpoints),
+		},
+		{
+			name: "Ready condition becomes true",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints: 1,
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          "WhateverReason",
+			expectedConditionStatus: metav1.ConditionTrue,
+			expectedReason:          string(rayv1.NonZeroServeEndpoints),
+		},
+		{
+			name: "Ready condition becomes false",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints: 0,
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionTrue,
+			originalReason:          string(rayv1.NonZeroServeEndpoints),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.ZeroServeEndpoints),
+		},
+		{
+			name: "UpgradeInProgress condition is true if both active and pending clusters exist",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "active-cluster",
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "pending-cluster",
+					},
+				},
+			},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          "WhateverReason",
+			expectedConditionStatus: metav1.ConditionTrue,
+			expectedReason:          string(rayv1.BothActivePendingClustersExist),
+		},
+		{
+			name: "UpgradeInProgress condition is false if only active cluster exists",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "active-cluster",
+					},
+				},
+			},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionTrue,
+			originalReason:          string(rayv1.BothActivePendingClustersExist),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.NoPendingCluster),
+		},
+		{
+			name:                    "UpgradeInProgress condition is unknown if no active cluster exists and RayService is not initializing",
+			rayServiceInstance:      rayv1.RayService{},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionTrue,
+			originalReason:          string(rayv1.BothActivePendingClustersExist),
+			expectedConditionStatus: metav1.ConditionUnknown,
+			expectedReason:          string(rayv1.NoActiveCluster),
+		},
+		{
+			name: "UpgradeInProgress condition is false if RayService is initializing",
+			rayServiceInstance: rayv1.RayService{
+				Status: rayv1.RayServiceStatuses{
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "pending-cluster",
+					},
+				},
+			},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializing),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initConditions(&tt.rayServiceInstance)
+			meta.SetStatusCondition(&tt.rayServiceInstance.Status.Conditions, metav1.Condition{
+				Type:   string(tt.conditionType),
+				Status: tt.originalConditionStatus,
+				Reason: tt.originalReason,
+			})
+			calculateConditions(&tt.rayServiceInstance)
+			condition := meta.FindStatusCondition(tt.rayServiceInstance.Status.Conditions, string(tt.conditionType))
+			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
+			assert.Equal(t, tt.expectedReason, condition.Reason)
 		})
 	}
 }
