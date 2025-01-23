@@ -40,7 +40,6 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		}
 	}
 
-	var paths []networkingv1.HTTPIngressPath
 	pathType := networkingv1.PathTypeExact
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := int32(utils.DefaultDashboardPort)
@@ -52,7 +51,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	if err != nil {
 		return nil, err
 	}
-	paths = []networkingv1.HTTPIngressPath{
+	paths := []networkingv1.HTTPIngressPath{
 		{
 			Path:     "/" + cluster.Name + "/(.*)",
 			PathType: &pathType,
