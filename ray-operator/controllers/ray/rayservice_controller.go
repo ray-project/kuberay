@@ -197,7 +197,9 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	if !isActiveClusterReady && !isPendingClusterReady {
 		logger.Info("Ray Serve applications are not ready to serve requests")
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+		if !isEagerExposesServicesEnabled() {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+		}
 	}
 
 	// Switch pending cluster to active cluster if pending cluster is ready
@@ -224,6 +226,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !isReady {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
 	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
@@ -254,6 +260,10 @@ func validateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
 	}
 	return nil
+}
+
+func isEagerExposesServicesEnabled() bool {
+	return strings.ToLower(os.Getenv(utils.ENABLE_RAYSERVICE_EAGER_EXPOSES_SERVICES)) == "true"
 }
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
