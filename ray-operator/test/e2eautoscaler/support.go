@@ -141,6 +141,7 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 
 func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfiguration {
 	return corev1ac.PodTemplateSpec().
+		WithLabels(make(map[string]string)).
 		WithSpec(corev1ac.PodSpec().
 			WithContainers(corev1ac.Container().
 				WithName("ray-worker").
@@ -158,6 +159,7 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 
 func workerPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfiguration {
 	return corev1ac.PodTemplateSpec().
+		WithLabels(make(map[string]string)).
 		WithSpec(corev1ac.PodSpec().
 			WithRestartPolicy(corev1.RestartPolicyNever).
 			WithContainers(corev1ac.Container().
