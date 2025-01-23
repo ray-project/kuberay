@@ -34,12 +34,14 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithGcsFaultToleranceOptions(
-				rayv1ac.GcsFaultToleranceOptions().WithRedisAddress("redis:6379")).
+				rayv1ac.GcsFaultToleranceOptions().
+					WithRedisAddress("redis:6379").
+					WithRedisPassword(rayv1ac.RedisCredential().WithValue(redisPassword)),
+			).
 			WithRayVersion(rayVersion).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{
-					"num-cpus":       "0",
-					"redis-password": redisPassword,
+					"num-cpus": "0",
 				}).
 				WithTemplate(headPodTemplateApplyConfiguration()),
 			).
@@ -54,7 +56,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 				WithTemplate(workerPodTemplateApplyConfiguration()),
 			)
 		rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
-			WithAnnotations(map[string]string{"ray.io/ft-enabled": "true"}).
 			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScript, "/home/ray/samples")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -63,7 +64,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 		test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
-		g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutLong).
 			Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
 
 		headPod, err := GetHeadPod(test, rayCluster)
