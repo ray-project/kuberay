@@ -89,3 +89,11 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 	}
 	return nil
 }
+
+func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
+	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusWaiting && rayJob.Spec.SubmissionMode != rayv1.InteractiveMode {
+		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode")
+	}
+
+	return nil
+}
