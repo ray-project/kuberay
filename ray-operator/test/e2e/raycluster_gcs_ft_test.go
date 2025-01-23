@@ -5,9 +5,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -16,8 +14,9 @@ import (
 )
 
 const (
-	rayImage   = "rayproject/ray:2.40.0"
-	rayVersion = "2.40.0"
+	rayImage      = "rayproject/ray:2.40.0"
+	rayVersion    = "2.40.0"
+	redisPassword = "5241590000000000"
 )
 
 func TestRayClusterGCSFaultTolerence(t *testing.T) {
@@ -27,84 +26,37 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 	testScriptAC := newConfigMap(namespace.Name, files(test, "test_detached_actor_1.py", "test_detached_actor_2.py"))
-	testScriptCM, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
+	testScript, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	redisDM := newRedisDeployment(namespace.Name)
-
-	_, err = test.Client().Core().AppsV1().Deployments(namespace.Name).Apply(test.Ctx(), redisDM, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	redisSvc := newRedisService(namespace.Name)
-
-	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Apply(test.Ctx(), redisSvc, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
+	deployRedis(test, namespace.Name, redisPassword)
 
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
+		rayClusterSpecAC := rayv1ac.RayClusterSpec().
+			WithGcsFaultToleranceOptions(
+				rayv1ac.GcsFaultToleranceOptions().WithRedisAddress("redis:6379")).
+			WithRayVersion(rayVersion).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{
+					"num-cpus":       "0",
+					"redis-password": redisPassword,
+				}).
+				WithTemplate(headPodTemplateApplyConfiguration()),
+			).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithRayStartParams(map[string]string{
+					"num-cpus": "1",
+				}).
+				WithGroupName("small-group").
+				WithReplicas(1).
+				WithMinReplicas(1).
+				WithMaxReplicas(2).
+				WithTemplate(workerPodTemplateApplyConfiguration()),
+			)
 		rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
 			WithAnnotations(map[string]string{"ray.io/ft-enabled": "true"}).
-			WithSpec(
-				newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScriptCM, "/home/ray/samples")).
-					WithGcsFaultToleranceOptions(
-						rayv1ac.GcsFaultToleranceOptions().WithRedisAddress("redis:6379")).
-					WithRayVersion(rayVersion).
-					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-						WithRayStartParams(map[string]string{
-							"num-cpus":       "0",
-							"redis-password": "5241590000000000",
-						}).
-						WithTemplate(corev1ac.PodTemplateSpec().
-							WithSpec(corev1ac.PodSpec().
-								WithContainers(corev1ac.Container().
-									WithName("ray-head").
-									WithImage(rayImage).
-									WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("20")).
-									WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("redis")).
-									WithPorts(corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard")).
-									WithPorts(corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")).
-									WithVolumeMounts(corev1ac.VolumeMount().
-										WithMountPath("/home/ray/samples").
-										WithName("test-script-configmap"),
-									),
-								).
-								WithVolumes(corev1ac.Volume().
-									WithName("test-script-configmap").
-									WithConfigMap(corev1ac.ConfigMapVolumeSource().
-										WithName("jobs").
-										WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_1.py").WithPath("test_detached_actor_1.py")).
-										WithItems(corev1ac.KeyToPath().WithKey("test_detached_actor_2.py").WithPath("test_detached_actor_2.py")),
-									),
-								),
-							),
-						),
-					).
-					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-						WithRayStartParams(map[string]string{
-							"num-cpus": "1",
-						}).
-						WithGroupName("small-group").
-						WithReplicas(1).
-						WithMinReplicas(1).
-						WithMaxReplicas(2).
-						WithTemplate(corev1ac.PodTemplateSpec().
-							WithSpec(corev1ac.PodSpec().
-								WithContainers(corev1ac.Container().
-									WithName("ray-worker").
-									WithImage(rayImage).
-									WithEnv(corev1ac.EnvVar().WithName("RAY_gcs_rpc_server_reconnect_timeout_s").WithValue("120")).
-									WithResources(corev1ac.ResourceRequirements().
-										WithLimits(corev1.ResourceList{
-											corev1.ResourceCPU: resource.MustParse("300m"),
-										}).
-										WithRequests(corev1.ResourceList{
-											corev1.ResourceCPU: resource.MustParse("300m"),
-										}),
-									),
-								),
-							),
-						),
-					),
-			)
+			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScript, "/home/ray/samples")))
+
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 
 		g.Expect(err).NotTo(HaveOccurred())
@@ -125,10 +77,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_1.py", rayNamespace})
 
 		// [Test 1: Kill GCS process to "restart" the head Pod]
-		// become running and ready, the RayCluster still needs tens of seconds
-		// Hence, `test_detached_actor_2.py` will retry until a Ray client
-		// connection succeeds.
-		// Assert is implement in python, so no furthur handling needed here, and so are other ExecPodCmd
+		// Assertion is implement in python, so no furthur handling needed here, and so are other ExecPodCmd
 		stdout, stderr := ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
 		t.Logf("pkill gcs_server output - stdout: %s, stderr: %s", stdout.String(), stderr.String())
 
@@ -153,7 +102,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_2.py", rayNamespace, expectedOutput})
 
 		// Test 2: Delete the head Pod
-
 		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
