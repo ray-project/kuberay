@@ -203,30 +203,17 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Switch pending cluster to active cluster if pending cluster is ready
 	// to serve requests.
 	if isPendingClusterReady {
-		promotePendingClusterToActiveCluster(ctx, rayServiceInstance)
-		// TODO: update K8s service to switch the RayCluster to pending cluster.
+		logger.Info("Reconciling the service resources on the pending Ray cluster.")
+		err = r.reconcileServicesToReadyCluster(ctx, rayServiceInstance, pendingRayClusterInstance)
+	} else {
+		logger.Info("Reconciling the service resources on the active Ray cluster. No valid pending Ray cluster found.")
+		err = r.reconcileServicesToReadyCluster(ctx, rayServiceInstance, activeRayClusterInstance)
 	}
-
-	// Get the ready Ray cluster instance for service update.
-	var rayClusterInstance *rayv1.RayCluster
-	if pendingRayClusterInstance != nil {
-		rayClusterInstance = pendingRayClusterInstance
-		logger.Info("Reconciling the service resources " +
-			"on the pending Ray cluster.")
-	} else if activeRayClusterInstance != nil {
-		rayClusterInstance = activeRayClusterInstance
-		logger.Info("Reconciling the service resources " +
-			"on the active Ray cluster. No pending Ray cluster found.")
-	}
-
-	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-	}
-	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService); err != nil {
+	if err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
-	if err := r.calculateStatus(ctx, rayServiceInstance); err != nil {
+	if err := r.calculateStatus(ctx, rayServiceInstance, isPendingClusterReady); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
@@ -237,8 +224,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
 	}
-
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
+		return err
+	}
+	return r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService)
 }
 
 func validateRayServiceSpec(rayService *rayv1.RayService) error {
@@ -256,7 +249,20 @@ func validateRayServiceSpec(rayService *rayv1.RayService) error {
 	return nil
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) error {
+	// Switch the pending cluster to active cluster if needed.
+	logger := ctrl.LoggerFrom(ctx)
+
+	if isPendingClusterReady {
+		oldClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+		newClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+
+		logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", newClusterName)
+		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
+		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running
+	}
+
 	serveEndPoints := &corev1.Endpoints{}
 	if err := r.Get(ctx, common.RayServiceServeServiceNamespacedName(rayServiceInstance), serveEndPoints); err != nil && !errors.IsNotFound(err) {
 		return err
@@ -988,20 +994,6 @@ func markPreparingNewCluster(rayServiceInstance *rayv1.RayService) {
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 		RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 	}
-}
-
-func promotePendingClusterToActiveCluster(ctx context.Context, rayServiceInstance *rayv1.RayService) {
-	// Switch the pending cluster to active cluster if needed. Note that this function
-	// is called when the pending cluster is ready.
-	logger := ctrl.LoggerFrom(ctx)
-
-	oldClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
-	newClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
-
-	logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", newClusterName)
-	rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
-	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-	rayServiceInstance.Status.ServiceStatus = rayv1.Running
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
