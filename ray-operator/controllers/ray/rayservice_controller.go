@@ -212,6 +212,10 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
+	if headSvc == nil || serveSvc == nil {
+		panic("Both head and serve services are nil before calculate RayService status. " +
+			"This should never happen. Please open a GitHub issue in the KubeRay repository.")
+	}
 
 	// Calculate the status of the RayService based on K8s resources.
 	if err := r.calculateStatus(ctx, rayServiceInstance, headSvc, serveSvc); err != nil {
@@ -261,6 +265,8 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 
 	if headSvc != nil && serveSvc != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+		// Promote the pending cluster to the active cluster if both RayService's head and serve services
+		// have already pointed to the pending cluster.
 		shouldPromotePendingClusterToActiveCluster := pendingClusterName != "" &&
 			utils.GetRayClusterNameFromService(headSvc) == pendingClusterName &&
 			utils.GetRayClusterNameFromService(serveSvc) == pendingClusterName
