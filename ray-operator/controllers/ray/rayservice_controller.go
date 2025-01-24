@@ -265,15 +265,24 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 
 	if headSvc != nil && serveSvc != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+		activeClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+
 		// Promote the pending cluster to the active cluster if both RayService's head and serve services
 		// have already pointed to the pending cluster.
-		shouldPromotePendingClusterToActiveCluster := pendingClusterName != "" &&
-			utils.GetRayClusterNameFromService(headSvc) == pendingClusterName &&
-			utils.GetRayClusterNameFromService(serveSvc) == pendingClusterName
+		clusterName := utils.GetRayClusterNameFromService(headSvc)
+		if clusterName != utils.GetRayClusterNameFromService(serveSvc) {
+			panic("headSvc and serveSvc are not pointing to the same cluster")
+		}
+		// Verify cluster name matches either pending or active cluster
+		if clusterName != pendingClusterName && clusterName != activeClusterName {
+			panic("clusterName is not equal to pendingCluster or activeCluster")
+		}
 
-		if shouldPromotePendingClusterToActiveCluster {
-			oldClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
-			logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", pendingClusterName)
+		// If services point to a different cluster than the active one, promote pending to active
+		if activeClusterName != clusterName {
+			logger.Info("Promoting pending cluster to active",
+				"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
+				"newCluster", clusterName)
 			rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 			rayServiceInstance.Status.ServiceStatus = rayv1.Running
