@@ -552,7 +552,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	ctx := context.TODO()
 	// Create a head service.
-	err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	_, err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList := corev1.ServiceList{}
@@ -568,7 +568,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			ContainerPort: 9999,
 		},
 	}
-	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
@@ -579,7 +579,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
-	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
