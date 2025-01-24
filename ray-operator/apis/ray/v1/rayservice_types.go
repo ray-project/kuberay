@@ -11,9 +11,7 @@ import (
 type ServiceStatus string
 
 const (
-	WaitForServeDeploymentReady ServiceStatus = "WaitForServeDeploymentReady"
-	Running                     ServiceStatus = "Running"
-	PreparingNewCluster         ServiceStatus = "PreparingNewCluster"
+	Running ServiceStatus = "Running"
 )
 
 type RayServiceUpgradeType string
