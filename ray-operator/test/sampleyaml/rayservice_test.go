@@ -1,7 +1,6 @@
 package sampleyaml
 
 import (
-	"fmt"
 	"path"
 	"testing"
 
@@ -12,8 +11,6 @@ import (
 )
 
 func TestRayService(t *testing.T) {
-	fmt.Println("--- RUN	TestRayService")
-
 	tests := []struct {
 		name string
 	}{
