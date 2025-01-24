@@ -1,12 +1,14 @@
 package e2e
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -25,10 +27,6 @@ func TestRayServiceUpgrade(t *testing.T) {
 	rayServiceName := "rayservice-sample"
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
-
-	// TODO: This test will fail on Ray 2.40.0. Pin the Ray version to 2.9.0 as a workaround. Need to remove this after the issue is fixed.
-	rayServiceAC.Spec.RayClusterSpec.WithRayVersion("2.9.0")
-	rayServiceAC.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].WithImage("rayproject/ray:2.9.0")
 
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -67,14 +65,13 @@ func TestRayServiceUpgrade(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 
 	// After the above curl test, now the RayService is ready.
-	// We manually delete the "ray.io/serve" label on the Head for testing the reconciliation later.
-	g.Eventually(func(g Gomega) {
-		head, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), rayService.Status.ActiveServiceStatus.RayClusterStatus.Head.PodName, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		delete(head.Labels, utils.RayClusterServingServiceLabelKey)
-		_, err = test.Client().Core().CoreV1().Pods(namespace.Name).Update(test.Ctx(), head, metav1.UpdateOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-	}, TestTimeoutShort).Should(Succeed())
+	// Get the Endpoints object for the later usage.
+	svcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(endpoints.Subsets).To(HaveLen(1))
+	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
 
 	// upgrade the cluster and the serve application
 	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
@@ -85,27 +82,63 @@ func TestRayServiceUpgrade(t *testing.T) {
 	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
 	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
 
-	// modify EnableInTreeAutoscaling to trigger a zero downtime upgrade.
-	rayService.Spec.RayClusterSpec.EnableInTreeAutoscaling = ptr.To[bool](true)
-	rayService.Spec.ServeConfigV2 = serveConfig
-
-	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
-		test.Ctx(),
-		rayService,
-		metav1.UpdateOptions{},
+	// modify InitContainers to trigger a zero downtime upgrade.
+	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.InitContainers = append(
+		rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.InitContainers,
+		corev1.Container{
+			Name:    "sleep",
+			Image:   rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image,
+			Command: []string{"/bin/bash"},
+			// intentionally make the new pending cluster sleep for a while for us
+			// to have time to capture the below iptables manipulation.
+			Args: []string{"-c", "sleep 30"},
+		},
 	)
+	rayService.Spec.ServeConfigV2 = serveConfig
+	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// After upgrade the RayService, there should be 2 Heads with "ray.io/serve=true".
-	g.Eventually(func(g Gomega) int {
-		heads, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(test.Ctx(), metav1.ListOptions{
-			LabelSelector: "ray.io/serve=true",
-		})
+	// use iptables to make the ProxyActor(8000 port) fail on the old Head.
+	headPodPatch := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"ephemeralContainers": []corev1.EphemeralContainer{
+				{
+					EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+						Name:    "proxy-actor-drop",
+						Image:   "istio/iptables",
+						Command: []string{"iptables"},
+						Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
+						SecurityContext: &corev1.SecurityContext{
+							Privileged: ptr.To[bool](true),
+							RunAsUser:  ptr.To[int64](0),
+						},
+					},
+				},
+			},
+		},
+	}
+	patchBytes, err := json.Marshal(headPodPatch)
+	g.Expect(err).NotTo(HaveOccurred())
+	headPodName := endpoints.Subsets[0].Addresses[0].TargetRef.Name
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), headPodName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "ephemeralcontainers")
+	g.Expect(err).NotTo(HaveOccurred())
+	// the "ray.io/serve" label on the old Head should be "true" first,
+	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
+	// then be turned to "false" and it should also not be in the new Endpoints.
+	g.Eventually(func(g Gomega) string {
+		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
-		return len(heads.Items)
-	}, TestTimeoutShort).Should(Equal(2))
+		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
+	}, TestTimeoutShort).Should(Equal("false"))
+	g.Eventually(func(g Gomega) {
+		endpoints, err = test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(endpoints.Subsets).To(HaveLen(1))
+		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(headPodName))
+	}, TestTimeoutShort).Should(Succeed())
 
-	// Test the new price and factor
+	// Test the upgraded Ray Serve application.
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
 		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
