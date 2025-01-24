@@ -272,6 +272,11 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
+	if rayServiceInstance.Status.NumServeEndpoints > 0 {
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running
+	} else {
+		rayServiceInstance.Status.ServiceStatus = ""
+	}
 	return nil
 }
 
@@ -984,7 +989,6 @@ func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RaySer
 }
 
 func markPreparingNewCluster(rayServiceInstance *rayv1.RayService) {
-	rayServiceInstance.Status.ServiceStatus = rayv1.PreparingNewCluster
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 		RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 	}
@@ -1001,7 +1005,6 @@ func promotePendingClusterToActiveCluster(ctx context.Context, rayServiceInstanc
 	logger.Info("Switch over to the new cluster", "OldRayClusterName", oldClusterName, "NewClusterName", newClusterName)
 	rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-	rayServiceInstance.Status.ServiceStatus = rayv1.Running
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
@@ -1155,15 +1158,6 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	logger.Info("Check serve health", "isReady", isReady, "isActive", isActive)
-
-	if !isReady {
-		// TODO (kevin85421): avoid always updating status if the serve applications are not ready.
-		rayServiceInstance.Status.ServiceStatus = rayv1.WaitForServeDeploymentReady
-		if err := r.Status().Update(ctx, rayServiceInstance); err != nil {
-			return false, err
-		}
-		logger.Info("Mark cluster as waiting for Serve applications", "rayCluster", rayClusterInstance)
-	}
 
 	return isReady, nil
 }

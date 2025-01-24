@@ -366,17 +366,10 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.PreparingNewCluster,
 	}
 	ctx := context.Background()
 
-	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.WaitForServeDeploymentReady
-	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
-
-	// Test 2: Test RayServiceStatus
-	newStatus = oldStatus.DeepCopy()
 	assert.False(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 }
 
