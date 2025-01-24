@@ -149,3 +149,18 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	return nil
 }
+
+func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
+		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+	}
+
+	// only NewCluster and None are valid upgradeType
+	if rayService.Spec.UpgradeStrategy != nil &&
+		rayService.Spec.UpgradeStrategy.Type != nil &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
+	}
+	return nil
+}

@@ -686,3 +686,35 @@ func TestValidateRayJobSpec(t *testing.T) {
 	})
 	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 }
+
+func TestValidateRayServiceSpec(t *testing.T) {
+	err := ValidateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					HeadService: &corev1.Service{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "my-head-service",
+						},
+					},
+				},
+			},
+		},
+	})
+	assert.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+
+	err = ValidateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{},
+	})
+	assert.NoError(t, err, "The RayService spec is valid.")
+
+	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
+	err = ValidateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: &upgradeStrat,
+			},
+		},
+	})
+	assert.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+}
