@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 )
 
 func TestRayJob(t *testing.T) {
+	fmt.Println("--- RUN	TestRayJob")
+
 	test := With(t)
 	g := NewWithT(t)
 
