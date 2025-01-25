@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -18,7 +17,7 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-func TestRayServiceUpgrade(t *testing.T) {
+func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -41,20 +40,21 @@ func TestRayServiceUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	// Create curl pod
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
 
+	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
+
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	// Wait until curl pod is created
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
+	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
-	// test the default curl result
+	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
 		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
@@ -64,41 +64,32 @@ func TestRayServiceUpgrade(t *testing.T) {
 		g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 	}, TestTimeoutShort).Should(Succeed())
 
-	// After the above curl test, now the RayService is ready.
-	// Get the Endpoints object for the later usage.
-	svcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
-	g.Expect(err).NotTo(HaveOccurred())
+	svcName := utils.GenerateServeServiceName(rayService.Name)
+	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint because the cluster only has a head Pod", svcName)
 	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(endpoints.Subsets).To(HaveLen(1))
 	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+	headPodName := endpoints.Subsets[0].Addresses[0].TargetRef.Name
 
-	// upgrade the cluster and the serve application
-	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
+	test.T().Logf("Upgrading the RayService to trigger a zero downtime upgrade")
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-
-	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
-	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
-
-	// modify InitContainers to trigger a zero downtime upgrade.
 	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.InitContainers = append(
 		rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.InitContainers,
 		corev1.Container{
 			Name:    "sleep",
 			Image:   rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image,
 			Command: []string{"/bin/bash"},
-			// intentionally make the new pending cluster sleep for a while for us
-			// to have time to capture the below iptables manipulation.
+			// Intentionally make the new pending cluster sleep for a while to give us
+			// time to capture the iptables manipulation below.
 			Args: []string{"-c", "sleep 30"},
 		},
 	)
-	rayService.Spec.ServeConfigV2 = serveConfig
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// use iptables to make the ProxyActor(8000 port) fail on the old Head.
+	test.T().Logf("Using iptables to make the ProxyActor(8000 port) fail to receive requests on the old head Pod")
 	headPodPatch := map[string]interface{}{
 		"spec": map[string]interface{}{
 			"ephemeralContainers": []corev1.EphemeralContainer{
@@ -109,8 +100,8 @@ func TestRayServiceUpgrade(t *testing.T) {
 						Command: []string{"iptables"},
 						Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
 						SecurityContext: &corev1.SecurityContext{
-							Privileged: ptr.To[bool](true),
-							RunAsUser:  ptr.To[int64](0),
+							Privileged: ptr.To(true),
+							RunAsUser:  ptr.To(int64(0)),
 						},
 					},
 				},
@@ -119,17 +110,20 @@ func TestRayServiceUpgrade(t *testing.T) {
 	}
 	patchBytes, err := json.Marshal(headPodPatch)
 	g.Expect(err).NotTo(HaveOccurred())
-	headPodName := endpoints.Subsets[0].Addresses[0].TargetRef.Name
 	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), headPodName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "ephemeralcontainers")
 	g.Expect(err).NotTo(HaveOccurred())
-	// the "ray.io/serve" label on the old Head should be "true" first,
+
+	test.T().Logf("Checking that the old Head Pod's label `ray.io/serve` is `true`")
 	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
-	// then be turned to "false" and it should also not be in the new Endpoints.
+
+	test.T().Logf("Checking that the old Head Pod's label `ray.io/serve` is `false` because it is not healthy")
 	g.Eventually(func(g Gomega) string {
 		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
 	}, TestTimeoutShort).Should(Equal("false"))
+
+	test.T().Logf("Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
 		endpoints, err = test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -138,13 +132,13 @@ func TestRayServiceUpgrade(t *testing.T) {
 		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(headPodName))
 	}, TestTimeoutShort).Should(Succeed())
 
-	// Test the upgraded Ray Serve application.
+	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
 	g.Eventually(func(g Gomega) {
 		// curl /fruit
 		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-		g.Expect(stdout.String()).To(Equal("8"))
+		g.Expect(stdout.String()).To(Equal("6"))
 		// curl /calc
 		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-		g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
+		g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 	}, TestTimeoutShort).Should(Succeed())
 }
