@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -127,6 +128,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
+
+	// Initialize conditions for RayService.
+	changed := initConditions(rayServiceInstance)
+	if changed {
+		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
+			logger.Error(errStatus, "Fail to update initial conditions for RayService")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+		}
+	}
 
 	// Find active and pending ray cluster objects given current service name.
 	var activeRayClusterInstance *rayv1.RayCluster
@@ -289,7 +299,55 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
+	calculateConditions(rayServiceInstance)
 	return nil
+}
+
+func initConditions(rayServiceInstance *rayv1.RayService) (changed bool) {
+	changed = false
+	if rayServiceInstance.Status.Conditions == nil {
+		rayServiceInstance.Status.Conditions = []metav1.Condition{}
+		changed = true
+	}
+	if len(rayServiceInstance.Status.Conditions) == 0 {
+		message := "RayService is initializing"
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
+		changed = true
+	}
+	return changed
+}
+
+func calculateConditions(rayServiceInstance *rayv1.RayService) {
+	if rayServiceInstance.Status.NumServeEndpoints > 0 {
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
+	} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.ZeroServeEndpoints, "Number of serve endpoints dropped to 0")
+	}
+
+	activeClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+	pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+	if activeClusterName != "" && pendingClusterName != "" {
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.BothActivePendingClustersExist, "Both active and pending Ray clusters exist")
+	} else if activeClusterName != "" {
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Active Ray cluster exists and no pending Ray cluster")
+	} else {
+		cond := meta.FindStatusCondition(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+		if cond == nil || cond.Reason != string(rayv1.RayServiceInitializing) {
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionUnknown, rayv1.NoActiveCluster, "No active Ray cluster exists, and the RayService is not initializing. Please open a GitHub issue in the KubeRay repository.")
+		}
+	}
+}
+
+func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayServiceConditionType, status metav1.ConditionStatus, reason rayv1.RayServiceConditionReason, message string) {
+	condition := metav1.Condition{
+		Type:               string(conditionType),
+		Status:             status,
+		Reason:             string(reason),
+		Message:            message,
+		ObservedGeneration: rayServiceInstance.Status.ObservedGeneration,
+	}
+	meta.SetStatusCondition(&rayServiceInstance.Status.Conditions, condition)
 }
 
 // Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
@@ -357,6 +415,11 @@ func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServ
 
 	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
 		logger.Info("inconsistentRayServiceStatus RayService NumServeEndpoints changed", "oldNumServeEndpoints", oldStatus.NumServeEndpoints, "newNumServeEndpoints", newStatus.NumServeEndpoints)
+		return true
+	}
+
+	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
+		logger.Info("inconsistentRayServiceStatus RayService Conditions changed")
 		return true
 	}
 
@@ -1005,6 +1068,8 @@ func markPreparingNewCluster(rayServiceInstance *rayv1.RayService) {
 	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 		RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 	}
+	// TODO(MortalHappiness): Don't calculate conditions here. Try to refactor this. Status calculation should be done in single place.
+	calculateConditions(rayServiceInstance)
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) (*corev1.Service, error) {

@@ -36,6 +36,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -230,6 +231,15 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", myRayService.Name)
 		})
 
+		It("should initialize conditions correctly", func() {
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService); err != nil {
+					return false
+				}
+				return meta.IsStatusConditionFalse(myRayService.Status.Conditions, string(rayv1.RayServiceReady)) && meta.IsStatusConditionFalse(myRayService.Status.Conditions, string(rayv1.UpgradeInProgress))
+			}, time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService conditions = %v", myRayService.Status.Conditions)
+		})
+
 		It("should create a raycluster object", func() {
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, myRayService),
@@ -289,6 +299,34 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(svc.Spec.Selector[utils.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
 		})
 
+		It("should have true Ready condition when number of endpoints is greater than 0", func() {
+			endpoints := &corev1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      utils.GenerateServeServiceName(myRayService.Name),
+					Namespace: "default",
+				},
+				Subsets: []corev1.EndpointSubset{
+					{
+						Addresses: []corev1.EndpointAddress{
+							{
+								IP: "10.9.8.7",
+							},
+						},
+					},
+				},
+			}
+			err := k8sClient.Create(ctx, endpoints)
+			Expect(err).NotTo(HaveOccurred(), "failed to create test Endpoints resource")
+
+			Eventually(func() int32 {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: myRayService.Name, Namespace: "default"}, myRayService); err != nil {
+					return 0
+				}
+				return myRayService.Status.NumServeEndpoints
+			}, time.Second*3, time.Millisecond*500).Should(BeNumerically(">", 0), "My myRayService status = %v", myRayService.Status)
+			Expect(meta.IsStatusConditionTrue(myRayService.Status.Conditions, string(rayv1.RayServiceReady))).Should(BeTrue())
+		})
+
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
@@ -305,6 +343,7 @@ var _ = Context("Inside the default namespace", func() {
 				getPreparingRayClusterNameFunc(ctx, myRayService),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name  = %v", myRayService.Status.PendingServiceStatus.RayClusterName)
 			pendingRayClusterName := myRayService.Status.PendingServiceStatus.RayClusterName
+			Expect(meta.IsStatusConditionTrue(myRayService.Status.Conditions, string(rayv1.UpgradeInProgress))).Should(BeTrue())
 
 			// Update the status of the head Pod to Running.
 			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, "default")
@@ -317,6 +356,7 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: myRayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+			Expect(meta.IsStatusConditionFalse(myRayService.Status.Conditions, string(rayv1.UpgradeInProgress))).Should(BeTrue())
 		})
 
 		It("Disable zero-downtime upgrade", func() {
