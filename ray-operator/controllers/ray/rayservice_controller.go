@@ -117,7 +117,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 
-	if err := validateRayServiceSpec(rayServiceInstance); err != nil {
+	if err := utils.ValidateRayServiceSpec(rayServiceInstance); err != nil {
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceSpec),
 			"The RayService spec is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -243,21 +243,6 @@ func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Conte
 		return headSvc, serveSvc, err
 	}
 	return headSvc, serveSvc, nil
-}
-
-func validateRayServiceSpec(rayService *rayv1.RayService) error {
-	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
-		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
-	}
-
-	// only NewCluster and None are valid upgradeType
-	if rayService.Spec.UpgradeStrategy != nil &&
-		rayService.Spec.UpgradeStrategy.Type != nil &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
-	}
-	return nil
 }
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service) error {
