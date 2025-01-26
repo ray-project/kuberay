@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -752,72 +751,10 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	}
 }
 
-func TestCheckIfNeedSubmitServeDeployment(t *testing.T) {
-	// Create a new scheme with CRDs, Pod, Service schemes.
-	newScheme := runtime.NewScheme()
-	_ = rayv1.AddToScheme(newScheme)
-	_ = corev1.AddToScheme(newScheme)
+func TestCheckIfNeedSubmitServeApplications(t *testing.T) {
+	serveConfigV2_1 := "serve-config-1"
+	serveConfigV2_2 := "serve-config-2"
 
-	// Initialize a fake client with newScheme and runtimeObjects.
-	runtimeObjects := []runtime.Object{}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-
-	// Initialize RayService reconciler.
-	r := RayServiceReconciler{
-		Client:       fakeClient,
-		Recorder:     &record.FakeRecorder{},
-		Scheme:       scheme.Scheme,
-		ServeConfigs: lru.New(utils.ServeConfigLRUSize),
-	}
-
-	namespace := "ray"
-	cluster := rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: namespace,
-		},
-	}
-	rayService := rayv1.RayService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-service",
-			Namespace: cluster.ObjectMeta.Namespace,
-		},
-		Spec: rayv1.RayServiceSpec{
-			ServeConfigV2: `
-applications:
-- name: myapp
-  import_path: fruit.deployment_graph
-  runtime_env:
-  working_dir: "https://github.com/ray-project/test_dag/archive/41d09119cbdf8450599f993f51318e9e27c59098.zip"
-  deployments:
-  - name: MangoStand
-	num_replicas: 1
-	user_config:
-	price: 3
-	ray_actor_options:
-	num_cpus: 0.1`,
-		},
-	}
-	ctx := context.Background()
-
-	// Test 1: The RayCluster is new, and this is the first reconciliation after the RayCluster becomes ready.
-	// No Serve application has been created yet, so the RayService's serve configuration has not been cached in
-	// `r.ServeConfigs`.
-	serveConfig := r.getServeConfigFromCache(&rayService, cluster.Name)
-	assert.Empty(t, serveConfig)
-	shouldCreate := r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
-	assert.True(t, shouldCreate)
-
-	// Test 2: The RayCluster is not new, but the head Pod without GCS FT-enabled crashes and restarts.
-	// Hence, the RayService's Serve application status is empty, but the KubeRay operator has cached the Serve
-	// application's configuration.
-	r.cacheServeConfig(&rayService, cluster.Name) // Simulate the Serve application's configuration has been cached.
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &rayv1.RayServiceStatus{})
-	assert.True(t, shouldCreate)
-
-	// Test 3: The Serve application has been created, and the RayService's status has been updated.
-	serveConfig = r.getServeConfigFromCache(&rayService, cluster.Name)
-	assert.NotEmpty(t, serveConfig)
 	serveStatus := rayv1.RayServiceStatus{
 		Applications: map[string]rayv1.AppStatus{
 			"myapp": {
@@ -825,16 +762,34 @@ applications:
 			},
 		},
 	}
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &serveStatus)
+	emptyServeStatus := rayv1.RayServiceStatus{}
+
+	clusterName := "test-cluster"
+	ctx := context.TODO()
+
+	// Test 1: The cached Serve config is empty, and the new Serve config is not empty.
+	// This happens when the RayCluster is new, and the serve application has not been created yet.
+	shouldCreate := checkIfNeedSubmitServeApplications(ctx, "", serveConfigV2_1, &emptyServeStatus, clusterName)
+	assert.True(t, shouldCreate)
+
+	// Test 2: The cached Serve config and the new Serve config are the same.
+	// This happens when the serve application is already created, and users do not update the serve config.
+	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_1, &serveStatus, clusterName)
 	assert.False(t, shouldCreate)
 
-	// Test 4: The Serve application has been created, but the Serve config has been updated.
-	// Therefore, the Serve in-place update should be triggered.
-	rayService.Spec.ServeConfigV2 = `
-applications:
-- name: new_app_name
-  import_path: fruit.deployment_graph`
-	shouldCreate = r.checkIfNeedSubmitServeDeployment(ctx, &rayService, &cluster, &serveStatus)
+	// Test 3: The cached Serve config and the new Serve config are different.
+	// This happens when the serve application is already created, and users update the serve config.
+	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_2, &serveStatus, clusterName)
+	assert.True(t, shouldCreate)
+
+	// Test 4: Both the cached Serve config and the new Serve config are the same, but the RayService CR status is empty.
+	// This happens when the head Pod crashed and GCS FT was not enabled
+	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_1, &emptyServeStatus, clusterName)
+	assert.True(t, shouldCreate)
+
+	// Test 5: The cached Serve config is empty, but the new Serve config is not empty.
+	// This happens when KubeRay operator crashes and restarts. Submit the request for safety.
+	shouldCreate = checkIfNeedSubmitServeApplications(ctx, "", serveConfigV2_1, &serveStatus, clusterName)
 	assert.True(t, shouldCreate)
 }
 

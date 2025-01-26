@@ -875,47 +875,46 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	return rayCluster, nil
 }
 
-func (r *RayServiceReconciler) checkIfNeedSubmitServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serveStatus *rayv1.RayServiceStatus) bool {
+func checkIfNeedSubmitServeApplications(ctx context.Context, cachedServeConfigV2 string, serveConfigV2 string, serveStatus *rayv1.RayServiceStatus, clusterName string) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// If the Serve config has not been cached, update the Serve config.
-	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
 	if cachedServeConfigV2 == "" {
 		logger.Info(
-			"shouldUpdate",
-			"shouldUpdateServe", true,
-			"reason", "Nothing has been cached for the cluster",
-			"rayClusterName", rayClusterInstance.Name,
-		)
+			"checkIfNeedSubmitServeApplications",
+			"shouldSubmitServeApplications", true,
+			"reason", "Nothing has been cached for the cluster.",
+			"rayClusterName", clusterName)
 		return true
 	}
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
 	if len(serveStatus.Applications) == 0 {
 		logger.Info(
-			"shouldUpdate",
-			"should create Serve applications", true,
-			"reason",
-			"No Serve application found in the RayCluster, need to create serve applications. "+
-				"A possible reason is the head Pod has crashed and GCS FT is not enabled. "+
-				"Hence, the RayService CR's Serve application status is set to empty in the previous reconcile.",
-			"rayClusterName", rayClusterInstance.Name,
-		)
+			"checkIfNeedSubmitServeApplications",
+			"shouldSubmitServeApplications", true,
+			"reason", "No Serve application found in the RayCluster. "+
+				"A possible reason is that the head Pod crashed and GCS FT was not enabled. ",
+			"rayClusterName", clusterName)
 		return true
 	}
 
 	// If the Serve config has been cached, check if it needs to be updated.
-	shouldUpdate := false
-	reason := fmt.Sprintf("Current Serve config matches cached Serve config, "+
-		"and some deployments have been deployed for cluster %s", rayClusterInstance.Name)
-
-	if cachedServeConfigV2 != rayServiceInstance.Spec.ServeConfigV2 {
-		shouldUpdate = true
-		reason = fmt.Sprintf("Current V2 Serve config doesn't match cached Serve config for cluster %s", rayClusterInstance.Name)
+	if cachedServeConfigV2 != serveConfigV2 {
+		logger.Info(
+			"checkIfNeedSubmitServeApplications",
+			"shouldSubmitServeApplications", true,
+			"reason", "Current V2 Serve config doesn't match cached Serve config.",
+			"rayClusterName", clusterName)
+		return true
 	}
-	logger.Info("shouldUpdate", "shouldUpdateServe", shouldUpdate, "reason", reason, "cachedServeConfig", cachedServeConfigV2, "current Serve config", rayServiceInstance.Spec.ServeConfigV2)
 
-	return shouldUpdate
+	logger.Info(
+		"checkIfNeedSubmitServeApplications",
+		"shouldSubmitServeApplications", false,
+		"reason", "Current V2 Serve config matches cached Serve config.",
+		"rayClusterName", clusterName)
+	return false
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
@@ -1203,7 +1202,13 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return false, err
 	}
 
-	shouldUpdate := r.checkIfNeedSubmitServeDeployment(ctx, rayServiceInstance, rayClusterInstance, rayServiceStatus)
+	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
+	shouldUpdate := checkIfNeedSubmitServeApplications(
+		ctx,
+		cachedServeConfigV2,
+		rayServiceInstance.Spec.ServeConfigV2,
+		rayServiceStatus,
+		rayClusterInstance.Name)
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
 			return false, err
