@@ -875,46 +875,25 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	return rayCluster, nil
 }
 
-func checkIfNeedSubmitServeApplications(ctx context.Context, cachedServeConfigV2 string, serveConfigV2 string, serveStatus *rayv1.RayServiceStatus, clusterName string) bool {
-	logger := ctrl.LoggerFrom(ctx)
-
+func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveStatus *rayv1.RayServiceStatus) (bool, string) {
 	// If the Serve config has not been cached, update the Serve config.
 	if cachedServeConfigV2 == "" {
-		logger.Info(
-			"checkIfNeedSubmitServeApplications",
-			"shouldSubmitServeApplications", true,
-			"reason", "Nothing has been cached for the cluster.",
-			"rayClusterName", clusterName)
-		return true
+		return true, "Nothing has been cached for the cluster."
 	}
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
 	if len(serveStatus.Applications) == 0 {
-		logger.Info(
-			"checkIfNeedSubmitServeApplications",
-			"shouldSubmitServeApplications", true,
-			"reason", "No Serve application found in the RayCluster. "+
-				"A possible reason is that the head Pod crashed and GCS FT was not enabled. ",
-			"rayClusterName", clusterName)
-		return true
+		reason := "No Serve application found in the RayCluster. " +
+			"A possible reason is that the head Pod crashed and GCS FT was not enabled."
+		return true, reason
 	}
 
 	// If the Serve config has been cached, check if it needs to be updated.
 	if cachedServeConfigV2 != serveConfigV2 {
-		logger.Info(
-			"checkIfNeedSubmitServeApplications",
-			"shouldSubmitServeApplications", true,
-			"reason", "Current V2 Serve config doesn't match cached Serve config.",
-			"rayClusterName", clusterName)
-		return true
+		return true, "Current V2 Serve config doesn't match cached Serve config."
 	}
 
-	logger.Info(
-		"checkIfNeedSubmitServeApplications",
-		"shouldSubmitServeApplications", false,
-		"reason", "Current V2 Serve config matches cached Serve config.",
-		"rayClusterName", clusterName)
-	return false
+	return false, "Current V2 Serve config matches cached Serve config."
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
@@ -1203,12 +1182,9 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
-	shouldUpdate := checkIfNeedSubmitServeApplications(
-		ctx,
-		cachedServeConfigV2,
-		rayServiceInstance.Spec.ServeConfigV2,
-		rayServiceStatus,
-		rayClusterInstance.Name)
+	shouldUpdate, reason := checkIfNeedSubmitServeApplications(cachedServeConfigV2, rayServiceInstance.Spec.ServeConfigV2, rayServiceStatus)
+	logger.Info("checkIfNeedSubmitServeApplications", "shouldUpdate", shouldUpdate, "reason", reason)
+
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
 			return false, err

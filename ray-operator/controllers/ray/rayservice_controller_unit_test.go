@@ -764,32 +764,29 @@ func TestCheckIfNeedSubmitServeApplications(t *testing.T) {
 	}
 	emptyServeStatus := rayv1.RayServiceStatus{}
 
-	clusterName := "test-cluster"
-	ctx := context.TODO()
-
 	// Test 1: The cached Serve config is empty, and the new Serve config is not empty.
 	// This happens when the RayCluster is new, and the serve application has not been created yet.
-	shouldCreate := checkIfNeedSubmitServeApplications(ctx, "", serveConfigV2_1, &emptyServeStatus, clusterName)
+	shouldCreate, _ := checkIfNeedSubmitServeApplications("", serveConfigV2_1, &emptyServeStatus)
 	assert.True(t, shouldCreate)
 
 	// Test 2: The cached Serve config and the new Serve config are the same.
 	// This happens when the serve application is already created, and users do not update the serve config.
-	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_1, &serveStatus, clusterName)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, &serveStatus)
 	assert.False(t, shouldCreate)
 
 	// Test 3: The cached Serve config and the new Serve config are different.
 	// This happens when the serve application is already created, and users update the serve config.
-	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_2, &serveStatus, clusterName)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_2, &serveStatus)
 	assert.True(t, shouldCreate)
 
 	// Test 4: Both the cached Serve config and the new Serve config are the same, but the RayService CR status is empty.
 	// This happens when the head Pod crashed and GCS FT was not enabled
-	shouldCreate = checkIfNeedSubmitServeApplications(ctx, serveConfigV2_1, serveConfigV2_1, &emptyServeStatus, clusterName)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, &emptyServeStatus)
 	assert.True(t, shouldCreate)
 
 	// Test 5: The cached Serve config is empty, but the new Serve config is not empty.
 	// This happens when KubeRay operator crashes and restarts. Submit the request for safety.
-	shouldCreate = checkIfNeedSubmitServeApplications(ctx, "", serveConfigV2_1, &serveStatus, clusterName)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications("", serveConfigV2_1, &serveStatus)
 	assert.True(t, shouldCreate)
 }
 
