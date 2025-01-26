@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -15,8 +14,6 @@ import (
 )
 
 func TestRayJobWithClusterSelector(t *testing.T) {
-	fmt.Println("--- RUN	TestRayJobWithClusterSelector")
-
 	test := With(t)
 	g := NewWithT(t)
 

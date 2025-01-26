@@ -31,7 +31,6 @@ var tests = map[string]struct {
 }
 
 func TestRayClusterAutoscaler(t *testing.T) {
-	fmt.Println("--- RUN	TestRayClusterAutoscaler")
 	for name, tc := range tests {
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -99,7 +98,6 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
-	fmt.Println("--- RUN	TestRayClusterAutoscalerWithFakeGPU")
 	for name, tc := range tests {
 
 		test := With(t)
@@ -161,8 +159,6 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
-	fmt.Println("--- RUN	TestRayClusterAutoscalerWithCustomResource")
-
 	for name, tc := range tests {
 
 		test := With(t)
@@ -223,8 +219,6 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
-	fmt.Println("--- RUN	TestRayClusterAutoscalerWithDesiredState")
-
 	for name, tc := range tests {
 
 		test := With(t)
@@ -289,8 +283,6 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
-	fmt.Println("--- RUN	TestRayClusterAutoscalerMinReplicasUpdate")
-
 	for name, tc := range tests {
 
 		test := With(t)

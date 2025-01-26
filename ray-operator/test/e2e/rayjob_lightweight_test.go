@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -17,8 +16,6 @@ import (
 )
 
 func TestRayJobLightWeightMode(t *testing.T) {
-	fmt.Println("--- RUN	TestRayJobLightWeightMode")
-
 	test := With(t)
 	g := NewWithT(t)
 

@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -16,7 +15,6 @@ import (
 )
 
 func TestRayServiceInPlaceUpdate(t *testing.T) {
-	fmt.Println("--- RUN 	TestRayServiceInPlaceUpdate")
 	test := With(t)
 	g := NewWithT(t)
 

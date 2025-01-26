@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -17,8 +16,6 @@ import (
 )
 
 func TestRayJobSuspend(t *testing.T) {
-	fmt.Println("--- RUN	TestRayJobSuspend")
-
 	test := With(t)
 	g := NewWithT(t)
 
