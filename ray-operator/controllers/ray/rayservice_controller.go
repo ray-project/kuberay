@@ -179,7 +179,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve applications for pending cluster", "clusterName", pendingRayClusterInstance.Name)
 		if isPendingClusterReady, pendingClusterServeApplications, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance); err != nil {
-			// TODO
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
@@ -188,7 +187,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		// in-place update and updating the serve application status for the active cluster will not work.
 		logger.Info("Reconciling the Serve applications for active cluster", "clusterName", activeRayClusterInstance.Name)
 		if isActiveClusterReady, activeClusterServeApplications, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
-			// TODO
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
