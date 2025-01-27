@@ -343,43 +343,6 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	assert.False(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 }
 
-func TestInconsistentRayServiceStatus(t *testing.T) {
-	oldStatus := rayv1.RayServiceStatus{
-		RayClusterName: "cluster-1",
-		Applications: map[string]rayv1.AppStatus{
-			"app1": {
-				Status:  rayv1.ApplicationStatusEnum.RUNNING,
-				Message: "Application is running",
-				Deployments: map[string]rayv1.ServeDeploymentStatus{
-					"serve-1": {
-						Status:  rayv1.DeploymentStatusEnum.HEALTHY,
-						Message: "Serve is healthy",
-					},
-				},
-			},
-			"app2": {
-				Status:  rayv1.ApplicationStatusEnum.RUNNING,
-				Message: "Application is running",
-				Deployments: map[string]rayv1.ServeDeploymentStatus{
-					"serve-1": {
-						Status:  rayv1.DeploymentStatusEnum.HEALTHY,
-						Message: "Serve is healthy",
-					},
-				},
-			},
-		},
-	}
-
-	ctx := context.Background()
-
-	// Test 1: Only HealthLastUpdateTime is updated.
-	newStatus := oldStatus.DeepCopy()
-	for appName, application := range newStatus.Applications {
-		newStatus.Applications[appName] = application
-	}
-	assert.False(t, inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
-}
-
 func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
