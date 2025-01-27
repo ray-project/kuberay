@@ -575,9 +575,8 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*15, time.Millisecond*500).Should(Equal(initialPendingClusterName), "New active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 		})
 
-		It("Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.", func() {
+		It("RayService status should be updated when Ray Serve application status is updated", func() {
 			// Make sure (1) Dashboard client is healthy (2) All the three Ray Serve deployments in the active RayCluster are HEALTHY.
-			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
@@ -585,11 +584,6 @@ var _ = Context("Inside the default namespace", func() {
 			// Change serve status to be unhealthy
 			unhealthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UNHEALTHY, rayv1.ApplicationStatusEnum.UNHEALTHY)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &unhealthyStatus})
-
-			// Confirm not switch to a new RayCluster.
-			Consistently(
-				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// Check if all the deployment statuses are UNHEALTHY.
 			checkAllDeploymentStatusesUnhealthy := func(ctx context.Context, rayService *rayv1.RayService) bool {
@@ -605,56 +599,15 @@ var _ = Context("Inside the default namespace", func() {
 				}
 				return true
 			}
-
-			// The status update not only includes the LastUpdateTime and HealthLastUpdateTime fields, but also the ServeStatuses[i].Status field.
-			// Hence, all the ServeStatuses[i].Status should be updated to UNHEALTHY.
-			//
-			// Note: LastUpdateTime/HealthLastUpdateTime will be overwritten via metav1.Now() in rayservice_controller.go.
-			// Hence, we cannot use `newTime` to check whether the status is updated or not.
 			Eventually(
 				checkAllDeploymentStatusesUnhealthy).WithContext(ctx).WithArguments(myRayService).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
+			// Change serve status back to HEALTHY.
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-
-			// Confirm not switch to a new RayCluster.
-			Consistently(
-				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
-
-			// The status update not only includes the LastUpdateTime and HealthLastUpdateTime fields, but also the ServeStatuses[i].Status field.
-			// Hence, the status should be updated.
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-		})
-
-		It("Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.", func() {
-			// Make sure (1) Dashboard client is healthy (2) All the three Ray Serve deployments in the active RayCluster are HEALTHY.
-			initialClusterName, _ := getRayClusterNameFunc(ctx, myRayService)()
-			Eventually(
-				checkServiceHealth(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-
-			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
-			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
-			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
-
-			// Confirm not switch to a new RayCluster
-			Consistently(
-				getRayClusterNameFunc(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(Equal(initialClusterName), "Active RayCluster name = %v", myRayService.Status.ActiveServiceStatus.RayClusterName)
-
-			// The status is still the same as before.
-			Eventually(
-				checkServiceHealth(ctx, myRayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-
-			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
-			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
-			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
-			Expect(myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
 		})
 
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {

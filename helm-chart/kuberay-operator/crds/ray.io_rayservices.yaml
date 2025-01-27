@@ -8087,17 +8087,11 @@ spec:
                   applicationStatuses:
                     additionalProperties:
                       properties:
-                        healthLastUpdateTime:
-                          format: date-time
-                          type: string
                         message:
                           type: string
                         serveDeploymentStatuses:
                           additionalProperties:
                             properties:
-                              healthLastUpdateTime:
-                                format: date-time
-                                type: string
                               message:
                                 type: string
                               status:
@@ -8276,17 +8270,11 @@ spec:
                   applicationStatuses:
                     additionalProperties:
                       properties:
-                        healthLastUpdateTime:
-                          format: date-time
-                          type: string
                         message:
                           type: string
                         serveDeploymentStatuses:
                           additionalProperties:
                             properties:
-                              healthLastUpdateTime:
-                                format: date-time
-                                type: string
                               message:
                                 type: string
                               status:
