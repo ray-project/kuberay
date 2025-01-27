@@ -2,30 +2,17 @@
 
 package v1
 
-import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
 // ServeDeploymentStatusApplyConfiguration represents an declarative configuration of the ServeDeploymentStatus type for use
 // with apply.
 type ServeDeploymentStatusApplyConfiguration struct {
-	HealthLastUpdateTime *v1.Time `json:"healthLastUpdateTime,omitempty"`
-	Status               *string  `json:"status,omitempty"`
-	Message              *string  `json:"message,omitempty"`
+	Status  *string `json:"status,omitempty"`
+	Message *string `json:"message,omitempty"`
 }
 
 // ServeDeploymentStatusApplyConfiguration constructs an declarative configuration of the ServeDeploymentStatus type for use with
 // apply.
 func ServeDeploymentStatus() *ServeDeploymentStatusApplyConfiguration {
 	return &ServeDeploymentStatusApplyConfiguration{}
-}
-
-// WithHealthLastUpdateTime sets the HealthLastUpdateTime field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the HealthLastUpdateTime field is set to the value of the last call.
-func (b *ServeDeploymentStatusApplyConfiguration) WithHealthLastUpdateTime(value v1.Time) *ServeDeploymentStatusApplyConfiguration {
-	b.HealthLastUpdateTime = &value
-	return b
 }
 
 // WithStatus sets the Status field in the declarative configuration to the given value

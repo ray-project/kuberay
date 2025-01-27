@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 
@@ -299,20 +298,17 @@ func TestDecideClusterAction(t *testing.T) {
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
-	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatuses{
 		ActiveServiceStatus: rayv1.RayServiceStatus{
 			RayClusterName: "new-cluster",
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
-					Status:               rayv1.ApplicationStatusEnum.RUNNING,
-					Message:              "OK",
-					HealthLastUpdateTime: &timeNow,
+					Status:  rayv1.ApplicationStatusEnum.RUNNING,
+					Message: "OK",
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               rayv1.DeploymentStatusEnum.UNHEALTHY,
-							Message:              "error",
-							HealthLastUpdateTime: &timeNow,
+							Status:  rayv1.DeploymentStatusEnum.UNHEALTHY,
+							Message: "error",
 						},
 					},
 				},
@@ -322,14 +318,12 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			RayClusterName: "old-cluster",
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
-					Status:               rayv1.ApplicationStatusEnum.NOT_STARTED,
-					Message:              "application not started yet",
-					HealthLastUpdateTime: &timeNow,
+					Status:  rayv1.ApplicationStatusEnum.NOT_STARTED,
+					Message: "application not started yet",
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-							Message:              "Serve is healthy",
-							HealthLastUpdateTime: &timeNow,
+							Status:  rayv1.DeploymentStatusEnum.HEALTHY,
+							Message: "Serve is healthy",
 						},
 					},
 				},
@@ -347,49 +341,6 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 	// Test 2: Test RayServiceStatus
 	newStatus = oldStatus.DeepCopy()
 	assert.False(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
-}
-
-func TestInconsistentRayServiceStatus(t *testing.T) {
-	timeNow := metav1.Now()
-	oldStatus := rayv1.RayServiceStatus{
-		RayClusterName: "cluster-1",
-		Applications: map[string]rayv1.AppStatus{
-			"app1": {
-				Status:               rayv1.ApplicationStatusEnum.RUNNING,
-				Message:              "Application is running",
-				HealthLastUpdateTime: &timeNow,
-				Deployments: map[string]rayv1.ServeDeploymentStatus{
-					"serve-1": {
-						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-						Message:              "Serve is healthy",
-						HealthLastUpdateTime: &timeNow,
-					},
-				},
-			},
-			"app2": {
-				Status:               rayv1.ApplicationStatusEnum.RUNNING,
-				Message:              "Application is running",
-				HealthLastUpdateTime: &timeNow,
-				Deployments: map[string]rayv1.ServeDeploymentStatus{
-					"serve-1": {
-						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-						Message:              "Serve is healthy",
-						HealthLastUpdateTime: &timeNow,
-					},
-				},
-			},
-		},
-	}
-
-	ctx := context.Background()
-
-	// Test 1: Only HealthLastUpdateTime is updated.
-	newStatus := oldStatus.DeepCopy()
-	for appName, application := range newStatus.Applications {
-		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
-		newStatus.Applications[appName] = application
-	}
-	assert.False(t, inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -617,8 +568,6 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	// Initialize RayService reconciler.
 	ctx := context.TODO()
 	serveAppName := "serve-app-1"
-	longPeriod := time.Duration(10000)
-	shortPeriod := time.Duration(1)
 
 	// Here are the key representing Ray Serve deployment and application statuses.
 	const (
@@ -642,22 +591,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			applications:  map[string]rayv1.AppStatus{},
 			expectedReady: false,
 		},
-		// Test 2: The Ray Serve application takes a long time to be "RUNNING". This may happen when `runtime_env`
-		// installation takes a long time or the cluster does not have enough resources for autoscaling.
-		"Take a long time to be RUNNING while deploying": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOYING,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOYING,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 3: The Ray Serve application finishes the deployment process and becomes "RUNNING".
+		// Test 2: The Ray Serve application finishes the deployment process and becomes "RUNNING".
 		"Finishes the deployment process and becomes RUNNING": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.HEALTHY,
@@ -665,69 +599,38 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOYING,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Time},
+					Status: rayv1.ApplicationStatusEnum.RUNNING,
 				},
 			},
 			expectedReady: true,
 		},
-		// Test 4: The Ray Serve application lasts "UNHEALTHY" for a long period.
-		"UNHEALTHY status lasts for a long period": {
+		// Test 3: Both the current Ray Serve application and RayService status are unhealthy.
+		"Both the current Ray Serve application and RayService status are unhealthy": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.UNHEALTHY,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
+					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
 				},
 			},
 			expectedReady: false,
 		},
-		// Test 5: The Ray Serve application lasts "UNHEALTHY" for a short period.
-		"UNHEALTHY status lasts for a short period": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.UNHEALTHY,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * shortPeriod)},
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 6: The Ray Serve application lasts "DEPLOY_FAILED" for a long period.
-		"DEPLOY_FAILED status lasts for a long period": {
+		// Test 4: Both the current Ray Serve application and RayService status are DEPLOY_FAILED.
+		"Both the current Ray Serve application and RayService status are DEPLOY_FAILED": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
+					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 				},
 			},
 			expectedReady: false,
 		},
-		// Test 7: The Ray Serve application lasts "DEPLOY_FAILED" for a short period.
-		"DEPLOY_FAILED status lasts for a short period": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * shortPeriod)},
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 8: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
+		// Test 5: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
 		"Ray Serve application is not found": {
 			rayServiceStatus: map[string]string{},
 			applications:     map[string]rayv1.AppStatus{},

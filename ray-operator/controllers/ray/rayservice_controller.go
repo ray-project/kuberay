@@ -139,8 +139,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Find active and pending ray cluster objects given current service name.
-	var activeRayClusterInstance *rayv1.RayCluster
-	var pendingRayClusterInstance *rayv1.RayCluster
+	var activeRayClusterInstance, pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
@@ -223,7 +222,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Calculate the status of the RayService based on K8s resources.
-	if err := r.calculateStatus(ctx, rayServiceInstance, headSvc, serveSvc); err != nil {
+	if err := r.calculateStatus(ctx, rayServiceInstance, headSvc, serveSvc, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
@@ -250,8 +249,19 @@ func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Conte
 	return headSvc, serveSvc, nil
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service) error {
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
+
+	// Update RayClusterStatus in RayService status.
+	var activeClusterStatus, pendingClusterStatus rayv1.RayClusterStatus
+	if activeCluster != nil {
+		activeClusterStatus = activeCluster.Status
+	}
+	if pendingCluster != nil {
+		pendingClusterStatus = pendingCluster.Status
+	}
+	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = activeClusterStatus
+	rayServiceInstance.Status.PendingServiceStatus.RayClusterStatus = pendingClusterStatus
 
 	if headSvc != nil && serveSvc != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
@@ -346,8 +356,6 @@ func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayS
 }
 
 // Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// If the only difference between the old and new status is the HealthLastUpdateTime field,
-// the status update will not be triggered.
 // The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
 func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
 	logger := ctrl.LoggerFrom(ctx)
@@ -940,7 +948,6 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 	logger.Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isReady := true
-	timeNow := metav1.Now()
 
 	newApplications := make(map[string]rayv1.AppStatus)
 	for appName, app := range serveAppStatuses {
@@ -948,25 +955,10 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 			appName = utils.DefaultServeAppName
 		}
 
-		prevApplicationStatus := rayServiceServeStatus.Applications[appName]
-
 		applicationStatus := rayv1.AppStatus{
-			Message:              app.Message,
-			Status:               app.Status,
-			HealthLastUpdateTime: &timeNow,
-			Deployments:          make(map[string]rayv1.ServeDeploymentStatus),
-		}
-
-		if isServeAppUnhealthyOrDeployedFailed(app.Status) {
-			if isServeAppUnhealthyOrDeployedFailed(prevApplicationStatus.Status) {
-				if prevApplicationStatus.HealthLastUpdateTime != nil {
-					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
-					logger.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
-						"The status of the serve application has been UNHEALTHY or DEPLOY_FAILED since last updated.",
-						"appName", appName,
-						"healthLastUpdateTime", prevApplicationStatus.HealthLastUpdateTime)
-				}
-			}
+			Message:     app.Message,
+			Status:      app.Status,
+			Deployments: make(map[string]rayv1.ServeDeploymentStatus),
 		}
 
 		// `isReady` is used to determine whether the Serve application is ready or not. The cluster switchover only happens when all Serve
@@ -978,18 +970,8 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 		// Copy deployment statuses
 		for deploymentName, deployment := range app.Deployments {
 			deploymentStatus := rayv1.ServeDeploymentStatus{
-				Status:               deployment.Status,
-				Message:              deployment.Message,
-				HealthLastUpdateTime: &timeNow,
-			}
-
-			if deployment.Status == rayv1.DeploymentStatusEnum.UNHEALTHY {
-				prevStatus, exist := prevApplicationStatus.Deployments[deploymentName]
-				if exist {
-					if prevStatus.Status == rayv1.DeploymentStatusEnum.UNHEALTHY {
-						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
-					}
-				}
+				Status:  deployment.Status,
+				Message: deployment.Message,
 			}
 			applicationStatus.Deployments[deploymentName] = deploymentStatus
 		}
@@ -1103,7 +1085,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, isActive bool) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
 	var err error
 	var clientURL string
 	var rayServiceStatus *rayv1.RayServiceStatus
@@ -1264,8 +1245,4 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
-}
-
-func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
-	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
 }

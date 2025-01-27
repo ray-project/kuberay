@@ -109,21 +109,13 @@ type RayServiceStatus struct {
 }
 
 type AppStatus struct {
-	// Keep track of how long the service is healthy.
-	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime *metav1.Time                     `json:"healthLastUpdateTime,omitempty"`
-	Deployments          map[string]ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
-	Status               string                           `json:"status,omitempty"`
-	Message              string                           `json:"message,omitempty"`
+	Deployments map[string]ServeDeploymentStatus `json:"serveDeploymentStatuses,omitempty"`
+	Status      string                           `json:"status,omitempty"`
+	Message     string                           `json:"message,omitempty"`
 }
 
 // ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatus struct {
-	// Keep track of how long the service is healthy.
-	// Update when Serve deployment is healthy or first time convert to unhealthy from healthy.
-	HealthLastUpdateTime *metav1.Time `json:"healthLastUpdateTime,omitempty"`
-	// Name, Status, Message are from Ray Dashboard and represent a Serve deployment's state.
-	// TODO: change status type to enum
 	Status  string `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`
 }
