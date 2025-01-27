@@ -285,6 +285,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		}
 
 		// If services point to a different cluster than the active one, promote pending to active
+		logger.Info("calculateStatus", "clusterSvcPointingTo", clusterName, "pendingClusterName", pendingClusterName, "activeClusterName", activeClusterName)
 		if activeClusterName != clusterName {
 			logger.Info("Promoting pending cluster to active",
 				"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
