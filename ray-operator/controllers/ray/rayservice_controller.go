@@ -139,8 +139,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Find active and pending ray cluster objects given current service name.
-	var activeRayClusterInstance *rayv1.RayCluster
-	var pendingRayClusterInstance *rayv1.RayCluster
+	var activeRayClusterInstance, pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
@@ -228,7 +227,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Calculate the status of the RayService based on K8s resources.
-	if err := r.calculateStatus(ctx, rayServiceInstance, headSvc, serveSvc); err != nil {
+	if err := r.calculateStatus(ctx, rayServiceInstance, headSvc, serveSvc, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
@@ -255,8 +254,19 @@ func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Conte
 	return headSvc, serveSvc, nil
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service) error {
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
+
+	// Update RayClusterStatus in RayService status.
+	var activeClusterStatus, pendingClusterStatus rayv1.RayClusterStatus
+	if activeCluster != nil {
+		activeClusterStatus = activeCluster.Status
+	}
+	if pendingCluster != nil {
+		pendingClusterStatus = pendingCluster.Status
+	}
+	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = activeClusterStatus
+	rayServiceInstance.Status.PendingServiceStatus.RayClusterStatus = pendingClusterStatus
 
 	if headSvc != nil && serveSvc != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
@@ -1078,7 +1088,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
 
 	var err error
 	var clientURL string
@@ -1107,7 +1116,6 @@ func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context,
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, isActive bool) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
 	var err error
 	var clientURL string
 	var rayServiceStatus *rayv1.RayServiceStatus
