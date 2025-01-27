@@ -188,11 +188,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve component. Active and pending Ray clusters exist.")
-		// TODO (kevin85421): This can most likely be removed.
-		if err = r.updateStatusForActiveCluster(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
-			logger.Error(err, "Failed to update active Ray cluster's status.")
-		}
-
 		if isPendingClusterReady, err = r.reconcileServe(ctx, rayServiceInstance, pendingRayClusterInstance, false); err != nil {
 			logger.Error(err, "Fail to reconcileServe.")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -1102,33 +1097,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		return newSvc, nil
 	}
 	return nil, err
-}
-
-func (r *RayServiceReconciler) updateStatusForActiveCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
-	logger := ctrl.LoggerFrom(ctx)
-	rayServiceInstance.Status.ActiveServiceStatus.RayClusterStatus = rayClusterInstance.Status
-
-	var err error
-	var clientURL string
-	rayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
-
-	if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
-		return err
-	}
-
-	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
-		return err
-	}
-
-	var isReady bool
-	if isReady, err = getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
-		return err
-	}
-
-	logger.Info("Check serve health", "isReady", isReady)
-
-	return err
 }
 
 // Reconciles the Serve applications on the RayCluster. Returns (isReady, error).
