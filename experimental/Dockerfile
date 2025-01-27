@@ -1,5 +1,5 @@
 # Build security proxy
-FROM golang:1.22.4-bullseye as builder
+FROM golang:1.22.4-bullseye AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
