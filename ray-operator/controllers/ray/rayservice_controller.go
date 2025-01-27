@@ -878,14 +878,14 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	return rayCluster, nil
 }
 
-func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveStatus *rayv1.RayServiceStatus) (bool, string) {
+func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveApplications map[string]rayv1.AppStatus) (bool, string) {
 	// If the Serve config has not been cached, update the Serve config.
 	if cachedServeConfigV2 == "" {
 		return true, "Nothing has been cached for the cluster."
 	}
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
-	if len(serveStatus.Applications) == 0 {
+	if len(serveApplications) == 0 {
 		reason := "No Serve application found in the RayCluster. " +
 			"A possible reason is that the head Pod crashed and GCS FT was not enabled."
 		return true, reason
@@ -928,12 +928,12 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 }
 
 // `getAndCheckServeStatus` gets Serve applications' and deployments' statuses and check whether the
-// Serve applications are ready to serve incoming traffic or not. It returns two values:
+// Serve applications are ready to serve incoming traffic or not. It returns three values:
 //
-// (1) `isReady` is used to determine whether the Serve applications in the RayCluster are ready to serve incoming traffic or not.
-// (2) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard. We should take a look at dashboard rather than Ray Serve applications.
-
-func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface, rayServiceServeStatus *rayv1.RayServiceStatus) (bool, error) {
+// (1) `isReady`: Whether the Serve applications are ready to serve incoming traffic or not.
+// (2) `newApplications`: The Serve applications' statuses.
+// (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard.
+func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface) (bool, map[string]rayv1.AppStatus, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var serveAppStatuses map[string]*utils.ServeApplicationStatus
 	var err error
@@ -942,10 +942,8 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 			"failed to get Serve application statuses from the dashboard. "+
 				"If you observe this error consistently, please check https://docs.ray.io/en/latest/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html for more details. "+
 				"err: %v", err)
-		return false, err
+		return false, nil, err
 	}
-
-	logger.Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isReady := true
 
@@ -982,9 +980,7 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 		logger.Info("No Serve application found. The RayCluster is not ready to serve requests. Set 'isReady' to false")
 		isReady = false
 	}
-	rayServiceServeStatus.Applications = newApplications
-	logger.Info("getAndCheckServeStatus", "new statuses", rayServiceServeStatus.Applications)
-	return isReady, nil
+	return isReady, newApplications, nil
 }
 
 func (r *RayServiceReconciler) getServeConfigFromCache(rayServiceInstance *rayv1.RayService, clusterName string) string {
@@ -1131,18 +1127,19 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
-	shouldUpdate, reason := checkIfNeedSubmitServeApplications(cachedServeConfigV2, rayServiceInstance.Spec.ServeConfigV2, rayServiceStatus)
+	isReady, newApplications, err := getAndCheckServeStatus(ctx, rayDashboardClient)
+	// TODO (kevin85421): We should unify the update of the CR status in calculateStatus.
+	rayServiceStatus.Applications = newApplications
+	if err != nil {
+		return false, err
+	}
+	shouldUpdate, reason := checkIfNeedSubmitServeApplications(cachedServeConfigV2, rayServiceInstance.Spec.ServeConfigV2, newApplications)
 	logger.Info("checkIfNeedSubmitServeApplications", "shouldUpdate", shouldUpdate, "reason", reason)
 
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
 			return false, err
 		}
-	}
-
-	var isReady bool
-	if isReady, err = getAndCheckServeStatus(ctx, rayDashboardClient, rayServiceStatus); err != nil {
-		return false, err
 	}
 
 	logger.Info("Check serve health", "isReady", isReady, "isActive", isActive)

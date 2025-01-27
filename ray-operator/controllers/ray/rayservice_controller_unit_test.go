@@ -646,8 +646,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			} else {
 				dashboardClient = &utils.FakeRayDashboardClient{}
 			}
-			prevRayServiceStatus := rayv1.RayServiceStatus{Applications: tc.applications}
-			isReady, err := getAndCheckServeStatus(ctx, dashboardClient, &prevRayServiceStatus)
+			isReady, _, err := getAndCheckServeStatus(ctx, dashboardClient)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedReady, isReady)
 		})
@@ -658,38 +657,36 @@ func TestCheckIfNeedSubmitServeApplications(t *testing.T) {
 	serveConfigV2_1 := "serve-config-1"
 	serveConfigV2_2 := "serve-config-2"
 
-	serveStatus := rayv1.RayServiceStatus{
-		Applications: map[string]rayv1.AppStatus{
-			"myapp": {
-				Status: rayv1.ApplicationStatusEnum.RUNNING,
-			},
+	serveApplications := map[string]rayv1.AppStatus{
+		"myapp": {
+			Status: rayv1.ApplicationStatusEnum.RUNNING,
 		},
 	}
-	emptyServeStatus := rayv1.RayServiceStatus{}
+	emptyServeApplications := map[string]rayv1.AppStatus{}
 
 	// Test 1: The cached Serve config is empty, and the new Serve config is not empty.
 	// This happens when the RayCluster is new, and the serve application has not been created yet.
-	shouldCreate, _ := checkIfNeedSubmitServeApplications("", serveConfigV2_1, &emptyServeStatus)
+	shouldCreate, _ := checkIfNeedSubmitServeApplications("", serveConfigV2_1, emptyServeApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 2: The cached Serve config and the new Serve config are the same.
 	// This happens when the serve application is already created, and users do not update the serve config.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, &serveStatus)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, serveApplications)
 	assert.False(t, shouldCreate)
 
 	// Test 3: The cached Serve config and the new Serve config are different.
 	// This happens when the serve application is already created, and users update the serve config.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_2, &serveStatus)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_2, serveApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 4: Both the cached Serve config and the new Serve config are the same, but the RayService CR status is empty.
 	// This happens when the head Pod crashed and GCS FT was not enabled
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, &emptyServeStatus)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, emptyServeApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 5: The cached Serve config is empty, but the new Serve config is not empty.
 	// This happens when KubeRay operator crashes and restarts. Submit the request for safety.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications("", serveConfigV2_1, &serveStatus)
+	shouldCreate, _ = checkIfNeedSubmitServeApplications("", serveConfigV2_1, serveApplications)
 	assert.True(t, shouldCreate)
 }
 
