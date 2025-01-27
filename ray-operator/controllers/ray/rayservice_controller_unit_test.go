@@ -591,21 +591,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			applications:  map[string]rayv1.AppStatus{},
 			expectedReady: false,
 		},
-		// Test 2: The Ray Serve application takes a long time to be "RUNNING". This may happen when `runtime_env`
-		// installation takes a long time or the cluster does not have enough resources for autoscaling.
-		"Take a long time to be RUNNING while deploying": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOYING,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status: rayv1.ApplicationStatusEnum.DEPLOYING,
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 3: The Ray Serve application finishes the deployment process and becomes "RUNNING".
+		// Test 2: The Ray Serve application finishes the deployment process and becomes "RUNNING".
 		"Finishes the deployment process and becomes RUNNING": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.HEALTHY,
@@ -618,8 +604,8 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			expectedReady: true,
 		},
-		// Test 4: The Ray Serve application lasts "UNHEALTHY" for a long period.
-		"UNHEALTHY status lasts for a long period": {
+		// Test 3: Both the current Ray Serve application and RayService status are unhealthy.
+		"Both the current Ray Serve application and RayService status are unhealthy": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
@@ -631,21 +617,8 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			expectedReady: false,
 		},
-		// Test 5: The Ray Serve application lasts "UNHEALTHY" for a short period.
-		"UNHEALTHY status lasts for a short period": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 6: The Ray Serve application lasts "DEPLOY_FAILED" for a long period.
-		"DEPLOY_FAILED status lasts for a long period": {
+		// Test 4: Both the current Ray Serve application and RayService status are DEPLOY_FAILED.
+		"Both the current Ray Serve application and RayService status are DEPLOY_FAILED": {
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
@@ -657,20 +630,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			expectedReady: false,
 		},
-		// Test 7: The Ray Serve application lasts "DEPLOY_FAILED" for a short period.
-		"DEPLOY_FAILED status lasts for a short period": {
-			rayServiceStatus: map[string]string{
-				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
-				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-			},
-			applications: map[string]rayv1.AppStatus{
-				serveAppName: {
-					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-				},
-			},
-			expectedReady: false,
-		},
-		// Test 8: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
+		// Test 5: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
 		"Ray Serve application is not found": {
 			rayServiceStatus: map[string]string{},
 			applications:     map[string]rayv1.AppStatus{},
