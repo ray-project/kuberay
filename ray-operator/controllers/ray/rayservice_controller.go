@@ -945,7 +945,6 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 	logger.Info("getAndCheckServeStatus", "prev statuses", rayServiceServeStatus.Applications, "serve statuses", serveAppStatuses)
 
 	isReady := true
-	timeNow := metav1.Now()
 
 	newApplications := make(map[string]rayv1.AppStatus)
 	for appName, app := range serveAppStatuses {
@@ -953,25 +952,10 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 			appName = utils.DefaultServeAppName
 		}
 
-		prevApplicationStatus := rayServiceServeStatus.Applications[appName]
-
 		applicationStatus := rayv1.AppStatus{
-			Message:              app.Message,
-			Status:               app.Status,
-			HealthLastUpdateTime: &timeNow,
-			Deployments:          make(map[string]rayv1.ServeDeploymentStatus),
-		}
-
-		if isServeAppUnhealthyOrDeployedFailed(app.Status) {
-			if isServeAppUnhealthyOrDeployedFailed(prevApplicationStatus.Status) {
-				if prevApplicationStatus.HealthLastUpdateTime != nil {
-					applicationStatus.HealthLastUpdateTime = prevApplicationStatus.HealthLastUpdateTime
-					logger.Info("Ray Serve application is unhealthy", "appName", appName, "detail",
-						"The status of the serve application has been UNHEALTHY or DEPLOY_FAILED since last updated.",
-						"appName", appName,
-						"healthLastUpdateTime", prevApplicationStatus.HealthLastUpdateTime)
-				}
-			}
+			Message:     app.Message,
+			Status:      app.Status,
+			Deployments: make(map[string]rayv1.ServeDeploymentStatus),
 		}
 
 		// `isReady` is used to determine whether the Serve application is ready or not. The cluster switchover only happens when all Serve
@@ -983,18 +967,8 @@ func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashbo
 		// Copy deployment statuses
 		for deploymentName, deployment := range app.Deployments {
 			deploymentStatus := rayv1.ServeDeploymentStatus{
-				Status:               deployment.Status,
-				Message:              deployment.Message,
-				HealthLastUpdateTime: &timeNow,
-			}
-
-			if deployment.Status == rayv1.DeploymentStatusEnum.UNHEALTHY {
-				prevStatus, exist := prevApplicationStatus.Deployments[deploymentName]
-				if exist {
-					if prevStatus.Status == rayv1.DeploymentStatusEnum.UNHEALTHY {
-						deploymentStatus.HealthLastUpdateTime = prevStatus.HealthLastUpdateTime
-					}
-				}
+				Status:  deployment.Status,
+				Message: deployment.Message,
 			}
 			applicationStatus.Deployments[deploymentName] = deploymentStatus
 		}
@@ -1296,8 +1270,4 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
-}
-
-func isServeAppUnhealthyOrDeployedFailed(appStatus string) bool {
-	return appStatus == rayv1.ApplicationStatusEnum.UNHEALTHY || appStatus == rayv1.ApplicationStatusEnum.DEPLOY_FAILED
 }

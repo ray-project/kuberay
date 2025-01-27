@@ -637,7 +637,6 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
 
 			// Only update the LastUpdateTime and HealthLastUpdateTime fields in the active RayCluster.
-			oldTime := myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime.DeepCopy()
 			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
 			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{testServeAppName: &healthyStatus})
 
@@ -650,11 +649,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				checkServiceHealth(ctx, myRayService),
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", myRayService.Status)
-
-			// Status should not be updated if the only differences are the LastUpdateTime and HealthLastUpdateTime fields.
-			// Unlike the test "Status should be updated if the differences are not only LastUpdateTime and HealthLastUpdateTime fields.",
-			// the status update will not be triggered, so we can check whether the LastUpdateTime/HealthLastUpdateTime fields are updated or not by `oldTime`.
-			Expect(myRayService.Status.ActiveServiceStatus.Applications[utils.DefaultServeAppName].HealthLastUpdateTime).Should(Equal(oldTime), "myRayService status = %v", myRayService.Status)
 		})
 
 		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {

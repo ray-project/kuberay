@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 
@@ -299,20 +298,17 @@ func TestDecideClusterAction(t *testing.T) {
 }
 
 func TestInconsistentRayServiceStatuses(t *testing.T) {
-	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatuses{
 		ActiveServiceStatus: rayv1.RayServiceStatus{
 			RayClusterName: "new-cluster",
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
-					Status:               rayv1.ApplicationStatusEnum.RUNNING,
-					Message:              "OK",
-					HealthLastUpdateTime: &timeNow,
+					Status:  rayv1.ApplicationStatusEnum.RUNNING,
+					Message: "OK",
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               rayv1.DeploymentStatusEnum.UNHEALTHY,
-							Message:              "error",
-							HealthLastUpdateTime: &timeNow,
+							Status:  rayv1.DeploymentStatusEnum.UNHEALTHY,
+							Message: "error",
 						},
 					},
 				},
@@ -322,14 +318,12 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 			RayClusterName: "old-cluster",
 			Applications: map[string]rayv1.AppStatus{
 				utils.DefaultServeAppName: {
-					Status:               rayv1.ApplicationStatusEnum.NOT_STARTED,
-					Message:              "application not started yet",
-					HealthLastUpdateTime: &timeNow,
+					Status:  rayv1.ApplicationStatusEnum.NOT_STARTED,
+					Message: "application not started yet",
 					Deployments: map[string]rayv1.ServeDeploymentStatus{
 						"serve-1": {
-							Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-							Message:              "Serve is healthy",
-							HealthLastUpdateTime: &timeNow,
+							Status:  rayv1.DeploymentStatusEnum.HEALTHY,
+							Message: "Serve is healthy",
 						},
 					},
 				},
@@ -350,31 +344,26 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 }
 
 func TestInconsistentRayServiceStatus(t *testing.T) {
-	timeNow := metav1.Now()
 	oldStatus := rayv1.RayServiceStatus{
 		RayClusterName: "cluster-1",
 		Applications: map[string]rayv1.AppStatus{
 			"app1": {
-				Status:               rayv1.ApplicationStatusEnum.RUNNING,
-				Message:              "Application is running",
-				HealthLastUpdateTime: &timeNow,
+				Status:  rayv1.ApplicationStatusEnum.RUNNING,
+				Message: "Application is running",
 				Deployments: map[string]rayv1.ServeDeploymentStatus{
 					"serve-1": {
-						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-						Message:              "Serve is healthy",
-						HealthLastUpdateTime: &timeNow,
+						Status:  rayv1.DeploymentStatusEnum.HEALTHY,
+						Message: "Serve is healthy",
 					},
 				},
 			},
 			"app2": {
-				Status:               rayv1.ApplicationStatusEnum.RUNNING,
-				Message:              "Application is running",
-				HealthLastUpdateTime: &timeNow,
+				Status:  rayv1.ApplicationStatusEnum.RUNNING,
+				Message: "Application is running",
 				Deployments: map[string]rayv1.ServeDeploymentStatus{
 					"serve-1": {
-						Status:               rayv1.DeploymentStatusEnum.HEALTHY,
-						Message:              "Serve is healthy",
-						HealthLastUpdateTime: &timeNow,
+						Status:  rayv1.DeploymentStatusEnum.HEALTHY,
+						Message: "Serve is healthy",
 					},
 				},
 			},
@@ -386,7 +375,6 @@ func TestInconsistentRayServiceStatus(t *testing.T) {
 	// Test 1: Only HealthLastUpdateTime is updated.
 	newStatus := oldStatus.DeepCopy()
 	for appName, application := range newStatus.Applications {
-		application.HealthLastUpdateTime = &metav1.Time{Time: timeNow.Add(1)}
 		newStatus.Applications[appName] = application
 	}
 	assert.False(t, inconsistentRayServiceStatus(ctx, oldStatus, *newStatus))
@@ -617,8 +605,6 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 	// Initialize RayService reconciler.
 	ctx := context.TODO()
 	serveAppName := "serve-app-1"
-	longPeriod := time.Duration(10000)
-	shortPeriod := time.Duration(1)
 
 	// Here are the key representing Ray Serve deployment and application statuses.
 	const (
@@ -651,8 +637,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOYING,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
+					Status: rayv1.ApplicationStatusEnum.DEPLOYING,
 				},
 			},
 			expectedReady: false,
@@ -665,8 +650,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOYING,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Time},
+					Status: rayv1.ApplicationStatusEnum.RUNNING,
 				},
 			},
 			expectedReady: true,
@@ -679,8 +663,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.UNHEALTHY,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
+					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
 				},
 			},
 			expectedReady: false,
@@ -693,8 +676,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.UNHEALTHY,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * shortPeriod)},
+					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
 				},
 			},
 			expectedReady: false,
@@ -707,8 +689,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * longPeriod)},
+					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 				},
 			},
 			expectedReady: false,
@@ -721,8 +702,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 			},
 			applications: map[string]rayv1.AppStatus{
 				serveAppName: {
-					Status:               rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
-					HealthLastUpdateTime: &metav1.Time{Time: metav1.Now().Add(-time.Second * shortPeriod)},
+					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 				},
 			},
 			expectedReady: false,
