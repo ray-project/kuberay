@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -44,7 +43,7 @@ func TestRayService(t *testing.T) {
 
 			test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-				Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+				Should(WithTransform(IsRayServiceReady, BeTrue()))
 			// Get the latest rayService
 			rayService, err = GetRayService(test, namespace.Name, rayServiceFromYaml.Name)
 			g.Expect(err).NotTo(HaveOccurred())
