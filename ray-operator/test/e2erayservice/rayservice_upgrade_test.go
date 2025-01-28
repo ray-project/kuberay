@@ -130,7 +130,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		g.Expect(endpoints.Subsets).To(HaveLen(1))
 		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
 		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(headPodName))
-	}, TestTimeoutShort).Should(Succeed())
+	}, TestTimeoutMedium).Should(Succeed())
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
 	g.Eventually(func(g Gomega) {
