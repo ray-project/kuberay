@@ -34,7 +34,7 @@
             "gridPos": {
                 "x": 0,
                 "y": 0,
-                "w": 8,
+                "w": 12,
                 "h": 8
             },
             "hiddenSeries": false,
@@ -198,9 +198,9 @@
             "fill": 10,
             "fillGradient": 0,
             "gridPos": {
-                "x": 8,
+                "x": 12,
                 "y": 0,
-                "w": 8,
+                "w": 12,
                 "h": 8
             },
             "hiddenSeries": false,
@@ -260,7 +260,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_num_http_requests{application=~\"$Application\",application!~\"\",route=~\"$HTTP_Route\",route!~\"/-/.*\",}[5m])) by (application, route)",
+                    "expr": "sum(rate(ray_serve_num_http_requests_total{application=~\"$Application\",application!~\"\",route=~\"$HTTP_Route\",route!~\"/-/.*\",}[5m])) by (application, route)",
                     "interval": "",
                     "legendFormat": "{{application, route}}",
                     "queryType": "randomWalk",
@@ -268,7 +268,7 @@
                 },
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_num_grpc_requests{application=~\"$Application\",application!~\"\",method=~\"$gRPC_Method\",}[5m])) by (application, method)",
+                    "expr": "sum(rate(ray_serve_num_grpc_requests_total{application=~\"$Application\",application!~\"\",method=~\"$gRPC_Method\",}[5m])) by (application, method)",
                     "interval": "",
                     "legendFormat": "{{application, method}}",
                     "queryType": "randomWalk",
@@ -332,9 +332,9 @@
             "fill": 10,
             "fillGradient": 0,
             "gridPos": {
-                "x": 16,
-                "y": 0,
-                "w": 8,
+                "x": 0,
+                "y": 1,
+                "w": 12,
                 "h": 8
             },
             "hiddenSeries": false,
@@ -394,7 +394,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_num_http_error_requests{application=~\"$Application\",application!~\"\",route=~\"$HTTP_Route\",route!~\"/-/.*\",}[5m])) by (application, route)",
+                    "expr": "sum(rate(ray_serve_num_http_error_requests_total{application=~\"$Application\",application!~\"\",route=~\"$HTTP_Route\",route!~\"/-/.*\",}[5m])) by (application, route)",
                     "interval": "",
                     "legendFormat": "{{application, route}}",
                     "queryType": "randomWalk",
@@ -402,7 +402,7 @@
                 },
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_num_grpc_error_requests{application=~\"$Application\",application!~\"\",method=~\"$gRPC_Method\",}[5m])) by (application, method)",
+                    "expr": "sum(rate(ray_serve_num_grpc_error_requests_total{application=~\"$Application\",application!~\"\",method=~\"$gRPC_Method\",}[5m])) by (application, method)",
                     "interval": "",
                     "legendFormat": "{{application, method}}",
                     "queryType": "randomWalk",
@@ -458,6 +458,140 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
+            "description": "Error QPS for each selected application.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 12,
+                "y": 1,
+                "w": 12,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 17,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(rate(ray_serve_num_http_error_requests_total{application=~\"$Application\",application!~\"\",route=~\"$HTTP_Route\",route!~\"/-/.*\",}[5m])) by (application, route, error_code)",
+                    "interval": "",
+                    "legendFormat": "{{application, route, error_code}}",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                },
+                {
+                    "exemplar": true,
+                    "expr": "sum(rate(ray_serve_num_grpc_error_requests_total{application=~\"$Application\",application!~\"\",method=~\"$gRPC_Method\",}[5m])) by (application, method, error_code)",
+                    "interval": "",
+                    "legendFormat": "{{application, method, error_code}}",
+                    "queryType": "randomWalk",
+                    "refId": "B"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Error QPS per application per error code",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "qps",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
             "description": "P50 latency for selected applications.",
             "fieldConfig": {
                 "defaults": {},
@@ -467,7 +601,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 0,
-                "y": 1,
+                "y": 2,
                 "w": 8,
                 "h": 8
             },
@@ -609,7 +743,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 8,
-                "y": 1,
+                "y": 2,
                 "w": 8,
                 "h": 8
             },
@@ -751,7 +885,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 16,
-                "y": 1,
+                "y": 2,
                 "w": 8,
                 "h": 8
             },
@@ -893,7 +1027,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 0,
-                "y": 2,
+                "y": 3,
                 "w": 8,
                 "h": 8
             },
@@ -1019,7 +1153,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 8,
-                "y": 2,
+                "y": 3,
                 "w": 8,
                 "h": 8
             },
@@ -1080,7 +1214,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_deployment_request_counter{application=~\"$Application\",application!~\"\",}[5m])) by (application, deployment)",
+                    "expr": "sum(rate(ray_serve_deployment_request_counter_total{application=~\"$Application\",application!~\"\",}[5m])) by (application, deployment)",
                     "interval": "",
                     "legendFormat": "{{application, deployment}}",
                     "queryType": "randomWalk",
@@ -1145,7 +1279,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 16,
-                "y": 2,
+                "y": 3,
                 "w": 8,
                 "h": 8
             },
@@ -1206,7 +1340,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_deployment_error_counter{application=~\"$Application\",application!~\"\",}[5m])) by (application, deployment)",
+                    "expr": "sum(rate(ray_serve_deployment_error_counter_total{application=~\"$Application\",application!~\"\",}[5m])) by (application, deployment)",
                     "interval": "",
                     "legendFormat": "{{application, deployment}}",
                     "queryType": "randomWalk",
@@ -1271,7 +1405,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 0,
-                "y": 3,
+                "y": 4,
                 "w": 8,
                 "h": 8
             },
@@ -1405,7 +1539,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 8,
-                "y": 3,
+                "y": 4,
                 "w": 8,
                 "h": 8
             },
@@ -1539,7 +1673,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 16,
-                "y": 3,
+                "y": 4,
                 "w": 8,
                 "h": 8
             },
@@ -1673,7 +1807,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 0,
-                "y": 4,
+                "y": 5,
                 "w": 8,
                 "h": 8
             },
@@ -1799,7 +1933,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 8,
-                "y": 4,
+                "y": 5,
                 "w": 8,
                 "h": 8
             },
@@ -1941,7 +2075,7 @@
             "fillGradient": 0,
             "gridPos": {
                 "x": 16,
-                "y": 4,
+                "y": 5,
                 "w": 8,
                 "h": 8
             },
@@ -2059,13 +2193,769 @@
                 "align": false,
                 "alignLevel": null
             }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The number of ongoing requests in the HTTP Proxy.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 0,
+                "y": 6,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 20,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_num_ongoing_http_requests{}",
+                    "interval": "",
+                    "legendFormat": "Ongoing HTTP Requests",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Ongoing HTTP Requests",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "requests",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The number of ongoing requests in the gRPC Proxy.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 8,
+                "y": 6,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 21,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_num_ongoing_grpc_requests{}",
+                    "interval": "",
+                    "legendFormat": "Ongoing gRPC Requests",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Ongoing gRPC Requests",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "requests",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The number of request scheduling tasks in the router.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 16,
+                "y": 6,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 22,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_num_scheduling_tasks{}",
+                    "interval": "",
+                    "legendFormat": "Scheduling Tasks",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Scheduling Tasks",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "tasks",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The number of request scheduling tasks in the router that are undergoing backoff.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 0,
+                "y": 7,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 23,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_num_scheduling_tasks_in_backoff{}",
+                    "interval": "",
+                    "legendFormat": "Scheduling Tasks in Backoff",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Scheduling Tasks in Backoff",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "tasks",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The duration of the last control loop.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 8,
+                "y": 7,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 24,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_controller_control_loop_duration_s{}",
+                    "interval": "",
+                    "legendFormat": "Control Loop Duration",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Controller Control Loop Duration",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "seconds",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "The number of control loops performed by the controller. Increases monotonically over the controller's lifetime.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 10,
+            "fillGradient": 0,
+            "gridPos": {
+                "x": 16,
+                "y": 7,
+                "w": 8,
+                "h": 8
+            },
+            "hiddenSeries": false,
+            "id": 25,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "ray_serve_controller_num_control_loops{}",
+                    "interval": "",
+                    "legendFormat": "Control Loops",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Number of Control Loops",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "loops",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
         }
     ],
     "refresh": false,
     "schemaVersion": 27,
     "style": "dark",
     "tags": [
-        "rayVersion:2.9.0"
+        "rayVersion:2.40.0"
     ],
     "templating": {
         "list": [
@@ -2132,7 +3022,7 @@
                     ]
                 },
                 "datasource": "${datasource}",
-                "definition": "label_values(ray_serve_num_http_requests{}, route)",
+                "definition": "label_values(ray_serve_num_http_requests_total{}, route)",
                 "description": null,
                 "error": null,
                 "hide": 0,
@@ -2142,7 +3032,7 @@
                 "name": "HTTP_Route",
                 "options": [],
                 "query": {
-                    "query": "label_values(ray_serve_num_http_requests{}, route)",
+                    "query": "label_values(ray_serve_num_http_requests_total{}, route)",
                     "refId": "Prometheus-Instance-Variable-Query"
                 },
                 "refresh": 2,
