@@ -40,7 +40,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(rayService).NotTo(BeNil())
 
 	curlPodName := "curl-pod"
-	curlContainerName := "curl-container"
+	curlContainerName := "curl"
 
 	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
 

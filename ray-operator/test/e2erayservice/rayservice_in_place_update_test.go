@@ -72,9 +72,13 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("8"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
+	// Test the new price and factor
+	g.Eventually(func(g Gomega) {
+		// curl /fruit
+		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		g.Expect(stdout.String()).To(Equal("8"))
+		// curl /calc
+		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+		g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
+	}, TestTimeoutShort).Should(Succeed())
 }
