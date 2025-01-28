@@ -125,6 +125,9 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
+	if err = r.cleanUpRayClusterInstance(ctx, rayServiceInstance); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
@@ -516,9 +519,6 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, rayService *rayv1.RayServ
 func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, *rayv1.RayCluster, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
-	if err = r.cleanUpRayClusterInstance(ctx, rayServiceInstance); err != nil {
-		return nil, nil, err
-	}
 
 	// Get active cluster and pending cluster instances.
 	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
@@ -542,12 +542,10 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, pendingRayCluster, err
 	case UpdatePendingCluster:
 		logger.Info("Updating the pending RayCluster instance.")
-		pendingRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, pendingRayCluster.Name)
-		if err != nil {
+		if pendingRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, pendingRayCluster.Name); err != nil {
 			return nil, nil, err
 		}
-		err = r.updateRayClusterInstance(ctx, pendingRayCluster)
-		if err != nil {
+		if err = r.updateRayClusterInstance(ctx, pendingRayCluster); err != nil {
 			return nil, nil, err
 		}
 		return activeRayCluster, pendingRayCluster, nil
@@ -591,7 +589,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 				)
 			} else {
 				reasonForDeletion := ""
-				if time.Since(cachedTimestamp) > 0*time.Second {
+				if time.Now().After(cachedTimestamp) {
 					reasonForDeletion = fmt.Sprintf("Deletion timestamp %s "+
 						"for RayCluster %s has passed. Deleting cluster "+
 						"immediately.", cachedTimestamp, rayClusterInstance.Name)
