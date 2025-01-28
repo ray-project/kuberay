@@ -296,8 +296,6 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 			rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 		}
-		// make ServiceStatus ready since headSvc and serveSvc are ready.
-		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 	}
 
 	serveEndPoints := &corev1.Endpoints{}
@@ -316,6 +314,9 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	calculateConditions(rayServiceInstance)
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running
+	}
 	return nil
 }
 
