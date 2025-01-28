@@ -544,7 +544,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, pendingRayCluster, err
 	case UpdatePendingCluster:
 		logger.Info("Updating the pending RayCluster instance.")
-		if pendingRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, pendingRayCluster.Name); err != nil {
+		if pendingRayCluster, err = constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name); err != nil {
 			return nil, nil, err
 		}
 		if err = r.updateRayClusterInstance(ctx, pendingRayCluster); err != nil {
@@ -553,7 +553,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, pendingRayCluster, nil
 	case UpdateActiveCluster:
 		logger.Info("Updating the active RayCluster instance.")
-		if activeRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, activeRayCluster.Name); err != nil {
+		if activeRayCluster, err = constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name); err != nil {
 			return nil, nil, err
 		}
 		if err := r.updateRayClusterInstance(ctx, activeRayCluster); err != nil {
@@ -827,8 +827,12 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	}
 
 	logger.Info("No pending RayCluster, creating RayCluster.")
-	rayClusterInstance, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, rayClusterKey.Name)
+	rayClusterInstance, err = constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name)
 	if err != nil {
+		return nil, err
+	}
+	// Set the ownership in order to do the garbage collection by k8s.
+	if err := ctrl.SetControllerReference(rayServiceInstance, rayClusterInstance, r.Scheme); err != nil {
 		return nil, err
 	}
 	if err = r.Create(ctx, rayClusterInstance); err != nil {
@@ -839,9 +843,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	return rayClusterInstance, nil
 }
 
-func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Context, rayService *rayv1.RayService, rayClusterName string) (*rayv1.RayCluster, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
+func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
@@ -854,12 +856,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	errContext := "Failed to serialize RayCluster config. " +
-		"Manual config updates will NOT be tracked accurately. " +
-		"Please tear down the cluster and apply a new config."
 	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
-		logger.Error(err, errContext)
 		return nil, err
 	}
 	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
@@ -876,12 +874,6 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 		},
 		Spec: rayService.Spec.RayClusterSpec,
 	}
-
-	// Set the ownership in order to do the garbage collection by k8s.
-	if err := ctrl.SetControllerReference(rayService, rayCluster, r.Scheme); err != nil {
-		return nil, err
-	}
-
 	return rayCluster, nil
 }
 
