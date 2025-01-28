@@ -295,8 +295,9 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 				"newCluster", clusterName)
 			rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-			rayServiceInstance.Status.ServiceStatus = rayv1.Running
 		}
+		// make ServiceStatus ready since headSvc and serveSvc are ready.
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 	}
 
 	serveEndPoints := &corev1.Endpoints{}
