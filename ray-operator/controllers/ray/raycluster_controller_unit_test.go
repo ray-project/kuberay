@@ -1631,7 +1631,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// `inconsistentRayClusterStatus` is used to check whether the old and new RayClusterStatus are inconsistent
 	// by comparing different fields. If the only differences between the old and new status are the `LastUpdateTime`
-	// and `ObservedGeneration` fields (Case 11 and Case 12), the status update will not be triggered.
+	// and `ObservedGeneration` fields, the status update will not be triggered.
 	ctx := context.Background()
 
 	testCases := []struct {
