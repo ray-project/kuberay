@@ -335,7 +335,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.WaitForServeDeploymentReady
+	newStatus.ServiceStatus = rayv1.Running
 	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus
