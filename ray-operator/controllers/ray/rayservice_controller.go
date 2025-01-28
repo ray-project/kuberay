@@ -544,7 +544,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, pendingRayCluster, err
 	case UpdatePendingCluster:
 		logger.Info("Updating the pending RayCluster instance.")
-		if pendingRayCluster, err = constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name); err != nil {
+		if pendingRayCluster, err = constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name, r.Scheme); err != nil {
 			return nil, nil, err
 		}
 		if err = r.updateRayClusterInstance(ctx, pendingRayCluster); err != nil {
@@ -553,7 +553,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		return activeRayCluster, pendingRayCluster, nil
 	case UpdateActiveCluster:
 		logger.Info("Updating the active RayCluster instance.")
-		if activeRayCluster, err = constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name); err != nil {
+		if activeRayCluster, err = constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name, r.Scheme); err != nil {
 			return nil, nil, err
 		}
 		if err := r.updateRayClusterInstance(ctx, activeRayCluster); err != nil {
@@ -827,12 +827,8 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	}
 
 	logger.Info("No pending RayCluster, creating RayCluster.")
-	rayClusterInstance, err = constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name)
+	rayClusterInstance, err = constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name, r.Scheme)
 	if err != nil {
-		return nil, err
-	}
-	// Set the ownership in order to do the garbage collection by k8s.
-	if err := ctrl.SetControllerReference(rayServiceInstance, rayClusterInstance, r.Scheme); err != nil {
 		return nil, err
 	}
 	if err = r.Create(ctx, rayClusterInstance); err != nil {
@@ -843,7 +839,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	return rayClusterInstance, nil
 }
 
-func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string) (*rayv1.RayCluster, error) {
+func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
@@ -874,6 +870,12 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 		},
 		Spec: rayService.Spec.RayClusterSpec,
 	}
+
+	// Set the ownership in order to do the garbage collection by k8s.
+	if err := ctrl.SetControllerReference(rayService, rayCluster, scheme); err != nil {
+		return nil, err
+	}
+
 	return rayCluster, nil
 }
 

@@ -1180,32 +1180,36 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			rayService.Name = "test-service"
 			rayService.Namespace = "test-namespace"
 			clusterName := "test-cluster"
-			rayCluster, err := constructRayClusterForRayService(&tt.rayService, clusterName)
+			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme.Scheme)
 			assert.NoError(t, err)
 
 			// Check ObjectMeta of the RayCluster
 			assert.Equal(t, rayCluster.ObjectMeta.Name, clusterName)
-			assert.Equal(t, rayCluster.ObjectMeta.Namespace, tt.rayService.Namespace)
+			assert.Equal(t, rayCluster.ObjectMeta.Namespace, rayService.Namespace)
 
 			// Check labels for metadata
-			assert.Equal(t, rayCluster.Labels[utils.RayOriginatedFromCRNameLabelKey], tt.rayService.Name)
+			assert.Equal(t, rayCluster.Labels[utils.RayOriginatedFromCRNameLabelKey], rayService.Name)
 			assert.Equal(t, rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey], string(utils.RayServiceCRD))
 
 			// Check annotations for metadata
 			assert.NotEmpty(t, rayCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey])
-			expectedNumWorkerGroups := strconv.Itoa(len(tt.rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
+			expectedNumWorkerGroups := strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
 			assert.Equal(t, rayCluster.Annotations[utils.NumWorkerGroupsKey], expectedNumWorkerGroups)
 			assert.Equal(t, rayCluster.Annotations[utils.KubeRayVersion], utils.KUBERAY_VERSION)
 
 			// Check whether the RayService's labels are copied to the RayCluster
-			for key, value := range tt.rayService.Labels {
+			for key, value := range rayService.Labels {
 				assert.Equal(t, rayCluster.Labels[key], value)
 			}
 
 			// Check whether the RayService's annotations are copied to the RayCluster
-			for key, value := range tt.rayService.Annotations {
+			for key, value := range rayService.Annotations {
 				assert.Equal(t, rayCluster.Annotations[key], value)
 			}
+
+			// Check owner reference
+			assert.Equal(t, rayCluster.OwnerReferences[0].Name, rayService.Name)
+			assert.Equal(t, rayCluster.OwnerReferences[0].UID, rayService.UID)
 		})
 	}
 }
