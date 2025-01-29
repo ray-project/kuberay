@@ -233,48 +233,41 @@ func TestGetPortsFromCluster(t *testing.T) {
 }
 
 func TestGetServicePortsWithMetricsPort(t *testing.T) {
-	cluster := instanceWithWrongSvc.DeepCopy()
-
 	testCases := []struct {
-		modifyPorts  func(*rayv1.RayCluster)
 		name         string
+		ports        []corev1.ContainerPort
 		expectResult int32
 	}{
 		{
-			name: "No ports are specified by the user.",
-			modifyPorts: func(cluster *rayv1.RayCluster) {
-				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
-			},
+			name:         "No ports are specified by the user.",
+			ports:        []corev1.ContainerPort{},
 			expectResult: int32(utils.DefaultMetricsPort),
 		},
 		{
 			name: "Only a random port is specified by the user.",
-			modifyPorts: func(cluster *rayv1.RayCluster) {
-				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
-					{
-						Name:          "random",
-						ContainerPort: 1234,
-					},
-				}
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "random",
+					ContainerPort: 1234,
+				},
 			},
 			expectResult: int32(utils.DefaultMetricsPort),
 		},
 		{
 			name: "A custom port is specified by the user.",
-			modifyPorts: func(cluster *rayv1.RayCluster) {
-				customMetricsPort := int32(utils.DefaultMetricsPort) + 1
-				metricsPort := corev1.ContainerPort{
+			ports: []corev1.ContainerPort{
+				{
 					Name:          utils.MetricsPortName,
-					ContainerPort: customMetricsPort,
-				}
-				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports, metricsPort)
+					ContainerPort: int32(utils.DefaultMetricsPort) + 1,
+				},
 			},
 			expectResult: int32(utils.DefaultMetricsPort) + 1,
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			testCase.modifyPorts(cluster)
+			cluster := instanceWithWrongSvc.DeepCopy()
+			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
 			ports := getServicePorts(*cluster)
 			if ports[utils.MetricsPortName] != testCase.expectResult {
 				t.Fatalf("Expected `%v` but got `%v`", testCase.expectResult, ports[utils.MetricsPortName])
