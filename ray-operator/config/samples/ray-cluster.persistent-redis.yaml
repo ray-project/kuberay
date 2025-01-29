@@ -1,21 +1,16 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: raycluster-external-redis-uri
-spec:
-  rayVersion: '2.41.0'
-  gcsFaultToleranceOptions:
-    # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
+  annotations:
+    ray.io/ft-enabled: "true" # enable Ray GCS FT
+    # In most cases, you don't need to set `ray.io/external-storage-namespace` because KubeRay will
     # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
     # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
     # [Example]:
-    # externalStorageNamespace: "my-raycluster-storage"
-    redisAddress: "redis://redis:6379"
-    redisPassword:
-      valueFrom:
-        secretKeyRef:
-          name: redis-password-secret
-          key: password
+    # ray.io/external-storage-namespace: "my-raycluster-storage"
+  name: raycluster-external-redis
+spec:
+  rayVersion: '2.9.0'
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
@@ -23,17 +18,33 @@ spec:
     rayStartParams:
       # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.
       num-cpus: "0"
+      # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
+      # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
+      redis-password: $REDIS_PASSWORD
     # Pod template
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.9.0
             resources:
               limits:
                 cpu: "1"
               requests:
                 cpu: "1"
+            env:
+              # Ray will read the RAY_REDIS_ADDRESS environment variable to establish
+              # a connection with the Redis server. In this instance, we use the "redis"
+              # Kubernetes ClusterIP service name, also created by this YAML, as the
+              # connection point to the Redis server.
+              - name: RAY_REDIS_ADDRESS
+                value: redis:6379
+              # This environment variable is used in the `rayStartParams` above.
+              - name: REDIS_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: redis-password-secret
+                    key: password
             ports:
               - containerPort: 6379
                 name: redis
@@ -44,20 +55,9 @@ spec:
             volumeMounts:
               - mountPath: /tmp/ray
                 name: ray-logs
-              - mountPath: /home/ray/samples
-                name: ray-example-uri-configmap
         volumes:
           - name: ray-logs
             emptyDir: {}
-          - name: ray-example-uri-configmap
-            configMap:
-              name: ray-example-uri
-              defaultMode: 0777
-              items:
-                - key: detached_actor.py
-                  path: detached_actor.py
-                - key: increment_counter.py
-                  path: increment_counter.py
   workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 1
@@ -73,7 +73,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.9.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
@@ -97,10 +97,21 @@ data:
     dir /data
     port 6379
     bind 0.0.0.0
-    appendonly yes
     protected-mode no
     requirepass 5241590000000000
     pidfile /data/redis-6379.pid
+    # Dump a backup every 60s, if there are 1000 writes since the prev. backup.
+    save 60 1000
+    dbfilename dump.rdb
+    # Enable the append-only log file.
+    appendonly yes
+    # Sync the log to disk every second.
+    # Alternatives are "no" and "always" (every write).
+    appendfsync everysec
+    # These are the default values, change if desired.
+    appendfilename "appendonly.aof"
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
 ---
 apiVersion: v1
 kind: Service
@@ -116,8 +127,24 @@ spec:
   selector:
     app: redis
 ---
+# This volume claim will use the default storage class for your cluster/provider.
+# On GCP, this is a persistent disk, which is more performant than GCS FUSE
+# (which does not support append operations).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+  # choose a storageClassName provided by your Kubernetes:
+  #storageClassName: standard-rwo
+---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
   labels:
@@ -145,10 +172,15 @@ spec:
             - name: config
               mountPath: /usr/local/etc/redis/redis.conf
               subPath: redis.conf
+            - name: redis-data
+              mountPath: /data
       volumes:
         - name: config
           configMap:
             name: redis-config
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data
 ---
 # Redis password
 apiVersion: v1
@@ -159,29 +191,3 @@ type: Opaque
 data:
   # echo -n "5241590000000000" | base64
   password: NTI0MTU5MDAwMDAwMDAwMA==
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ray-example-uri
-data:
-  detached_actor.py: |
-    import ray
-
-    @ray.remote(num_cpus=1)
-    class Counter:
-      def __init__(self):
-          self.value = 0
-
-      def increment(self):
-          self.value += 1
-          return self.value
-
-    ray.init(namespace="default_namespace")
-    Counter.options(name="counter_actor", lifetime="detached").remote()
-  increment_counter.py: |
-    import ray
-
-    ray.init(namespace="default_namespace")
-    counter = ray.get_actor("counter_actor")
-    print(ray.get(counter.increment.remote()))

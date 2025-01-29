@@ -8,7 +8,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -30,7 +29,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Get the latest RayService
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
@@ -50,15 +49,11 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
 
-	// test the default curl result
-	g.Eventually(func(g Gomega) {
-		// curl /fruit
-		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-		g.Expect(stdout.String()).To(Equal("6"))
-		// curl /calc
-		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-		g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
-	}, TestTimeoutShort).Should(Succeed())
+	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
+	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("6"))
+	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 	// In-place update
 	// Parse ServeConfigV2 and replace the string in the simplest way to update it.

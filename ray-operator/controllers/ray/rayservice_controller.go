@@ -532,7 +532,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if shouldUpdateCluster(rayServiceInstance, activeRayCluster, true) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the active RayCluster instance", "clusterName", activeRayCluster.Name)
-		if activeRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, activeRayCluster.Name); err != nil {
+		if activeRayCluster, err = constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name, r.Scheme); err != nil {
 			return nil, nil, err
 		}
 		err = r.updateRayClusterInstance(ctx, activeRayCluster)
@@ -542,7 +542,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the pending RayCluster instance", "clusterName", pendingRayCluster.Name)
-		if pendingRayCluster, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, pendingRayCluster.Name); err != nil {
+		if pendingRayCluster, err = constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name, r.Scheme); err != nil {
 			return nil, nil, err
 		}
 		err = r.updateRayClusterInstance(ctx, pendingRayCluster)
@@ -773,7 +773,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	}
 
 	logger.Info("No pending RayCluster, creating RayCluster.")
-	rayClusterInstance, err = r.constructRayClusterForRayService(ctx, rayServiceInstance, rayClusterKey.Name)
+	rayClusterInstance, err = constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name, r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -785,9 +785,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	return rayClusterInstance, nil
 }
 
-func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Context, rayService *rayv1.RayService, rayClusterName string) (*rayv1.RayCluster, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
+func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
 	for k, v := range rayService.Labels {
@@ -800,12 +798,8 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
-	errContext := "Failed to serialize RayCluster config. " +
-		"Manual config updates will NOT be tracked accurately. " +
-		"Please tear down the cluster and apply a new config."
 	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
-		logger.Error(err, errContext)
 		return nil, err
 	}
 	rayClusterAnnotations[utils.NumWorkerGroupsKey] = strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
@@ -824,7 +818,7 @@ func (r *RayServiceReconciler) constructRayClusterForRayService(ctx context.Cont
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
-	if err := ctrl.SetControllerReference(rayService, rayCluster, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(rayService, rayCluster, scheme); err != nil {
 		return nil, err
 	}
 

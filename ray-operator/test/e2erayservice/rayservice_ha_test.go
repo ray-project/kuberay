@@ -39,7 +39,7 @@ func TestStaticRayService(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -89,7 +89,7 @@ func TestAutoscalingRayService(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Get the underlying RayCluster of the RayService
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
@@ -155,7 +155,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -231,7 +231,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
 		Should(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))

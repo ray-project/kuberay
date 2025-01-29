@@ -54,6 +54,21 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			createSecret: false,
 		},
 		{
+			name:          "Redis Password and Username",
+			redisPassword: "5241590000000000",
+			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
+				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
+					newRayClusterSpec().WithGcsFaultToleranceOptions(
+						rayv1ac.GcsFaultToleranceOptions().
+							WithRedisAddress("redis:6379").
+							WithRedisUsername(rayv1ac.RedisCredential().WithValue("default")).
+							WithRedisPassword(rayv1ac.RedisCredential().WithValue("5241590000000000")),
+					),
+				)
+			},
+			createSecret: false,
+		},
+		{
 			name:          "Redis Password In Secret",
 			redisPassword: "5241590000000000",
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
