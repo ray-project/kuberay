@@ -1099,3 +1099,117 @@ func TestCalculateConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestConstructRayClusterForRayService(t *testing.T) {
+	tests := []struct {
+		name       string
+		rayService rayv1.RayService
+	}{
+		{
+			name: "RayClusterSpec with no worker groups",
+			rayService: rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
+					},
+				},
+			},
+		},
+		{
+			name: "RayClusterSpec with two worker groups",
+			rayService: rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "worker-group-1",
+							},
+							{
+								GroupName: "worker-group-2",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "RayService with labels",
+			rayService: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"label-1": "value-1",
+						"label-2": "value-2",
+					},
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "worker-group-1",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "RayService with annotations",
+			rayService: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"annotation-1": "value-1",
+						"annotation-2": "value-2",
+					},
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "worker-group-1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := tt.rayService
+			rayService.Name = "test-service"
+			rayService.Namespace = "test-namespace"
+			clusterName := "test-cluster"
+			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme.Scheme)
+			assert.NoError(t, err)
+
+			// Check ObjectMeta of the RayCluster
+			assert.Equal(t, rayCluster.ObjectMeta.Name, clusterName)
+			assert.Equal(t, rayCluster.ObjectMeta.Namespace, rayService.Namespace)
+
+			// Check labels for metadata
+			assert.Equal(t, rayCluster.Labels[utils.RayOriginatedFromCRNameLabelKey], rayService.Name)
+			assert.Equal(t, rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey], string(utils.RayServiceCRD))
+
+			// Check annotations for metadata
+			assert.NotEmpty(t, rayCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey])
+			expectedNumWorkerGroups := strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
+			assert.Equal(t, rayCluster.Annotations[utils.NumWorkerGroupsKey], expectedNumWorkerGroups)
+			assert.Equal(t, rayCluster.Annotations[utils.KubeRayVersion], utils.KUBERAY_VERSION)
+
+			// Check whether the RayService's labels are copied to the RayCluster
+			for key, value := range rayService.Labels {
+				assert.Equal(t, rayCluster.Labels[key], value)
+			}
+
+			// Check whether the RayService's annotations are copied to the RayCluster
+			for key, value := range rayService.Annotations {
+				assert.Equal(t, rayCluster.Annotations[key], value)
+			}
+
+			// Check owner reference
+			assert.Equal(t, rayCluster.OwnerReferences[0].Name, rayService.Name)
+			assert.Equal(t, rayCluster.OwnerReferences[0].UID, rayService.UID)
+		})
+	}
+}
