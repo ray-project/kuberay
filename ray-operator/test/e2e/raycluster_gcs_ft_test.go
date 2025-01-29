@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -14,8 +15,6 @@ import (
 )
 
 const (
-	rayImage      = "rayproject/ray:2.40.0"
-	rayVersion    = "2.40.0"
 	redisPassword = "5241590000000000"
 )
 
@@ -29,7 +28,8 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	testScript, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	deployRedis(test, namespace.Name, redisPassword)
+	checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+	defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
@@ -38,7 +38,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 					WithRedisAddress("redis:6379").
 					WithRedisPassword(rayv1ac.RedisCredential().WithValue(redisPassword)),
 			).
-			WithRayVersion(rayVersion).
+			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{
 					"num-cpus": "0",
