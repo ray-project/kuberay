@@ -1,16 +1,21 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  annotations:
-    ray.io/ft-enabled: "true" # enable Ray GCS FT
-    # In most cases, you don't need to set `ray.io/external-storage-namespace` because KubeRay will
+  name: raycluster-external-redis-uri
+spec:
+  rayVersion: '2.41.0'
+  gcsFaultToleranceOptions:
+    # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
     # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
     # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
     # [Example]:
-    # ray.io/external-storage-namespace: "my-raycluster-storage"
-  name: raycluster-external-redis-uri
-spec:
-  rayVersion: '2.9.0'
+    # externalStorageNamespace: "my-raycluster-storage"
+    redisAddress: "redis://redis:6379"
+    redisPassword:
+      valueFrom:
+        secretKeyRef:
+          name: redis-password-secret
+          key: password
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
@@ -18,33 +23,17 @@ spec:
     rayStartParams:
       # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.
       num-cpus: "0"
-      # redis-password should match "requirepass" in redis.conf in the ConfigMap above.
-      # Ray 2.3.0 changes the default redis password from "5241590000000000" to "".
-      redis-password: $REDIS_PASSWORD
     # Pod template
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.41.0
             resources:
               limits:
                 cpu: "1"
               requests:
                 cpu: "1"
-            env:
-              # Ray will read the RAY_REDIS_ADDRESS environment variable to establish
-              # a connection with the Redis server. In this instance, we use the "redis"
-              # Kubernetes ClusterIP service name, also created by this YAML, as the
-              # connection point to the Redis server.
-              - name: RAY_REDIS_ADDRESS
-                value: redis://redis:6379
-              # This environment variable is used in the `rayStartParams` above.
-              - name: REDIS_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: redis-password-secret
-                    key: password
             ports:
               - containerPort: 6379
                 name: redis
@@ -84,7 +73,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.41.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
