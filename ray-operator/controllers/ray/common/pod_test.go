@@ -1278,12 +1278,14 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 	customAddress := "custom-address:1234"
 
 	testCases := []struct {
+		name           string
 		assertion      func(t *testing.T, rayStartParams map[string]string)
 		rayStartParams map[string]string
 		fqdnRayIP      string
 		nodeType       rayv1.RayNodeType
 	}{
 		{
+			name:           "Head node with no address option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1292,6 +1294,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			},
 		},
 		{
+			name:           "Head node with custom address option set.",
 			rayStartParams: map[string]string{"address": customAddress},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1300,6 +1303,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with no address option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1309,6 +1313,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with custom address option set.",
 			rayStartParams: map[string]string{"address": customAddress},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1318,8 +1323,10 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
-		testCase.assertion(t, testCase.rayStartParams)
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
 	}
 }
 
@@ -1334,12 +1341,14 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	customMetricsPort := utils.DefaultMetricsPort + 1
 	testCases := []struct {
+		name           string
 		assertion      func(t *testing.T, rayStartParams map[string]string)
 		rayStartParams map[string]string
 		fqdnRayIP      string
 		nodeType       rayv1.RayNodeType
 	}{
 		{
+			name:           "Head node with no metrics-export-port option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1348,6 +1357,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			},
 		},
 		{
+			name:           "Head node with custom metrics-export-port option set.",
 			rayStartParams: map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1356,6 +1366,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with no metrics-export-port option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1364,6 +1375,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with custom metrics-export-port option set.",
 			rayStartParams: map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1374,8 +1386,10 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
-		testCase.assertion(t, testCase.rayStartParams)
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
 	}
 }
 
@@ -1389,12 +1403,14 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	testCases := []struct {
+		name           string
 		assertion      func(t *testing.T, rayStartParams map[string]string)
 		rayStartParams map[string]string
 		fqdnRayIP      string
 		nodeType       rayv1.RayNodeType
 	}{
 		{
+			name:           "Head node with no --block option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1403,6 +1419,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			},
 		},
 		{
+			name:           "Head node with --block option set to false.",
 			rayStartParams: map[string]string{"block": "false"},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1411,6 +1428,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with no --block option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1419,6 +1437,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with --block option set to false.",
 			rayStartParams: map[string]string{"block": "false"},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1428,8 +1447,10 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
-		testCase.assertion(t, testCase.rayStartParams)
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
 	}
 }
 
@@ -1441,12 +1462,14 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	testCases := []struct {
+		name           string
 		assertion      func(t *testing.T, rayStartParams map[string]string)
 		rayStartParams map[string]string
 		fqdnRayIP      string
 		nodeType       rayv1.RayNodeType
 	}{
 		{
+			name:           "Head node with no dashboard-host option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1455,6 +1478,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			},
 		},
 		{
+			name:           "Head node with dashboard-host option set.",
 			rayStartParams: map[string]string{"dashboard-host": "localhost"},
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
@@ -1463,6 +1487,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with no dashboard-host option set.",
 			rayStartParams: map[string]string{},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1471,6 +1496,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			},
 		},
 		{
+			name:           "Worker node with dashboard-host option set.",
 			rayStartParams: map[string]string{"dashboard-host": "localhost"},
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
@@ -1481,8 +1507,10 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
-		testCase.assertion(t, testCase.rayStartParams)
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
 	}
 }
 

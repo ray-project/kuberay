@@ -237,15 +237,18 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 
 	testCases := []struct {
 		modifyPorts  func(*rayv1.RayCluster)
+		name         string
 		expectResult int32
 	}{
 		{
+			name: "No ports are specified by the user.",
 			modifyPorts: func(cluster *rayv1.RayCluster) {
 				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
 			},
 			expectResult: int32(utils.DefaultMetricsPort),
 		},
 		{
+			name: "Only a random port is specified by the user.",
 			modifyPorts: func(cluster *rayv1.RayCluster) {
 				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
 					{
@@ -257,6 +260,7 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 			expectResult: int32(utils.DefaultMetricsPort),
 		},
 		{
+			name: "A custom port is specified by the user.",
 			modifyPorts: func(cluster *rayv1.RayCluster) {
 				customMetricsPort := int32(utils.DefaultMetricsPort) + 1
 				metricsPort := corev1.ContainerPort{
@@ -269,11 +273,13 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		testCase.modifyPorts(cluster)
-		ports := getServicePorts(*cluster)
-		if ports[utils.MetricsPortName] != testCase.expectResult {
-			t.Fatalf("Expected `%v` but got `%v`", testCase.expectResult, ports[utils.MetricsPortName])
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.modifyPorts(cluster)
+			ports := getServicePorts(*cluster)
+			if ports[utils.MetricsPortName] != testCase.expectResult {
+				t.Fatalf("Expected `%v` but got `%v`", testCase.expectResult, ports[utils.MetricsPortName])
+			}
+		})
 	}
 }
 

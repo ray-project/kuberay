@@ -21,6 +21,7 @@ func TestPopulatePodLabels(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
+		name                   string
 		job                    string
 		queue                  string
 		clusterName            string
@@ -31,6 +32,7 @@ func TestPopulatePodLabels(t *testing.T) {
 		expectQueueLabelResult bool
 	}{
 		{
+			name:             "Ray Cluster CR has labels defined",
 			job:              "job-1-01234",
 			queue:            "root.default",
 			clusterName:      "ray-cluster-with-labels",
@@ -44,6 +46,7 @@ func TestPopulatePodLabels(t *testing.T) {
 			expectQueueLabelResult: true,
 		},
 		{
+			name:                   "Ray Cluster CR has nothing. In this case, the pod will not be populated with the required labels",
 			job:                    "job-2-01234",
 			queue:                  "root.default",
 			clusterName:            "ray-cluster-with-labels",
@@ -55,13 +58,15 @@ func TestPopulatePodLabels(t *testing.T) {
 		},
 	}
 
-	for _, test := range testCases {
-		rayCluster := createRayClusterWithLabels(test.clusterName, test.clusterNameSpace, test.clusterLabel)
-		rayPod := createPod(test.podName, test.clusterNameSpace)
-		yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-		yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
-		assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, test.job), test.expectJobLabelResult)
-		assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, test.queue), test.expectQueueLabelResult)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			rayCluster := createRayClusterWithLabels(testCase.clusterName, testCase.clusterNameSpace, testCase.clusterLabel)
+			rayPod := createPod(testCase.podName, testCase.clusterNameSpace)
+			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, testCase.job), testCase.expectJobLabelResult)
+			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, testCase.queue), testCase.expectQueueLabelResult)
+		})
 	}
 }
 

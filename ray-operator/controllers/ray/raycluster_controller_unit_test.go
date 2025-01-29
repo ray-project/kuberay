@@ -1636,75 +1636,88 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	testCases := []struct {
 		modifyStatus func(*rayv1.RayClusterStatus)
+		name         string
 		expectResult bool
 	}{
 		{
+			name: "State is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.State = rayv1.Suspended //nolint:staticcheck // Still need to check State even though it is deprecated, delete this no lint after this field is removed.
 			},
 			expectResult: true,
 		},
 		{
+			name: "Reason is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.Reason = "new reason"
 			},
 			expectResult: true,
 		},
 		{
+			name: "ReadyWorkerReplicas is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
 			},
 			expectResult: true,
 		},
 		{
+			name: "AvailableWorkerReplicas is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
 			},
 			expectResult: true,
 		},
 		{
+			name: "DesiredWorkerReplicas is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
 			},
 			expectResult: true,
 		},
 		{
+			name: "MinWorkerReplicas is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
 			},
 			expectResult: true,
 		},
 		{
+			name: "MaxWorkerReplicas is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
 			},
 			expectResult: true,
 		},
 		{
+			name: "Endpoints is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.Endpoints["fakeEndpoint"] = "10009"
 			},
 			expectResult: true,
 		},
 		{
+			name: "Head.PodIP is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.Head.PodIP = "test head pod ip"
 			},
 			expectResult: true,
 		},
 		{
+			name: "RayClusterReplicaFailure is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
 			},
 			expectResult: true,
 		},
 		{
+			name: "LastUpdateTime is updated, expect result to be false",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
 			},
 			expectResult: false,
 		},
 		{
+			name: "ObservedGeneration is updated, expect result to be false",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
 				newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
 			},
@@ -1713,10 +1726,12 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		newStatus := oldStatus.DeepCopy()
-		testCase.modifyStatus(newStatus)
-		result := r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus)
-		assert.Equal(t, testCase.expectResult, result)
+		t.Run(testCase.name, func(t *testing.T) {
+			newStatus := oldStatus.DeepCopy()
+			testCase.modifyStatus(newStatus)
+			result := r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus)
+			assert.Equal(t, testCase.expectResult, result)
+		})
 	}
 }
 
