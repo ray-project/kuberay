@@ -968,3 +968,109 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 		})
 	}
 }
+
+func TestIsClusterSpecHashEqual(t *testing.T) {
+	rayService := rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Replicas:  ptr.To[int32](1),
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name              string
+		partial           bool
+		diffReplicas      bool
+		expected          bool
+		addNewWorkerGroup bool
+		updateClusterSpec bool
+	}{
+		{
+			name:              "[full] diff replicas",
+			partial:           false,
+			diffReplicas:      true,
+			addNewWorkerGroup: false,
+			expected:          true,
+		},
+		{
+			name:              "[full] completely identical",
+			partial:           false,
+			diffReplicas:      false,
+			addNewWorkerGroup: false,
+			expected:          true,
+		},
+		{
+			name:              "[full] update cluster spec",
+			partial:           false,
+			diffReplicas:      false,
+			addNewWorkerGroup: false,
+			updateClusterSpec: true,
+			expected:          false,
+		},
+		{
+			name:              "[partial] new worker group",
+			partial:           true,
+			diffReplicas:      false,
+			addNewWorkerGroup: true,
+			expected:          true,
+		},
+		{
+			name:              "[partial] diff replicas + new worker group",
+			partial:           true,
+			diffReplicas:      true,
+			addNewWorkerGroup: true,
+			expected:          true,
+		},
+		{
+			name:              "[partial] diff replicas",
+			partial:           true,
+			diffReplicas:      true,
+			addNewWorkerGroup: false,
+			expected:          true,
+		},
+		{
+			name:              "[partial] update cluster spec",
+			partial:           true,
+			updateClusterSpec: true,
+			expected:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := rayService.DeepCopy()
+			hash, err := generateHashWithoutReplicasAndWorkersToDelete(service.Spec.RayClusterSpec)
+			assert.NoError(t, err)
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+						utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+					},
+				},
+				Spec: rayService.Spec.RayClusterSpec,
+			}
+			if tt.diffReplicas {
+				*service.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
+			}
+			if tt.addNewWorkerGroup {
+				service.Spec.RayClusterSpec.WorkerGroupSpecs = append(service.Spec.RayClusterSpec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+					GroupName: "worker-group-2",
+					Replicas:  ptr.To[int32](1),
+				})
+			}
+			if tt.updateClusterSpec {
+				service.Spec.RayClusterSpec.RayVersion = "new-version"
+			}
+
+			isEqual := isClusterSpecHashEqual(service, &cluster, tt.partial)
+			assert.Equal(t, tt.expected, isEqual)
+		})
+	}
+}
