@@ -729,6 +729,24 @@ func TestCalculateConditions(t *testing.T) {
 		rayServiceInstance      rayv1.RayService
 	}{
 		{
+			name:                    "initial RayServiceReady",
+			rayServiceInstance:      rayv1.RayService{},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializing),
+		},
+		{
+			name:                    "initial RayServiceInitializing",
+			rayServiceInstance:      rayv1.RayService{},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializing),
+		},
+		{
 			name: "Ready condition remains false unchanged",
 			rayServiceInstance: rayv1.RayService{
 				Status: rayv1.RayServiceStatuses{
@@ -841,7 +859,6 @@ func TestCalculateConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initConditions(&tt.rayServiceInstance)
 			meta.SetStatusCondition(&tt.rayServiceInstance.Status.Conditions, metav1.Condition{
 				Type:   string(tt.conditionType),
 				Status: tt.originalConditionStatus,
