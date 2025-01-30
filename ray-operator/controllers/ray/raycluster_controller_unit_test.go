@@ -1631,68 +1631,108 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// `inconsistentRayClusterStatus` is used to check whether the old and new RayClusterStatus are inconsistent
 	// by comparing different fields. If the only differences between the old and new status are the `LastUpdateTime`
-	// and `ObservedGeneration` fields (Case 9 and Case 10), the status update will not be triggered.
+	// and `ObservedGeneration` fields, the status update will not be triggered.
 	ctx := context.Background()
 
-	// Case 1: `State` is different => return true
-	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+	testCases := []struct {
+		modifyStatus func(*rayv1.RayClusterStatus)
+		name         string
+		expectResult bool
+	}{
+		{
+			name: "State is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.State = rayv1.Suspended //nolint:staticcheck // Still need to check State even though it is deprecated, delete this no lint after this field is removed.
+			},
+			expectResult: true,
+		},
+		{
+			name: "Reason is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Reason = "new reason"
+			},
+			expectResult: true,
+		},
+		{
+			name: "ReadyWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "AvailableWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "DesiredWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "MinWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "MaxWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "Endpoints is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Endpoints["fakeEndpoint"] = "10009"
+			},
+			expectResult: true,
+		},
+		{
+			name: "Head.PodIP is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Head.PodIP = "test head pod ip"
+			},
+			expectResult: true,
+		},
+		{
+			name: "RayClusterReplicaFailure is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+			},
+			expectResult: true,
+		},
+		{
+			name: "LastUpdateTime is updated, expect result to be false",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
+			},
+			expectResult: false,
+		},
+		{
+			name: "ObservedGeneration is updated, expect result to be false",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
+			},
+			expectResult: false,
+		},
+	}
 
-	// Case 2: `Reason` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Reason = "new reason"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 3: `ReadyWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 4: `AvailableWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 5: `DesiredWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 6: `MinWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 7: `MaxWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 8: `Endpoints` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Endpoints["fakeEndpoint"] = "10009"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 9: `Head` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Head.PodIP = "test head pod ip"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 10: `LastUpdateTime` is different => return false
-	newStatus = oldStatus.DeepCopy()
-	newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
-	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 11: `ObservedGeneration` is different => return false
-	newStatus = oldStatus.DeepCopy()
-	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
-	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 12: `Conditions` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			newStatus := oldStatus.DeepCopy()
+			testCase.modifyStatus(newStatus)
+			result := r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus)
+			assert.Equal(t, testCase.expectResult, result)
+		})
+	}
 }
 
 func TestCalculateStatus(t *testing.T) {

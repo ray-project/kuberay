@@ -233,40 +233,46 @@ func TestGetPortsFromCluster(t *testing.T) {
 }
 
 func TestGetServicePortsWithMetricsPort(t *testing.T) {
-	cluster := instanceWithWrongSvc.DeepCopy()
-
-	// Test case 1: No ports are specified by the user.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{}
-	ports := getServicePorts(*cluster)
-	// Verify that getServicePorts sets the default metrics port when the user doesn't specify any ports.
-	if ports[utils.MetricsPortName] != int32(utils.DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(utils.DefaultMetricsPort), ports[utils.MetricsPortName])
-	}
-
-	// Test case 2: Only a random port is specified by the user.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+	testCases := []struct {
+		name         string
+		ports        []corev1.ContainerPort
+		expectResult int32
+	}{
 		{
-			Name:          "random",
-			ContainerPort: 1234,
+			name:         "No ports are specified by the user.",
+			ports:        []corev1.ContainerPort{},
+			expectResult: int32(utils.DefaultMetricsPort),
+		},
+		{
+			name: "Only a random port is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "random",
+					ContainerPort: 1234,
+				},
+			},
+			expectResult: int32(utils.DefaultMetricsPort),
+		},
+		{
+			name: "A custom port is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          utils.MetricsPortName,
+					ContainerPort: int32(utils.DefaultMetricsPort) + 1,
+				},
+			},
+			expectResult: int32(utils.DefaultMetricsPort) + 1,
 		},
 	}
-	ports = getServicePorts(*cluster)
-	// Verify that getServicePorts sets the default metrics port when the user doesn't specify the metrics port but specifies other ports.
-	if ports[utils.MetricsPortName] != int32(utils.DefaultMetricsPort) {
-		t.Fatalf("Expected `%v` but got `%v`", int32(utils.DefaultMetricsPort), ports[utils.MetricsPortName])
-	}
-
-	// Test case 3: A custom metrics port is specified by the user.
-	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
-	metricsPort := corev1.ContainerPort{
-		Name:          utils.MetricsPortName,
-		ContainerPort: customMetricsPort,
-	}
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports, metricsPort)
-	ports = getServicePorts(*cluster)
-	// Verify that getServicePorts uses the user's custom metrics port when the user specifies the metrics port.
-	if ports[utils.MetricsPortName] != customMetricsPort {
-		t.Fatalf("Expected `%v` but got `%v`", customMetricsPort, ports[utils.MetricsPortName])
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cluster := instanceWithWrongSvc.DeepCopy()
+			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
+			ports := getServicePorts(*cluster)
+			if ports[utils.MetricsPortName] != testCase.expectResult {
+				t.Fatalf("Expected `%v` but got `%v`", testCase.expectResult, ports[utils.MetricsPortName])
+			}
+		})
 	}
 }
 
