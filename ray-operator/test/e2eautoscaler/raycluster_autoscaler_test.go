@@ -368,57 +368,75 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	// Minimum Ray Version for custom idleTimeoutSeconds
-	idleTimeoutMinRayVersion := "2.40.0"
+	idleTimeoutShort := int32(10)
+	idleTimeoutLong := int32(30)
+	timeoutBuffer := int32(20) // Additional wait time to allow for scale down operation
 
-	customIdleTimeoutSeconds := int32(30)
-	defaultIdleTimeoutSeconds := int32(60)
+	// Script for creating detached actors to trigger autoscaling
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 	test.T().Run(name, func(_ *testing.T) {
+		groupName1 := "short-idle-timeout-group"
+		groupName2 := "long-idle-timeout-group"
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
-			WithRayVersion(idleTimeoutMinRayVersion).
+			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
 				WithTemplate(tc.HeadPodTemplateGetter())).
 			WithWorkerGroupSpecs(
 				rayv1ac.WorkerGroupSpec().
-					WithReplicas(1).
+					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(4).
-					WithGroupName("no-idle-timeout-group").
+					WithMaxReplicas(1).
+					WithIdleTimeoutSeconds(idleTimeoutShort).
+					WithGroupName(groupName1).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 				rayv1ac.WorkerGroupSpec().
-					WithReplicas(1).
+					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(4).
-					WithIdleTimeoutSeconds(customIdleTimeoutSeconds).
-					WithGroupName("custom-idle-timeout-group").
-					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithMaxReplicas(1).
+					WithIdleTimeoutSeconds(idleTimeoutLong).
+					WithGroupName(groupName2).
+					WithRayStartParams(map[string]string{"num-cpus": "2"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 			)
-		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).WithSpec((rayClusterSpecAC))
+		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-		// Wait for RayCluster to become ready and verify the number of available worker replicas.
+		// Wait for RayCluster to become ready
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
+		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-		// After customIdleTimeoutSeconds, the replica in the worker group with custom idleTimeoutSeconds set should be scaled down.
-		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(customIdleTimeoutSeconds)*time.Second).
+		// Deploy one detached actor on each worker group. This is guaranteed by setting `maxReplicas` and specifying respective num-cpus.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor-long-timeout", "--num-cpus=2"})
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor-short-timeout", "--num-cpus=1"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
+		g.Expect(GetGroupPods(test, rayCluster, groupName1)).To(gomega.HaveLen(1))
+		g.Expect(GetGroupPods(test, rayCluster, groupName2)).To(gomega.HaveLen(1))
+
+		// Terminate the first detached actor, and the worker should be marked idle after ~10 seconds.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "actor-short-timeout"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(idleTimeoutShort+timeoutBuffer)*time.Second).
 			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
 
-		// After the default idleTimeoutSeconds, all worker replicas should be scaled down.
-		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(defaultIdleTimeoutSeconds)*time.Second).
+		// Terminate the second detached actor, and the worker should be marked idle after ~30 seconds.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "actor-long-timeout"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(idleTimeoutLong+timeoutBuffer)*time.Second).
 			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 	})
 }
