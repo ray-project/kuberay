@@ -1074,3 +1074,56 @@ func TestIsClusterSpecHashEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldPrepareNewCluster_PrepareNewCluster(t *testing.T) {
+	// Prepare a new cluster when both active and pending clusters are nil.
+	ctx := context.TODO()
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: "test-namespace",
+		},
+	}
+
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, nil)
+	assert.True(t, shouldPrepareNewCluster)
+}
+
+func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
+	// Trigger a zero-downtime upgrade when the cluster spec in RayService differs
+	// from the active cluster and no pending cluster exists.
+	ctx := context.TODO()
+	namespace := "test-namespace"
+	activeClusterName := "active-cluster"
+
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				RayVersion: "old-version",
+			},
+		},
+	}
+
+	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	assert.Nil(t, err)
+	activeCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      activeClusterName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+			},
+		},
+	}
+
+	// Update cluster spec in RayService to trigger a zero downtime upgrade.
+	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil)
+	assert.True(t, shouldPrepareNewCluster)
+}
