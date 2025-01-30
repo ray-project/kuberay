@@ -199,6 +199,10 @@ func IsRayServiceReady(service *rayv1.RayService) bool {
 	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
 }
 
+func IsRayServiceUpgrading(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
+}
+
 func RayServicesNumEndPoints(service *rayv1.RayService) int32 {
 	return service.Status.NumServeEndpoints
 }
