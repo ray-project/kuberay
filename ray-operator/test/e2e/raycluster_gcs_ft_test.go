@@ -28,10 +28,10 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 	testScript, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
-	defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
-
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
+		checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+		defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
+
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithGcsFaultToleranceOptions(
 				rayv1ac.GcsFaultToleranceOptions().
@@ -117,5 +117,8 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		expectedOutput = "4"
 
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_2.py", rayNamespace, expectedOutput})
+
+		err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
 	})
 }
