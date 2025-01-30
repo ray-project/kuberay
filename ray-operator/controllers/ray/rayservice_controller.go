@@ -129,15 +129,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 
-	// Initialize conditions for RayService.
-	changed := initConditions(rayServiceInstance)
-	if changed {
-		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
-			logger.Error(errStatus, "Fail to update initial conditions for RayService")
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
-		}
-	}
-
 	// Find active and pending ray cluster objects given current service name.
 	var activeRayClusterInstance, pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
@@ -312,22 +303,15 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	return nil
 }
 
-func initConditions(rayServiceInstance *rayv1.RayService) (changed bool) {
-	changed = false
+func calculateConditions(rayServiceInstance *rayv1.RayService) {
 	if rayServiceInstance.Status.Conditions == nil {
 		rayServiceInstance.Status.Conditions = []metav1.Condition{}
-		changed = true
 	}
 	if len(rayServiceInstance.Status.Conditions) == 0 {
 		message := "RayService is initializing"
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
-		changed = true
 	}
-	return changed
-}
-
-func calculateConditions(rayServiceInstance *rayv1.RayService) {
 	if rayServiceInstance.Status.NumServeEndpoints > 0 {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
 	} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
