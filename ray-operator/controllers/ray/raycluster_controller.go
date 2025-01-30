@@ -1147,7 +1147,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod := r.buildHeadPod(ctx, instance)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
-	// Trim all labels to ensure they are within the 63-character limit
+	// Trim labels to meet Kubernetes naming constraints
 	for key, value := range pod.Labels {
 		pod.Labels[key] = utils.CheckLabel(value)
 	}
@@ -1203,7 +1203,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Trim the job name to ensure it is within the 63-character limit.
-	jobName := utils.CheckLabel(fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"))
+	jobName := utils.TrimJobName(fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"))
 
 	redisCleanupJob := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1220,6 +1220,8 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			},
 			// Make this job best-effort only for 5 minutes.
 			ActiveDeadlineSeconds: ptr.To[int64](300),
+			// Keep the Job for 3 minutes after it completes for debugging
+			TTLSecondsAfterFinished: ptr.To[int32](180),
 		},
 	}
 

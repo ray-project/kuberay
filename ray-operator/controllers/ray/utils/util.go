@@ -205,6 +205,11 @@ func CheckName(s string) string {
 	return s
 }
 
+// TrimJobName uses CheckLabel to trim Kubernetes job to constrains
+func TrimJobName(jobName string) string {
+	return CheckLabel(jobName)
+}
+
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
 	maxLenght := 63
