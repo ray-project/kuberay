@@ -5,9 +5,6 @@
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
-    # Install Ray
-    - echo Install Ray
-    - pip install -U "ray[default]==2.40.0"
     # Deploy nightly KubeRay operator
     - echo Deploying Kuberay operator
     - pushd ray-operator
