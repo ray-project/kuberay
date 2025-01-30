@@ -118,6 +118,11 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
 	}, TestTimeoutShort).Should(Equal("false"))
 
+	test.T().Logf("Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+	test.T().Logf("Waiting for RayService %s/%s Ready condition to be false because there is no endpoint", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceReady, BeFalse()))
+
 	test.T().Logf("Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
 		endpoints, err = test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
@@ -126,6 +131,11 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
 		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(headPodName))
 	}, TestTimeoutMedium).Should(Succeed())
+
+	test.T().Logf("Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
+	test.T().Logf("Waiting for RayService %s/%s Ready condition to be true because there is an endpoint", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
