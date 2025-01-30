@@ -11,8 +11,12 @@ import (
 type ServiceStatus string
 
 const (
-	Running             ServiceStatus = "Running"
-	PreparingNewCluster ServiceStatus = "PreparingNewCluster"
+	// `Running` means the RayService is ready to serve requests. `NotRunning` means it is not ready.
+	// The naming is a bit confusing, but to maintain backward compatibility, we use `Running` instead of `Ready`.
+	// Since KubeRay v1.3.0, `ServiceStatus` is equivalent to the `RayServiceReady` condition.
+	// `ServiceStatus` is deprecated - please use conditions instead.
+	Running    ServiceStatus = "Running"
+	NotRunning ServiceStatus = ""
 )
 
 type RayServiceUpgradeType string
@@ -87,7 +91,9 @@ type RayServiceStatuses struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// LastUpdateTime represents the timestamp when the RayService status was last updated.
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// ServiceStatus indicates the current RayService status.
+	// Deprecated: `ServiceStatus` is deprecated - use `Conditions` instead. `Running` means the RayService is ready to
+	// serve requests. An empty `ServiceStatus` means the RayService is not ready to serve requests. The definition of
+	// `ServiceStatus` is equivalent to the `RayServiceReady` condition.
 	ServiceStatus       ServiceStatus    `json:"serviceStatus,omitempty"`
 	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
 	// Pending Service Status indicates a RayCluster will be created or is being created.

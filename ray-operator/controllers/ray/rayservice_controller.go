@@ -109,11 +109,8 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	var rayServiceInstance *rayv1.RayService
-	var err error
-
-	// Resolve the CR from request.
-	if rayServiceInstance, err = r.getRayServiceInstance(ctx, request); err != nil {
+	rayServiceInstance, err := r.getRayServiceInstance(ctx, request)
+	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
@@ -306,8 +303,11 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	calculateConditions(rayServiceInstance)
+
+	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
+	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning //nolint:staticcheck // `ServiceStatus` is deprecated
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
-		rayServiceInstance.Status.ServiceStatus = rayv1.Running
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running //nolint:staticcheck // `ServiceStatus` is deprecated
 	}
 	return nil
 }
@@ -415,8 +415,8 @@ func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServic
 // Determine whether to update the status of the RayService instance.
 func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
 	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
-		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
+	if oldStatus.ServiceStatus != newStatus.ServiceStatus { //nolint:staticcheck // `ServiceStatus` is deprecated
+		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus) //nolint:staticcheck // `ServiceStatus` is deprecated
 		return true
 	}
 
