@@ -11,8 +11,7 @@ import (
 type ServiceStatus string
 
 const (
-	Running             ServiceStatus = "Running"
-	PreparingNewCluster ServiceStatus = "PreparingNewCluster"
+	Running ServiceStatus = "Running"
 )
 
 // These statuses should match Ray Serve's application statuses

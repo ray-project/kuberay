@@ -92,13 +92,13 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.PreparingNewCluster,
+		ServiceStatus: rayv1.NotRunning,
 	}
 	ctx := context.Background()
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.Running
+	newStatus.ServiceStatus = rayv1.Running //nolint:staticcheck // `ServiceStatus` is deprecated
 	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus

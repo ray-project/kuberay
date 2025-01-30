@@ -192,7 +192,7 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 }
 
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
-	return service.Status.ServiceStatus
+	return service.Status.ServiceStatus //nolint:staticcheck // `ServiceStatus` is deprecated
 }
 
 func IsRayServiceReady(service *rayv1.RayService) bool {
