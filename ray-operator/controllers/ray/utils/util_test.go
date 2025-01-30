@@ -51,11 +51,13 @@ func TestStatus(t *testing.T) {
 }
 
 func TestCheckAllPodsRunning(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		pods     corev1.PodList
 		expected bool
 	}{
-		"should return true if all Pods are running": {
+		{
+			name: "should return true if all Pods are running",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodRunning),
@@ -64,13 +66,15 @@ func TestCheckAllPodsRunning(t *testing.T) {
 			},
 			expected: true,
 		},
-		"should return false if there are no Pods": {
+		{
+			name: "should return false if there are no Pods",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{},
 			},
 			expected: false,
 		},
-		"should return false if any Pods don't have .status.phase Running": {
+		{
+			name: "should return false if any Pods don't have .status.phase Running",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodPending),
@@ -79,7 +83,8 @@ func TestCheckAllPodsRunning(t *testing.T) {
 			},
 			expected: false,
 		},
-		"should return false if any Pods have a .status.condition of type: Ready that's not status: True": {
+		{
+			name: "should return false if any Pods have a .status.condition of type: Ready that's not status: True",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodRunning),
@@ -90,8 +95,8 @@ func TestCheckAllPodsRunning(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, CheckAllPodsRunning(context.Background(), tc.pods))
 		})
 	}
@@ -291,11 +296,13 @@ func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.Pod
 }
 
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name  string
 		input *rayv1.RayCluster
 		want  string
 	}{
-		"Ray cluster with head group service account": {
+		{
+			name: "Ray cluster with head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -313,7 +320,8 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 			},
 			want: "my-service-account",
 		},
-		"Ray cluster without head group service account": {
+		{
+			name: "Ray cluster without head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -331,8 +339,8 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			got := GetHeadGroupServiceAccountName(tc.input)
 			if got != tc.want {
 				t.Fatalf("got %s, want %s", got, tc.want)
@@ -567,46 +575,50 @@ func TestCalculateMaxReplicas(t *testing.T) {
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
 		group1Replicas    *int32
 		group1MinReplicas *int32
 		group1MaxReplicas *int32
 		group2Replicas    *int32
 		group2MinReplicas *int32
 		group2MaxReplicas *int32
+		name              string
 		answer            int32
 	}{
-		"Both groups' Replicas are nil": {
+		{
 			group1Replicas:    nil,
 			group1MinReplicas: ptr.To[int32](1),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    nil,
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Both groups' Replicas are nil",
 			answer:            3,
 		},
-		"Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.": {
+		{
 			group1Replicas:    ptr.To[int32](0),
 			group1MinReplicas: ptr.To[int32](2),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    ptr.To[int32](6),
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.",
 			answer:            7,
 		},
-		"Group1's Replicas is more than MaxReplicas.": {
+		{
 			group1Replicas:    ptr.To[int32](6),
 			group1MinReplicas: ptr.To[int32](2),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    ptr.To[int32](3),
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Group1's Replicas is more than MaxReplicas.",
 			answer:            8,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
 					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
@@ -631,29 +643,33 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 }
 
 func TestUnmarshalRuntimeEnv(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name           string
 		runtimeEnvYAML string
 		isErrorNil     bool
 	}{
-		"Empty runtimeEnvYAML": {
+		{
+			name:           "Empty runtimeEnvYAML",
 			runtimeEnvYAML: "",
 			isErrorNil:     true,
 		},
-		"Valid runtimeEnvYAML": {
+		{
+			name: "Valid runtimeEnvYAML",
 			runtimeEnvYAML: `
 env_vars:
   counter_name: test_counter
 `,
 			isErrorNil: true,
 		},
-		"Invalid runtimeEnvYAML": {
+		{
+			name:           "Invalid runtimeEnvYAML",
 			runtimeEnvYAML: `invalid_yaml_str`,
 			isErrorNil:     false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
 			if tc.isErrorNil {
 				assert.Nil(t, err)
@@ -665,26 +681,30 @@ env_vars:
 }
 
 func TestFindHeadPodReadyCondition(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		pod      *corev1.Pod
 		expected metav1.Condition
 	}{
-		"condition true if Ray head pod is running and ready": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+		{
+			name: "condition true if Ray head pod is running and ready",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionTrue,
 			},
 		},
-		"condition false if Ray head pod is not running": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+		{
+			name: "condition false if Ray head pod is not running",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
 			},
 		},
-		"condition false if Ray head pod is not ready": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+		{
+			name: "condition false if Ray head pod is not ready",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -692,8 +712,8 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			headPodReadyCondition := FindHeadPodReadyCondition(tc.pod)
 			assert.Equal(t, tc.expected.Status, headPodReadyCondition.Status)
 		})

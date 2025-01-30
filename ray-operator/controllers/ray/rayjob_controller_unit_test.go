@@ -199,31 +199,35 @@ func TestGetSubmitterTemplate(t *testing.T) {
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
-	tests := map[string]struct {
+	tests := []struct {
+		name                 string
 		status               rayv1.JobDeploymentStatus
 		suspend              bool
 		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
-		"Suspend is false": {
+		{
+			name:                 "Suspend is false",
 			suspend:              false,
 			status:               rayv1.JobDeploymentStatusInitializing,
 			expectedShouldUpdate: false,
 		},
-		"Suspend is true, but the status is not allowed to transition to suspending": {
+		{
+			name:                 "Suspend is true, but the status is not allowed to transition to suspending",
 			suspend:              true,
 			status:               rayv1.JobDeploymentStatusComplete,
 			expectedShouldUpdate: false,
 		},
-		"Suspend is true, and the status is allowed to transition to suspending": {
+		{
+			name:                 "Suspend is true, and the status is allowed to transition to suspending",
 			suspend:              true,
 			status:               rayv1.JobDeploymentStatusInitializing,
 			expectedShouldUpdate: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			name := "test-rayjob"
 			namespace := "default"
 			rayJob := &rayv1.RayJob{
@@ -269,19 +273,22 @@ func TestUpdateRayJobStatus(t *testing.T) {
 	}
 	newMessage := "new message"
 
-	tests := map[string]struct {
+	tests := []struct {
+		name                         string
 		isJobDeploymentStatusChanged bool
 	}{
-		"JobDeploymentStatus is not changed": {
+		{
+			name:                         "JobDeploymentStatus is not changed",
 			isJobDeploymentStatusChanged: false,
 		},
-		"JobDeploymentStatus is changed": {
+		{
+			name:                         "JobDeploymentStatus is changed",
 			isJobDeploymentStatusChanged: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			oldRayJob := rayJobTemplate.DeepCopy()
 
 			// Initialize a fake client with newScheme and runtimeObjects.
