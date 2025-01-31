@@ -1220,8 +1220,6 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 			},
 			// Make this job best-effort only for 5 minutes.
 			ActiveDeadlineSeconds: ptr.To[int64](300),
-			// Keep the Job for 3 minutes after it completes for debugging
-			TTLSecondsAfterFinished: ptr.To[int32](180),
 		},
 	}
 
