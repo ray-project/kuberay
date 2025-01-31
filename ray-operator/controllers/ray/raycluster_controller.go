@@ -1147,7 +1147,6 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod := r.buildHeadPod(ctx, instance)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
-
 	// Only keep the Ray container in the Redis cleanup Job.
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
 	pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
