@@ -1147,10 +1147,6 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod := r.buildHeadPod(ctx, instance)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
-	// Trim labels to meet Kubernetes naming constraints
-	for key, value := range pod.Labels {
-		pod.Labels[key] = utils.CheckLabel(value)
-	}
 
 	// Only keep the Ray container in the Redis cleanup Job.
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
