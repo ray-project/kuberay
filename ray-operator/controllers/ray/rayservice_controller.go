@@ -167,36 +167,28 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Reconcile K8s services and make sure it points to the correct RayCluster.
-	var headSvc, serveSvc *corev1.Service
-	if isPendingClusterReady || isActiveClusterReady {
-		targetCluster := activeRayClusterInstance
-		logMsg := "Reconciling K8s services to point to the active Ray cluster."
-
-		if isPendingClusterReady {
-			targetCluster = pendingRayClusterInstance
-			logMsg = "Reconciling K8s services to point to the pending Ray cluster to switch traffic because it is ready."
-		}
-
-		logger.Info(logMsg)
-		headSvc, serveSvc, err = r.reconcileServicesToReadyCluster(ctx, rayServiceInstance, targetCluster)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-
-		if headSvc == nil || serveSvc == nil {
-			panic("Both head and serve services are nil before calculate RayService status. " +
-				"This should never happen. Please open a GitHub issue in the KubeRay repository.")
-		}
+	var targetRayClusterInstance *rayv1.RayCluster
+	if isPendingClusterReady {
+		targetRayClusterInstance = pendingRayClusterInstance
+		logger.Info("Reconciling K8s services to point to the pending Ray cluster to switch traffic because it is ready.")
+	} else if isActiveClusterReady {
+		targetRayClusterInstance = activeRayClusterInstance
+		logger.Info("Reconciling K8s services to point to the active Ray cluster.")
+	} else {
+		targetRayClusterInstance = nil
+		logger.Info("Reconciling K8s services to point to no Ray cluster.")
+	}
+	if err := r.reconcileServicesToRayCluster(ctx, rayServiceInstance, targetRayClusterInstance); err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
 	// Calculate the status of the RayService based on K8s resources.
 	if err := r.calculateStatus(
 		ctx,
 		rayServiceInstance,
-		headSvc,
-		serveSvc,
 		activeRayClusterInstance,
 		pendingRayClusterInstance,
+		targetRayClusterInstance,
 		activeClusterServeApplications,
 		pendingClusterServeApplications,
 	); err != nil {
@@ -213,20 +205,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
-func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
+func (r *RayServiceReconciler) reconcileServicesToRayCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
 	// Create K8s services if they don't exist. If they do exist, update the services to point to the RayCluster passed in.
-	headSvc, err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService)
-	if err != nil {
-		return headSvc, nil, err
+	if err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService); err != nil {
+		return err
 	}
-	serveSvc, err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService)
-	if err != nil {
-		return headSvc, serveSvc, err
-	}
-	return headSvc, serveSvc, nil
+	return r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.ServingService)
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service, activeCluster, pendingCluster *rayv1.RayCluster, activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus) error {
+func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster, targetCluster *rayv1.RayCluster, activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Update RayClusterStatus in RayService status.
@@ -244,27 +231,23 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	rayServiceInstance.Status.ActiveServiceStatus.Applications = activeClusterServeApplications
 	rayServiceInstance.Status.PendingServiceStatus.Applications = pendingClusterServeApplications
 
-	if headSvc != nil && serveSvc != nil {
+	if targetCluster != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
 		activeClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
 
-		// Promote the pending cluster to the active cluster if both RayService's head and serve services
-		// have already pointed to the pending cluster.
-		clusterName := utils.GetRayClusterNameFromService(headSvc)
-		if clusterName != utils.GetRayClusterNameFromService(serveSvc) {
-			panic("headSvc and serveSvc are not pointing to the same cluster")
-		}
+		// Promote the pending cluster to the active cluster if the target cluster
+		// has already pointed to the pending cluster.
 		// Verify cluster name matches either pending or active cluster
-		if clusterName != pendingClusterName && clusterName != activeClusterName {
-			panic("clusterName is not equal to pendingCluster or activeCluster")
+		if targetCluster.Name != pendingClusterName && targetCluster.Name != activeClusterName {
+			panic("targetCluster is not equal to pendingCluster or activeCluster")
 		}
 
 		// If services point to a different cluster than the active one, promote pending to active
-		logger.Info("calculateStatus", "clusterSvcPointingTo", clusterName, "pendingClusterName", pendingClusterName, "activeClusterName", activeClusterName)
-		if activeClusterName != clusterName {
+		logger.Info("calculateStatus", "clusterSvcPointingTo", targetCluster.Name, "pendingClusterName", pendingClusterName, "activeClusterName", activeClusterName)
+		if activeClusterName != targetCluster.Name {
 			logger.Info("Promoting pending cluster to active",
 				"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
-				"newCluster", clusterName)
+				"newCluster", targetCluster.Name)
 			rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
 			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 		}
@@ -307,14 +290,9 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 	if rayServiceInstance.Status.Conditions == nil {
 		rayServiceInstance.Status.Conditions = []metav1.Condition{}
 	}
-	if len(rayServiceInstance.Status.Conditions) == 0 {
-		message := "RayService is initializing"
-		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
-		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
-	}
 	if rayServiceInstance.Status.NumServeEndpoints > 0 {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
-	} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
+	} else {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.ZeroServeEndpoints, "Number of serve endpoints dropped to 0")
 	}
 
@@ -324,11 +302,10 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.BothActivePendingClustersExist, "Both active and pending Ray clusters exist")
 	} else if activeClusterName != "" {
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Active Ray cluster exists and no pending Ray cluster")
+	} else if pendingClusterName != "" {
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoActiveCluster, "No active Ray cluster exists.")
 	} else {
-		cond := meta.FindStatusCondition(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
-		if cond == nil || cond.Reason != string(rayv1.RayServiceInitializing) {
-			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionUnknown, rayv1.NoActiveCluster, "No active Ray cluster exists, and the RayService is not initializing. Please open a GitHub issue in the KubeRay repository.")
-		}
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionUnknown, rayv1.NoActiveCluster, "No active Ray cluster exists.")
 	}
 }
 
@@ -945,7 +922,7 @@ func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RaySer
 	rayServiceServeConfigs.Set(clusterName, serveConfig)
 }
 
-func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) (*corev1.Service, error) {
+func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	var newSvc *corev1.Service
@@ -953,15 +930,23 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 
 	switch serviceType {
 	case utils.HeadService:
-		newSvc, err = common.BuildHeadServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
+		if rayClusterInstance == nil {
+			newSvc, err = common.BuildHeadServiceForRayService(ctx, *rayServiceInstance, rayv1.RayCluster{})
+		} else {
+			newSvc, err = common.BuildHeadServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
+		}
 	case utils.ServingService:
-		newSvc, err = common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
+		if rayClusterInstance == nil {
+			newSvc, err = common.BuildServeServiceForRayService(ctx, *rayServiceInstance, rayv1.RayCluster{})
+		} else {
+			newSvc, err = common.BuildServeServiceForRayService(ctx, *rayServiceInstance, *rayClusterInstance)
+		}
 	default:
 		panic(fmt.Sprintf("unknown service type %v. This should never happen. Please open an issue in the KubeRay repository.", serviceType))
 	}
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
@@ -969,10 +954,14 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	err = r.Get(ctx, client.ObjectKey{Name: newSvc.Name, Namespace: rayServiceInstance.Namespace}, oldSvc)
 
 	if err == nil {
+		// Do not drop cluster selector on the existing service.
+		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == "" {
+			return nil
+		}
 		// Only update the service if the RayCluster switches.
 		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
 			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster", newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", serviceType)
-			return oldSvc, nil
+			return nil
 		}
 
 		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
@@ -982,21 +971,18 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
 		logger.Info("Update Kubernetes Service", "serviceType", serviceType)
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
-			return nil, updateErr
+			return updateErr
 		}
 		// Return the updated service.
-		return oldSvc, nil
+		return nil
 	} else if errors.IsNotFound(err) {
 		logger.Info("Create a Kubernetes Service", "serviceType", serviceType)
 		if err := ctrl.SetControllerReference(rayServiceInstance, newSvc, r.Scheme); err != nil {
-			return nil, err
+			return err
 		}
-		if err := r.Create(ctx, newSvc); err != nil {
-			return nil, err
-		}
-		return newSvc, nil
+		return r.Create(ctx, newSvc)
 	}
-	return nil, err
+	return err
 }
 
 // Reconciles the Serve applications on the RayCluster. Returns (isReady, error).

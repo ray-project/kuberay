@@ -222,7 +222,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 
 	if isRayService {
 		// We are invoked from RayService
-		if len(ports) == 0 && rayService.Spec.ServeService == nil {
+		if len(ports) == 0 && rayService.Spec.ServeService == nil && rayCluster.Name != "" {
 			return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
 				"otherwise, the Kubernetes service for Ray Serve will not be created.")
 		}
@@ -266,7 +266,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	}
 
 	// We are invoked from cluster
-	if len(ports) == 0 {
+	if len(ports) == 0 && rayCluster.Name != "" {
 		return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
 			"otherwise, the Kubernetes service for Ray Serve will not be created.")
 	}
@@ -394,6 +394,10 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 // TODO: Consider to infer ports from rayStartParams (source of truth) in the future.
 func getPortsFromCluster(cluster rayv1.RayCluster) map[string]int32 {
 	svcPorts := map[string]int32{}
+
+	if len(cluster.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+		return svcPorts
+	}
 
 	cPorts := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports
 	for _, port := range cPorts {

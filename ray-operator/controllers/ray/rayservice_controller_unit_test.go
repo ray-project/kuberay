@@ -187,7 +187,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	assert.True(t, isReady)
 }
 
-func TestReconcileServices_UpdateService(t *testing.T) {
+func TestReconcileServices_UpdateHeadService(t *testing.T) {
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -235,13 +235,33 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	ctx := context.TODO()
 	// Create a head service.
-	_, err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	err := r.reconcileServices(ctx, &rayService, nil, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
+	// Test -: the service should point to no cluster initially.
 	svcList := corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	assert.Nil(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], "")
+
+	// Test -: the service should have selector after updated with a RayCluster.
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], cluster.Name)
+
+	// Test -: the cluster selector should not be dropped by another update.
+	err = r.reconcileServices(ctx, &rayService, nil, utils.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], cluster.Name)
 	oldSvc := svcList.Items[0].DeepCopy()
 
 	// Test 1: When the service for the RayCluster already exists, it should not be updated.
@@ -251,7 +271,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 			ContainerPort: 9999,
 		},
 	}
-	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
@@ -262,7 +282,117 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
-	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
+}
+
+func TestReconcileServices_UpdateServeService(t *testing.T) {
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Mock data
+	namespace := "ray"
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{
+										Name:          "serve",
+										ContainerPort: 9999,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: cluster.ObjectMeta.Namespace,
+		},
+	}
+
+	// Initialize a fake client with newScheme and runtimeObjects.
+	runtimeObjects := []runtime.Object{}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+	// Initialize RayCluster reconciler.
+	r := &RayServiceReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	ctx := context.TODO()
+	// Create a head service.
+	err := r.reconcileServices(ctx, &rayService, nil, utils.ServingService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	// Test -: the service should point to no cluster initially.
+	svcList := corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], "")
+
+	// Test -: the service should have selector after updated with a RayCluster.
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.ServingService)
+	assert.Nil(t, err, "Fail to reconcile service")
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], cluster.Name)
+
+	// Test -: the cluster selector should not be dropped by another update.
+	err = r.reconcileServices(ctx, &rayService, nil, utils.ServingService)
+	assert.Nil(t, err, "Fail to reconcile service")
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Equal(t, svcList.Items[0].Spec.Selector[utils.RayClusterLabelKey], cluster.Name)
+	oldSvc := svcList.Items[0].DeepCopy()
+
+	// Test 1: When the service for the RayCluster already exists, it should not be updated.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{
+			Name:          "serve",
+			ContainerPort: 10000,
+		},
+	}
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.ServingService)
+	assert.Nil(t, err, "Fail to reconcile service")
+
+	svcList = corev1.ServiceList{}
+	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
+	assert.Nil(t, err, "Fail to get service list")
+	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
+
+	// Test 2: When the RayCluster switches, the service should be updated.
+	cluster.Name = "new-cluster"
+	err = r.reconcileServices(ctx, &rayService, &cluster, utils.ServingService)
 	assert.Nil(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
@@ -729,25 +859,7 @@ func TestCalculateConditions(t *testing.T) {
 		rayServiceInstance      rayv1.RayService
 	}{
 		{
-			name:                    "initial RayServiceReady",
-			rayServiceInstance:      rayv1.RayService{},
-			conditionType:           rayv1.RayServiceReady,
-			originalConditionStatus: metav1.ConditionFalse,
-			originalReason:          string(rayv1.RayServiceInitializing),
-			expectedConditionStatus: metav1.ConditionFalse,
-			expectedReason:          string(rayv1.RayServiceInitializing),
-		},
-		{
-			name:                    "initial RayServiceInitializing",
-			rayServiceInstance:      rayv1.RayService{},
-			conditionType:           rayv1.UpgradeInProgress,
-			originalConditionStatus: metav1.ConditionFalse,
-			originalReason:          string(rayv1.RayServiceInitializing),
-			expectedConditionStatus: metav1.ConditionFalse,
-			expectedReason:          string(rayv1.RayServiceInitializing),
-		},
-		{
-			name: "Ready condition remains false unchanged",
+			name: "Ready condition remains false",
 			rayServiceInstance: rayv1.RayService{
 				Status: rayv1.RayServiceStatuses{
 					NumServeEndpoints: 0,
@@ -757,7 +869,7 @@ func TestCalculateConditions(t *testing.T) {
 			originalConditionStatus: metav1.ConditionFalse,
 			originalReason:          "WhateverReason",
 			expectedConditionStatus: metav1.ConditionFalse,
-			expectedReason:          "WhateverReason",
+			expectedReason:          string(rayv1.ZeroServeEndpoints),
 		},
 		{
 			name: "Ready condition remains true always has NonZeroServeEndPoints reason",
@@ -851,9 +963,9 @@ func TestCalculateConditions(t *testing.T) {
 			},
 			conditionType:           rayv1.UpgradeInProgress,
 			originalConditionStatus: metav1.ConditionFalse,
-			originalReason:          string(rayv1.RayServiceInitializing),
+			originalReason:          "WhateverReason",
 			expectedConditionStatus: metav1.ConditionFalse,
-			expectedReason:          string(rayv1.RayServiceInitializing),
+			expectedReason:          string(rayv1.NoActiveCluster),
 		},
 	}
 

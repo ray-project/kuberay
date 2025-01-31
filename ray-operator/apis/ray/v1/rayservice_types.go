@@ -138,7 +138,6 @@ const (
 )
 
 const (
-	RayServiceInitializing         RayServiceConditionReason = "Initializing"
 	ZeroServeEndpoints             RayServiceConditionReason = "ZeroServeEndpoints"
 	NonZeroServeEndpoints          RayServiceConditionReason = "NonZeroServeEndpoints"
 	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"
