@@ -12,6 +12,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // log is for logging in this package.
@@ -23,7 +25,7 @@ var (
 // SetupRayClusterWebhookWithManager registers the webhook for RayCluster in the manager.
 func SetupRayClusterWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&RayCluster{}).
+		For(&rayv1.RayCluster{}).
 		WithValidator(&RayClusterWebhook{}).
 		Complete()
 }
@@ -37,14 +39,14 @@ var _ webhook.CustomValidator = &RayClusterWebhook{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (w *RayClusterWebhook) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	rayCluster := obj.(*RayCluster)
+	rayCluster := obj.(*rayv1.RayCluster)
 	rayclusterlog.Info("validate create", "name", rayCluster.Name)
 	return nil, w.validateRayCluster(rayCluster)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (w *RayClusterWebhook) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
-	rayCluster := newObj.(*RayCluster)
+	rayCluster := newObj.(*rayv1.RayCluster)
 	rayclusterlog.Info("validate update", "name", rayCluster.Name)
 	return nil, w.validateRayCluster(rayCluster)
 }
@@ -54,7 +56,7 @@ func (w *RayClusterWebhook) ValidateDelete(_ context.Context, _ runtime.Object) 
 	return nil, nil
 }
 
-func (w *RayClusterWebhook) validateRayCluster(rayCluster *RayCluster) error {
+func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) error {
 	var allErrs field.ErrorList
 
 	if err := w.validateName(rayCluster); err != nil {
@@ -74,14 +76,14 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *RayCluster) error {
 		rayCluster.Name, allErrs)
 }
 
-func (w *RayClusterWebhook) validateName(rayCluster *RayCluster) *field.Error {
+func (w *RayClusterWebhook) validateName(rayCluster *rayv1.RayCluster) *field.Error {
 	if !nameRegex.MatchString(rayCluster.Name) {
 		return field.Invalid(field.NewPath("metadata").Child("name"), rayCluster.Name, "name must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')")
 	}
 	return nil
 }
 
-func (w *RayClusterWebhook) validateWorkerGroups(rayCluster *RayCluster) *field.Error {
+func (w *RayClusterWebhook) validateWorkerGroups(rayCluster *rayv1.RayCluster) *field.Error {
 	workerGroupNames := make(map[string]bool)
 
 	for i, workerGroup := range rayCluster.Spec.WorkerGroupSpecs {

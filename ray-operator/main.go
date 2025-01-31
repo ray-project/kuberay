@@ -35,6 +35,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -241,7 +242,7 @@ func main() {
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
-		exitOnError(rayv1.SetupRayClusterWebhookWithManager(mgr),
+		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
 	}
 	// +kubebuilder:scaffold:builder
