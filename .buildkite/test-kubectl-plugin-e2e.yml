@@ -12,10 +12,6 @@
     - kind load docker-image kuberay/operator:nightly
     - IMG=kuberay/operator:nightly make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
-    # Deploy Ray Cluster
-    - echo Deploying Kuberay cluster
-    - kubectl apply -f ./config/samples/ray-cluster.sample.yaml
-    - kubectl wait --timeout=300s --for=condition=ready  pod -l ray.io/cluster=raycluster-kuberay
     # Setup gotestfmt
     - popd && pushd kubectl-plugin
     - curl -Lo gotestfmt.tar.gz https://github.com/GoTestTools/gotestfmt/releases/download/v2.5.0/gotestfmt_2.5.0_linux_amd64.tar.gz
