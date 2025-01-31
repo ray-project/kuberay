@@ -89,6 +89,20 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			},
 			createSecret: true,
 		},
+		{
+			name:          "Long RayCluster Name",
+			redisPassword: "",
+			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
+				// Intentionally using a long name to test job name trimming
+				return rayv1ac.RayCluster("raycluster-with-a-very-long-name-exceeding-k8s-limit", namespace).WithSpec(
+					newRayClusterSpec().WithGcsFaultToleranceOptions(
+						rayv1ac.GcsFaultToleranceOptions().
+							WithRedisAddress("redis:6379"),
+					),
+				)
+			},
+			createSecret: false,
+		},
 	}
 
 	for _, tc := range testCases {

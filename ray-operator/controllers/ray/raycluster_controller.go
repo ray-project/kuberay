@@ -1143,6 +1143,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instance rayv1.RayCluster) batchv1.Job {
 	logger := ctrl.LoggerFrom(ctx)
 
+	// Build the head pod
 	pod := r.buildHeadPod(ctx, instance)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
@@ -1150,7 +1151,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
 	pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 	pod.Spec.Containers[utils.RayContainerIndex].Args = []string{
-		"echo \"To get more information about manually delete the storage namespace in Redis and remove the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" && " +
+		"echo \"To get more information about manually deleting the storage namespace in Redis and removing the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" && " +
 			"python -c " +
 			"\"from ray._private.gcs_utils import cleanup_redis_storage; " +
 			"from urllib.parse import urlparse; " +
@@ -1180,8 +1181,8 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 		Value: "500",
 	})
 
-	// The container's resource consumption remains constant. so hard-coding the resources is acceptable.
-	// In addition, avoid using the GPU for the Redis cleanup Job.
+	// The container's resource consumption remains constant. Hard-coding the resources is acceptable.
+	// Avoid using the GPU for the Redis cleanup Job.
 	pod.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("200m"),
@@ -1196,9 +1197,12 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	// For Kubernetes Job, the valid values for Pod's `RestartPolicy` are `Never` and `OnFailure`.
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
+	// Trim the job name to ensure it is within the 63-character limit.
+	jobName := utils.TrimJobName(fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"))
+
 	redisCleanupJob := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"),
+			Name:        jobName,
 			Namespace:   instance.Namespace,
 			Labels:      pod.Labels,
 			Annotations: pod.Annotations,
@@ -1209,7 +1213,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 				ObjectMeta: pod.ObjectMeta,
 				Spec:       pod.Spec,
 			},
-			// make this job be best-effort only for 5 minutes.
+			// Make this job best-effort only for 5 minutes.
 			ActiveDeadlineSeconds: ptr.To[int64](300),
 		},
 	}
