@@ -340,22 +340,24 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 		ApplicationStatus = "ApplicationStatus"
 	)
 
-	tests := map[string]struct {
+	tests := []struct {
 		rayServiceStatus map[string]string
 		applications     map[string]rayv1.AppStatus
+		name             string
 		expectedReady    bool
 	}{
 		// Test 1: There is no pre-existing RayServiceStatus in the RayService CR. Create a new Ray Serve application, and the application is still deploying.
-		"Create a new Ray Serve application": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOYING,
 			},
 			applications:  map[string]rayv1.AppStatus{},
+			name:          "Create a new Ray Serve application",
 			expectedReady: false,
 		},
 		// Test 2: The Ray Serve application finishes the deployment process and becomes "RUNNING".
-		"Finishes the deployment process and becomes RUNNING": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.HEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.RUNNING,
@@ -365,10 +367,11 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.RUNNING,
 				},
 			},
+			name:          "Finishes the deployment process and becomes RUNNING",
 			expectedReady: true,
 		},
 		// Test 3: Both the current Ray Serve application and RayService status are unhealthy.
-		"Both the current Ray Serve application and RayService status are unhealthy": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
@@ -378,10 +381,11 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
 				},
 			},
+			name:          "Both the current Ray Serve application and RayService status are unhealthy",
 			expectedReady: false,
 		},
 		// Test 4: Both the current Ray Serve application and RayService status are DEPLOY_FAILED.
-		"Both the current Ray Serve application and RayService status are DEPLOY_FAILED": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
@@ -391,18 +395,20 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 				},
 			},
+			name:          "Both the current Ray Serve application and RayService status are DEPLOY_FAILED",
 			expectedReady: false,
 		},
 		// Test 5: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
-		"Ray Serve application is not found": {
+		{
 			rayServiceStatus: map[string]string{},
 			applications:     map[string]rayv1.AppStatus{},
+			name:             "Ray Serve application is not found",
 			expectedReady:    false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			var dashboardClient utils.RayDashboardClientInterface
 			if len(tc.rayServiceStatus) != 0 {
 				dashboardClient = initFakeDashboardClient(serveAppName, tc.rayServiceStatus[DeploymentStatus], tc.rayServiceStatus[ApplicationStatus])
@@ -636,35 +642,40 @@ func initFakeRayHttpProxyClient(isHealthy bool) utils.RayHttpProxyClientInterfac
 }
 
 func TestLabelHeadPodForServeStatus(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name                       string
 		expectServeResult          string
 		excludeHeadPodFromServeSvc bool
 		isHealthy                  bool
 	}{
-		"Ray serve application is running, excludeHeadPodFromServeSvc is true": {
-			"false",
-			true,
-			true,
+		{
+			name:                       "Ray serve application is running, excludeHeadPodFromServeSvc is true",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: true,
+			isHealthy:                  true,
 		},
-		"Ray serve application is running, excludeHeadPodFromServeSvc is false": {
-			"true",
-			false,
-			true,
+		{
+			name:                       "Ray serve application is running, excludeHeadPodFromServeSvc is false",
+			expectServeResult:          "true",
+			excludeHeadPodFromServeSvc: false,
+			isHealthy:                  true,
 		},
-		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true": {
-			"false",
-			true,
-			false,
+		{
+			name:                       "Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: true,
+			isHealthy:                  false,
 		},
-		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false": {
-			"false",
-			false,
-			false,
+		{
+			name:                       "Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: false,
+			isHealthy:                  false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(newScheme)
 

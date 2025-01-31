@@ -17,22 +17,25 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-var tests = map[string]struct {
+var tests = []struct {
 	HeadPodTemplateGetter   func() *corev1ac.PodTemplateSpecApplyConfiguration
 	WorkerPodTemplateGetter func() *corev1ac.PodTemplateSpecApplyConfiguration
+	name                    string
 }{
-	"Create a RayCluster with autoscaling enabled": {
+	{
 		HeadPodTemplateGetter:   headPodTemplateApplyConfiguration,
 		WorkerPodTemplateGetter: workerPodTemplateApplyConfiguration,
+		name:                    "Create a RayCluster with autoscaling enabled",
 	},
-	"Create a RayCluster with autoscaler v2 enabled": {
+	{
 		HeadPodTemplateGetter:   headPodTemplateApplyConfigurationV2,
 		WorkerPodTemplateGetter: workerPodTemplateApplyConfigurationV2,
+		name:                    "Create a RayCluster with autoscaler v2 enabled",
 	},
 }
 
 func TestRayClusterAutoscaler(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 		test := With(t)
 		g := gomega.NewWithT(t)
 
@@ -45,7 +48,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
@@ -99,7 +102,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -113,7 +116,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
@@ -160,7 +163,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -174,7 +177,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "custom-resource-group"
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
@@ -220,7 +223,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -238,7 +241,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "custom-resource-group"
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -284,7 +287,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -298,7 +301,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "test-group"
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
@@ -359,8 +362,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 
 func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	// Only test with the V2 Autoscaler
-	name := "Create a RayCluster with autoscaler v2 enabled"
-	tc := tests["Create a RayCluster with autoscaler v2 enabled"]
+	tc := tests[1]
 
 	test := With(t)
 	g := gomega.NewWithT(t)
@@ -378,7 +380,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-	test.T().Run(name, func(_ *testing.T) {
+	test.T().Run(tc.name, func(_ *testing.T) {
 		groupName1 := "short-idle-timeout-group"
 		groupName2 := "long-idle-timeout-group"
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
