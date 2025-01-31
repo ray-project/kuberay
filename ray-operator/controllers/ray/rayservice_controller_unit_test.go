@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -1154,4 +1155,78 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
 	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil)
 	assert.True(t, shouldPrepareNewCluster)
+}
+
+func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
+	tests := []struct {
+		name                     string
+		upgradeStrategy          *rayv1.RayServiceUpgradeStrategy
+		enableZeroDowntimeEnvVar string // "true" or "false" or "" (not set)
+		expected                 bool
+	}{
+		{
+			// The most common case.
+			name:                     "both upgrade strategy and env var are not set",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is not set, but env var is set to true",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is not set, but env var is set to false",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster, and env var is not set",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster, and env var is set to false",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is not set",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is set to true",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is set to false",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 false,
+		},
+	}
+
+	ctx := context.TODO()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
+			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
+			assert.Equal(t, tt.expected, isEnabled)
+		})
+	}
 }
