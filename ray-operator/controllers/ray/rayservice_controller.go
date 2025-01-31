@@ -126,9 +126,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// TODO (kevin85421): ObservedGeneration should be used to determine whether to update this CR or not.
-	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
-
 	// Find active and pending ray cluster objects given current service name.
 	var activeRayClusterInstance, pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
@@ -228,6 +225,8 @@ func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Conte
 
 func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service, activeCluster, pendingCluster *rayv1.RayCluster, activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus) error {
 	logger := ctrl.LoggerFrom(ctx)
+
+	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 
 	// Update RayClusterStatus in RayService status.
 	var activeClusterStatus, pendingClusterStatus rayv1.RayClusterStatus
