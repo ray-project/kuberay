@@ -771,14 +771,14 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
-	rayClusterLabel := make(map[string]string)
+	rayClusterLabel := make(map[string]string, len(rayService.Labels)+2)
 	for k, v := range rayService.Labels {
 		rayClusterLabel[k] = v
 	}
 	rayClusterLabel[utils.RayOriginatedFromCRNameLabelKey] = rayService.Name
 	rayClusterLabel[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 
-	rayClusterAnnotations := make(map[string]string)
+	rayClusterAnnotations := make(map[string]string, len(rayService.Annotations)+3)
 	for k, v := range rayService.Annotations {
 		rayClusterAnnotations[k] = v
 	}
