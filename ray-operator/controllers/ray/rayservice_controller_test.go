@@ -41,8 +41,8 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-func rayServiceTemplate(name string, namespace string, serveAppName string) *rayv1.RayService {
-	serveConfigV2 := fmt.Sprintf(`
+func serveConfigV2Template(serveAppName string) string {
+	return fmt.Sprintf(`
     applications:
     - name: %s
       import_path: fruit.deployment_graph
@@ -68,7 +68,10 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
             price: 1
           ray_actor_options:
             num_cpus: 0.1`, serveAppName)
+}
 
+func rayServiceTemplate(name string, namespace string, serveAppName string) *rayv1.RayService {
+	serveConfigV2 := serveConfigV2Template(serveAppName)
 	return &rayv1.RayService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -115,15 +118,130 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 	}
 }
 
-var _ = Context("Inside the default namespace", func() {
-	ctx := context.TODO()
-	var workerPods corev1.PodList
+func endpointsTemplate(name string, namespace string) *corev1.Endpoints {
+	return &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Subsets: []corev1.EndpointSubset{
+			{
+				Addresses: []corev1.EndpointAddress{
+					{
+						IP: "10.9.8.7",
+					},
+				},
+			},
+		},
+	}
+}
 
-	serveAppName := "app1"
-	rayService := rayServiceTemplate("rayservice-sample", "default", serveAppName)
-	myRayCluster := &rayv1.RayCluster{}
+var _ = Context("RayService env tests", func() {
+	Describe("RayService happy path", Ordered, func() {
+		// This test case simulates the most common scenario in the RayService code path:
+		// (1) Create a RayService custom resource
+		// (2) The RayService controller creates a pending RayCluster
+		// (3) The serve application becomes ready on the pending RayCluster
+		// (4) The Kubernetes head and serve services are created
+		// (5) The pending RayCluster transitions to become the active RayCluster
+		ctx := context.Background()
+		namespace := "default"
+		serveAppName := "app1"
+		rayService := rayServiceTemplate("test-happy-path", namespace, serveAppName)
+		rayCluster := &rayv1.RayCluster{}
+
+		It("Create a RayService custom resource", func() {
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+		})
+
+		It("Conditions should be initialized correctly", func() {
+			Eventually(
+				func() bool {
+					return meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.UpgradeInProgress))
+				},
+				time.Second*3, time.Millisecond*500).Should(BeFalse(), "UpgradeInProgress condition: %v", rayService.Status.Conditions)
+			Eventually(
+				func() bool {
+					return meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RayServiceReady))
+				},
+				time.Second*3, time.Millisecond*500).Should(BeFalse(), "RayServiceReady condition: %v", rayService.Status.Conditions)
+		})
+
+		It("Should create a pending RayCluster", func() {
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, rayService),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name: %v", rayService.Status.PendingServiceStatus.RayClusterName)
+		})
+
+		It("Promote the pending RayCluster to the active RayCluster", func() {
+			// Update the status of the head Pod to Running. Note that the default fake dashboard client
+			// will return a healthy serve application status.
+			pendingRayClusterName := rayService.Status.PendingServiceStatus.RayClusterName
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, namespace)
+
+			// Make sure the pending RayCluster becomes the active RayCluster.
+			Eventually(
+				getRayClusterNameFunc(ctx, rayService),
+				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// Initialize RayCluster for the following tests.
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the serve application status in the RayService status", func() {
+			// Check the serve application status in the RayService status.
+			// The serve application should be healthy.
+			Eventually(
+				checkServiceHealth(ctx, rayService),
+				time.Second*3, time.Millisecond*500).Should(BeTrue(), "RayService status: %v", rayService.Status)
+		})
+
+		It("Should create a new head service resource", func() {
+			svc := &corev1.Service{}
+			headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: namespace}, svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Head service: %v", svc)
+			// TODO: Verify the head service by checking labels and annotations.
+		})
+
+		It("Should create a new serve service resource", func() {
+			svc := &corev1.Service{}
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(rayService.Name), Namespace: namespace}, svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Serve service: %v", svc)
+			// TODO: Verify the serve service by checking labels and annotations.
+		})
+
+		It("The RayServiceReady condition should be true when the number of endpoints is greater than 0", func() {
+			endpoints := endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
+			err := k8sClient.Create(ctx, endpoints)
+			Expect(err).NotTo(HaveOccurred(), "failed to create Endpoints resource")
+			Eventually(func() int32 {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService); err != nil {
+					return 0
+				}
+				return rayService.Status.NumServeEndpoints
+			}, time.Second*3, time.Millisecond*500).Should(BeNumerically(">", 0), "RayService status: %v", rayService.Status)
+			Expect(meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RayServiceReady))).Should(BeTrue())
+		})
+	})
 
 	Describe("When creating a rayservice", Ordered, func() {
+		ctx := context.TODO()
+		var workerPods corev1.PodList
+
+		serveAppName := "app1"
+		rayService := rayServiceTemplate("rayservice-sample", "default", serveAppName)
+		myRayCluster := &rayv1.RayCluster{}
+
 		It("should create a rayservice object", func() {
 			err := k8sClient.Create(ctx, rayService)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test RayService resource")
@@ -133,15 +251,6 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
-		})
-
-		It("should initialize conditions correctly", func() {
-			Eventually(func() bool {
-				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
-					return false
-				}
-				return meta.IsStatusConditionFalse(rayService.Status.Conditions, string(rayv1.RayServiceReady)) && meta.IsStatusConditionFalse(rayService.Status.Conditions, string(rayv1.UpgradeInProgress))
-			}, time.Second*3, time.Millisecond*500).Should(BeTrue(), "My myRayService conditions = %v", rayService.Status.Conditions)
 		})
 
 		It("should create a raycluster object", func() {
@@ -201,34 +310,6 @@ var _ = Context("Inside the default namespace", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(rayService.Name), Namespace: "default"}, svc),
 				time.Second*15, time.Millisecond*500).Should(BeNil(), "My serve service = %v", svc)
 			Expect(svc.Spec.Selector[utils.RayClusterLabelKey]).Should(Equal(myRayCluster.Name))
-		})
-
-		It("should have true Ready condition when number of endpoints is greater than 0", func() {
-			endpoints := &corev1.Endpoints{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      utils.GenerateServeServiceName(rayService.Name),
-					Namespace: "default",
-				},
-				Subsets: []corev1.EndpointSubset{
-					{
-						Addresses: []corev1.EndpointAddress{
-							{
-								IP: "10.9.8.7",
-							},
-						},
-					},
-				},
-			}
-			err := k8sClient.Create(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to create test Endpoints resource")
-
-			Eventually(func() int32 {
-				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService); err != nil {
-					return 0
-				}
-				return rayService.Status.NumServeEndpoints
-			}, time.Second*3, time.Millisecond*500).Should(BeNumerically(">", 0), "My myRayService status = %v", rayService.Status)
-			Expect(meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RayServiceReady))).Should(BeTrue())
 		})
 
 		It("should update a rayservice object and switch to new Ray Cluster", func() {
