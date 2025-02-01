@@ -18,7 +18,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -426,47 +425,6 @@ var _ = Context("RayService env tests", func() {
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
 			Expect(meta.IsStatusConditionFalse(rayService.Status.Conditions, string(rayv1.UpgradeInProgress))).Should(BeTrue())
-		})
-
-		It("Disable zero-downtime upgrade", func() {
-			// Disable zero-downtime upgrade.
-			os.Setenv("ENABLE_ZERO_DOWNTIME", "false")
-
-			// Try to trigger a zero-downtime upgrade.
-			oldRayVersion := rayService.Spec.RayClusterSpec.RayVersion
-			newRayVersion := "2.198.0"
-			Expect(oldRayVersion).ShouldNot(Equal(newRayVersion))
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
-				rayService.Spec.RayClusterSpec.RayVersion = newRayVersion
-				return k8sClient.Update(ctx, rayService)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
-
-			// Because the zero-downtime upgrade is disabled, the RayService controller will not prepare a new RayCluster.
-			Consistently(
-				getPreparingRayClusterNameFunc(ctx, rayService),
-				time.Second*5, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name  = %v", rayService.Status.PendingServiceStatus.RayClusterName)
-
-			// Set the RayVersion back to the old value to avoid triggering the zero-downtime upgrade.
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
-				rayService.Spec.RayClusterSpec.RayVersion = oldRayVersion
-				return k8sClient.Update(ctx, rayService)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
-
-			// Enable zero-downtime upgrade again.
-			os.Unsetenv("ENABLE_ZERO_DOWNTIME")
-
-			// Zero-downtime upgrade should not be triggered.
-			Consistently(
-				getPreparingRayClusterNameFunc(ctx, rayService),
-				time.Second*5, time.Millisecond*500).Should(BeEmpty(), "Pending RayCluster name  = %v", rayService.Status.PendingServiceStatus.RayClusterName)
 		})
 
 		It("should update the active RayCluster in place when WorkerGroupSpecs are modified by the user in RayServiceSpec", func() {

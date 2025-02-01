@@ -463,14 +463,13 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 	return rayServiceInstance, nil
 }
 
-func isZeroDowntimeUpgradeEnabled(ctx context.Context, rayService *rayv1.RayService) bool {
+func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.RayServiceUpgradeStrategy) bool {
 	// For LLM serving, some users might not have sufficient GPU resources to run two RayClusters simultaneously.
 	// Therefore, KubeRay offers ENABLE_ZERO_DOWNTIME as a feature flag for zero-downtime upgrades.
 	// There are two ways to enable zero downtime upgrade. Through ENABLE_ZERO_DOWNTIME env var or setting Spec.UpgradeStrategy.Type.
 	// If no fields are set, zero downtime upgrade by default is enabled.
 	// Spec.UpgradeStrategy.Type takes precedence over ENABLE_ZERO_DOWNTIME.
 	logger := ctrl.LoggerFrom(ctx)
-	upgradeStrategy := rayService.Spec.UpgradeStrategy
 	if upgradeStrategy != nil {
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
@@ -691,7 +690,7 @@ func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayS
 		// KubeRay should update the RayCluster instead of creating a new one.
 		return false
 	}
-	return isZeroDowntimeUpgradeEnabled(ctx, rayServiceInstance)
+	return isZeroDowntimeUpgradeEnabled(ctx, rayServiceInstance.Spec.UpgradeStrategy)
 }
 
 // updateRayClusterInstance updates the RayCluster instance.
