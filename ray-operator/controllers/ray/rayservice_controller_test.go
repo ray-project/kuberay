@@ -233,14 +233,7 @@ var _ = Context("RayService env tests", func() {
 	})
 
 	Describe("Autoscaler updates RayCluster should not trigger zero downtime upgrade", Ordered, func() {
-		// (1) Create a RayService custom resource
-		// (2) The RayService controller creates a pending RayCluster
-		// (3) Ray Autoscaler scales up the RayCluster
-		// (4) The RayService controller should not trigger zero downtime upgrade
-		// (5) The serve application becomes ready on the pending RayCluster
-		// (6) The pending RayCluster transitions to become the active RayCluster
-		// (7) Ray Autoscaler scales up the RayCluster again
-		// (8) The RayService controller should not trigger zero downtime upgrade
+		// If Autoscaler scales up the pending or active RayCluster, zero downtime upgrade should not be triggered.
 		ctx := context.Background()
 		namespace := "default"
 		serveAppName := "app1"
