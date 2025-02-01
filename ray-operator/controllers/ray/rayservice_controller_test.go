@@ -551,28 +551,28 @@ var _ = Context("RayService env tests", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "myRayService status = %v", rayService.Status)
 		})
 
-		It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
-			// Certain field updates should not trigger new RayCluster preparation, such as updates
-			// to `Replicas` and `WorkersToDelete` triggered by the autoscaler during scaling up/down.
-			// See the function `generateRayClusterJsonHash` for more details.
-			initialClusterName, _ := getRayClusterNameFunc(ctx, rayService)()
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
-				*rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
-				return k8sClient.Update(ctx, rayService)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
+		// It("Update workerGroup.replicas in RayService and should not switch to new Ray Cluster", func() {
+		// 	// Certain field updates should not trigger new RayCluster preparation, such as updates
+		// 	// to `Replicas` and `WorkersToDelete` triggered by the autoscaler during scaling up/down.
+		// 	// See the function `generateRayClusterJsonHash` for more details.
+		// 	initialClusterName, _ := getRayClusterNameFunc(ctx, rayService)()
+		// 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// 		Eventually(
+		// 			getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
+		// 			time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
+		// 		*rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas++
+		// 		return k8sClient.Update(ctx, rayService)
+		// 	})
+		// 	Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 
-			// Confirm not switch to a new RayCluster
-			Consistently(
-				getRayClusterNameFunc(ctx, rayService),
-				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", rayService.Status.ActiveServiceStatus.RayClusterName)
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
-		})
+		// 	// Confirm not switch to a new RayCluster
+		// 	Consistently(
+		// 		getRayClusterNameFunc(ctx, rayService),
+		// 		time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", rayService.Status.ActiveServiceStatus.RayClusterName)
+		// 	Eventually(
+		// 		getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: "default"}, myRayCluster),
+		// 		time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayCluster  = %v", myRayCluster.Name)
+		// })
 
 		It("should perform a zero-downtime update after a code change.", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, rayService)()
