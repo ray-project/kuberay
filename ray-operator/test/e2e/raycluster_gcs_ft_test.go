@@ -91,7 +91,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
 			Should(WithTransform(HeadPodContainerReady, Equal(true)))
 
-		// Pos Status should eventually become Running
+		// Pod Status should eventually become Running
 		PodState := func(p *corev1.Pod) string { return string(p.Status.Phase) }
 		g.Eventually(HeadPod(test, rayCluster)).
 			Should(WithTransform(PodState, Equal("Running")))
