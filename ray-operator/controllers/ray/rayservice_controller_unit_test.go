@@ -1224,6 +1224,10 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 	ctx := context.TODO()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				os.Unsetenv(ENABLE_ZERO_DOWNTIME)
+			}()
+
 			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
 			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
 			assert.Equal(t, tt.expected, isEnabled)
