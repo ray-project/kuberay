@@ -514,21 +514,31 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if shouldUpdateCluster(rayServiceInstance, activeRayCluster, true) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the active RayCluster instance", "clusterName", activeRayCluster.Name)
-		if activeRayCluster, err = constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name, r.Scheme); err != nil {
+		goalCluster, err := constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name, r.Scheme)
+		if err != nil {
 			return nil, nil, err
 		}
-		err = r.updateRayClusterInstance(ctx, rayServiceInstance, activeRayCluster)
-		return activeRayCluster, pendingRayCluster, err
+		updatedActiveCluster := updateRayClusterInstance(ctx, activeRayCluster, goalCluster)
+		if err = r.Update(ctx, updatedActiveCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
+		return updatedActiveCluster, pendingRayCluster, err
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the pending RayCluster instance", "clusterName", pendingRayCluster.Name)
-		if pendingRayCluster, err = constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name, r.Scheme); err != nil {
+		goalCluster, err := constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name, r.Scheme)
+		if err != nil {
 			return nil, nil, err
 		}
-		err = r.updateRayClusterInstance(ctx, rayServiceInstance, pendingRayCluster)
-		return activeRayCluster, pendingRayCluster, err
+		updatedPendingCluster := updateRayClusterInstance(ctx, pendingRayCluster, goalCluster)
+		if err = r.Update(ctx, updatedPendingCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
+		return activeRayCluster, updatedPendingCluster, nil
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
@@ -695,41 +705,33 @@ func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayS
 	return isZeroDowntimeUpgradeEnabled(ctx, rayServiceInstance.Spec.UpgradeStrategy)
 }
 
-// updateRayClusterInstance updates the RayCluster instance.
-func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
+// `updateRayClusterInstance` creates a deep copy of `currentCluster` and updates its spec, labels, and annotations with
+// `goalCluster`. It returns the updated RayCluster. `currentCluster` is the current RayCluster retrieved from the informer
+// cache, and `goalCluster` is the target state of the RayCluster derived from the RayService spec.
+func updateRayClusterInstance(ctx context.Context, currentCluster, goalCluster *rayv1.RayCluster) *rayv1.RayCluster {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("updateRayClusterInstance", "Name", rayClusterInstance.Name, "Namespace", rayClusterInstance.Namespace)
 
-	// Fetch the current state of the RayCluster
-	currentRayCluster, err := r.getRayClusterByNamespacedName(ctx, client.ObjectKey{
-		Namespace: rayClusterInstance.Namespace,
-		Name:      rayClusterInstance.Name,
-	})
-	if err != nil {
-		err = fmt.Errorf("failed to get the current state of RayCluster, namespace: %s, name: %s: %w", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
-		return err
+	if currentCluster.Name != goalCluster.Name || currentCluster.Namespace != goalCluster.Namespace {
+		panic(fmt.Sprintf(
+			"currentCluster and goalCluster have different names or namespaces: "+
+				"%s/%s != %s/%s",
+			currentCluster.Namespace,
+			currentCluster.Name,
+			goalCluster.Namespace,
+			goalCluster.Name,
+		))
 	}
+	logger.Info("updateRayClusterInstance", "Name", goalCluster.Name, "Namespace", goalCluster.Namespace)
 
-	if currentRayCluster == nil {
-		logger.Info("RayCluster not found, possibly deleted", "Namespace", rayClusterInstance.Namespace, "Name", rayClusterInstance.Name)
-		return nil
-	}
+	cluster := currentCluster.DeepCopy()
 
 	// Update the fetched RayCluster with new changes
-	currentRayCluster.Spec = rayClusterInstance.Spec
+	cluster.Spec = goalCluster.Spec
 
 	// Update the labels and annotations
-	currentRayCluster.Labels = rayClusterInstance.Labels
-	currentRayCluster.Annotations = rayClusterInstance.Annotations
-
-	// Update the RayCluster
-	err = r.Update(ctx, currentRayCluster)
-	if err != nil {
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the RayCluster %s/%s: %v", currentRayCluster.Namespace, currentRayCluster.Name, err)
-	} else {
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the RayCluster %s/%s", currentRayCluster.Namespace, currentRayCluster.Name)
-	}
-	return err
+	cluster.Labels = goalCluster.Labels
+	cluster.Annotations = goalCluster.Annotations
+	return cluster
 }
 
 // createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
