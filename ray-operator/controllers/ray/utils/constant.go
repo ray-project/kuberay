@@ -271,7 +271,11 @@ const (
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 
 	// RayService event list
-	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
+	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
+	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
+	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
@@ -288,7 +292,9 @@ const (
 
 	// Service event list
 	CreatedService        K8sEventType = "CreatedService"
+	UpdatedService        K8sEventType = "UpdatedService"
 	FailedToCreateService K8sEventType = "FailedToCreateService"
+	FailedToUpdateService K8sEventType = "FailedToUpdateService"
 
 	// ServiceAccount event list
 	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"
