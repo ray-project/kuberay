@@ -6,6 +6,7 @@ toolchain go1.22.5
 
 require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/novln/docker-parser v1.0.0
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/ray-project/kuberay/ray-operator v0.0.0
