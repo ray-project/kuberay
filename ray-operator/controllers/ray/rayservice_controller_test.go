@@ -233,7 +233,7 @@ var _ = Context("RayService env tests", func() {
 
 		It("Should perform a zero-downtime update after rayVersion updated.", func() {
 			initialClusterName, _ := getRayClusterNameFunc(ctx, rayService)()
-			const mockRayVersion = "2.40.0" // Current rayVersion is 2.41.0, so set the rayVersio to 2.40.0 to test if zero-downtime is triggered.
+			const mockRayVersion = "2.40.0" // Current rayVersion is 2.41.0, so set the rayVersion to 2.40.0 to test if zero-downtime is triggered.
 
 			// The cluster shouldn't switch until deployments are finished updating
 			updatingStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UPDATING, rayv1.ApplicationStatusEnum.DEPLOYING)
