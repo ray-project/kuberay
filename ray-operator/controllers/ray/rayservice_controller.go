@@ -732,48 +732,21 @@ func (r *RayServiceReconciler) updateRayClusterInstance(ctx context.Context, ray
 	return err
 }
 
-// createRayClusterInstance deletes the old RayCluster instance if exists. Only when no existing RayCluster, create a new RayCluster instance.
-// One important part is that if this method deletes the old RayCluster, it will return instantly. It depends on the controller to call it again to generate the new RayCluster instance.
 func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterKey := common.RayServicePendingRayClusterNamespacedName(rayServiceInstance)
+	logger.Info("createRayClusterInstance", "clusterName", rayClusterKey.Name)
 
-	logger.Info("createRayClusterInstance", "rayClusterInstanceName", rayClusterKey.Name)
-
-	rayClusterInstance := &rayv1.RayCluster{}
-
-	var err error
-	// Loop until there is no pending RayCluster.
-	err = r.Get(ctx, rayClusterKey, rayClusterInstance)
-
-	// If RayCluster exists, it means the config is updated. Delete the previous RayCluster first.
-	if err == nil {
-		logger.Info("Ray cluster already exists, config changes. Need to recreate. Delete the pending one now.", "key", rayClusterKey.String(), "rayClusterInstance.Spec", rayClusterInstance.Spec, "rayServiceInstance.Spec.RayClusterSpec", rayServiceInstance.Spec.RayClusterSpec)
-		delErr := r.Delete(ctx, rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground))
-		if delErr == nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
-			// Go to next loop and check if the ray cluster is deleted.
-			return nil, nil
-		} else if !errors.IsNotFound(delErr) {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, delErr)
-			return nil, delErr
-		}
-		// if error is `not found`, then continue.
-	} else if !errors.IsNotFound(err) {
-		return nil, err
-		// if error is `not found`, then continue.
-	}
-
-	logger.Info("No pending RayCluster, creating RayCluster.")
-	rayClusterInstance, err = constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name, r.Scheme)
+	rayClusterInstance, err := constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name, r.Scheme)
 	if err != nil {
 		return nil, err
 	}
 	if err = r.Create(ctx, rayClusterInstance); err != nil {
+		logger.Error(err, "Failed to create the RayCluster")
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 		return nil, err
 	}
-	logger.Info("created rayCluster for rayService", "rayCluster", rayClusterInstance)
+	logger.Info("Created RayCluster for RayService", "clusterName", rayClusterInstance.Name)
 	r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedRayCluster), "Created the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 	return rayClusterInstance, nil
 }
