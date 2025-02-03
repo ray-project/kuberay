@@ -27,7 +27,7 @@ func TestRayCreateClusterComplete(t *testing.T) {
 func TestRayCreateClusterValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-contet", "test-bearer-token", "test-person"
+	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
 	// Fake directory for kubeconfig
 	fakeDir, err := os.MkdirTemp("", "fake-dir")
