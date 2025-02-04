@@ -135,6 +135,12 @@ func endpointsTemplate(name string, namespace string) *corev1.Endpoints {
 	}
 }
 
+func appendNewWorkerGroup(workerGroupSpecs []rayv1.WorkerGroupSpec, newGroupName string) []rayv1.WorkerGroupSpec {
+	newWorkerGroupSpec := workerGroupSpecs[0].DeepCopy()
+	newWorkerGroupSpec.GroupName = newGroupName
+	return append(workerGroupSpecs, *newWorkerGroupSpec)
+}
+
 var _ = Context("RayService env tests", func() {
 	Describe("Zero-downtime upgrade", Ordered, func() {
 		// This test case simulates the most common scenario in the RayService code path:
@@ -449,6 +455,8 @@ var _ = Context("RayService env tests", func() {
 		})
 
 		When("Testing in-place update: updating the serveConfigV2", Ordered, func() {
+			// Update serveConfigV2 to trigger an in-place update. The new serve application should appear in the RayService status,
+			// and a zero-downtime upgrade should not be triggered.
 			var newConfigV2 string
 			newServeAppName := "newAppName"
 
@@ -495,29 +503,30 @@ var _ = Context("RayService env tests", func() {
 			})
 		})
 
-		When("adding a new worker group", Ordered, func() {
+		When("Testing appending a new worker group to the active RayCluster", Ordered, func() {
+			// When a RayService has only an active RayCluster and no pending RayCluster, appending a new worker group
+			// to the RayService spec will update the active RayCluster CR instead of triggering a zero-downtime upgrade.
 			BeforeAll(func() {
-				newWorkerGroupSpec := rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].DeepCopy()
-				newWorkerGroupSpecs := []rayv1.WorkerGroupSpec{*newWorkerGroupSpec, *newWorkerGroupSpec}
-				newWorkerGroupSpecs[1].GroupName = "worker-group-to-active-cluster"
-
-				rayService.Spec.RayClusterSpec.WorkerGroupSpecs = newWorkerGroupSpecs
+				rayService.Spec.RayClusterSpec.WorkerGroupSpecs = appendNewWorkerGroup(rayService.Spec.RayClusterSpec.WorkerGroupSpecs, "worker-group-to-active-cluster")
 				err := k8sClient.Update(ctx, rayService)
 				Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 			})
 
-			It("reflects the changes in the active cluster's WorkerGroupSpecs", func() {
+			It("Should reflect the changes in the active cluster's WorkerGroupSpecs", func() {
 				Eventually(
 					getActiveRayClusterWorkerGroupSpecsFunc(ctx, rayService),
-					time.Second*15, time.Millisecond*500).Should(HaveLen(2))
+					time.Second*10, time.Millisecond*500).Should(HaveLen(2))
 			})
 
-			It("doesn't create a new pending cluster", func() {
+			It("Should not create a new pending cluster", func() {
 				Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
 			})
 
-			It("doesn't switch to a new active cluster", func() {
-				Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(Equal(rayCluster.Name))
+			It("Should not switch to a new active cluster", func() {
+				clusterName := rayCluster.Name
+				Consistently(
+					getRayClusterNameFunc(ctx, rayService),
+					time.Second*3, time.Millisecond*500).Should(Equal(clusterName), "Active RayCluster: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
 			})
 		})
 
@@ -553,25 +562,24 @@ var _ = Context("RayService env tests", func() {
 				})
 			})
 
-			When("adding a new worker group", Ordered, func() {
+			When("Testing appending a new worker group to the pending RayCluster", Ordered, func() {
 				BeforeAll(func() {
-					newWorkerGroupSpec := rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].DeepCopy()
-					newWorkerGroupSpecs := []rayv1.WorkerGroupSpec{*newWorkerGroupSpec, *newWorkerGroupSpec}
-					newWorkerGroupSpecs[1].GroupName = "worker-group-to-pending-cluster"
-
-					rayService.Spec.RayClusterSpec.WorkerGroupSpecs = newWorkerGroupSpecs
+					rayService.Spec.RayClusterSpec.WorkerGroupSpecs = appendNewWorkerGroup(rayService.Spec.RayClusterSpec.WorkerGroupSpecs, "worker-group-to-pending-cluster")
 					err := k8sClient.Update(ctx, rayService)
 					Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
 				})
 
-				It("reflects the changes in the pending cluster's WorkerGroupSpecs", func() {
+				It("Should reflect the changes in the pending cluster's WorkerGroupSpecs", func() {
 					Eventually(
 						getPendingRayClusterWorkerGroupSpecsFunc(ctx, rayService),
 						time.Second*15, time.Millisecond*500).Should(HaveLen(2))
 				})
 
-				It("doesn't switch to a new active cluster", func() {
-					Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(Equal(rayCluster.Name))
+				It("Should not prepare a new pending cluster", func() {
+					pendingClusterName := rayService.Status.PendingServiceStatus.RayClusterName
+					Consistently(
+						getPreparingRayClusterNameFunc(ctx, rayService),
+						time.Second*5, time.Millisecond*500).Should(Equal(pendingClusterName), "Pending RayCluster: %v", rayService.Status.PendingServiceStatus.RayClusterName)
 				})
 			})
 		})
