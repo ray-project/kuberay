@@ -360,10 +360,8 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 	}
 }
 
-
 func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
-	for name, tc := range tests {
-
+	for _, tc := range tests {
 		test := With(t)
 		g := gomega.NewWithT(t)
 
@@ -376,7 +374,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "test-group"
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -434,8 +432,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
-	for name, tc := range tests {
-
+	for _, tc := range tests {
 		test := With(t)
 		g := gomega.NewWithT(t)
 
@@ -448,7 +445,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "test-group"
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -493,6 +490,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(10))
 		})
 	}
+}
 
 func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	// Only test with the V2 Autoscaler
