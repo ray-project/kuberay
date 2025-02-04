@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -220,7 +221,15 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 }
 
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
-	return service.Status.ServiceStatus
+	return service.Status.ServiceStatus //nolint:staticcheck // `ServiceStatus` is deprecated
+}
+
+func IsRayServiceReady(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
+}
+
+func IsRayServiceUpgrading(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
 }
 
 func RayServicesNumEndPoints(service *rayv1.RayService) int32 {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -298,6 +299,357 @@ func checkContainerEnv(t *testing.T, container corev1.Container, envName string,
 	}
 }
 
+func assertWorkerGCSFaultToleranceConfig(t *testing.T, podTemplate *corev1.PodTemplateSpec, container corev1.Container) {
+	assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
+	assert.Empty(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey])
+	assert.True(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
+	assert.False(t, utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env))
+}
+
+func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
+	tests := []struct {
+		name                        string
+		storageNS                   string
+		redisUsernameEnv            string
+		redisPasswordEnv            string
+		redisUsernameRayStartParams string
+		redisPasswordRayStartParams string
+		isHeadPod                   bool
+		gcsFTEnabled                bool
+	}{
+		{
+			name:         "GCS FT enabled",
+			gcsFTEnabled: true,
+			isHeadPod:    true,
+		},
+		{
+			name:         "GCS FT enabled with external storage",
+			gcsFTEnabled: true,
+			storageNS:    "test-ns",
+			isHeadPod:    true,
+		},
+		{
+			name:             "GCS FT enabled with redis password env",
+			gcsFTEnabled:     true,
+			redisPasswordEnv: "test-password",
+			isHeadPod:        true,
+		},
+		{
+			name:             "GCS FT enabled with redis username and password env",
+			gcsFTEnabled:     true,
+			redisUsernameEnv: "test-username",
+			redisPasswordEnv: "test-password",
+			isHeadPod:        true,
+		},
+		{
+			name:                        "GCS FT enabled with redis password ray start params",
+			gcsFTEnabled:                true,
+			redisPasswordRayStartParams: "test-password",
+			isHeadPod:                   true,
+		},
+		{
+			name:                        "GCS FT enabled with redis username and password ray start params",
+			gcsFTEnabled:                true,
+			redisUsernameRayStartParams: "test-username",
+			redisPasswordRayStartParams: "test-password",
+			isHeadPod:                   true,
+		},
+		{
+			// The most common case.
+			name:                        "GCS FT enabled with redis password env and ray start params referring to env",
+			gcsFTEnabled:                true,
+			redisPasswordEnv:            "test-password",
+			redisPasswordRayStartParams: "$REDIS_PASSWORD",
+			isHeadPod:                   false,
+		},
+		{
+			name:                        "GCS FT enabled with redis username and password env and ray start params referring to env",
+			gcsFTEnabled:                true,
+			redisUsernameEnv:            "test-username",
+			redisUsernameRayStartParams: "$REDIS_USERNAME",
+			redisPasswordEnv:            "test-password",
+			redisPasswordRayStartParams: "$REDIS_PASSWORD",
+			isHeadPod:                   false,
+		},
+		{
+			name:         "GCS FT enabled / worker Pod",
+			gcsFTEnabled: true,
+			isHeadPod:    false,
+		},
+		{
+			name:         "GCS FT disabled",
+			gcsFTEnabled: false,
+			isHeadPod:    true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Validate the test input
+			if test.redisUsernameEnv != "" && test.redisUsernameRayStartParams != "" {
+				assert.True(t, test.redisUsernameRayStartParams == "$REDIS_USERNAME")
+			}
+			if test.redisPasswordEnv != "" && test.redisPasswordRayStartParams != "" {
+				assert.True(t, test.redisPasswordRayStartParams == "$REDIS_PASSWORD")
+			}
+
+			// Prepare the cluster
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						utils.RayFTEnabledAnnotationKey: strconv.FormatBool(test.gcsFTEnabled),
+					},
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Env: []corev1.EnvVar{
+											{
+												Name:  utils.RAY_REDIS_ADDRESS,
+												Value: "redis:6379",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Env: []corev1.EnvVar{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			if test.storageNS != "" {
+				cluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = test.storageNS
+			}
+			if test.redisUsernameEnv != "" {
+				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+					Name:  utils.REDIS_USERNAME,
+					Value: test.redisUsernameEnv,
+				})
+			}
+			if test.redisPasswordEnv != "" {
+				cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+					Name:  utils.REDIS_PASSWORD,
+					Value: test.redisPasswordEnv,
+				})
+			}
+			if test.redisUsernameRayStartParams != "" {
+				cluster.Spec.HeadGroupSpec.RayStartParams["redis-username"] = test.redisUsernameRayStartParams
+			}
+			if test.redisPasswordRayStartParams != "" {
+				cluster.Spec.HeadGroupSpec.RayStartParams["redis-password"] = test.redisPasswordRayStartParams
+			}
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			if !test.isHeadPod {
+				podTemplate = &cluster.Spec.WorkerGroupSpecs[0].Template
+			}
+
+			// Configure GCS fault tolerance
+			if test.isHeadPod {
+				configureGCSFaultTolerance(podTemplate, cluster, rayv1.HeadNode)
+			} else {
+				configureGCSFaultTolerance(podTemplate, cluster, rayv1.WorkerNode)
+			}
+
+			// Check configurations for GCS fault tolerance
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
+			if test.isHeadPod {
+				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTEnabled))
+				if test.storageNS != "" {
+					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.storageNS)
+					assert.True(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+				}
+				if test.redisUsernameEnv != "" {
+					env := getEnvVar(container, utils.REDIS_USERNAME)
+					assert.Equal(t, env.Value, test.redisUsernameEnv)
+				}
+				if test.redisPasswordEnv != "" {
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
+					assert.Equal(t, env.Value, test.redisPasswordEnv)
+				} else if test.redisPasswordRayStartParams != "" {
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
+					assert.Equal(t, env.Value, test.redisPasswordRayStartParams)
+				}
+			} else {
+				assertWorkerGCSFaultToleranceConfig(t, podTemplate, container)
+			}
+		})
+	}
+}
+
+func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
+	tests := []struct {
+		gcsFTOptions *rayv1.GcsFaultToleranceOptions
+		name         string
+		isHeadPod    bool
+	}{
+		{
+			name: "GCS FT enabled",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis password",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisPassword: &rayv1.RedisCredential{
+					Value: "test-password",
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis username and password",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisUsername: &rayv1.RedisCredential{
+					Value: "test-username",
+				},
+				RedisPassword: &rayv1.RedisCredential{
+					Value: "test-password",
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis password in secret",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisPassword: &rayv1.RedisCredential{
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "spec.redisPassword",
+						},
+					},
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis username and password in secret",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				RedisUsername: &rayv1.RedisCredential{
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "spec.redisUsername",
+						},
+					},
+				},
+				RedisPassword: &rayv1.RedisCredential{
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "spec.redisPassword",
+						},
+					},
+				},
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled with redis external storage namespace",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress:             "redis:6379",
+				ExternalStorageNamespace: "test-ns",
+			},
+			isHeadPod: true,
+		},
+		{
+			name: "GCS FT enabled / worker Pod",
+			gcsFTOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+			},
+			isHeadPod: false,
+		},
+	}
+
+	emptyPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Env: []corev1.EnvVar{},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Prepare the cluster
+			cluster := rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: test.gcsFTOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template:       *emptyPodTemplate.DeepCopy(),
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							Template: *emptyPodTemplate.DeepCopy(),
+						},
+					},
+				},
+			}
+
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			nodeType := rayv1.HeadNode
+			if !test.isHeadPod {
+				podTemplate = &cluster.Spec.WorkerGroupSpecs[0].Template
+				nodeType = rayv1.WorkerNode
+			}
+			configureGCSFaultTolerance(podTemplate, cluster, nodeType)
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
+
+			if test.isHeadPod {
+				assert.False(t, utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env))
+				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTOptions != nil))
+
+				env := getEnvVar(container, utils.RAY_REDIS_ADDRESS)
+				assert.Equal(t, env.Value, "redis:6379")
+
+				if test.gcsFTOptions.RedisUsername != nil {
+					env := getEnvVar(container, utils.REDIS_USERNAME)
+					assert.Equal(t, env.Value, test.gcsFTOptions.RedisUsername.Value)
+					assert.Equal(t, env.ValueFrom, test.gcsFTOptions.RedisUsername.ValueFrom)
+				}
+
+				if test.gcsFTOptions.RedisPassword != nil {
+					env := getEnvVar(container, utils.REDIS_PASSWORD)
+					assert.Equal(t, env.Value, test.gcsFTOptions.RedisPassword.Value)
+					assert.Equal(t, env.ValueFrom, test.gcsFTOptions.RedisPassword.ValueFrom)
+				}
+				if test.gcsFTOptions.ExternalStorageNamespace != "" {
+					assert.Equal(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey], test.gcsFTOptions.ExternalStorageNamespace)
+					env := getEnvVar(container, utils.RAY_EXTERNAL_STORAGE_NS)
+					assert.Equal(t, env.Value, test.gcsFTOptions.ExternalStorageNamespace)
+				}
+			} else {
+				assertWorkerGCSFaultToleranceConfig(t, podTemplate, container)
+			}
+		})
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()
@@ -305,7 +657,7 @@ func TestBuildPod(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
@@ -360,7 +712,7 @@ func TestBuildPod(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 
 	// Check resources
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -423,7 +775,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	// Test head pod
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
@@ -435,7 +787,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
 	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
@@ -459,7 +811,7 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, headContainer.Command, []string{"I am head"})
 	assert.Equal(t, headContainer.Args, []string{"I am head again"})
@@ -468,7 +820,7 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
 	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
@@ -480,7 +832,7 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.GetCRDType(""), "")
 
 	actualResult := pod.Labels[utils.RayClusterLabelKey]
 	expectedResult := cluster.Name
@@ -537,7 +889,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.RayServiceCRD, "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.RayServiceCRD, "")
 
 	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
@@ -548,176 +900,12 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.RayServiceCRD, fqdnRayIP)
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP)
 
 	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
 	assert.True(t, ok, "Expected serve label is not present")
 	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
-}
-
-func TestBuildPod_WithGcsFtEnabled(t *testing.T) {
-	ctx := context.Background()
-	// Test 1
-	cluster := instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Build a head Pod.
-	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-
-	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-
-	// "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" should not be set on the head Pod by default
-	assert.True(t, !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, rayContainer.Env))
-
-	// Test 2
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the head group spec.
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env,
-		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "60"})
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	// Check environment variable "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "60")
-
-	// Test 3
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Build a worker pod
-	worker := cluster.Spec.WorkerGroupSpecs[0]
-	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
-
-	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, utils.DefaultWorkerRayGcsReconnectTimeoutS)
-
-	// Test 4
-	cluster = instance.DeepCopy()
-	cluster.Annotations = map[string]string{
-		utils.RayFTEnabledAnnotationKey: "true",
-	}
-
-	// Add "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S" env var in the worker group spec.
-	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env = append(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env,
-		corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: "120"})
-	worker = cluster.Spec.WorkerGroupSpecs[0]
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, cluster.Spec.GcsFaultToleranceOptions, worker.RayStartParams, "6379", nil, utils.GetCRDType(""), fqdnRayIP)
-
-	// Check the default value of "RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S"
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, "120")
-
-	// Test 5 with a minimal GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress: "redis://127.0.0.1:6379",
-	}
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if pod.Annotations[utils.RayFTEnabledAnnotationKey] != "true" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayFTEnabledAnnotationKey, pod.Annotations[utils.RayFTEnabledAnnotationKey])
-	}
-	if pod.Annotations[utils.RayExternalStorageNSAnnotationKey] != string(cluster.UID) {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayExternalStorageNSAnnotationKey, pod.Annotations[utils.RayExternalStorageNSAnnotationKey])
-	}
-	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
-	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, string(cluster.UID))
-
-	// Test 6 with a full GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		ExternalStorageNamespace: "myns",
-		RedisAddress:             "redis://127.0.0.1:6379",
-	}
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if pod.Annotations[utils.RayFTEnabledAnnotationKey] != "true" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayFTEnabledAnnotationKey, pod.Annotations[utils.RayFTEnabledAnnotationKey])
-	}
-	if pod.Annotations[utils.RayExternalStorageNSAnnotationKey] != "myns" {
-		t.Fatalf("Ray pod has unexpected %s annotation: %v", utils.RayExternalStorageNSAnnotationKey, pod.Annotations[utils.RayExternalStorageNSAnnotationKey])
-	}
-	checkContainerEnv(t, rayContainer, utils.RAY_EXTERNAL_STORAGE_NS, "myns")
-	checkContainerEnv(t, rayContainer, utils.RAY_REDIS_ADDRESS, "redis://127.0.0.1:6379")
-
-	// Test 7 with a plain text redis password in GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress:  "redis://127.0.0.1:6379",
-		RedisPassword: &rayv1.RedisCredential{Value: "mypassword"},
-	}
-
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
-		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
-	}
-	checkContainerEnv(t, rayContainer, utils.REDIS_PASSWORD, "mypassword")
-
-	// Test 8 with a redis password from secret in GcsFaultToleranceOptions
-	cluster = instance.DeepCopy()
-	cluster.UID = "mycluster"
-	cluster.Annotations = map[string]string{}
-	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
-		RedisAddress: "redis://127.0.0.1:6379",
-		RedisPassword: &rayv1.RedisCredential{
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "redis-password-secret",
-					},
-					Key: "password",
-				},
-			},
-		},
-	}
-
-	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", nil, utils.GetCRDType(""), "")
-	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
-
-	if !strings.Contains(rayContainer.Args[0], "--redis-password=$REDIS_PASSWORD") {
-		t.Fatalf("Ray container expected `--redis-password=$REDIS_PASSWORD` in `%v`", rayContainer.Args[0])
-	}
-
-	passwordEnv := getEnvVar(rayContainer, utils.REDIS_PASSWORD)
-	if passwordEnv == nil || passwordEnv.ValueFrom == nil || passwordEnv.ValueFrom.SecretKeyRef == nil {
-		t.Fatalf("Ray container expected env `%v` in `%v`", utils.REDIS_PASSWORD, rayContainer.Env)
-	}
-	if passwordEnv.ValueFrom.SecretKeyRef.LocalObjectReference.Name != "redis-password-secret" ||
-		passwordEnv.ValueFrom.SecretKeyRef.Key != "password" {
-		t.Fatalf("Ray container expected secret `redis-password-secret` with key `password` ")
-	}
 }
 
 // Check that autoscaler container overrides work as expected.
@@ -784,7 +972,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 		SecurityContext:    &customSecurityContext,
 	}
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.GcsFaultToleranceOptions, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", &trueFlag, utils.GetCRDType(""), "")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.GetCRDType(""), "")
 	expectedContainer := *autoscalerContainer.DeepCopy()
 	expectedContainer.Image = customAutoscalerImage
 	expectedContainer.ImagePullPolicy = customPullPolicy
@@ -1089,26 +1277,57 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	customAddress := "custom-address:1234"
 
-	// Case 1: Head node with no address option set.
-	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.NotContains(t, rayStartParams, "address", "Head node should not have an address option set by default.")
-
-	// Case 2: Head node with custom address option set.
-	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
-
-	// Case 3: Worker node with no address option set.
-	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
-	assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
-
-	// Case 4: Worker node with custom address option set.
-	rayStartParams = map[string]string{"address": customAddress}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+	testCases := []struct {
+		name           string
+		assertion      func(t *testing.T, rayStartParams map[string]string)
+		rayStartParams map[string]string
+		fqdnRayIP      string
+		nodeType       rayv1.RayNodeType
+	}{
+		{
+			name:           "Head node with no address option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.NotContains(t, rayStartParams, "address", "Head node should not have an address option set by default.")
+			},
+		},
+		{
+			name:           "Head node with custom address option set.",
+			rayStartParams: map[string]string{"address": customAddress},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+			},
+		},
+		{
+			name:           "Worker node with no address option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
+				assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
+			},
+		},
+		{
+			name:           "Worker node with custom address option set.",
+			rayStartParams: map[string]string{"address": customAddress},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
+	}
 }
 
 func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
@@ -1121,26 +1340,57 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	customMetricsPort := utils.DefaultMetricsPort + 1
+	testCases := []struct {
+		name           string
+		assertion      func(t *testing.T, rayStartParams map[string]string)
+		rayStartParams map[string]string
+		fqdnRayIP      string
+		nodeType       rayv1.RayNodeType
+	}{
+		{
+			name:           "Head node with no metrics-export-port option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+			},
+		},
+		{
+			name:           "Head node with custom metrics-export-port option set.",
+			rayStartParams: map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+			},
+		},
+		{
+			name:           "Worker node with no metrics-export-port option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+			},
+		},
+		{
+			name:           "Worker node with custom metrics-export-port option set.",
+			rayStartParams: map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+			},
+		},
+	}
 
-	// Case 1: Head node with no metrics-export-port option set.
-	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
-
-	// Case 2: Head node with custom metrics-export-port option set.
-	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
-
-	// Case 3: Worker node with no metrics-export-port option set.
-	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
-
-	// Case 4: Worker node with custom metrics-export-port option set.
-	rayStartParams = map[string]string{"metrics-export-port": fmt.Sprint(customMetricsPort)}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
+	}
 }
 
 func TestSetMissingRayStartParamsBlock(t *testing.T) {
@@ -1152,26 +1402,56 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
-
-	// Case 1: Head node with no --block option set.
-	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
-
-	// Case 2: Head node with --block option set to false.
-	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
-
-	// Case 3: Worker node with no --block option set.
-	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
-
-	// Case 4: Worker node with --block option set to false.
-	rayStartParams = map[string]string{"block": "false"}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+	testCases := []struct {
+		name           string
+		assertion      func(t *testing.T, rayStartParams map[string]string)
+		rayStartParams map[string]string
+		fqdnRayIP      string
+		nodeType       rayv1.RayNodeType
+	}{
+		{
+			name:           "Head node with no --block option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+			},
+		},
+		{
+			name:           "Head node with --block option set to false.",
+			rayStartParams: map[string]string{"block": "false"},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+			},
+		},
+		{
+			name:           "Worker node with no --block option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+			},
+		},
+		{
+			name:           "Worker node with --block option set to false.",
+			rayStartParams: map[string]string{"block": "false"},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
+	}
 }
 
 func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
@@ -1181,27 +1461,57 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 	// Users can manually set the dashboard-host option to customize the host the dashboard server binds to, either "localhost" (127.0.0.1) or "0.0.0.0" (available from all interfaces).
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
+	testCases := []struct {
+		name           string
+		assertion      func(t *testing.T, rayStartParams map[string]string)
+		rayStartParams map[string]string
+		fqdnRayIP      string
+		nodeType       rayv1.RayNodeType
+	}{
+		{
+			name:           "Head node with no dashboard-host option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
+			},
+		},
+		{
+			name:           "Head node with dashboard-host option set.",
+			rayStartParams: map[string]string{"dashboard-host": "localhost"},
+			fqdnRayIP:      "",
+			nodeType:       rayv1.HeadNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+			},
+		},
+		{
+			name:           "Worker node with no dashboard-host option set.",
+			rayStartParams: map[string]string{},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.NotContains(t, rayStartParams, "dashboard-host", "workers should not have an dashboard-host option set.")
+			},
+		},
+		{
+			name:           "Worker node with dashboard-host option set.",
+			rayStartParams: map[string]string{"dashboard-host": "localhost"},
+			fqdnRayIP:      fqdnRayIP,
+			nodeType:       rayv1.WorkerNode,
+			assertion: func(t *testing.T, rayStartParams map[string]string) {
+				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+			},
+		},
+	}
 
-	// Case 1: Head node with no dashboard-host option set.
-	rayStartParams := map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
-
-	// Case 2: Head node with dashboard-host option set.
-	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.HeadNode, headPort, "")
-	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
-
-	// Case 3: Worker node with no dashboard-host option set.
-	rayStartParams = map[string]string{}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.NotContains(t, rayStartParams, "dashboard-host", "workers should not have an dashboard-host option set.")
-
-	// Case 4: Worker node with dashboard-host option set.
-	// To maximize user empowerment, this option can be enabled. However, it is important to note that the dashboard is not available on worker nodes.
-	rayStartParams = map[string]string{"dashboard-host": "localhost"}
-	rayStartParams = setMissingRayStartParams(ctx, rayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
-	assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
+			testCase.assertion(t, testCase.rayStartParams)
+		})
+	}
 }
 
 func TestGetCustomWorkerInitImage(t *testing.T) {

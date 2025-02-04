@@ -18,7 +18,6 @@ package ray
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -434,7 +433,8 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 	os.Setenv(utils.ENABLE_RANDOM_POD_DELETE, "true")
 	enableInTreeAutoscaling := true
 
-	tests := map[string]struct {
+	tests := []struct {
+		name            string
 		workersToDelete []string
 		numRandomDelete int
 	}{
@@ -442,35 +442,40 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 		// That is, it will firstly delete Pod1, then Pod2, then Pod3, then Pod4, then Pod5. Hence,
 		// we need to test the different cases of the workersToDelete to make sure both Pod deletion
 		// works as expected.
-		"Set WorkersToDelete to pod1 and pod2.": {
+		{
+			name: "Set WorkersToDelete to pod1 and pod2.",
 			// The pod1 and pod2 will be deleted.
 			workersToDelete: []string{"pod1", "pod2"},
 			numRandomDelete: 0,
 		},
-		"Set WorkersToDelete to pod3 and pod4": {
+		{
+			name: "Set WorkersToDelete to pod3 and pod4",
 			// The pod3 and pod4 will be deleted. If the random Pod deletion is triggered, it will firstly delete pod1 and make the test fail.
 			workersToDelete: []string{"pod3", "pod4"},
 			numRandomDelete: 0,
 		},
-		"Set WorkersToDelete to pod1 and pod5": {
+		{
+			name: "Set WorkersToDelete to pod1 and pod5",
 			// The pod1 and pod5 will be deleted.
 			workersToDelete: []string{"pod1", "pod5"},
 			numRandomDelete: 0,
 		},
-		"Set WorkersToDelete to pod2 and NonExistentPod": {
+		{
+			name: "Set WorkersToDelete to pod2 and NonExistentPod",
 			// The pod2 will be deleted, and 1 pod will be deleted randomly to meet `expectedNumWorkerPods`.
 			workersToDelete: []string{"pod2", "NonExistentPod"},
 			numRandomDelete: 1,
 		},
-		"Set WorkersToDelete to NonExistentPod1 and NonExistentPod1": {
+		{
+			name: "Set WorkersToDelete to NonExistentPod1 and NonExistentPod1",
 			// Two Pods will be deleted randomly to meet `expectedNumWorkerPods`.
 			workersToDelete: []string{"NonExistentPod1", "NonExistentPod2"},
 			numRandomDelete: 2,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			// Initialize a fake client with newScheme and runtimeObjects.
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 			ctx := context.Background()
@@ -552,29 +557,33 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 	os.Unsetenv(utils.ENABLE_RANDOM_POD_DELETE)
 	enableInTreeAutoscaling := true
 
-	tests := map[string]struct {
+	tests := []struct {
+		name            string
 		workersToDelete []string
 		numNonExistPods int
 	}{
-		"Set WorkersToDelete to pod2 and pod3.": {
+		{
+			name: "Set WorkersToDelete to pod2 and pod3.",
 			// The pod2 and pod3 will be deleted. The number of remaining Pods will be 3.
 			workersToDelete: []string{"pod2", "pod3"},
 			numNonExistPods: 0,
 		},
-		"Set WorkersToDelete to pod2 and NonExistentPod": {
+		{
+			name: "Set WorkersToDelete to pod2 and NonExistentPod",
 			// Only pod2 will be deleted. The number of remaining Pods will be 4.
 			workersToDelete: []string{"pod2", "NonExistentPod"},
 			numNonExistPods: 1,
 		},
-		"Set WorkersToDelete to NonExistentPod1 and NonExistentPod1": {
+		{
+			name: "Set WorkersToDelete to NonExistentPod1 and NonExistentPod1",
 			// No Pod will be deleted. The number of remaining Pods will be 5.
 			workersToDelete: []string{"NonExistentPod1", "NonExistentPod2"},
 			numNonExistPods: 2,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			// Initialize a fake client with newScheme and runtimeObjects.
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 			ctx := context.Background()
@@ -869,20 +878,23 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 	numHeadPods := 1
 	oldNumWorkerPods := len(testPods) - numHeadPods
 
-	tests := map[string]struct {
+	tests := []struct {
+		name                  string
 		enableRandomPodDelete bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `enableRandomPodDelete`.
-		"Enable random Pod deletion": {
+		{
+			name:                  "Enable random Pod deletion",
 			enableRandomPodDelete: true,
 		},
-		"Disable random Pod deletion": {
+		{
+			name:                  "Disable random Pod deletion",
 			enableRandomPodDelete: false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			// Initialize a fake client with newScheme and runtimeObjects.
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
 			ctx := context.Background()
@@ -939,19 +951,22 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 	setupTest(t)
 
-	tests := map[string]struct {
+	tests := []struct {
+		name          string
 		restartPolicy corev1.RestartPolicy
 	}{
-		"Pod with RestartPolicyAlways": {
+		{
+			name:          "Pod with RestartPolicyAlways",
 			restartPolicy: corev1.RestartPolicyAlways,
 		},
-		"Pod with RestartPolicyOnFailure": {
+		{
+			name:          "Pod with RestartPolicyOnFailure",
 			restartPolicy: corev1.RestartPolicyOnFailure,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().
 				WithRuntimeObjects(testPods...).
 				Build()
@@ -1013,6 +1028,7 @@ func TestReconcileHeadService(t *testing.T) {
 			Labels: map[string]string{
 				utils.RayClusterLabelKey:  cluster.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 			},
 		},
 	}
@@ -1026,6 +1042,7 @@ func TestReconcileHeadService(t *testing.T) {
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
 		utils.RayClusterLabelKey:  cluster.Name,
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 	})
 
 	// Initialize RayCluster reconciler.
@@ -1351,29 +1368,34 @@ func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 		},
 	}
 
-	tests := map[string]struct {
+	tests := []struct {
+		name         string
 		expectedIP   string
 		expectedName string
 		pods         []runtime.Object
 		returnsError bool
 	}{
-		"get expected Pod IP if there's one head node": {
+		{
+			name:         "get expected Pod IP if there's one head node",
 			pods:         testPods,
 			expectedIP:   headNodeIP,
 			expectedName: headNodeName,
 			returnsError: false,
 		},
-		"no error if there's no head node": {
+		{
+			name:         "no error if there's no head node",
 			pods:         []runtime.Object{},
 			expectedIP:   "",
 			returnsError: false,
 		},
-		"no error if there's more than one head node": {
+		{
+			name:         "no error if there's more than one head node",
 			pods:         append(testPods, extraHeadPod),
 			expectedIP:   "",
 			returnsError: true,
 		},
-		"no error if head pod ip is not yet set": {
+		{
+			name:         "no error if head pod ip is not yet set",
 			pods:         testPodsNoHeadIP,
 			expectedIP:   "",
 			expectedName: headNodeName,
@@ -1381,8 +1403,8 @@ func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
 
 			ip, name := "", ""
@@ -1425,25 +1447,29 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 		},
 	}
 
-	tests := map[string]struct {
+	tests := []struct {
+		name         string
 		expectedIP   string
 		expectedName string
 		services     []runtime.Object
 		returnsError bool
 	}{
-		"get expected Service IP if there's one head Service": {
+		{
+			name:         "get expected Service IP if there's one head Service",
 			services:     testServices,
 			expectedIP:   headServiceIP,
 			expectedName: headService.Name,
 			returnsError: false,
 		},
-		"get error if there's no head Service": {
+		{
+			name:         "get error if there's no head Service",
 			services:     []runtime.Object{},
 			expectedIP:   "",
 			expectedName: "",
 			returnsError: true,
 		},
-		"get error if there's more than one head Service": {
+		{
+			name:         "get error if there's more than one head Service",
 			services:     append(testServices, extraHeadService),
 			expectedIP:   "",
 			expectedName: "",
@@ -1451,8 +1477,8 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.services...).Build()
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
@@ -1630,68 +1656,108 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 
 	// `inconsistentRayClusterStatus` is used to check whether the old and new RayClusterStatus are inconsistent
 	// by comparing different fields. If the only differences between the old and new status are the `LastUpdateTime`
-	// and `ObservedGeneration` fields (Case 9 and Case 10), the status update will not be triggered.
+	// and `ObservedGeneration` fields, the status update will not be triggered.
 	ctx := context.Background()
 
-	// Case 1: `State` is different => return true
-	newStatus := oldStatus.DeepCopy()
-	newStatus.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+	testCases := []struct {
+		modifyStatus func(*rayv1.RayClusterStatus)
+		name         string
+		expectResult bool
+	}{
+		{
+			name: "State is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.State = rayv1.Suspended //nolint:staticcheck // Still need to check State even though it is deprecated, delete this no lint after this field is removed.
+			},
+			expectResult: true,
+		},
+		{
+			name: "Reason is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Reason = "new reason"
+			},
+			expectResult: true,
+		},
+		{
+			name: "ReadyWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "AvailableWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "DesiredWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "MinWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "MaxWorkerReplicas is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
+			},
+			expectResult: true,
+		},
+		{
+			name: "Endpoints is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Endpoints["fakeEndpoint"] = "10009"
+			},
+			expectResult: true,
+		},
+		{
+			name: "Head.PodIP is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.Head.PodIP = "test head pod ip"
+			},
+			expectResult: true,
+		},
+		{
+			name: "RayClusterReplicaFailure is updated, expect result to be true",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
+			},
+			expectResult: true,
+		},
+		{
+			name: "LastUpdateTime is updated, expect result to be false",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
+			},
+			expectResult: false,
+		},
+		{
+			name: "ObservedGeneration is updated, expect result to be false",
+			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
+				newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
+			},
+			expectResult: false,
+		},
+	}
 
-	// Case 2: `Reason` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Reason = "new reason"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 3: `ReadyWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 4: `AvailableWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 5: `DesiredWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 6: `MinWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 7: `MaxWorkerReplicas` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 8: `Endpoints` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Endpoints["fakeEndpoint"] = "10009"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 9: `Head` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	newStatus.Head.PodIP = "test head pod ip"
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 10: `LastUpdateTime` is different => return false
-	newStatus = oldStatus.DeepCopy()
-	newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
-	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 11: `ObservedGeneration` is different => return false
-	newStatus = oldStatus.DeepCopy()
-	newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
-	assert.False(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
-
-	// Case 12: `Conditions` is different => return true
-	newStatus = oldStatus.DeepCopy()
-	meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
-	assert.True(t, r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			newStatus := oldStatus.DeepCopy()
+			testCase.modifyStatus(newStatus)
+			result := r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus)
+			assert.Equal(t, testCase.expectResult, result)
+		})
+	}
 }
 
 func TestCalculateStatus(t *testing.T) {
@@ -2609,26 +2675,30 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	// The KubeRay operator environment variable `ENABLE_GCS_FT_REDIS_CLEANUP` is used to enable/disable
 	// the GCS FT Redis cleanup feature. If the feature flag is not set, the GCS FT Redis cleanup feature
 	// is enabled by default.
-	tests := map[string]struct {
+	tests := []struct {
+		name                    string
 		enableGCSFTRedisCleanup string
 		expectedNumFinalizers   int
 	}{
-		"Enable GCS FT Redis cleanup": {
+		{
+			name:                    "Enable GCS FT Redis cleanup",
 			enableGCSFTRedisCleanup: "true",
 			expectedNumFinalizers:   1,
 		},
-		"Disable GCS FT Redis cleanup": {
+		{
+			name:                    "Disable GCS FT Redis cleanup",
 			enableGCSFTRedisCleanup: "false",
 			expectedNumFinalizers:   0,
 		},
-		"Feature flag is not set": {
+		{
+			name:                    "Feature flag is not set",
 			enableGCSFTRedisCleanup: "unset",
 			expectedNumFinalizers:   1,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			if tc.enableGCSFTRedisCleanup == "unset" {
 				os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
 			} else {
@@ -2716,11 +2786,12 @@ func TestEvents_RedisCleanup(t *testing.T) {
 	gcsFTEnabledCluster.DeletionTimestamp = &now
 	errInjected := errors.New("random error")
 
-	tests := map[string]struct {
+	tests := []struct {
 		fakeClientFn func(client.Object) client.Client
 		errInjected  error
+		message      string
 	}{
-		"Created Redis cleanup Job": {
+		{
 			fakeClientFn: func(obj client.Object) client.Client {
 				return clientFake.NewClientBuilder().
 					WithScheme(newScheme).
@@ -2728,8 +2799,9 @@ func TestEvents_RedisCleanup(t *testing.T) {
 					Build()
 			},
 			errInjected: nil,
+			message:     "Created Redis cleanup Job",
 		},
-		"Failed to create Redis cleanup Job": {
+		{
 			fakeClientFn: func(obj client.Object) client.Client {
 				return clientFake.NewClientBuilder().
 					WithScheme(newScheme).
@@ -2742,11 +2814,12 @@ func TestEvents_RedisCleanup(t *testing.T) {
 					Build()
 			},
 			errInjected: errInjected,
+			message:     "Failed to create Redis cleanup Job",
 		},
 	}
 
-	for message, tc := range tests {
-		t.Run(message, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.message, func(t *testing.T) {
 			cluster := gcsFTEnabledCluster.DeepCopy()
 			ctx := context.Background()
 
@@ -2770,7 +2843,7 @@ func TestEvents_RedisCleanup(t *testing.T) {
 			var events []string
 			for len(recorder.Events) > 0 {
 				event := <-recorder.Events
-				if strings.Contains(event, message) {
+				if strings.Contains(event, tc.message) {
 					foundEvent = true
 					break
 				}
@@ -2827,35 +2900,40 @@ func Test_RedisCleanup(t *testing.T) {
 		},
 	}
 
-	tests := map[string]struct {
+	tests := []struct {
+		name            string
 		hasHeadPod      bool
 		hasWorkerPod    bool
 		expectedNumJobs int
 	}{
-		"Both head and worker Pods are not terminated": {
+		{
+			name:            "Both head and worker Pods are not terminated",
 			hasHeadPod:      true,
 			hasWorkerPod:    true,
 			expectedNumJobs: 0,
 		},
-		"Only head Pod is terminated": {
+		{
+			name:            "Only head Pod is terminated",
 			hasHeadPod:      false,
 			hasWorkerPod:    true,
 			expectedNumJobs: 1,
 		},
-		"Only worker Pod is terminated": {
+		{
+			name:            "Only worker Pod is terminated",
 			hasHeadPod:      true,
 			hasWorkerPod:    false,
 			expectedNumJobs: 0,
 		},
-		"Both head and worker Pods are terminated": {
+		{
+			name:            "Both head and worker Pods are terminated",
 			hasHeadPod:      false,
 			hasWorkerPod:    false,
 			expectedNumJobs: 1,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := gcsFTEnabledCluster.DeepCopy()
 			runtimeObjects := []runtime.Object{cluster}
 			if tc.hasHeadPod {
@@ -2954,38 +3032,42 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 
-	tests := map[string]struct {
+	tests := []struct {
 		replicas        *int32
 		minReplicas     *int32
 		maxReplicas     *int32
+		name            string
 		desiredReplicas int
 	}{
-		"Replicas is nil": {
+		{
 			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
 			// [Note]: It is not possible for `Replicas` to be nil in practice because it has a default value in the CRD.
 			replicas:        nil,
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](10000),
+			name:            "Replicas is nil",
 			desiredReplicas: 1,
 		},
-		"Replicas is smaller than MinReplicas": {
+		{
 			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas` Pods.
 			replicas:        ptr.To[int32](0),
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](10000),
+			name:            "Replicas is smaller than MinReplicas",
 			desiredReplicas: 1,
 		},
-		"Replicas is larger than MaxReplicas": {
+		{
 			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas` Pods.
 			replicas:        ptr.To[int32](4),
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](3),
+			name:            "Replicas is larger than MaxReplicas",
 			desiredReplicas: 3,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := testRayCluster.DeepCopy()
 			cluster.Spec.WorkerGroupSpecs[0].Replicas = tc.replicas
 			cluster.Spec.WorkerGroupSpecs[0].MinReplicas = tc.minReplicas
@@ -3044,41 +3126,45 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
 
-	tests := map[string]struct {
+	tests := []struct {
 		replicas        *int32
 		minReplicas     *int32
 		maxReplicas     *int32
+		name            string
 		desiredReplicas int
 		numOfHosts      int
 	}{
-		"Replicas is nil": {
+		{
 			// If `Replicas` is nil, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
 			replicas:        nil,
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](10000),
+			name:            "Replicas is nil",
 			desiredReplicas: 1,
 			numOfHosts:      4,
 		},
-		"Replicas is smaller than MinReplicas": {
+		{
 			// If `Replicas` is smaller than `MinReplicas`, the controller will set the desired state of the workerGroup to `MinReplicas`*`NumOfHosts` Pods.
 			replicas:        ptr.To[int32](0),
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](10000),
+			name:            "Replicas is smaller than MinReplicas",
 			desiredReplicas: 1,
 			numOfHosts:      4,
 		},
-		"Replicas is larger than MaxReplicas": {
+		{
 			// If `Replicas` is larger than `MaxReplicas`, the controller will set the desired state of the workerGroup to `MaxReplicas`*`NumOfHosts` Pods.
 			replicas:        ptr.To[int32](4),
 			minReplicas:     ptr.To[int32](1),
 			maxReplicas:     ptr.To[int32](3),
+			name:            "Replicas is larger than MaxReplicas",
 			desiredReplicas: 3,
 			numOfHosts:      4,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := testRayCluster.DeepCopy()
 			cluster.Spec.WorkerGroupSpecs[0].Replicas = tc.replicas
 			cluster.Spec.WorkerGroupSpecs[0].MinReplicas = tc.minReplicas
@@ -3137,24 +3223,27 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
 
-	tests := map[string]struct {
+	tests := []struct {
 		replicas   *int32
+		name       string
 		numOfHosts int32
 	}{
-		"NumOfHosts is 1": {
+		{
 			// If `NumOfHosts` is 1, the controller will set the desired state of the workerGroup to `Replicas` Pods.
 			replicas:   ptr.To[int32](1),
+			name:       "NumOfHosts is 1",
 			numOfHosts: 1,
 		},
-		"NumOfHosts is larger than 1": {
+		{
 			// If `NumOfHosts` is larger than 1, the controller will set the desired state of the workerGroup to `NumOfHosts` Pods.
 			replicas:   ptr.To[int32](1),
+			name:       "NumOfHosts is larger than 1",
 			numOfHosts: 4,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := testRayCluster.DeepCopy()
 			cluster.Spec.WorkerGroupSpecs[0].NumOfHosts = tc.numOfHosts
 
@@ -3200,37 +3289,41 @@ func TestSumGPUs(t *testing.T) {
 	nvidiaGPUResourceName := corev1.ResourceName("nvidia.com/gpu")
 	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
 
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		input    map[corev1.ResourceName]resource.Quantity
 		expected resource.Quantity
 	}{
-		"no GPUs specified": {
-			map[corev1.ResourceName]resource.Quantity{
+		{
+			name: "no GPUs specified",
+			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU: resource.MustParse("1"),
 			},
-			resource.MustParse("0"),
+			expected: resource.MustParse("0"),
 		},
-		"one GPU type specified": {
-			map[corev1.ResourceName]resource.Quantity{
+		{
+			name: "one GPU type specified",
+			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU:    resource.MustParse("1"),
 				nvidiaGPUResourceName: resource.MustParse("1"),
 				googleTPUResourceName: resource.MustParse("1"),
 			},
-			resource.MustParse("1"),
+			expected: resource.MustParse("1"),
 		},
-		"multiple GPUs specified": {
-			map[corev1.ResourceName]resource.Quantity{
+		{
+			name: "multiple GPUs specified",
+			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU:                 resource.MustParse("1"),
 				nvidiaGPUResourceName:              resource.MustParse("3"),
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
 				googleTPUResourceName:              resource.MustParse("1"),
 			},
-			resource.MustParse("5"),
+			expected: resource.MustParse("5"),
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			result := sumGPUs(tc.input)
 			assert.True(t, tc.expected.Equal(result), "GPU number is wrong")
 		})
@@ -3416,32 +3509,37 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme)
 	_ = batchv1.AddToScheme(newScheme)
 
-	tests := map[string]struct {
+	tests := []struct {
 		managedBy       *string
+		name            string
 		shouldReconcile bool
 	}{
-		"ManagedBy field not set": {
+		{
 			managedBy:       nil,
+			name:            "ManagedBy field not set",
 			shouldReconcile: true,
 		},
-		"ManagedBy field to RayOperator": {
+		{
 			managedBy:       ptr.To(utils.KubeRayController),
+			name:            "ManagedBy field to RayOperator",
 			shouldReconcile: true,
 		},
-		"ManagedBy field empty": {
+		{
 			managedBy: ptr.To(""),
+			name:      "ManagedBy field empty",
 		},
-		"ManagedBy field to external allowed controller": {
+		{
 			managedBy: ptr.To(MultiKueueController),
+			name:      "ManagedBy field to external allowed controller",
 		},
-		"ManagedBy field to external not allowed controller": {
+		{
 			managedBy: ptr.To("controller.com/invalid"),
+			name:      "ManagedBy field to external not allowed controller",
 		},
 	}
 
-	for name, tc := range tests {
-		name, tc := name, tc
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			cluster := testRayCluster.DeepCopy()
 			cluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
@@ -3468,341 +3566,6 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			} else {
 				// skip reconciliation
 				assert.Equal(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds())
-			}
-		})
-	}
-}
-
-func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
-	errorMessageBothSet := fmt.Sprintf("%s annotation and GcsFaultToleranceOptions are both set. "+
-		"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", utils.RayFTEnabledAnnotationKey)
-	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
-		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
-		"to enable GCS fault tolerance", utils.RAY_REDIS_ADDRESS)
-
-	tests := []struct {
-		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
-		annotations              map[string]string
-		name                     string
-		errorMessage             string
-		envVars                  []corev1.EnvVar
-		expectError              bool
-	}{
-		// GcsFaultToleranceOptions and ray.io/ft-enabled should not be both set.
-		{
-			name: "ray.io/ft-enabled is set to false and GcsFaultToleranceOptions is set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
-			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
-			expectError:              true,
-			errorMessage:             errorMessageBothSet,
-		},
-		{
-			name: "ray.io/ft-enabled is set to true and GcsFaultToleranceOptions is set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
-			expectError:              true,
-			errorMessage:             errorMessageBothSet,
-		},
-		{
-			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
-			expectError:              false,
-		},
-		{
-			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is not set",
-			gcsFaultToleranceOptions: nil,
-			expectError:              false,
-		},
-		// RAY_REDIS_ADDRESS should not be set if KubeRay is not aware that GCS fault tolerance is enabled.
-		{
-			name: "ray.io/ft-enabled is set to false and RAY_REDIS_ADDRESS is set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "false",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis:6379",
-				},
-			},
-			expectError:  true,
-			errorMessage: errorMessageRedisAddressSet,
-		},
-		{
-			name: "FT is disabled and RAY_REDIS_ADDRESS is set",
-			envVars: []corev1.EnvVar{
-				{
-					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis:6379",
-				},
-			},
-			expectError:  true,
-			errorMessage: errorMessageRedisAddressSet,
-		},
-		{
-			name: "ray.io/ft-enabled is set to true and RAY_REDIS_ADDRESS is set",
-			annotations: map[string]string{
-				utils.RayFTEnabledAnnotationKey: "true",
-			},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: "redis:6379",
-				},
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: tt.annotations,
-				},
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			err := validateRayClusterSpec(rayCluster)
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.errorMessage)
-			} else {
-				assert.Nil(t, err)
-			}
-		})
-	}
-}
-
-func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
-	tests := []struct {
-		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
-		name                     string
-		rayStartParams           map[string]string
-		envVars                  []corev1.EnvVar
-		expectError              bool
-	}{
-		{
-			name:                     "GcsFaultToleranceOptions is set and `redis-password` is also set in rayStartParams",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
-			rayStartParams: map[string]string{
-				"redis-password": "password",
-			},
-			expectError: true,
-		},
-		{
-			name:                     "GcsFaultToleranceOptions is set and `REDIS_PASSWORD` env var is also set in the head Pod",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
-			envVars: []corev1.EnvVar{
-				{
-					Name:  utils.REDIS_PASSWORD,
-					Value: "password",
-				},
-			},
-			expectError: true,
-		},
-		{
-			name: "GcsFaultToleranceOptions.RedisPassword is set",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
-				RedisPassword: &rayv1.RedisCredential{
-					Value: "password",
-				},
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: tt.rayStartParams,
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			err := validateRayClusterSpec(rayCluster)
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-			}
-		})
-	}
-}
-
-func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
-	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
-		Template: corev1.PodTemplateSpec{
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{Name: "ray-head"}},
-			},
-		},
-	}
-	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
-		Template: corev1.PodTemplateSpec{
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{Name: "ray-worker"}},
-			},
-		},
-	}
-	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
-	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
-	workerGroupSpecWithNoContainers := *workerGroupSpecWithOneContainer.DeepCopy()
-	workerGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
-
-	tests := []struct {
-		rayCluster   *rayv1.RayCluster
-		name         string
-		errorMessage string
-		expectError  bool
-	}{
-		{
-			name: "headGroupSpec has no containers",
-			rayCluster: &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: headGroupSpecWithNoContainers,
-				},
-			},
-			expectError:  true,
-			errorMessage: "headGroupSpec should have at least one container",
-		},
-		{
-			name: "workerGroupSpec has no containers",
-			rayCluster: &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec:    headGroupSpecWithOneContainer,
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithNoContainers},
-				},
-			},
-			expectError:  true,
-			errorMessage: "workerGroupSpec should have at least one container",
-		},
-		{
-			name: "valid cluster with containers in both head and worker groups",
-			rayCluster: &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec:    headGroupSpecWithOneContainer,
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{workerGroupSpecWithOneContainer},
-				},
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateRayClusterSpec(tt.rayCluster)
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.errorMessage)
-			} else {
-				assert.Nil(t, err)
-			}
-		})
-	}
-}
-
-func TestValidateRayClusterStatus(t *testing.T) {
-	tests := []struct {
-		name        string
-		conditions  []metav1.Condition
-		expectError bool
-	}{
-		{
-			name: "Both suspending and suspended are true",
-			conditions: []metav1.Condition{
-				{
-					Type:   string(rayv1.RayClusterSuspending),
-					Status: metav1.ConditionTrue,
-				},
-				{
-					Type:   string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionTrue,
-				},
-			},
-			expectError: true,
-		},
-		{
-			name: "Only suspending is true",
-			conditions: []metav1.Condition{
-				{
-					Type:   string(rayv1.RayClusterSuspending),
-					Status: metav1.ConditionTrue,
-				},
-				{
-					Type:   string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionFalse,
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "Only suspended is true",
-			conditions: []metav1.Condition{
-				{
-					Type:   string(rayv1.RayClusterSuspending),
-					Status: metav1.ConditionFalse,
-				},
-				{
-					Type:   string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionTrue,
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "Both suspending and suspended are false",
-			conditions: []metav1.Condition{
-				{
-					Type:   string(rayv1.RayClusterSuspending),
-					Status: metav1.ConditionFalse,
-				},
-				{
-					Type:   string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionFalse,
-				},
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			instance := &rayv1.RayCluster{
-				Status: rayv1.RayClusterStatus{
-					Conditions: tt.conditions,
-				},
-			}
-			err := validateRayClusterStatus(instance)
-			if (err != nil) != tt.expectError {
-				t.Errorf("validateRayClusterStatus() error = %v, wantErr %v", err, tt.expectError)
 			}
 		})
 	}

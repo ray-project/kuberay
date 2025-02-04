@@ -31,7 +31,7 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
-								Image: "kuberay/operator:v0.5.0",
+								Image: "kuberay/operator:v0.5.0@sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
 							},
 						},
 					},
@@ -53,7 +53,51 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
+								Image: "kuberay/operator:v0.6.0@sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	kustomizeObjectsImageWithOnlyTag := []runtime.Object{
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kuberay-operator-kustomize",
+				Namespace: "test",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "kuberay",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
 								Image: "kuberay/operator:v0.6.0",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	kustomizeObjectsImageWithOnlyDigest := []runtime.Object{
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kuberay-operator-kustomize",
+				Namespace: "test",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "kuberay",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "kuberay/operator@sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
 							},
 						},
 					},
@@ -69,22 +113,34 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 		kubeObjects     []runtime.Object
 	}{
 		{
-			name:            "kubeRay operator not found",
+			name:            "KubeRay operator not found",
 			expectedVersion: "",
 			expectedError:   "no KubeRay operator deployments found in any namespace",
 			kubeObjects:     nil,
 		},
 		{
-			name:            "find kubeRay operator version for helm chart",
-			expectedVersion: "v0.5.0",
+			name:            "find KubeRay operator version for helm chart",
+			expectedVersion: "v0.5.0@sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
 			expectedError:   "",
 			kubeObjects:     helmKubeObjects,
 		},
 		{
-			name:            "find kubeRay operator version for Kustomize",
-			expectedVersion: "v0.6.0",
+			name:            "find KubeRay operator version for Kustomize",
+			expectedVersion: "v0.6.0@sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
 			expectedError:   "",
 			kubeObjects:     kustomizeObjects,
+		},
+		{
+			name:            "find KubeRay operator version for Kustomize",
+			expectedVersion: "v0.6.0",
+			expectedError:   "",
+			kubeObjects:     kustomizeObjectsImageWithOnlyTag,
+		},
+		{
+			name:            "find KubeRay operator version for Kustomize",
+			expectedVersion: "sha256:cc8ce713f3b4be3c72cca1f63ee78e3733bc7283472ecae367b47a128f7e4478",
+			expectedError:   "",
+			kubeObjects:     kustomizeObjectsImageWithOnlyDigest,
 		},
 	}
 
@@ -96,7 +152,7 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 			version, err := client.GetKubeRayOperatorVersion(context.Background())
 
 			if tc.expectedVersion != "" {
-				assert.Equal(t, version, tc.expectedVersion)
+				assert.Equal(t, tc.expectedVersion, version)
 				assert.NoError(t, err)
 			} else {
 				assert.EqualError(t, err, tc.expectedError)

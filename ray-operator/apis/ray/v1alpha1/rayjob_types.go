@@ -51,8 +51,7 @@ type RayJobSpec struct {
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// ClusterSelector is used to select running rayclusters by labels
 	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Entrypoint represents the command to start execution.
 	Entrypoint string `json:"entrypoint"`
 	// RuntimeEnvYAML represents the runtime environment configuration
 	// provided as a multi-line YAML string.

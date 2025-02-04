@@ -10,6 +10,7 @@ import (
 // RayServiceStatusesApplyConfiguration represents an declarative configuration of the RayServiceStatuses type for use
 // with apply.
 type RayServiceStatusesApplyConfiguration struct {
+	Conditions           []v1.Condition                      `json:"conditions,omitempty"`
 	LastUpdateTime       *v1.Time                            `json:"lastUpdateTime,omitempty"`
 	ServiceStatus        *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
 	ActiveServiceStatus  *RayServiceStatusApplyConfiguration `json:"activeServiceStatus,omitempty"`
@@ -22,6 +23,16 @@ type RayServiceStatusesApplyConfiguration struct {
 // apply.
 func RayServiceStatuses() *RayServiceStatusesApplyConfiguration {
 	return &RayServiceStatusesApplyConfiguration{}
+}
+
+// WithConditions adds the given value to the Conditions field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Conditions field.
+func (b *RayServiceStatusesApplyConfiguration) WithConditions(values ...v1.Condition) *RayServiceStatusesApplyConfiguration {
+	for i := range values {
+		b.Conditions = append(b.Conditions, values[i])
+	}
+	return b
 }
 
 // WithLastUpdateTime sets the LastUpdateTime field in the declarative configuration to the given value

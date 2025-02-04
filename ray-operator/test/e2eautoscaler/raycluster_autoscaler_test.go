@@ -3,6 +3,7 @@ package e2eautoscaler
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/onsi/gomega"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -16,22 +17,25 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-var tests = map[string]struct {
+var tests = []struct {
 	HeadPodTemplateGetter   func() *corev1ac.PodTemplateSpecApplyConfiguration
 	WorkerPodTemplateGetter func() *corev1ac.PodTemplateSpecApplyConfiguration
+	name                    string
 }{
-	"Create a RayCluster with autoscaling enabled": {
+	{
 		HeadPodTemplateGetter:   headPodTemplateApplyConfiguration,
 		WorkerPodTemplateGetter: workerPodTemplateApplyConfiguration,
+		name:                    "Create a RayCluster with autoscaling enabled",
 	},
-	"Create a RayCluster with autoscaler v2 enabled": {
+	{
 		HeadPodTemplateGetter:   headPodTemplateApplyConfigurationV2,
 		WorkerPodTemplateGetter: workerPodTemplateApplyConfigurationV2,
+		name:                    "Create a RayCluster with autoscaler v2 enabled",
 	},
 }
 
 func TestRayClusterAutoscaler(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 		test := With(t)
 		g := gomega.NewWithT(t)
 
@@ -44,7 +48,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
@@ -98,7 +102,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -112,7 +116,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
@@ -159,7 +163,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -173,7 +177,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "custom-resource-group"
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
@@ -219,7 +223,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -237,7 +241,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "custom-resource-group"
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -283,7 +287,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
-	for name, tc := range tests {
+	for _, tc := range tests {
 
 		test := With(t)
 		g := gomega.NewWithT(t)
@@ -297,7 +301,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
-		test.T().Run(name, func(_ *testing.T) {
+		test.T().Run(tc.name, func(_ *testing.T) {
 			groupName := "test-group"
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
@@ -355,6 +359,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 		})
 	}
 }
+
 
 func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 	for name, tc := range tests {
@@ -488,4 +493,86 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(10))
 		})
 	}
+
+func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
+	// Only test with the V2 Autoscaler
+	tc := tests[1]
+
+	test := With(t)
+	g := gomega.NewWithT(t)
+
+	// Create a namespace
+	namespace := test.NewTestNamespace()
+
+	idleTimeoutShort := int32(10)
+	idleTimeoutLong := int32(30)
+	timeoutBuffer := int32(20) // Additional wait time to allow for scale down operation
+
+	// Script for creating detached actors to trigger autoscaling
+	scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	test.T().Logf("Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+	test.T().Run(tc.name, func(_ *testing.T) {
+		groupName1 := "short-idle-timeout-group"
+		groupName2 := "long-idle-timeout-group"
+		rayClusterSpecAC := rayv1ac.RayClusterSpec().
+			WithEnableInTreeAutoscaling(true).
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"num-cpus": "0"}).
+				WithTemplate(tc.HeadPodTemplateGetter())).
+			WithWorkerGroupSpecs(
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(1).
+					WithIdleTimeoutSeconds(idleTimeoutShort).
+					WithGroupName(groupName1).
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(tc.WorkerPodTemplateGetter()),
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(1).
+					WithIdleTimeoutSeconds(idleTimeoutLong).
+					WithGroupName(groupName2).
+					WithRayStartParams(map[string]string{"num-cpus": "2"}).
+					WithTemplate(tc.WorkerPodTemplateGetter()),
+			)
+		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+		// Wait for RayCluster to become ready
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		test.T().Logf("Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+		// Deploy one detached actor on each worker group. This is guaranteed by setting `maxReplicas` and specifying respective num-cpus.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor-long-timeout", "--num-cpus=2"})
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor-short-timeout", "--num-cpus=1"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
+		g.Expect(GetGroupPods(test, rayCluster, groupName1)).To(gomega.HaveLen(1))
+		g.Expect(GetGroupPods(test, rayCluster, groupName2)).To(gomega.HaveLen(1))
+
+		// Terminate the first detached actor, and the worker should be marked idle after ~10 seconds.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "actor-short-timeout"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(idleTimeoutShort+timeoutBuffer)*time.Second).
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+
+		// Terminate the second detached actor, and the worker should be marked idle after ~30 seconds.
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "actor-long-timeout"})
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(idleTimeoutLong+timeoutBuffer)*time.Second).
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+	})
 }

@@ -2,31 +2,18 @@
 
 package v1
 
-import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
 // AppStatusApplyConfiguration represents an declarative configuration of the AppStatus type for use
 // with apply.
 type AppStatusApplyConfiguration struct {
-	HealthLastUpdateTime *v1.Time                                           `json:"healthLastUpdateTime,omitempty"`
-	Deployments          map[string]ServeDeploymentStatusApplyConfiguration `json:"serveDeploymentStatuses,omitempty"`
-	Status               *string                                            `json:"status,omitempty"`
-	Message              *string                                            `json:"message,omitempty"`
+	Deployments map[string]ServeDeploymentStatusApplyConfiguration `json:"serveDeploymentStatuses,omitempty"`
+	Status      *string                                            `json:"status,omitempty"`
+	Message     *string                                            `json:"message,omitempty"`
 }
 
 // AppStatusApplyConfiguration constructs an declarative configuration of the AppStatus type for use with
 // apply.
 func AppStatus() *AppStatusApplyConfiguration {
 	return &AppStatusApplyConfiguration{}
-}
-
-// WithHealthLastUpdateTime sets the HealthLastUpdateTime field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the HealthLastUpdateTime field is set to the value of the last call.
-func (b *AppStatusApplyConfiguration) WithHealthLastUpdateTime(value v1.Time) *AppStatusApplyConfiguration {
-	b.HealthLastUpdateTime = &value
-	return b
 }
 
 // WithDeployments puts the entries into the Deployments field in the declarative configuration

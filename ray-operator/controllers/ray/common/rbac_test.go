@@ -14,11 +14,13 @@ import (
 
 // Test subject and role ref names in the function BuildRoleBinding.
 func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name  string
 		input *rayv1.RayCluster
 		want  []string
 	}{
-		"Ray cluster with head group service account": {
+		{
+			name: "Ray cluster with head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -36,7 +38,8 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			},
 			want: []string{"my-service-account", "raycluster-sample"},
 		},
-		"Ray cluster without head group service account": {
+		{
+			name: "Ray cluster without head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -52,7 +55,8 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			},
 			want: []string{"raycluster-sample", "raycluster-sample"},
 		},
-		"Ray cluster with a long name and without head group service account": {
+		{
+			name: "Ray cluster with a long name and without head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      longString(t), // 200 chars long
@@ -73,8 +77,8 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			rb, err := BuildRoleBinding(tc.input)
 			assert.Nil(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}

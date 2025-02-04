@@ -55,12 +55,6 @@ func GetHeadPort(headStartParams map[string]string) string {
 	return strconv.Itoa(utils.DefaultGcsServerPort)
 }
 
-// Check if the RayCluster has GCS fault tolerance enabled.
-func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
-	v, ok := instance.Annotations[utils.RayFTEnabledAnnotationKey]
-	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
-}
-
 // Check if overwrites the container command.
 func isOverwriteRayContainerCmd(instance rayv1.RayCluster) bool {
 	v, ok := instance.Annotations[utils.RayOverwriteContainerCmdAnnotationKey]
@@ -72,27 +66,96 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 		podTemplate.Annotations = make(map[string]string)
 	}
 
-	// For now, we just set ray external storage enabled/disabled by checking if FT is enabled/disabled.
-	// This may need to be updated in the future.
-	if IsGCSFaultToleranceEnabled(instance) {
-		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
-		// if we have FT enabled, we need to set up a default external storage namespace.
-		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = string(instance.UID)
-	} else {
-		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = "false"
-	}
-
 	if isOverwriteRayContainerCmd(instance) {
 		podTemplate.Annotations[utils.RayOverwriteContainerCmdAnnotationKey] = "true"
 	}
-	// set ray external storage namespace if user specified one.
-	if instance.Annotations != nil {
-		if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-			podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = v
-		}
+}
+
+func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
+	// Note that both `podTemplate` and `instance` will be modified.
+	ftEnabled := utils.IsGCSFaultToleranceEnabled(instance)
+	if podTemplate.Annotations == nil {
+		podTemplate.Annotations = make(map[string]string)
 	}
-	if options := instance.Spec.GcsFaultToleranceOptions; options != nil && options.ExternalStorageNamespace != "" {
-		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = options.ExternalStorageNamespace
+
+	if rayNodeType == rayv1.HeadNode {
+		podTemplate.Annotations[utils.RayFTEnabledAnnotationKey] = strconv.FormatBool(ftEnabled)
+	}
+
+	if ftEnabled {
+		options := instance.Spec.GcsFaultToleranceOptions
+		container := &podTemplate.Spec.Containers[utils.RayContainerIndex]
+
+		// Configure the GCS RPC server reconnect timeout for GCS FT.
+		if !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
+			// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
+			// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
+			// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
+			// crash if the GCS server is down for more than 60s. Typically, the new GCS server will be available
+			// in 120 seconds, so we set the timeout to 600s to avoid the worker nodes crashing.
+			gcsTimeout := corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: utils.DefaultWorkerRayGcsReconnectTimeoutS}
+			container.Env = append(container.Env, gcsTimeout)
+		}
+
+		// Configure the Redis address, username and password for GCS FT.
+		if rayNodeType == rayv1.HeadNode {
+			// Configure the external storage namespace for GCS FT.
+			storageNS := string(instance.UID)
+			if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+				storageNS = v
+			}
+			if options != nil && options.ExternalStorageNamespace != "" {
+				storageNS = options.ExternalStorageNamespace
+			}
+			podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+			if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
+				storageNS := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
+				container.Env = append(container.Env, storageNS)
+			}
+
+			if options != nil {
+				container.Env = append(container.Env, corev1.EnvVar{
+					Name:  utils.RAY_REDIS_ADDRESS,
+					Value: options.RedisAddress,
+				})
+				if options.RedisUsername != nil {
+					// Note that `redis-username` will be supported starting from Ray 2.41.
+					// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
+					// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
+					// rayStartParams to refer to the environment variable.
+					instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] = "$REDIS_USERNAME"
+					container.Env = append(container.Env, corev1.EnvVar{
+						Name:      utils.REDIS_USERNAME,
+						Value:     options.RedisUsername.Value,
+						ValueFrom: options.RedisUsername.ValueFrom,
+					})
+				}
+				if options.RedisPassword != nil {
+					// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the
+					// `REDIS_PASSWORD` environment variable later. Here, we use `$REDIS_PASSWORD` in
+					// rayStartParams to refer to the environment variable.
+					instance.Spec.HeadGroupSpec.RayStartParams["redis-password"] = "$REDIS_PASSWORD"
+					container.Env = append(container.Env, corev1.EnvVar{
+						Name:      utils.REDIS_PASSWORD,
+						Value:     options.RedisPassword.Value,
+						ValueFrom: options.RedisPassword.ValueFrom,
+					})
+				}
+			} else {
+				// If users directly set the `redis-password` in `rayStartParams` instead of referring
+				// to a K8s secret, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
+				// job can connect to Redis using the password. This is not recommended.
+				if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
+					// setting the REDIS_PASSWORD env var from the params
+					redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
+					if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; ok {
+						redisPasswordEnv.Value = value
+						container.Env = append(container.Env, redisPasswordEnv)
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -116,7 +179,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	initTemplateAnnotations(instance, &podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
-	if instance.Spec.EnableInTreeAutoscaling != nil && *instance.Spec.EnableInTreeAutoscaling {
+	if utils.IsAutoscalingEnabled(&instance) {
 		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
 		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
@@ -131,6 +194,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 	}
+
+	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
@@ -234,6 +299,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
+	configureGCSFaultTolerance(&podTemplate, instance, rayv1.WorkerNode)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
@@ -320,7 +386,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, rayStartParams map[string]string, headPort string, enableRayAutoscaler *bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -345,7 +411,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
 	addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
-	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler != nil && *enableRayAutoscaler {
+	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
 		// Specifically, this is required for the event-logging functionality
@@ -361,15 +427,6 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	}
 	if len(pod.Spec.Containers[utils.RayContainerIndex].Args) > 0 {
 		cmd += convertCmdToString(pod.Spec.Containers[utils.RayContainerIndex].Args)
-	}
-
-	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
-		// If gcsOptions.RedisPassword is present, it will be put into the `REDIS_PASSWORD` env var later.
-		// Here, we add --redis-password flag to the ray start command with value "$REDIS_PASSWORD".
-		// $REDIS_PASSWORD will be replaced with the env var by the shell.
-		if gcsOptions.RedisPassword != nil {
-			rayStartParams["redis-password"] = "$REDIS_PASSWORD"
-		}
 	}
 
 	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
@@ -403,7 +460,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, gcsOptions, rayStartParams, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
+	setContainerEnvVars(&pod, rayNodeType, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -566,7 +623,7 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOptions *rayv1.GcsFaultToleranceOptions, rayStartParams map[string]string, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if len(container.Env) == 0 {
@@ -660,48 +717,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, gcsOpti
 			Value: fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, string(creatorCRDType)),
 		}
 		container.Env = append(container.Env, extraTagsEnv)
-	}
-	if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
-		// setting the REDIS_PASSWORD env var from the params
-		redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
-		if value, ok := rayStartParams["redis-password"]; ok {
-			redisPasswordEnv.Value = value
-		}
-		container.Env = append(container.Env, redisPasswordEnv)
-	}
-	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
-		// setting the RAY_EXTERNAL_STORAGE_NS env var from the params
-		if pod.Annotations != nil {
-			if v, ok := pod.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-				storageNS := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: v}
-				container.Env = append(container.Env, storageNS)
-			}
-		}
-	}
-	if !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
-		// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
-		// RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S to 600s. If the worker cannot reconnect to GCS within
-		// 600s, the Raylet will exit the process. By default, the value is 60s, so the head node will
-		// crash if the GCS server is down for more than 60s. Typically, the new GCS server will be available
-		// in 120 seconds, so we set the timeout to 600s to avoid the worker nodes crashing.
-		if ftEnabled := pod.Annotations[utils.RayFTEnabledAnnotationKey] == "true"; ftEnabled || gcsOptions != nil {
-			gcsTimeout := corev1.EnvVar{Name: utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, Value: utils.DefaultWorkerRayGcsReconnectTimeoutS}
-			container.Env = append(container.Env, gcsTimeout)
-		}
-	}
-
-	if rayNodeType == rayv1.HeadNode && gcsOptions != nil {
-		container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
-			Name:  utils.RAY_REDIS_ADDRESS,
-			Value: gcsOptions.RedisAddress,
-		})
-		if gcsOptions.RedisPassword != nil {
-			container.Env = utils.UpsertEnvVar(container.Env, corev1.EnvVar{
-				Name:      utils.REDIS_PASSWORD,
-				Value:     gcsOptions.RedisPassword.Value,
-				ValueFrom: gcsOptions.RedisPassword.ValueFrom,
-			})
-		}
 	}
 
 	if !utils.EnvVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {

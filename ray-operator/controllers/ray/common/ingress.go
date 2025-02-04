@@ -40,7 +40,6 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		}
 	}
 
-	var paths []networkingv1.HTTPIngressPath
 	pathType := networkingv1.PathTypeExact
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := int32(utils.DefaultDashboardPort)
@@ -52,7 +51,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	if err != nil {
 		return nil, err
 	}
-	paths = []networkingv1.HTTPIngressPath{
+	paths := []networkingv1.HTTPIngressPath{
 		{
 			Path:     "/" + cluster.Name + "/(.*)",
 			PathType: &pathType,
@@ -88,8 +87,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
-	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
-	if !ok {
+	if ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]; !ok {
 		log.Info("Ingress class annotation is not set for the cluster.", "clusterNamespace", cluster.Namespace, "clusterName", cluster.Name)
 	} else {
 		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.

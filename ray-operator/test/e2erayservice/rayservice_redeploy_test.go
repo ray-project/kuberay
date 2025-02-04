@@ -1,19 +1,19 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-func TestRayServiceInPlaceUpdate(t *testing.T) {
+func TestRedeployRayServe(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -36,18 +36,19 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	// Create curl pod
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
 
+	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
+
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	// Wait until curl pod is created
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
+	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
 	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
@@ -55,30 +56,31 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	// In-place update
-	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
-	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	test.T().Logf("Deleting the current Head for recreating a new one")
+	rayServiceUnderlyingRayCluster, err := GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
+	g.Expect(err).NotTo(HaveOccurred())
+	oldHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), oldHeadPod.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
-	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
-
-	rayService.Spec.ServeConfigV2 = serveConfig
-	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
-		test.Ctx(),
-		rayService,
-		metav1.UpdateOptions{},
-	)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Test the new price and factor
+	test.T().Logf("Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
-		// curl /fruit
-		stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-		g.Expect(stdout.String()).To(Equal("8"))
-		// curl /calc
-		stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-		g.Expect(stdout.String()).To(Equal("9 pizzas please!"))
-	}, TestTimeoutShort).Should(Succeed())
+		svcName := utils.GenerateServeServiceName(rayService.Name)
+		endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(endpoints.Subsets).To(HaveLen(1))
+		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(oldHeadPod.Name))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
+	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("6"))
+	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 }

@@ -30,9 +30,7 @@ type RayClusterSpec struct {
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// HeadGroupSpecs are the spec for the head pod
+	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
 	RayVersion string `json:"rayVersion,omitempty"`
@@ -72,6 +70,7 @@ type HeadGroupSpec struct {
 type WorkerGroupSpec struct {
 	// Suspend indicates whether a worker group should be suspended.
 	// A suspended worker group will have all pods deleted.
+	// This is not a user-facing API and is only used by RayJob DeletionPolicy.
 	Suspend *bool `json:"suspend,omitempty"`
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`

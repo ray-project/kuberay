@@ -97,6 +97,7 @@ const (
 	RAY_ADDRESS                             = "RAY_ADDRESS"
 	RAY_REDIS_ADDRESS                       = "RAY_REDIS_ADDRESS"
 	REDIS_PASSWORD                          = "REDIS_PASSWORD"
+	REDIS_USERNAME                          = "REDIS_USERNAME"
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
 	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
@@ -263,12 +264,18 @@ const (
 	FailedToCreateRayJobSubmitter K8sEventType = "FailedToCreateRayJobSubmitter"
 	FailedToDeleteRayJobSubmitter K8sEventType = "FailedToDeleteRayJobSubmitter"
 	CreatedRayCluster             K8sEventType = "CreatedRayCluster"
+	UpdatedRayCluster             K8sEventType = "UpdatedRayCluster"
 	DeletedRayCluster             K8sEventType = "DeletedRayCluster"
 	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
+	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 
 	// RayService event list
-	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
+	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
+	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
+	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
@@ -285,7 +292,9 @@ const (
 
 	// Service event list
 	CreatedService        K8sEventType = "CreatedService"
+	UpdatedService        K8sEventType = "UpdatedService"
 	FailedToCreateService K8sEventType = "FailedToCreateService"
+	FailedToUpdateService K8sEventType = "FailedToUpdateService"
 
 	// ServiceAccount event list
 	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"

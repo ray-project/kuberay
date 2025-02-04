@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -200,31 +199,35 @@ func TestGetSubmitterTemplate(t *testing.T) {
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
-	tests := map[string]struct {
+	tests := []struct {
+		name                 string
 		status               rayv1.JobDeploymentStatus
 		suspend              bool
 		expectedShouldUpdate bool
 	}{
 		// When Autoscaler is enabled, the random Pod deletion is controleld by the feature flag `ENABLE_RANDOM_POD_DELETE`.
-		"Suspend is false": {
+		{
+			name:                 "Suspend is false",
 			suspend:              false,
 			status:               rayv1.JobDeploymentStatusInitializing,
 			expectedShouldUpdate: false,
 		},
-		"Suspend is true, but the status is not allowed to transition to suspending": {
+		{
+			name:                 "Suspend is true, but the status is not allowed to transition to suspending",
 			suspend:              true,
 			status:               rayv1.JobDeploymentStatusComplete,
 			expectedShouldUpdate: false,
 		},
-		"Suspend is true, and the status is allowed to transition to suspending": {
+		{
+			name:                 "Suspend is true, and the status is allowed to transition to suspending",
 			suspend:              true,
 			status:               rayv1.JobDeploymentStatusInitializing,
 			expectedShouldUpdate: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			name := "test-rayjob"
 			namespace := "default"
 			rayJob := &rayv1.RayJob{
@@ -270,19 +273,22 @@ func TestUpdateRayJobStatus(t *testing.T) {
 	}
 	newMessage := "new message"
 
-	tests := map[string]struct {
+	tests := []struct {
+		name                         string
 		isJobDeploymentStatusChanged bool
 	}{
-		"JobDeploymentStatus is not changed": {
+		{
+			name:                         "JobDeploymentStatus is not changed",
 			isJobDeploymentStatusChanged: false,
 		},
-		"JobDeploymentStatus is changed": {
+		{
+			name:                         "JobDeploymentStatus is changed",
 			isJobDeploymentStatusChanged: true,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			oldRayJob := rayJobTemplate.DeepCopy()
 
 			// Initialize a fake client with newScheme and runtimeObjects.
@@ -317,52 +323,6 @@ func TestUpdateRayJobStatus(t *testing.T) {
 			assert.Equal(t, newRayJob.Status.Message == newMessage, tc.isJobDeploymentStatusChanged)
 		})
 	}
-}
-
-func TestValidateRayJobSpec(t *testing.T) {
-	err := validateRayJobSpec(&rayv1.RayJob{})
-	assert.Error(t, err, "The RayJob is invalid because both `RayClusterSpec` and `ClusterSelector` are empty")
-
-	err = validateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend:                  true,
-			ShutdownAfterJobFinishes: false,
-		},
-	})
-	assert.Error(t, err, "The RayJob is invalid because a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended.")
-
-	err = validateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend:                  true,
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
-		},
-	})
-	assert.NoError(t, err, "The RayJob is valid.")
-
-	err = validateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend: true,
-			ClusterSelector: map[string]string{
-				"key": "value",
-			},
-		},
-	})
-	assert.Error(t, err, "The RayJob is invalid because the ClusterSelector mode doesn't support the suspend operation.")
-
-	err = validateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			RuntimeEnvYAML: "invalid_yaml_str",
-		},
-	})
-	assert.Error(t, err, "The RayJob is invalid because the runtimeEnvYAML is invalid.")
-
-	err = validateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			BackoffLimit: ptr.To[int32](-1),
-		},
-	})
-	assert.Error(t, err, "The RayJob is invalid because the backoffLimit must be a positive integer.")
 }
 
 func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {

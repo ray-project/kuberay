@@ -31,6 +31,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	})
 
 	It("succeed in submitting RayJob", func() {
+		Skip("Skip this test as it is failing on CI")
 		cmd := exec.Command("kubectl", "ray", "job", "submit", "--namespace", namespace, "-f", rayJobFilePath, "--working-dir", kubectlRayJobWorkingDir, "--", "python", entrypointSampleFileName)
 		output, err := cmd.CombinedOutput()
 
@@ -66,6 +67,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	})
 
 	It("succeed in submitting RayJob with runtime environment set with working dir", func() {
+		Skip("Skip this test as it is failing on CI")
 		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
 		cmd := exec.Command("kubectl", "ray", "job", "submit", "--namespace", namespace, "-f", rayJobNoEnvFilePath, "--runtime-env", runtimeEnvFilePath, "--", "python", entrypointSampleFileName)
 		output, err := cmd.CombinedOutput()

@@ -39,7 +39,7 @@ func TestStaticRayService(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -89,7 +89,7 @@ func TestAutoscalingRayService(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Get the underlying RayCluster of the RayService
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
@@ -155,7 +155,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -193,10 +193,20 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 		newRayService.Spec.RayClusterSpec.RayVersion = ""
 		newRayService, err = test.Client().Ray().RayV1().RayServices(newRayService.Namespace).Update(test.Ctx(), newRayService, metav1.UpdateOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
+
+		test.T().Logf("Waiting for RayService %s/%s UpgradeInProgress condition to be true", newRayService.Namespace, newRayService.Name)
+		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
 		// Assert that the active RayCluster is eventually different
+		test.T().Logf("Waiting for RayService %s/%s to switch to a new cluster", newRayService.Namespace, newRayService.Name)
 		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) string {
 			return rayService.Status.ActiveServiceStatus.RayClusterName
 		}, Not(Equal(rayClusterName))))
+
+		test.T().Logf("Verifying RayService %s/%s UpgradeInProgress condition to be false", newRayService.Namespace, newRayService.Name)
+		rayService, err = GetRayService(test, namespace.Name, "test-rayservice")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(IsRayServiceUpgrading(rayService)).To(BeFalse())
 	}()
 
 	// Run Locust test
@@ -231,7 +241,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
 		Should(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))

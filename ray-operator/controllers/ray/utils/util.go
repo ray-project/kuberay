@@ -205,6 +205,11 @@ func CheckName(s string) string {
 	return s
 }
 
+// TrimJobName uses CheckLabel to trim Kubernetes job to constrains
+func TrimJobName(jobName string) string {
+	return CheckLabel(jobName)
+}
+
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
 	maxLenght := 63
@@ -598,21 +603,6 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	return false
 }
 
-func UpsertEnvVar(envVars []corev1.EnvVar, newEnvVar corev1.EnvVar) []corev1.EnvVar {
-	overridden := false
-	// override EVERY env vars with the same name.
-	for i, env := range envVars {
-		if env.Name == newEnvVar.Name {
-			envVars[i] = newEnvVar
-			overridden = true
-		}
-	}
-	if !overridden {
-		envVars = append(envVars, newEnvVar)
-	}
-	return envVars
-}
-
 // EnvVarByName returns an entry in []corev1.EnvVar that matches a name.
 // Also returns a bool for whether the env var exists.
 func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool) {
@@ -634,4 +624,31 @@ func ManagedByExternalController(controllerName *string) *string {
 		return controllerName
 	}
 	return nil
+}
+
+func IsAutoscalingEnabled[T *rayv1.RayCluster | *rayv1.RayJob | *rayv1.RayService](obj T) bool {
+	switch obj := (interface{})(obj).(type) {
+	case *rayv1.RayCluster:
+		return obj.Spec.EnableInTreeAutoscaling != nil && *obj.Spec.EnableInTreeAutoscaling
+	case *rayv1.RayJob:
+		return obj.Spec.RayClusterSpec != nil && obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
+	case *rayv1.RayService:
+		return obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", obj))
+	}
+}
+
+// Check if the RayCluster has GCS fault tolerance enabled.
+func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
+	v, ok := instance.Annotations[RayFTEnabledAnnotationKey]
+	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
+}
+
+// GetRayClusterNameFromService returns the name of the RayCluster that the service points to
+func GetRayClusterNameFromService(svc *corev1.Service) string {
+	if svc == nil || svc.Spec.Selector == nil {
+		return ""
+	}
+	return svc.Spec.Selector[RayClusterLabelKey]
 }

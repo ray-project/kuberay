@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	dockerparser "github.com/novln/docker-parser"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -80,12 +81,18 @@ func (c *k8sClient) GetKubeRayOperatorVersion(ctx context.Context) (string, erro
 	}
 
 	image := containers[0].Image
-	parts := strings.Split(image, ":")
-	if len(parts) < 2 {
-		return "", fmt.Errorf("unable to parse KubeRay operator version from image: %s", image)
+	ref, err := dockerparser.Parse(image)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse KubeRay operator version from image: %w", err)
 	}
 
-	return parts[len(parts)-1], nil
+	// If image reference contains both digest and tag, return both
+	if strings.Contains(image, "@sha256:") && strings.Count(image, ":") == 2 {
+		parts := strings.SplitN(image, ":", 2)
+		return parts[len(parts)-1], nil
+	}
+
+	return ref.Tag(), nil
 }
 
 func (c *k8sClient) GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error) {
