@@ -104,7 +104,7 @@ func TestRayCreateClusterValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Equal(t, tc.expectError, err.Error())
+				assert.Error(t, err, tc.expectError)
 			} else {
 				assert.Nil(t, err)
 			}
