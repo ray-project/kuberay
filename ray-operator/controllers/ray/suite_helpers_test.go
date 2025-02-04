@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -223,6 +224,21 @@ func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func(
 		}
 
 		return true, nil
+	}
+}
+
+func checkServeApplicationExists(ctx context.Context, rayService *rayv1.RayService, serveAppName string) func() (bool, error) {
+	return func() (bool, error) {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
+			return false, err
+		}
+		for appName := range rayService.Status.ActiveServiceStatus.Applications {
+			fmt.Println("checkServeApplicationExists: appName", appName)
+			if appName == serveAppName {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 }
 
