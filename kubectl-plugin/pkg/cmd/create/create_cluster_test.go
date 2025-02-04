@@ -1,15 +1,12 @@
 package create
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 func TestRayCreateClusterComplete(t *testing.T) {
@@ -26,49 +23,13 @@ func TestRayCreateClusterComplete(t *testing.T) {
 
 func TestRayCreateClusterValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
-	// Fake directory for kubeconfig
-	fakeDir, err := os.MkdirTemp("", "fake-dir")
-	assert.NoError(t, err)
-	defer os.RemoveAll(fakeDir)
-
-	// Set up fake config for kubeconfig
-	config := &api.Config{
-		Clusters: map[string]*api.Cluster{
-			"test-cluster": {
-				Server:                "https://fake-kubernetes-cluster.example.com",
-				InsecureSkipTLSVerify: true, // For testing purposes
-			},
-		},
-		Contexts: map[string]*api.Context{
-			"my-fake-context": {
-				Cluster:  "my-fake-cluster",
-				AuthInfo: "my-fake-user",
-			},
-		},
-		CurrentContext: "my-fake-context",
-		AuthInfos: map[string]*api.AuthInfo{
-			"my-fake-user": {
-				Token: "", // Empty for testing without authentication
-			},
-		},
-	}
-
-	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
-
-	err = clientcmd.WriteToFile(*config, fakeFile)
+	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
 	assert.NoError(t, err)
 
-	fakeConfigFlags := &genericclioptions.ConfigFlags{
-		Namespace:        &testNS,
-		Context:          &testContext,
-		KubeConfig:       &fakeFile,
-		BearerToken:      &testBT,
-		Impersonate:      &testImpersonate,
-		ImpersonateGroup: &[]string{"fake-group"},
-	}
+	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
+	assert.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -81,12 +42,48 @@ func TestRayCreateClusterValidate(t *testing.T) {
 				configFlags: genericclioptions.NewConfigFlags(false),
 				ioStreams:   &testStreams,
 			},
-			expectError: "no context is currently set, use \"kubectl config use-context <context>\" to select a new one",
+			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch isn't set",
+			opts: &CreateClusterOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+				},
+				ioStreams: &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has no current context and --context switch is set",
+			opts: &CreateClusterOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+					Context:    &testContext,
+				},
+				ioStreams: &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch is set",
+			opts: &CreateClusterOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+					Context:    &testContext,
+				},
+				ioStreams: &testStreams,
+			},
 		},
 		{
 			name: "Successful submit job validation with RayJob",
 			opts: &CreateClusterOptions{
-				configFlags:    fakeConfigFlags,
+				configFlags: &genericclioptions.ConfigFlags{
+					Namespace:        &testNS,
+					Context:          &testContext,
+					KubeConfig:       &kubeConfigWithCurrentContext,
+					BearerToken:      &testBT,
+					Impersonate:      &testImpersonate,
+					ImpersonateGroup: &[]string{"fake-group"},
+				},
 				ioStreams:      &testStreams,
 				clusterName:    "fakeclustername",
 				rayVersion:     "ray-version",
