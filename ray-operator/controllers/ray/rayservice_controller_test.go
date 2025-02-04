@@ -31,11 +31,11 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
 )
@@ -448,17 +448,26 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to delete the test RayService resource")
 		})
 
-		When("updating the serveConfigV2", Ordered, func() {
+		When("Testing in-place update: updating the serveConfigV2", Ordered, func() {
 			var newConfigV2 string
+			newServeAppName := "newAppName"
 
 			BeforeAll(func() {
-				newConfigV2 = serveConfigV2Template("newAppName")
+				newConfigV2 = serveConfigV2Template(newServeAppName)
 				rayService.Spec.ServeConfigV2 = newConfigV2
 				err := k8sClient.Update(ctx, rayService)
 				Expect(err).NotTo(HaveOccurred(), "failed to update RayService resource")
+
+				// Update the fake Ray dashboard client to return serve application statuses with the new serve application.
+				healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
+				fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{newServeAppName: &healthyStatus})
 			})
 
-			It("should create an UpdatedServeApplications event", func() {
+			It("New serve application should be shown in the RayService status", func() {
+				Eventually(checkServeApplicationExists(ctx, rayService, "newAppName"), time.Second*10, time.Millisecond*500).Should(BeTrue())
+			})
+
+			It("Should create an UpdatedServeApplications event", func() {
 				var eventList corev1.EventList
 				listOpts := []client.ListOption{
 					client.InNamespace(rayService.Namespace),
@@ -467,23 +476,21 @@ var _ = Context("RayService env tests", func() {
 						"reason":             string(utils.UpdatedServeApplications),
 					},
 				}
-				Eventually(func() int {
-					err := k8sClient.List(ctx, &eventList, listOpts...)
-					Expect(err).NotTo(HaveOccurred(), "failed to list events")
-					return len(eventList.Items)
-				}, time.Second*15, time.Millisecond*500).Should(Equal(1))
+				err := k8sClient.List(ctx, &eventList, listOpts...)
+				Expect(err).NotTo(HaveOccurred(), "failed to list events")
+				Expect(eventList.Items).To(HaveLen(1))
 			})
 
-			It("refreshes rayService", func() {
+			It("Refresh RayService", func() {
 				err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService)
 				Expect(err).NotTo(HaveOccurred(), "failed to get RayService resource")
 			})
 
-			It("doesn't create a new pending cluster", func() {
+			It("Should not create a new pending cluster", func() {
 				Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
 			})
 
-			It("doesn't switch to a new active cluster", func() {
+			It("Should not switch to a new active cluster", func() {
 				Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(Equal(rayCluster.Name))
 			})
 		})
