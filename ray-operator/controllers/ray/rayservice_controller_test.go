@@ -145,142 +145,6 @@ func appendNewWorkerGroup(workerGroupSpecs []rayv1.WorkerGroupSpec, newGroupName
 }
 
 var _ = Context("RayService env tests", func() {
-	Describe("Zero-downtime upgrade", Ordered, func() {
-		// This test case simulates the most common scenario in the RayService code path:
-		// (1) Create a RayService custom resource
-		// (2) The RayService controller creates a pending RayCluster
-		// (3) The serve application becomes ready on the pending RayCluster
-		// (4) The Kubernetes head and serve services are created
-		// (5) The pending RayCluster transitions to become the active RayCluster
-		ctx := context.Background()
-		namespace := "default"
-		serveAppName := "app1"
-		rayService := rayServiceTemplate("test-zero-downtime-path", namespace, serveAppName)
-		rayCluster := &rayv1.RayCluster{}
-
-		It("Create a RayService custom resource", func() {
-			err := k8sClient.Create(ctx, rayService)
-			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
-		})
-
-		It("Conditions should be initialized correctly", func() {
-			Eventually(
-				func() bool {
-					return meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.UpgradeInProgress))
-				},
-				time.Second*3, time.Millisecond*500).Should(BeFalse(), "UpgradeInProgress condition: %v", rayService.Status.Conditions)
-			Eventually(
-				func() bool {
-					return meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RayServiceReady))
-				},
-				time.Second*3, time.Millisecond*500).Should(BeFalse(), "RayServiceReady condition: %v", rayService.Status.Conditions)
-		})
-
-		It("Should create a pending RayCluster", func() {
-			Eventually(
-				getPreparingRayClusterNameFunc(ctx, rayService),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name: %v", rayService.Status.PendingServiceStatus.RayClusterName)
-		})
-
-		It("Promote the pending RayCluster to the active RayCluster", func() {
-			// Update the status of the head Pod to Running. Note that the default fake dashboard client
-			// will return a healthy serve application status.
-			pendingRayClusterName := rayService.Status.PendingServiceStatus.RayClusterName
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, namespace)
-
-			// Make sure the pending RayCluster becomes the active RayCluster.
-			Eventually(
-				getRayClusterNameFunc(ctx, rayService),
-				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
-
-			// Initialize RayCluster for the following tests.
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
-		})
-
-		It("Check the serve application status in the RayService status", func() {
-			// Check the serve application status in the RayService status.
-			// The serve application should be healthy.
-			Eventually(
-				checkServiceHealth(ctx, rayService),
-				time.Second*3, time.Millisecond*500).Should(BeTrue(), "RayService status: %v", rayService.Status)
-		})
-
-		It("Should create a new head service resource", func() {
-			svc := &corev1.Service{}
-			headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
-			Expect(err).ToNot(HaveOccurred())
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: namespace}, svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Head service: %v", svc)
-			// TODO: Verify the head service by checking labels and annotations.
-		})
-
-		It("Should create a new serve service resource", func() {
-			svc := &corev1.Service{}
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(rayService.Name), Namespace: namespace}, svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Serve service: %v", svc)
-			// TODO: Verify the serve service by checking labels and annotations.
-		})
-
-		It("The RayServiceReady condition should be true when the number of endpoints is greater than 0", func() {
-			endpoints := endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
-			err := k8sClient.Create(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to create Endpoints resource")
-			Eventually(func() int32 {
-				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService); err != nil {
-					return 0
-				}
-				return rayService.Status.NumServeEndpoints
-			}, time.Second*3, time.Millisecond*500).Should(BeNumerically(">", 0), "RayService status: %v", rayService.Status)
-			Expect(meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RayServiceReady))).Should(BeTrue())
-		})
-
-		It("Should perform a zero-downtime update after rayVersion updated.", func() {
-			initialClusterName, _ := getRayClusterNameFunc(ctx, rayService)()
-			const mockRayVersion = "2.40.0" // Current rayVersion is 2.41.0, so set the rayVersion to 2.40.0 to test if zero-downtime is triggered.
-
-			// The cluster shouldn't switch until deployments are finished updating
-			updatingStatus := generateServeStatus(rayv1.DeploymentStatusEnum.UPDATING, rayv1.ApplicationStatusEnum.DEPLOYING)
-			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{serveAppName: &updatingStatus})
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				Eventually(
-					getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: "default"}, rayService),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "My myRayService  = %v", rayService.Name)
-				rayService.Spec.RayClusterSpec.RayVersion = mockRayVersion
-				return k8sClient.Update(ctx, rayService)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update test RayService resource")
-
-			Eventually(
-				getPreparingRayClusterNameFunc(ctx, rayService),
-				time.Second*60, time.Millisecond*500).Should(Not(BeEmpty()), "My new RayCluster name  = %v", rayService.Status.PendingServiceStatus.RayClusterName)
-
-			pendingRayClusterName := rayService.Status.PendingServiceStatus.RayClusterName
-
-			Consistently(
-				getRayClusterNameFunc(ctx, rayService),
-				time.Second*5, time.Millisecond*500).Should(Equal(initialClusterName), "My current RayCluster name  = %v", rayService.Status.ActiveServiceStatus.RayClusterName)
-
-			// The cluster should switch once the deployments are finished updating
-			healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
-			fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{serveAppName: &healthyStatus})
-			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, "default")
-
-			Eventually(
-				getRayClusterNameFunc(ctx, rayService),
-				time.Second*60, time.Millisecond*500).Should(Equal(pendingRayClusterName), "My current RayCluster name  = %v", rayService.Status.ActiveServiceStatus.RayClusterName)
-			Eventually(
-				rayService.Spec.RayClusterSpec.RayVersion,
-				time.Second*60, time.Millisecond*500).Should(Equal(mockRayVersion), "My current RayVersion  = %v", rayService.Spec.RayClusterSpec.RayVersion)
-		})
-	})
-
 	Describe("Autoscaler updates RayCluster should not trigger zero downtime upgrade", Ordered, func() {
 		// If Autoscaler scales up the pending or active RayCluster, zero downtime upgrade should not be triggered.
 		ctx := context.Background()
@@ -579,6 +443,15 @@ var _ = Context("RayService env tests", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: pendingClusterName, Namespace: namespace}, pendingCluster),
 					time.Second*15, time.Millisecond*500).Should(BeNil(), "Pending RayCluster: %v", pendingCluster.Name)
+			})
+
+			When("Promote the pending RayCluster to the active RayCluster", Ordered, func() {
+				It("Update the head pod to Running and Ready", func() {
+					updateHeadPodToRunningAndReady(ctx, pendingClusterName, namespace)
+					Eventually(
+						getRayClusterNameFunc(ctx, rayService),
+						time.Second*60, time.Millisecond*500).Should(Equal(pendingClusterName), "Active RayCluster: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
+				})
 			})
 
 			When("Updating the RayVersion again to prepare a new pending cluster", Ordered, func() {
