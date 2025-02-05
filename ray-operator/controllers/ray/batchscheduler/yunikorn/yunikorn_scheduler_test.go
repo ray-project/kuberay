@@ -85,7 +85,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster1), true)
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster1))
 
 	rayCluster2 := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
@@ -97,7 +97,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster2), true)
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster2))
 
 	rayCluster3 := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
@@ -108,7 +108,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster3), false)
+	assert.False(t, yk.isGangSchedulingEnabled(rayCluster3))
 }
 
 func TestPopulateGangSchedulingAnnotations(t *testing.T) {
@@ -157,7 +157,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	assert.Equal(t, len(kk), 2)
 	// verify the annotation value
 	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
-	assert.Equal(t, true, len(taskGroupsSpec) > 0)
+	assert.NotEmpty(t, taskGroupsSpec)
 	taskGroups := newTaskGroups()
 	err = taskGroups.unmarshalFrom(taskGroupsSpec)
 	assert.NoError(t, err)
