@@ -1299,7 +1299,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+				assert.Equalf(t, customAddress, rayStartParams["address"], "Expected `%v` but got `%v`", customAddress, rayStartParams["address"])
 			},
 		},
 		{
@@ -1309,7 +1309,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
 				expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
-				assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
+				assert.Equalf(t, expectedAddress, rayStartParams["address"], "Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"])
 			},
 		},
 		{
@@ -1318,7 +1318,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+				assert.Equalf(t, customAddress, rayStartParams["address"], "Expected `%v` but got `%v`", customAddress, rayStartParams["address"])
 			},
 		},
 	}
@@ -1353,7 +1353,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", utils.DefaultMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1362,7 +1362,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", customMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1371,7 +1371,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", utils.DefaultMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1380,7 +1380,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", customMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 	}
@@ -1415,7 +1415,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "true", rayStartParams["block"])
 			},
 		},
 		{
@@ -1424,7 +1424,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "false", rayStartParams["block"])
 			},
 		},
 		{
@@ -1433,7 +1433,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "true", rayStartParams["block"])
 			},
 		},
 		{
@@ -1442,7 +1442,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "false", rayStartParams["block"])
 			},
 		},
 	}
@@ -1474,7 +1474,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "0.0.0.0", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"])
 			},
 		},
 		{
@@ -1483,7 +1483,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "localhost", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"])
 			},
 		},
 		{
@@ -1501,7 +1501,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "localhost", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"])
 			},
 		},
 	}
