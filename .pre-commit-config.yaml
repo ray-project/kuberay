@@ -29,48 +29,25 @@ repos:
 
   - repo: local
     hooks:
-      - id: check-golangci-lint-version
-        name: golangci-lint version check
-        entry: bash -c 'version="1.60.3"; [ "$(golangci-lint --version | awk "/version/ {print \$4}" | sed "s/^v//")" = "$version" ] || { echo "golangci-lint version is not $version"; exit 1; }'
-        language: system
-        always_run: true
-        fail_fast: true
-        pass_filenames: false
-
-  - repo: local
-    hooks:
-      - id: golangci-lint-ray-operator
-        name: golangci-lint (ray-operator)
-        entry: bash -c 'cd ray-operator && golangci-lint run --fix --exclude-files _generated.go --timeout 10m0s; status=$?; cd ..; exit $status'
+      - id: golangci-lint
+        name: golangci-lint
+        entry: ./scripts/lint.sh
         types: [ go ]
         language: golang
         require_serial: true
-        files: ^ray-operator/
-
-  - repo: local
-    hooks:
-      - id: golangci-lint-kubectl-plugin
-        name: golangci-lint (kubectl-plugin)
-        entry: bash -c 'cd kubectl-plugin && golangci-lint run --fix --timeout 10m0s; status=$?; cd ..; exit $status'
-        types: [ go ]
-        language: golang
-        require_serial: true
-        files: ^kubectl-plugin/
-
-  - repo: local
-    hooks:
-      - id: check-kubeconform-version
-        name: kubeconform version check
-        entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | awk -F"v" "{print \$2}")" = "$version" ] || { echo "kubeconform version is not $version"; exit 1; }'
-        language: system
         always_run: true
-        fail_fast: true
         pass_filenames: false
+        additional_dependencies:
+          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.3
 
   - repo: local
     hooks:
       - id: validate-helm-charts
         name: validate helm charts with kubeconform
         entry: bash scripts/validate-helm.sh
-        language: system
+        language: golang
+        require_serial: true
+        always_run: true
         pass_filenames: false
+        additional_dependencies:
+          - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
