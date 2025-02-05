@@ -1114,7 +1114,7 @@ func TestShouldPrepareNewCluster_PrepareNewCluster(t *testing.T) {
 		},
 	}
 
-	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, nil)
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, nil, false)
 	assert.True(t, shouldPrepareNewCluster)
 }
 
@@ -1153,8 +1153,56 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 
 	// Update cluster spec in RayService to trigger a zero downtime upgrade.
 	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
-	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil)
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil, false)
 	assert.True(t, shouldPrepareNewCluster)
+}
+
+func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
+	// Trigger a zero-downtime upgrade when the cluster spec in RayService differs
+	// from the pending cluster and no current serving cluster.
+	ctx := context.TODO()
+	namespace := "test-namespace"
+	pendingClusterName := "pending-cluster"
+
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				RayVersion: "old-version",
+			},
+		},
+	}
+
+	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	assert.NoError(t, err)
+	pendingCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pendingClusterName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+			},
+		},
+	}
+
+	t.Run("override the pending cluster if it is not serving", func(t *testing.T) {
+		// Update cluster spec in RayService to trigger a zero downtime upgrade.
+		rayService.Spec.RayClusterSpec.RayVersion = "new-version"
+		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, false)
+		assert.True(t, shouldPrepareNewCluster)
+	})
+
+	t.Run("do not override the pending cluster if it is serving", func(t *testing.T) {
+		// Update cluster spec in RayService to trigger a zero downtime upgrade.
+		rayService.Spec.RayClusterSpec.RayVersion = "new-version"
+		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, true)
+		assert.False(t, shouldPrepareNewCluster)
+	})
 }
 
 func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
