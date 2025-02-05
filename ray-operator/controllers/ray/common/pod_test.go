@@ -245,14 +245,14 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 1)
-	assert.Equal(t, len(testPod.Spec.Volumes), 1)
+	assert.Equal(t, 1, len(testPod.Spec.Containers[0].VolumeMounts))
+	assert.Equal(t, 1, len(testPod.Spec.Volumes))
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
-	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	assert.Equal(t, 2, len(testPod.Spec.Containers[0].VolumeMounts))
+	assert.Equal(t, 2, len(testPod.Spec.Volumes))
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
-	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	assert.Equal(t, 2, len(testPod.Spec.Containers[0].VolumeMounts))
+	assert.Equal(t, 2, len(testPod.Spec.Volumes))
 }
 
 func TestGetHeadPort(t *testing.T) {
@@ -625,7 +625,7 @@ func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
 				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTOptions != nil))
 
 				env := getEnvVar(container, utils.RAY_REDIS_ADDRESS)
-				assert.Equal(t, env.Value, "redis:6379")
+				assert.Equal(t, "redis:6379", env.Value)
 
 				if test.gcsFTOptions.RedisUsername != nil {
 					env := getEnvVar(container, utils.REDIS_USERNAME)
@@ -813,8 +813,8 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, headContainer.Command, []string{"I am head"})
-	assert.Equal(t, headContainer.Args, []string{"I am head again"})
+	assert.Equal(t, []string{"I am head"}, headContainer.Command)
+	assert.Equal(t, []string{"I am head again"}, headContainer.Args)
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
@@ -822,8 +822,8 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
-	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
+	assert.Equal(t, []string{"I am worker"}, workerContainer.Command)
+	assert.Equal(t, []string{"I am worker again"}, workerContainer.Args)
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -1121,8 +1121,8 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
 	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
-	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
-	assert.Equal(t, worker, expectedWorker)
+	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
+	assert.Equal(t, expectedWorker, worker)
 }
 
 func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {

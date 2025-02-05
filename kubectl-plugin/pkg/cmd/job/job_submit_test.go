@@ -164,7 +164,7 @@ working_dir: /fake/dir/ray_working_dir/
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, runtimeEnvActual)
-	assert.Equal(t, runtimeEnvActual, "/fake/dir/ray_working_dir/")
+	assert.Equal(t, "/fake/dir/ray_working_dir/", runtimeEnvActual)
 }
 
 func TestRaySubmitCmd(t *testing.T) {

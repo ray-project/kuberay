@@ -17,7 +17,7 @@ func longString(t *testing.T) string {
 	}
 	result := b.String()
 	// Confirm length.
-	assert.Equal(t, len(result), 200)
+	assert.Equal(t, 200, len(result))
 	return result
 }
 
@@ -26,6 +26,6 @@ func longString(t *testing.T) string {
 func shortString(t *testing.T) string {
 	result := utils.CheckName(longString(t))
 	// Confirm length.
-	assert.Equal(t, len(result), 50)
+	assert.Equal(t, 50, len(result))
 	return result
 }

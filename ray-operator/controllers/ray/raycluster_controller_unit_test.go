@@ -1508,7 +1508,7 @@ func TestGetHeadServiceIPAndNameOnHeadlessService(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to build head service: %v", err)
 	}
-	assert.Equal(t, headService.Spec.ClusterIP, corev1.ClusterIPNone, "BuildServiceForHeadPod returned unexpected ClusterIP")
+	assert.Equal(t, corev1.ClusterIPNone, headService.Spec.ClusterIP, "BuildServiceForHeadPod returned unexpected ClusterIP")
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(headService).WithRuntimeObjects(testPods...).Build()
 
@@ -1925,10 +1925,10 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	require.NoError(t, err)
-	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotEmpty(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Empty(t, newInstance.Status.Reason)
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 }
 
@@ -1990,12 +1990,12 @@ func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	require.NoError(t, err)
-	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, int32(0))
-	assert.Equal(t, newInstance.Status.MinWorkerReplicas, int32(0))
-	assert.Equal(t, newInstance.Status.MaxWorkerReplicas, int32(0))
-	assert.Equal(t, newInstance.Status.DesiredCPU, resource.Quantity{})
-	assert.Equal(t, newInstance.Status.DesiredMemory, resource.Quantity{})
-	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Zero(t, newInstance.Status.DesiredWorkerReplicas)
+	assert.Zero(t, newInstance.Status.MinWorkerReplicas)
+	assert.Zero(t, newInstance.Status.MaxWorkerReplicas)
+	assert.Zero(t, newInstance.Status.DesiredCPU)
+	assert.Zero(t, newInstance.Status.DesiredMemory)
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 }
 
@@ -2066,20 +2066,20 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Test head information with a reconcile error
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, errors.New("invalid"))
 	require.NoError(t, err)
-	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	// Note that even if there are DesiredWorkerReplicas ready, we don't mark CR to be Ready state due to the reconcile error.
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Equal(t, rayv1.ClusterState(""), newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Empty(t, newInstance.Status.Reason)
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 
 	// Test head information without a reconcile error
 	newInstance, err = r.calculateStatus(ctx, newInstance, nil)
 	require.NoError(t, err)
-	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Empty(t, newInstance.Status.Reason)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
 	t1 := newInstance.Status.StateTransitionTimes[rayv1.Ready]
@@ -2087,10 +2087,10 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Test head information with a reconcile error again
 	newInstance, err = r.calculateStatus(ctx, newInstance, errors.New("invalid2"))
 	require.NoError(t, err)
-	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
+	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-	assert.Equal(t, newInstance.Status.Reason, "")
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Empty(t, newInstance.Status.Reason)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
 	assert.Equal(t, t1, newInstance.Status.StateTransitionTimes[rayv1.Ready]) // no change to StateTransitionTimes
@@ -2163,8 +2163,8 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	rayClusterProvisionedCondition := meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
-	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionFalse)
-	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.RayClusterPodsProvisioning)
+	assert.Equal(t, metav1.ConditionFalse, rayClusterProvisionedCondition.Status)
+	assert.Equal(t, rayv1.RayClusterPodsProvisioning, rayClusterProvisionedCondition.Reason)
 
 	// After a while, all Ray Pods are ready for the first time, RayClusterProvisioned condition should be added and set to True.
 	headPod.Status = ReadyStatus
@@ -2173,8 +2173,8 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
-	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
+	assert.Equal(t, metav1.ConditionTrue, rayClusterProvisionedCondition.Status)
+	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
 
 	// After a while, worker Pod fails readiness, but since RayClusterProvisioned focuses solely on whether all Ray Pods are ready for the first time,
 	// RayClusterProvisioned condition should still be True.
@@ -2182,16 +2182,16 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	_ = fakeClient.Status().Update(ctx, workerPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
-	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
+	assert.Equal(t, metav1.ConditionTrue, rayClusterProvisionedCondition.Status)
+	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
 
 	// After a while, head Pod also fails readiness, RayClusterProvisioned condition should still be true.
 	headPod.Status = UnReadyStatus
 	_ = fakeClient.Status().Update(ctx, headPod)
 	testRayCluster, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
-	assert.Equal(t, rayClusterProvisionedCondition.Status, metav1.ConditionTrue)
-	assert.Equal(t, rayClusterProvisionedCondition.Reason, rayv1.AllPodRunningAndReadyFirstTime)
+	assert.Equal(t, metav1.ConditionTrue, rayClusterProvisionedCondition.Status)
+	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
