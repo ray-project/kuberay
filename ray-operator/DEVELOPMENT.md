@@ -203,8 +203,7 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 ## pre-commit hooks
 
-1. Install [pre-commit](https://pre-commit.com/).
-2. Run `pre-commit install` to install the pre-commit hooks.
+See [main development documentation][main-dev-doc].
 
 ## CI/CD
 
@@ -299,3 +298,5 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 * --tag is a remote repo_name:tag to push.
 * --push/--load optionally Push to remote registry or Load into local docker.
 * Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.
+
+[main-dev-doc]: ../docs/development/development.md#pre-commit-hooks
