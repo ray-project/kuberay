@@ -59,7 +59,9 @@ func TestRayClusterGetValidate(t *testing.T) {
 		{
 			name: "Test validation when no context is set",
 			opts: &GetClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(false),
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+				},
 				AllNamespaces: false,
 				args:          []string{"random_arg"},
 				ioStreams:     &testStreams,
