@@ -72,5 +72,7 @@ repos:
       - id: validate-helm-charts
         name: validate helm charts with kubeconform
         entry: bash scripts/validate-helm.sh
-        language: system
+        language: python
         pass_filenames: false
+        additional_dependencies:
+          - PyYAML==6.0.1
