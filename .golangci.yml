@@ -62,7 +62,6 @@ linters-settings:
       - float-compare
       - require-error
       - expected-actual
-      - bool-compare
       - len
       - compares
       - empty
