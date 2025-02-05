@@ -6,6 +6,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -16,7 +17,7 @@ func TestRayCreateClusterComplete(t *testing.T) {
 	cmd := &cobra.Command{Use: "cluster"}
 
 	err := fakeCreateClusterOptions.Complete(cmd, fakeArgs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "default", *fakeCreateClusterOptions.configFlags.Namespace)
 	assert.Equal(t, "testRayClusterName", fakeCreateClusterOptions.clusterName)
 }
@@ -26,10 +27,10 @@ func TestRayCreateClusterValidate(t *testing.T) {
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -104,9 +105,9 @@ func TestRayCreateClusterValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Error(t, err, tc.expectError)
+				require.Error(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}

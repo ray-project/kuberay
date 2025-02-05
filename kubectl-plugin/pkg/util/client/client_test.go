@@ -6,6 +6,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,7 +154,7 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 
 			if tc.expectedVersion != "" {
 				assert.Equal(t, tc.expectedVersion, version)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
 				assert.EqualError(t, err, tc.expectedError)
 			}
@@ -223,9 +224,9 @@ func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayCluster, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})
@@ -298,9 +299,9 @@ func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayJob, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})
@@ -377,9 +378,9 @@ func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayService, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})

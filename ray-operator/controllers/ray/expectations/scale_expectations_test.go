@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -27,14 +28,14 @@ func TestRayClusterExpectationsHeadPod(t *testing.T) {
 	// Add a pod to the informer. This is used to simulate the informer syncing with the head pod in etcd.
 	// In reality, it should be automatically done by the informer.
 	err := fakeClient.Create(ctx, &testPods[0])
-	assert.NoError(t, err, "Fail to create head pod")
+	require.NoError(t, err, "Fail to create head pod")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 	// Expect delete head pod.
 	exp.ExpectScalePod(namespace, rayClusterName, HeadGroup, testPods[0].Name, Delete)
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 	// Delete head pod from the informer.
 	err = fakeClient.Delete(ctx, &testPods[0])
-	assert.NoError(t, err, "Fail to delete head pod")
+	require.NoError(t, err, "Fail to delete head pod")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 }
 
@@ -54,11 +55,11 @@ func TestRayClusterExpectationsForSamePod(t *testing.T) {
 	// There is no pod in the informer. Satisfied. And delete expectation.
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 	err := fakeClient.Create(ctx, &testPods[0])
-	assert.NoError(t, err, "Fail to create head pod")
+	require.NoError(t, err, "Fail to create head pod")
 	// No expectation
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 	err = fakeClient.Delete(ctx, &testPods[0])
-	assert.NoError(t, err, "Fail to delete head pod")
+	require.NoError(t, err, "Fail to delete head pod")
 	// No expectation
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, HeadGroup))
 }
@@ -79,14 +80,14 @@ func TestRayClusterExpectationsWorkerGroupPods(t *testing.T) {
 	exp.ExpectScalePod(namespace, rayClusterName, groupB, testPods[2].Name, Create)
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
-	assert.NoError(t, fakeClient.Create(ctx, &testPods[1]), "Fail to create worker pod2")
+	require.NoError(t, fakeClient.Create(ctx, &testPods[1]), "Fail to create worker pod2")
 	// All pods within the same group are expected to meet.
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
-	assert.NoError(t, fakeClient.Create(ctx, &testPods[2]), "Fail to create worker pod3")
+	require.NoError(t, fakeClient.Create(ctx, &testPods[2]), "Fail to create worker pod3")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
 	// Different groups do not affect each other.
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
-	assert.NoError(t, fakeClient.Create(ctx, &testPods[0]), "Fail to create worker pod1")
+	require.NoError(t, fakeClient.Create(ctx, &testPods[0]), "Fail to create worker pod1")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
 
 	// Expect delete.
@@ -95,13 +96,13 @@ func TestRayClusterExpectationsWorkerGroupPods(t *testing.T) {
 	exp.ExpectScalePod(namespace, rayClusterName, groupB, testPods[2].Name, Delete)
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
-	assert.NoError(t, fakeClient.Delete(ctx, &testPods[1]), "Fail to delete worker pod2")
+	require.NoError(t, fakeClient.Delete(ctx, &testPods[1]), "Fail to delete worker pod2")
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
-	assert.NoError(t, fakeClient.Delete(ctx, &testPods[2]), "Fail to delete worker pod3")
+	require.NoError(t, fakeClient.Delete(ctx, &testPods[2]), "Fail to delete worker pod3")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupB))
 	// Different groups do not affect each other.
 	assert.False(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
-	assert.NoError(t, fakeClient.Delete(ctx, &testPods[0]), "Fail to delete worker pod1")
+	require.NoError(t, fakeClient.Delete(ctx, &testPods[0]), "Fail to delete worker pod1")
 	assert.True(t, exp.IsSatisfied(ctx, namespace, rayClusterName, groupA))
 }
 

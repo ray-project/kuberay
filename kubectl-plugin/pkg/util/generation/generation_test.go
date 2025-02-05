@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -97,7 +98,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	expectedResultYaml := `apiVersion: ray.io/v1
 kind: RayCluster
 metadata:

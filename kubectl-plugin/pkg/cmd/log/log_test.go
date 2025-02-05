@@ -15,6 +15,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -188,9 +189,9 @@ func TestRayClusterLogComplete(t *testing.T) {
 			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
 			err := fakeClusterLogOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectedResourceType, fakeClusterLogOptions.ResourceType)
 				assert.Equal(t, tc.expectedResourceName, fakeClusterLogOptions.ResourceName)
 				assert.Equal(t, tc.expectedNodeType, fakeClusterLogOptions.nodeType)
@@ -207,10 +208,10 @@ func TestRayClusterLogValidate(t *testing.T) {
 	fakeDir := t.TempDir()
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Initialize the fake config flag with the fake kubeconfig and values
 	fakeConfigFlags := &genericclioptions.ConfigFlags{
@@ -333,7 +334,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Error(t, err, tc.expectError)
+				require.Error(t, err, tc.expectError)
 			} else {
 				if tc.opts.outputDir == "" {
 					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
@@ -349,7 +350,7 @@ func TestRayClusterLogRun(t *testing.T) {
 	defer tf.Cleanup()
 
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
@@ -447,11 +448,11 @@ func TestRayClusterLogRun(t *testing.T) {
 	}
 
 	err = fakeClusterLogOptions.Run(context.Background(), tf)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Check that the two directories are there
 	entries, err := os.ReadDir(fakeDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2, len(entries))
 
 	assert.Equal(t, "test-cluster-kuberay-head-1", entries[0].Name())
@@ -461,19 +462,19 @@ func TestRayClusterLogRun(t *testing.T) {
 	for ind, entry := range entries {
 		currPath := filepath.Join(fakeDir, entry.Name())
 		currDir, err := os.ReadDir(currPath)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 1, len(currDir))
 		openfile, err := os.Open(filepath.Join(currPath, "stdout.log"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, fakeLogs[ind], string(actualContent))
 	}
 }
 
 func TestDownloadRayLogFiles(t *testing.T) {
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
@@ -484,7 +485,7 @@ func TestDownloadRayLogFiles(t *testing.T) {
 
 	// create fake tar files to test
 	fakeTar, err := createFakeTarFile()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Ray head needed for calling the downloadRayLogFiles command
 	rayHead := v1.Pod{
@@ -513,16 +514,16 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
 
 	err = fakeClusterLogOptions.downloadRayLogFiles(context.Background(), executor, rayHead)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	entries, err := os.ReadDir(fakeDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, len(entries))
 
 	// Assert the files
 	assert.True(t, entries[0].IsDir())
 	files, err := os.ReadDir(filepath.Join(fakeDir, entries[0].Name()))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 2, len(files))
 
 	expectedfileoutput := []struct {
@@ -536,14 +537,14 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	// Goes through and check the temp directory with the downloaded files
 	for ind, file := range files {
 		fileInfo, err := file.Info()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		curr := expectedfileoutput[ind]
 
 		assert.Equal(t, curr.Name, fileInfo.Name())
 		openfile, err := os.Open(filepath.Join(fakeDir, entries[0].Name(), file.Name()))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
 	}
 }

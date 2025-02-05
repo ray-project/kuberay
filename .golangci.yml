@@ -59,7 +59,6 @@ linters-settings:
   testifylint:
     disable:
       - float-compare
-      - require-error
       - expected-actual
       - len
       - compares

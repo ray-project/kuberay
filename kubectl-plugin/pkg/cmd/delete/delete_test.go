@@ -6,6 +6,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -100,9 +101,9 @@ func TestComplete(t *testing.T) {
 			fakeDeleteOptions.configFlags.Namespace = &tc.namespace
 			err := fakeDeleteOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectedName, fakeDeleteOptions.ResourceName)
 				assert.Equal(t, tc.expectedNamespace, fakeDeleteOptions.Namespace)
 				assert.Equal(t, tc.expectedResourceType, fakeDeleteOptions.ResourceType)
@@ -117,10 +118,10 @@ func TestRayDeleteValidate(t *testing.T) {
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -189,7 +190,7 @@ func TestRayDeleteValidate(t *testing.T) {
 			if tc.expectError != "" {
 				assert.Error(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
