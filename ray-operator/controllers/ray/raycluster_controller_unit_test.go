@@ -3563,10 +3563,10 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			require.NoError(t, err)
 			if tc.shouldReconcile {
 				// finish with requeue due to detected incosistency
-				assert.Equal(t, result.RequeueAfter.Seconds(), DefaultRequeueDuration.Seconds())
+				assert.InDelta(t, result.RequeueAfter.Seconds(), DefaultRequeueDuration.Seconds(), 1e-6)
 			} else {
 				// skip reconciliation
-				assert.Equal(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds())
+				assert.InDelta(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds(), 1e-6)
 			}
 		})
 	}
