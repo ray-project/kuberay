@@ -65,7 +65,6 @@ linters-settings:
       - bool-compare
       - len
       - compares
-      - empty
 linters:
   enable:
     - asciicheck
