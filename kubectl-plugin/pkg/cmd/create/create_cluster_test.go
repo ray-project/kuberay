@@ -19,7 +19,7 @@ func TestRayCreateClusterComplete(t *testing.T) {
 	cmd := &cobra.Command{Use: "cluster"}
 
 	err := fakeCreateClusterOptions.Complete(cmd, fakeArgs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "default", *fakeCreateClusterOptions.configFlags.Namespace)
 	assert.Equal(t, "testRayClusterName", fakeCreateClusterOptions.clusterName)
 }
@@ -31,7 +31,7 @@ func TestRayCreateClusterValidate(t *testing.T) {
 
 	// Fake directory for kubeconfig
 	fakeDir, err := os.MkdirTemp("", "fake-dir")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	// Set up fake config for kubeconfig
@@ -59,7 +59,7 @@ func TestRayCreateClusterValidate(t *testing.T) {
 	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
 
 	err = clientcmd.WriteToFile(*config, fakeFile)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	fakeConfigFlags := &genericclioptions.ConfigFlags{
 		Namespace:        &testNS,
@@ -106,7 +106,7 @@ func TestRayCreateClusterValidate(t *testing.T) {
 			if tc.expectError != "" {
 				assert.Error(t, err, tc.expectError)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
