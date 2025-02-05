@@ -228,7 +228,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -295,7 +295,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -366,7 +366,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -438,7 +438,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -515,7 +515,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		})
 	}

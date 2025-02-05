@@ -100,9 +100,9 @@ func TestComplete(t *testing.T) {
 			fakeSessionOptions.configFlags.Namespace = &tc.namespace
 			err := fakeSessionOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedNamespace, fakeSessionOptions.Namespace)
 				assert.Equal(t, tc.expectedResourceType, fakeSessionOptions.ResourceType)
 				assert.Equal(t, tc.expectedName, fakeSessionOptions.ResourceName)

@@ -364,7 +364,7 @@ func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 
 	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
 
-	assert.NotNil(t, err, "Expected error due to simulated job creation failure")
+	assert.Error(t, err, "Expected error due to simulated job creation failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -407,7 +407,7 @@ func TestFailedCreateRayClusterEvent(t *testing.T) {
 
 	_, err := reconciler.getOrCreateRayClusterInstance(context.Background(), rayJob)
 
-	assert.NotNil(t, err, "Expected error due to cluster creation failure")
+	assert.Error(t, err, "Expected error due to cluster creation failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -456,7 +456,7 @@ func TestFailedDeleteRayJobSubmitterEvent(t *testing.T) {
 
 	_, err := reconciler.deleteSubmitterJob(context.Background(), rayJob)
 
-	assert.NotNil(t, err, "Expected error due to job deletion failure")
+	assert.Error(t, err, "Expected error due to job deletion failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -509,7 +509,7 @@ func TestFailedDeleteRayClusterEvent(t *testing.T) {
 
 	_, err := reconciler.deleteClusterResources(context.Background(), rayJob)
 
-	assert.NotNil(t, err, "Expected error due to cluster deletion failure")
+	assert.Error(t, err, "Expected error due to cluster deletion failure")
 
 	var foundFailureEvent bool
 	events := []string{}

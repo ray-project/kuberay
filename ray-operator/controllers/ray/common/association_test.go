@@ -20,7 +20,7 @@ import (
 
 func TestRayServiceServeServiceNamespacedName(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	namespaced := RayServiceServeServiceNamespacedName(serviceInstance)
 	if namespaced.Name != svc.Name {
 		t.Fatalf("Expected `%v` but got `%v`", svc.Name, namespaced.Name)
@@ -38,7 +38,7 @@ func TestRayServiceServeServiceNamespacedNameForUserSpecifiedServeService(t *tes
 		},
 	}
 	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithWrongSvc)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	namespaced := RayServiceServeServiceNamespacedName(testRayServiceWithServeService)
 	if namespaced.Namespace != svc.Namespace {
@@ -290,7 +290,7 @@ func TestGetRayClusterHeadPod(t *testing.T) {
 	ctx := context.TODO()
 
 	ret, err := GetRayClusterHeadPod(ctx, fakeClient, &cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, ret, headPod)
 }
 

@@ -23,8 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	"k8s.io/kubectl/pkg/scheme"
@@ -190,9 +188,9 @@ func TestRayClusterLogComplete(t *testing.T) {
 			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
 			err := fakeClusterLogOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedResourceType, fakeClusterLogOptions.ResourceType)
 				assert.Equal(t, tc.expectedResourceName, fakeClusterLogOptions.ResourceName)
 				assert.Equal(t, tc.expectedNodeType, fakeClusterLogOptions.nodeType)
@@ -206,44 +204,19 @@ func TestRayClusterLogValidate(t *testing.T) {
 
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
-	// Fake directory for kubeconfig
-	fakeDir, err := os.MkdirTemp("", "fake-config")
-	assert.Nil(t, err)
-	defer os.RemoveAll(fakeDir)
+	fakeDir := t.TempDir()
 
-	// Set up fake config for kubeconfig
-	config := &api.Config{
-		Clusters: map[string]*api.Cluster{
-			"test-cluster": {
-				Server:                "https://fake-kubernetes-cluster.example.com",
-				InsecureSkipTLSVerify: true, // For testing purposes
-			},
-		},
-		Contexts: map[string]*api.Context{
-			"my-fake-context": {
-				Cluster:  "my-fake-cluster",
-				AuthInfo: "my-fake-user",
-			},
-		},
-		CurrentContext: "my-fake-context",
-		AuthInfos: map[string]*api.AuthInfo{
-			"my-fake-user": {
-				Token: "", // Empty for testing without authentication
-			},
-		},
-	}
+	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
+	assert.NoError(t, err)
 
-	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
-
-	if err := clientcmd.WriteToFile(*config, fakeFile); err != nil {
-		t.Fatalf("Failed to write kubeconfig to temp file: %v", err)
-	}
+	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
+	assert.NoError(t, err)
 
 	// Initialize the fake config flag with the fake kubeconfig and values
 	fakeConfigFlags := &genericclioptions.ConfigFlags{
 		Namespace:        &testNS,
 		Context:          &testContext,
-		KubeConfig:       &fakeFile,
+		KubeConfig:       &kubeConfigWithCurrentContext,
 		BearerToken:      &testBT,
 		Impersonate:      &testImpersonate,
 		ImpersonateGroup: &[]string{"fake-group"},
@@ -264,7 +237,33 @@ func TestRayClusterLogValidate(t *testing.T) {
 				nodeType:     "head",
 				ioStreams:    &testStreams,
 			},
-			expectError: "no context is currently set, use \"kubectl config use-context <context>\" to select a new one",
+			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch isn't set",
+			opts: &ClusterLogOptions{
+				// Use fake config to bypass the config flag checks
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+				},
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has no current context and --context switch is set",
+			opts: &ClusterLogOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+					Context:    &testContext,
+				},
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
+			},
 		},
 		{
 			name: "Test validation when node type is `random-string`",
@@ -319,7 +318,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
 				configFlags:  fakeConfigFlags,
-				outputDir:    fakeFile,
+				outputDir:    kubeConfigWithCurrentContext,
 				ResourceName: "fake-cluster",
 				nodeType:     "head",
 				ioStreams:    &testStreams,
@@ -332,7 +331,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Equal(t, tc.expectError, err.Error())
+				assert.Error(t, err, tc.expectError)
 			} else {
 				if tc.opts.outputDir == "" {
 					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
@@ -348,7 +347,7 @@ func TestRayClusterLogRun(t *testing.T) {
 	defer tf.Cleanup()
 
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
@@ -446,11 +445,11 @@ func TestRayClusterLogRun(t *testing.T) {
 	}
 
 	err = fakeClusterLogOptions.Run(context.Background(), tf)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Check that the two directories are there
 	entries, err := os.ReadDir(fakeDir)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(entries))
 
 	assert.Equal(t, "test-cluster-kuberay-head-1", entries[0].Name())
@@ -460,19 +459,19 @@ func TestRayClusterLogRun(t *testing.T) {
 	for ind, entry := range entries {
 		currPath := filepath.Join(fakeDir, entry.Name())
 		currDir, err := os.ReadDir(currPath)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, 1, len(currDir))
 		openfile, err := os.Open(filepath.Join(currPath, "stdout.log"))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, fakeLogs[ind], string(actualContent))
 	}
 }
 
 func TestDownloadRayLogFiles(t *testing.T) {
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
@@ -483,7 +482,7 @@ func TestDownloadRayLogFiles(t *testing.T) {
 
 	// create fake tar files to test
 	fakeTar, err := createFakeTarFile()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Ray head needed for calling the downloadRayLogFiles command
 	rayHead := v1.Pod{
@@ -512,16 +511,16 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
 
 	err = fakeClusterLogOptions.downloadRayLogFiles(context.Background(), executor, rayHead)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	entries, err := os.ReadDir(fakeDir)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(entries))
 
 	// Assert the files
 	assert.True(t, entries[0].IsDir())
 	files, err := os.ReadDir(filepath.Join(fakeDir, entries[0].Name()))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(files))
 
 	expectedfileoutput := []struct {
@@ -535,14 +534,14 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	// Goes through and check the temp directory with the downloaded files
 	for ind, file := range files {
 		fileInfo, err := file.Info()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		curr := expectedfileoutput[ind]
 
 		assert.Equal(t, curr.Name, fileInfo.Name())
 		openfile, err := os.Open(filepath.Join(fakeDir, entries[0].Name(), file.Name()))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
 	}
 }

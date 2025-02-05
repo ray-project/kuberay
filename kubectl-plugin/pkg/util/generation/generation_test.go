@@ -20,6 +20,7 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 			Image:          "rayproject/ray:2.39.0",
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
+			HeadGPU:        "1",
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
@@ -34,6 +35,7 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	assert.Equal(t, testRayClusterYamlObject.RayVersion, *result.Spec.RayVersion)
 	assert.Equal(t, testRayClusterYamlObject.Image, *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Image)
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadCPU), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Cpu())
+	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadGPU), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadMemory), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Memory())
 	assert.Equal(t, "default-group", *result.Spec.WorkerGroupSpecs[0].GroupName)
 	assert.Equal(t, testRayClusterYamlObject.WorkerReplicas, *result.Spec.WorkerGroupSpecs[0].Replicas)
@@ -51,6 +53,7 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			RayVersion:     "2.39.0",
 			Image:          "rayproject/ray:2.39.0",
 			HeadCPU:        "1",
+			HeadGPU:        "1",
 			HeadMemory:     "5Gi",
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
@@ -83,6 +86,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			Image:          "rayproject/ray:2.39.0",
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
+			HeadGPU:        "1",
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
@@ -93,7 +97,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	expectedResultYaml := `apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -119,9 +123,11 @@ spec:
             limits:
               cpu: "1"
               memory: 5Gi
+              nvidia.com/gpu: "1"
             requests:
               cpu: "1"
               memory: 5Gi
+              nvidia.com/gpu: "1"
   rayVersion: 2.39.0
   workerGroupSpecs:
   - groupName: default-group
