@@ -31,7 +31,7 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valid raycluster with namespace",
+			name:                 "valid RayCluster with namespace",
 			namespace:            "test-namespace",
 			args:                 []string{"raycluster/test-raycluster"},
 			expectedResourceType: util.RayCluster,
@@ -40,7 +40,7 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayjob without namespace",
+			name:                 "valid RayJob without namespace",
 			namespace:            "",
 			args:                 []string{"rayjob/test-rayjob"},
 			expectedResourceType: util.RayJob,
@@ -49,7 +49,7 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayservice without namespace",
+			name:                 "valid RayService without namespace",
 			namespace:            "",
 			args:                 []string{"rayservice/test-rayservice"},
 			expectedResourceType: util.RayService,

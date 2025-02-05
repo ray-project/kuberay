@@ -37,7 +37,7 @@ var (
 	`)
 
 	createClusterExample = templates.Examples(`
-		# Create a Ray cluster using default values
+		# Create a Ray Cluster using default values
 		kubectl ray create cluster sample-cluster
 
 		# Creates Ray Cluster from flags input
