@@ -27,6 +27,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -67,7 +69,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	scheme := runtime.NewScheme()
-	err = AddToScheme(scheme)
+	err = rayv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = admissionv1beta1.AddToScheme(scheme)
@@ -95,7 +97,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&RayCluster{}).SetupWebhookWithManager(mgr)
+	err = SetupRayClusterWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:webhook
@@ -126,13 +128,13 @@ var _ = BeforeSuite(func() {
 var _ = Describe("RayCluster validating webhook", func() {
 	Context("when name is invalid", func() {
 		It("should return error", func() {
-			rayCluster := RayCluster{
+			rayCluster := rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "invalid.name",
 				},
-				Spec: RayClusterSpec{
-					HeadGroupSpec: HeadGroupSpec{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
 						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
@@ -140,7 +142,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 							},
 						},
 					},
-					WorkerGroupSpecs: []WorkerGroupSpec{},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
 				},
 			}
 
@@ -153,7 +155,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 
 	Context("when groupNames are not unique", func() {
 		var name, namespace string
-		var rayCluster RayCluster
+		var rayCluster rayv1.RayCluster
 
 		BeforeEach(func() {
 			namespace = "default"
@@ -161,13 +163,13 @@ var _ = Describe("RayCluster validating webhook", func() {
 		})
 
 		It("should return error", func() {
-			rayCluster = RayCluster{
+			rayCluster = rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: namespace,
 				},
-				Spec: RayClusterSpec{
-					HeadGroupSpec: HeadGroupSpec{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
 						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
@@ -175,7 +177,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 							},
 						},
 					},
-					WorkerGroupSpecs: []WorkerGroupSpec{
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 						{
 							GroupName:      "group1",
 							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
