@@ -55,6 +55,18 @@ linters-settings:
       - fieldalignment
   lll:
     line-length: 120
+  # TODO: Enable all testifylint rules
+  testifylint:
+    disable:
+      - formatter
+      - float-compare
+      - require-error
+      - expected-actual
+      - error-nil
+      - bool-compare
+      - len
+      - compares
+      - empty
 linters:
   enable:
     - asciicheck
@@ -83,6 +95,7 @@ linters:
     - unparam
     - unused
     - wastedassign
+    - testifylint
   disable-all: true
 issues:
   max-issues-per-linter: 0
