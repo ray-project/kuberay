@@ -453,7 +453,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	// Test 1: `HeadService.Name` is empty.
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1.RayClusterSpec{}, "raycluster-sample")
 	expectedGeneratedSvcName := "raycluster-sample-head-svc"
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
 
 	// Test 2: `HeadService.Name` is not empty.
@@ -468,24 +468,24 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	}
 
 	headSvcName, err = GenerateHeadServiceName(RayClusterCRD, *clusterSpecWithHeadService.DeepCopy(), "raycluster-sample")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headSvcName, "my-head-svc")
 
 	// [RayService]
 	// Test 3: `HeadService.Name` is empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1.RayClusterSpec{}, "rayservice-sample")
 	expectedGeneratedSvcName = "rayservice-sample-head-svc"
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
 
 	// Test 4: `HeadService.Name` is not empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, *clusterSpecWithHeadService.DeepCopy(), "rayservice-sample")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
 
 	// Invalid CRD type
 	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
@@ -672,9 +672,9 @@ env_vars:
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
 			if tc.isErrorNil {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			} else {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			}
 		})
 	}

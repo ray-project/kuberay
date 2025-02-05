@@ -80,7 +80,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rb, err := BuildRoleBinding(tc.input)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("got %v, want %v", got, tc.want)

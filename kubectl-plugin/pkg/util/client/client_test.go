@@ -223,9 +223,9 @@ func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayCluster, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})
@@ -298,9 +298,9 @@ func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayJob, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})
@@ -377,9 +377,9 @@ func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcName, err := client.GetRayHeadSvcName(context.Background(), tc.namespace, util.RayService, tc.resourceName)
 			if tc.serviceName == "" {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.serviceName, svcName)
 			}
 		})

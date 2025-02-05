@@ -100,9 +100,9 @@ func TestComplete(t *testing.T) {
 			fakeDeleteOptions.configFlags.Namespace = &tc.namespace
 			err := fakeDeleteOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.NotNil(t, err)
+				assert.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedName, fakeDeleteOptions.ResourceName)
 				assert.Equal(t, tc.expectedNamespace, fakeDeleteOptions.Namespace)
 				assert.Equal(t, tc.expectedResourceType, fakeDeleteOptions.ResourceType)

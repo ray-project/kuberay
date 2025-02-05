@@ -78,12 +78,12 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1.RayCluster{
 func TestBuildIngressForHeadServiceWithoutIngressClass(t *testing.T) {
 	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass)
 	assert.NotNil(t, ingress)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBuildIngressForHeadService(t *testing.T) {
 	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// check ingress.class annotation
 	actualResult := ingress.Labels[utils.RayClusterLabelKey]
@@ -121,7 +121,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	// path names
 	paths := ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths
 	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instanceWithIngressEnabled.Spec, instanceWithIngressEnabled.Name)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	for _, path := range paths {
 		actualResult = path.Backend.Service.Name
 		expectedResult = headSvcName

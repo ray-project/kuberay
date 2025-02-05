@@ -93,7 +93,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	expectedResultYaml := `apiVersion: ray.io/v1
 kind: RayCluster
 metadata:

@@ -393,19 +393,19 @@ func setupTest(t *testing.T) {
 		utils.RayClusterLabelKey,
 		selection.Equals,
 		instanceReqValue)
-	assert.Nil(t, err, "Fail to create requirement")
+	assert.NoError(t, err, "Fail to create requirement")
 	groupNameReqValue := []string{groupNameStr}
 	groupNameReq, err := labels.NewRequirement(
 		utils.RayNodeGroupLabelKey,
 		selection.Equals,
 		groupNameReqValue)
-	assert.Nil(t, err, "Fail to create requirement")
+	assert.NoError(t, err, "Fail to create requirement")
 	headNameReqValue := []string{headGroupNameStr}
 	headNameReq, err := labels.NewRequirement(
 		utils.RayNodeGroupLabelKey,
 		selection.Equals,
 		headNameReqValue)
-	assert.Nil(t, err, "Fail to create requirement")
+	assert.NoError(t, err, "Fail to create requirement")
 	headSelector = labels.NewSelector().Add(*headNameReq)
 	workerSelector = labels.NewSelector().Add(*instanceReq).Add(*groupNameReq)
 }
@@ -481,7 +481,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 			ctx := context.Background()
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			numAllPods := len(podList.Items)
 			numWorkerPods := numAllPods - 1 // -1 for the head pod
 			assert.Equal(t, len(testPods), numAllPods, "Init pod list len is wrong")
@@ -514,12 +514,12 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
@@ -589,7 +589,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 			ctx := context.Background()
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			numAllPods := len(podList.Items)
 			numWorkerPods := numAllPods - 1 // -1 for the head pod
 			assert.Equal(t, len(testPods), numAllPods, "Init pod list len is wrong")
@@ -612,12 +612,12 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, expectedNumWorkersToDelete, numWorkerPods-len(podList.Items))
 
 			// Check if the workersToDelete are deleted.
@@ -649,7 +649,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 
 	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -660,14 +660,14 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	}
 
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	assert.NoError(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
 
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+	assert.NoError(t, err, "Fail to get pod list after reconcile")
 
 	assert.Equal(t, int(localExpectReplicaNum), len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
@@ -706,14 +706,14 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate the deletion of 2 worker Pods. After the deletion, the number of worker Pods should be 3.
 	err = fakeClient.Delete(ctx, &podList.Items[3])
-	assert.Nil(t, err, "Fail to delete pod")
+	assert.NoError(t, err, "Fail to delete pod")
 	err = fakeClient.Delete(ctx, &podList.Items[4])
-	assert.Nil(t, err, "Fail to delete pod")
+	assert.NoError(t, err, "Fail to delete pod")
 
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -726,13 +726,13 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	// Since the desired state of the workerGroup is 3 replicas,
 	// the controller will not create or delete any worker Pods.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	assert.NoError(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+	assert.NoError(t, err, "Fail to get pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
 		"Replica number is wrong after reconcile expect %d actual %d", expectedNumWorkerPods, len(podList.Items))
 }
@@ -766,12 +766,12 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	podList := corev1.PodList{}
 	ctx := context.Background()
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 	// Simulate the deletion of 1 worker Pod. After the deletion, the number of worker Pods should be 4.
 	err = fakeClient.Delete(ctx, &podList.Items[3])
-	assert.Nil(t, err, "Fail to delete pod")
+	assert.NoError(t, err, "Fail to delete pod")
 
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -784,13 +784,13 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	// Since the desired state of the workerGroup is 3 replicas, the controller
 	// will delete a worker Pod randomly to reach the goal state.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	assert.NoError(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+	assert.NoError(t, err, "Fail to get pod list after reconcile")
 
 	// The number of worker Pods should be 3.
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items),
@@ -826,7 +826,7 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 	// Initialize a new RayClusterReconciler.
@@ -840,13 +840,13 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 	// Pod3 and Pod4 should be deleted because of the workersToDelete.
 	// Hence, no failed Pods should exist in `podList`.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	assert.NoError(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get pod list after reconcile")
+	assert.NoError(t, err, "Fail to get pod list after reconcile")
 
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 	assert.Equal(t, expectedNumWorkerPods, getNotFailedPodItemNum(podList),
@@ -902,7 +902,7 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 			// Initialize a new RayClusterReconciler.
@@ -925,13 +925,13 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			// Case 2: enableRandomPodDelete is false.
 			//  Only the Pod in the `workersToDelete` will be deleted. After the deletion, the number of worker Pods should be 4.
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 
 			if tc.enableRandomPodDelete {
 				// Case 1: enableRandomPodDelete is true.
@@ -974,16 +974,16 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
 
 			// Simulate head pod get evicted.
 			podList.Items[0].Spec.RestartPolicy = tc.restartPolicy
 			err = fakeClient.Update(ctx, &podList.Items[0])
-			assert.Nil(t, err, "Fail to update head Pod restart policy")
+			assert.NoError(t, err, "Fail to update head Pod restart policy")
 			podList.Items[0].Status.Phase = corev1.PodFailed
 			err = fakeClient.Status().Update(ctx, &podList.Items[0])
-			assert.Nil(t, err, "Fail to update head Pod status")
+			assert.NoError(t, err, "Fail to update head Pod status")
 
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
@@ -996,7 +996,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			// The head Pod with the status `Failed` will be deleted, and the function will return an
 			// error to requeue the request with a short delay. If the function returns nil, the controller
 			// will requeue the request after RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV (default: 300) seconds.
-			assert.NotNil(t, err)
+			assert.Error(t, err)
 
 			// Filter head pod
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
@@ -1004,7 +1004,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 				Namespace:     namespaceStr,
 			})
 
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, 0, len(podList.Items),
 				"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
 		})
@@ -1055,7 +1055,7 @@ func TestReconcileHeadService(t *testing.T) {
 
 	// Case 1: Head service does not exist.
 	err := r.reconcileHeadService(ctx, cluster)
-	assert.Nil(t, err, "Fail to reconcile head service")
+	assert.NoError(t, err, "Fail to reconcile head service")
 
 	// One head service should be created.
 	serviceList := corev1.ServiceList{}
@@ -1063,12 +1063,12 @@ func TestReconcileHeadService(t *testing.T) {
 		LabelSelector: headServiceSelector,
 		Namespace:     cluster.Namespace,
 	})
-	assert.Nil(t, err, "Fail to get service list")
+	assert.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
 
 	// Case 2: One head service exists.
 	err = r.reconcileHeadService(ctx, cluster)
-	assert.Nil(t, err, "Fail to reconcile head service")
+	assert.NoError(t, err, "Fail to reconcile head service")
 
 	// The namespace should still have only one head service.
 	serviceList = corev1.ServiceList{}
@@ -1076,7 +1076,7 @@ func TestReconcileHeadService(t *testing.T) {
 		LabelSelector: headServiceSelector,
 		Namespace:     cluster.Namespace,
 	})
-	assert.Nil(t, err, "Fail to get service list")
+	assert.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
 
 	// Case 3: Two head services exist. This case only happens when users manually create a head service.
@@ -1087,13 +1087,13 @@ func TestReconcileHeadService(t *testing.T) {
 		LabelSelector: headServiceSelector,
 		Namespace:     cluster.Namespace,
 	})
-	assert.Nil(t, err, "Fail to get service list")
+	assert.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 2, len(serviceList.Items), "Service list len is wrong")
 	r.Client = fakeClient
 
 	// When there are two head services, the reconciler should report an error.
 	err = r.reconcileHeadService(ctx, cluster)
-	assert.NotNil(t, err, "Reconciler should report an error when there are two head services")
+	assert.Error(t, err, "Reconciler should report an error when there are two head services")
 }
 
 func TestReconcileHeadlessService(t *testing.T) {
@@ -1129,7 +1129,7 @@ func TestReconcileHeadlessService(t *testing.T) {
 
 	// Case 1: Headless service does not exist.
 	err := r.reconcileHeadlessService(ctx, cluster)
-	assert.Nil(t, err, "Fail to reconcile head service")
+	assert.NoError(t, err, "Fail to reconcile head service")
 
 	// One headless service should be created.
 	serviceList := corev1.ServiceList{}
@@ -1138,14 +1138,14 @@ func TestReconcileHeadlessService(t *testing.T) {
 		Namespace:     cluster.Namespace,
 	})
 	expectedName := cluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
-	assert.Nil(t, err, "Fail to get service list")
+	assert.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
 	assert.Equal(t, expectedName, serviceList.Items[0].ObjectMeta.Name, "Headless Service name is wrong, expected %s actual %s", expectedName, serviceList.Items[0].ObjectMeta.Name)
 	assert.Equal(t, "None", serviceList.Items[0].Spec.ClusterIP, "Created service is not a headless service, ClusterIP is not None")
 
 	// Case 2: Headless service already exists, nothing should be done
 	err = r.reconcileHeadlessService(ctx, cluster)
-	assert.Nil(t, err, "Fail to reconcile head service")
+	assert.NoError(t, err, "Fail to reconcile head service")
 
 	// The namespace should still have only one headless service.
 	serviceList = corev1.ServiceList{}
@@ -1153,7 +1153,7 @@ func TestReconcileHeadlessService(t *testing.T) {
 		LabelSelector: headlessServiceSelector,
 		Namespace:     cluster.Namespace,
 	})
-	assert.Nil(t, err, "Fail to get service list")
+	assert.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(serviceList.Items), "Service list len is wrong")
 }
 
@@ -1200,11 +1200,11 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile autoscaler ServiceAccount")
+	assert.NoError(t, err, "Fail to reconcile autoscaler ServiceAccount")
 
 	err = fakeClient.Get(ctx, saNamespacedName, &sa)
 
-	assert.Nil(t, err, "Fail to get head group ServiceAccount after reconciliation")
+	assert.NoError(t, err, "Fail to get head group ServiceAccount after reconciliation")
 }
 
 func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
@@ -1238,7 +1238,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	// zero-downtime rolling updates when RayService is performed. See https://github.com/ray-project/kuberay/pull/1128
 	// for more details.
 	err := testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, cluster)
-	assert.NotNil(t, err,
+	assert.Error(t, err,
 		"When users specify ServiceAccountName for the head Pod, they need to create a ServiceAccount themselves. "+
 			"If the ServiceAccount does not exist, the reconciler should return an error. However, err is nil.")
 
@@ -1254,7 +1254,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerServiceAccount(ctx, cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
@@ -1280,11 +1280,11 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 	}
 
 	err = testRayClusterReconciler.reconcileAutoscalerRoleBinding(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile autoscaler RoleBinding")
+	assert.NoError(t, err, "Fail to reconcile autoscaler RoleBinding")
 
 	err = fakeClient.Get(ctx, rbNamespacedName, &rb)
 
-	assert.Nil(t, err, "Fail to get autoscaler RoleBinding after reconciliation")
+	assert.NoError(t, err, "Fail to get autoscaler RoleBinding after reconciliation")
 }
 
 func TestReconcile_UpdateClusterReason(t *testing.T) {
@@ -1306,7 +1306,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	}
 	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.NoError(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.Reason, "Cluster reason should be empty")
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -1320,11 +1320,11 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	newTestRayCluster := testRayCluster.DeepCopy()
 	newTestRayCluster.Status.Reason = reason
 	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
-	assert.Nil(t, err, "Fail to update cluster reason")
+	assert.NoError(t, err, "Fail to update cluster reason")
 	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err, "Fail to get RayCluster after updating reason")
+	assert.NoError(t, err, "Fail to get RayCluster after updating reason")
 	assert.Equal(t, cluster.Status.Reason, reason, "Cluster reason should be updated")
 }
 
@@ -1415,9 +1415,9 @@ func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 			}
 
 			if tc.returnsError {
-				assert.NotNil(t, err, "GetRayClusterHeadPod should return error")
+				assert.Error(t, err, "GetRayClusterHeadPod should return error")
 			} else {
-				assert.Nil(t, err, "GetRayClusterHeadPod should not return error")
+				assert.NoError(t, err, "GetRayClusterHeadPod should not return error")
 			}
 
 			assert.Equal(t, tc.expectedIP, ip, "GetRayClusterHeadPod returned unexpected IP")
@@ -1489,9 +1489,9 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 
 			ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
 			if tc.returnsError {
-				assert.NotNil(t, err, "getHeadServiceIPAndName should return error")
+				assert.Error(t, err, "getHeadServiceIPAndName should return error")
 			} else {
-				assert.Nil(t, err, "getHeadServiceIPAndName should not return error")
+				assert.NoError(t, err, "getHeadServiceIPAndName should not return error")
 			}
 
 			assert.Equal(t, tc.expectedIP, ip, "getHeadServiceIPAndName returned unexpected IP")
@@ -1519,7 +1519,7 @@ func TestGetHeadServiceIPAndNameOnHeadlessService(t *testing.T) {
 
 	ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headNodeIP, ip, "getHeadServiceIPAndName returned unexpected IP")
 	assert.Equal(t, headService.Name, name, "getHeadServiceIPAndName returned unexpected name")
 }
@@ -1536,7 +1536,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	// initialize the runtimeObjects with appropriate context. In KubeRay, the `ClusterIP`
 	// and `TargetPort` fields are typically set by the cluster's control plane.
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headNodeIP
 	for i, port := range headService.Spec.Ports {
 		headService.Spec.Ports[i].TargetPort = intstr.IntOrString{IntVal: port.Port}
@@ -1559,7 +1559,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	}
 	cluster := rayv1.RayCluster{}
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.NoError(t, err, "Fail to get RayCluster")
 	assert.Equal(t, int64(-1), cluster.Status.ObservedGeneration)
 	assert.Equal(t, int64(0), cluster.ObjectMeta.Generation)
 
@@ -1573,9 +1573,9 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 
 	// Compare the values of `Generation` and `ObservedGeneration` to check if they match.
 	newInstance, err := testRayClusterReconciler.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, cluster.ObjectMeta.Generation, newInstance.Status.ObservedGeneration)
 }
 
@@ -1598,7 +1598,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	}
 	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err, "Fail to get RayCluster")
+	assert.NoError(t, err, "Fail to get RayCluster")
 	assert.Empty(t, cluster.Status.State, "Cluster state should be empty") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -1612,11 +1612,11 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	newTestRayCluster := testRayCluster.DeepCopy()
 	newTestRayCluster.Status.State = state //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
-	assert.Nil(t, err, "Fail to update cluster state")
+	assert.NoError(t, err, "Fail to update cluster state")
 	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
-	assert.Nil(t, err, "Fail to get RayCluster after updating state")
+	assert.NoError(t, err, "Fail to get RayCluster after updating state")
 	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 }
 
@@ -1775,7 +1775,7 @@ func TestCalculateStatus(t *testing.T) {
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	podReadyStatus := corev1.PodStatus{
 		PodIP: headNodeIP,
@@ -1828,7 +1828,7 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Test head information
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, headNodeIP, newInstance.Status.Head.PodIP)
 	assert.Equal(t, headServiceIP, newInstance.Status.Head.ServiceIP)
 	assert.Equal(t, headService.Name, newInstance.Status.Head.ServiceName)
@@ -1837,7 +1837,7 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Test reconcilePodsErr with the feature gate disabled
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, newInstance.Status.Conditions)
 
 	// enable feature gate for the following tests
@@ -1870,7 +1870,7 @@ func TestCalculateStatus(t *testing.T) {
 
 	// Test reconcilePodsErr with the feature gate enabled
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue))
 }
 
@@ -1887,7 +1887,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1923,7 +1923,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	}
 
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
@@ -1952,7 +1952,7 @@ func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1988,7 +1988,7 @@ func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	}
 
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, int32(0))
 	assert.Equal(t, newInstance.Status.MinWorkerReplicas, int32(0))
 	assert.Equal(t, newInstance.Status.MaxWorkerReplicas, int32(0))
@@ -2011,7 +2011,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	podReadyStatus := corev1.PodStatus{
 		PodIP: headNodeIP,
@@ -2064,7 +2064,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 
 	// Test head information with a reconcile error
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, errors.New("invalid"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
 	// Note that even if there are DesiredWorkerReplicas ready, we don't mark CR to be Ready state due to the reconcile error.
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
@@ -2074,7 +2074,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 
 	// Test head information without a reconcile error
 	newInstance, err = r.calculateStatus(ctx, newInstance, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
@@ -2085,7 +2085,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 
 	// Test head information with a reconcile error again
 	newInstance, err = r.calculateStatus(ctx, newInstance, errors.New("invalid2"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, 0)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
 	assert.Equal(t, newInstance.Status.State, rayv1.Ready) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
@@ -2204,7 +2204,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	// Mock data
 	headServiceIP := "aaa.bbb.ccc.ddd"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
-	assert.Nil(t, err, "Failed to build head service.")
+	assert.NoError(t, err, "Failed to build head service.")
 	headService.Spec.ClusterIP = headServiceIP
 	// headService.Spec.cont
 	headPod := &corev1.Pod{
@@ -2238,7 +2238,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	testRayCluster.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, preUpdateTime, *newInstance.Status.StateTransitionTimes[rayv1.Ready], "Cluster state transition timestamp should not be updated")
 }
 
@@ -2273,14 +2273,14 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 	// Make sure all worker Pods are running.
 	for _, pod := range podList.Items {
 		pod.Status.Phase = corev1.PodRunning
 		err = fakeClient.Status().Update(ctx, &pod)
-		assert.Nil(t, err, "Fail to update pod status")
+		assert.NoError(t, err, "Fail to update pod status")
 	}
 
 	// Initialize a new RayClusterReconciler.
@@ -2294,48 +2294,48 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 	// Since the desired state of the workerGroup is 3 replicas, the controller
 	// will delete 2 worker Pods.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err, "Fail to reconcile Pods")
+	assert.NoError(t, err, "Fail to reconcile Pods")
 
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 
 	// Update 1 worker Pod to Failed (a terminate state) state.
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err, "Fail to update Pod status")
+	assert.NoError(t, err, "Fail to update Pod status")
 
 	// Reconcile again, and the Failed worker Pod should be deleted even if the goal state of the workerGroup specifies 3 replicas.
 	// The function will return an error to requeue the request after a brief delay. Moreover, if there are unhealthy worker
 	// Pods to be deleted, the controller won't create new worker Pods during the same reconcile loop. As a result, the number of worker
 	// Pods will be (expectedNumWorkerPods - 1) after the reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods-1, len(podList.Items))
 
 	// Reconcile again, and the controller will create a new worker Pod to reach the goal state of the workerGroup.
 	// Note that the status of new worker Pod created by the fake client is empty, so we need to set all worker
 	// Pods to running state manually to avoid the new Pod being deleted in the next `reconcilePods` call.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 	for _, pod := range podList.Items {
 		pod.Status.Phase = corev1.PodRunning
 		err = fakeClient.Status().Update(ctx, &pod)
-		assert.Nil(t, err, "Fail to update pod status")
+		assert.NoError(t, err, "Fail to update pod status")
 	}
 
 	// Update 1 worker Pod to Succeeded (a terminate state) state.
@@ -2343,32 +2343,32 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	podList.Items[0].Status.Phase = corev1.PodSucceeded
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err, "Fail to update Pod status")
+	assert.NoError(t, err, "Fail to update Pod status")
 
 	// Reconcile again, and the Succeeded worker Pod should be deleted even if the goal state of the workerGroup specifies 3 replicas.
 	// The function will return an error to requeue the request after a brief delay. Moreover, if there are unhealthy worker
 	// Pods to be deleted, the controller won't create new worker Pods during the same reconcile loop. As a result, the number of worker
 	// Pods will be (expectedNumWorkerPods - 1) after the reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods-1, len(podList.Items))
 
 	// Reconcile again, and the controller will create a new worker Pod to reach the goal state of the workerGroup.
 	err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.List(ctx, &podList, &client.ListOptions{
 		LabelSelector: workerSelector,
 		Namespace:     namespaceStr,
 	})
-	assert.Nil(t, err, "Fail to get Pod list after reconcile")
+	assert.NoError(t, err, "Fail to get Pod list after reconcile")
 	assert.Equal(t, expectedNumWorkerPods, len(podList.Items))
 }
 
@@ -2393,7 +2393,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 	assert.Equal(t, "headNode", podList.Items[0].Name)
 
@@ -2402,10 +2402,10 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	// explicitly forbids it.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyAlways
 	err = fakeClient.Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	podList.Items[0].Status.Phase = corev1.PodFailed
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -2417,22 +2417,22 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 
 	// The head Pod will be deleted regardless restart policy.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 0, len(podList.Items))
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 
 	// Make sure the head Pod's restart policy is `Never` and status is `Running`.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
 	err = fakeClient.Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	podList.Items[0].Status.Phase = corev1.PodRunning
 	podList.Items[0].Status.ContainerStatuses = append(podList.Items[0].Status.ContainerStatuses,
 		corev1.ContainerStatus{
@@ -2442,21 +2442,21 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 			},
 		})
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// The head Pod will be deleted and the controller will return an error
 	// instead of creating a new head Pod in the same reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 0, len(podList.Items))
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 }
 
@@ -2482,7 +2482,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	// Get the pod list from the fake client.
 	podList := corev1.PodList{}
 	err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 	assert.Equal(t, "headNode", podList.Items[0].Name)
 
@@ -2491,7 +2491,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	// the head Pod and will not create a new one in the same reconciliation loop.
 	podList.Items[0].Spec.RestartPolicy = corev1.RestartPolicyNever
 	err = fakeClient.Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	podList.Items[0].Status.Phase = corev1.PodRunning
 	podList.Items[0].Status.ContainerStatuses = []corev1.ContainerStatus{
@@ -2503,7 +2503,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 		},
 	}
 	err = fakeClient.Status().Update(ctx, &podList.Items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -2516,16 +2516,16 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	// The head Pod will be deleted and the controller will return an error
 	// instead of creating a new head Pod in the same reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 0, len(podList.Items))
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-	assert.Nil(t, err, "Fail to get pod list")
+	assert.NoError(t, err, "Fail to get pod list")
 	assert.Equal(t, 1, len(podList.Items))
 }
 
@@ -2722,26 +2722,26 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 
 			rayClusterList := rayv1.RayClusterList{}
 			err := fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get RayCluster list")
+			assert.NoError(t, err, "Fail to get RayCluster list")
 			assert.Equal(t, 1, len(rayClusterList.Items))
 			assert.Equal(t, 0, len(rayClusterList.Items[0].Finalizers))
 
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			if tc.enableGCSFTRedisCleanup == "false" {
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				podList := corev1.PodList{}
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.NotEqual(t, 0, len(podList.Items))
 			} else {
 				// Add the GCS FT Redis cleanup finalizer to the RayCluster.
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 
 			// Check the RayCluster's finalizer
 			rayClusterList = rayv1.RayClusterList{}
 			err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get RayCluster list")
+			assert.NoError(t, err, "Fail to get RayCluster list")
 			assert.Equal(t, 1, len(rayClusterList.Items))
 			assert.Equal(t, tc.expectedNumFinalizers, len(rayClusterList.Items[0].Finalizers))
 			if tc.expectedNumFinalizers > 0 {
@@ -2750,15 +2750,15 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				// No Pod should be created before adding the GCS FT Redis cleanup finalizer.
 				podList := corev1.PodList{}
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				assert.Nil(t, err, "Fail to get Pod list")
+				assert.NoError(t, err, "Fail to get Pod list")
 				assert.Equal(t, 0, len(podList.Items))
 
 				// Reconcile the RayCluster again. The controller should create Pods.
 				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				assert.Nil(t, err, "Fail to get Pod list")
+				assert.NoError(t, err, "Fail to get Pod list")
 				assert.NotEqual(t, 0, len(podList.Items))
 			}
 		})
@@ -2957,7 +2957,7 @@ func Test_RedisCleanup(t *testing.T) {
 						utils.RayNodeGroupLabelKey: headGroupName,
 						utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
 					})
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, 1, len(headPods.Items))
 			}
 			if tc.hasWorkerPod {
@@ -2968,7 +2968,7 @@ func Test_RedisCleanup(t *testing.T) {
 						utils.RayNodeGroupLabelKey: cluster.Spec.WorkerGroupSpecs[0].GroupName,
 						utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
 					})
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, 1, len(workerPods.Items))
 			}
 
@@ -2981,23 +2981,23 @@ func Test_RedisCleanup(t *testing.T) {
 			// Check Job
 			jobList := batchv1.JobList{}
 			err := fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get Job list")
+			assert.NoError(t, err, "Fail to get Job list")
 			assert.Equal(t, 0, len(jobList.Items))
 
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			// Check Job
 			jobList = batchv1.JobList{}
 			err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get Job list")
+			assert.NoError(t, err, "Fail to get Job list")
 			assert.Equal(t, tc.expectedNumJobs, len(jobList.Items))
 
 			if tc.expectedNumJobs > 0 {
 				// Check RayCluster's finalizer
 				rayClusterList := rayv1.RayClusterList{}
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
-				assert.Nil(t, err, "Fail to get RayCluster list")
+				assert.NoError(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 1, len(rayClusterList.Items))
 				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 				assert.Equal(t, int64(300), *jobList.Items[0].Spec.ActiveDeadlineSeconds)
@@ -3007,14 +3007,14 @@ func Test_RedisCleanup(t *testing.T) {
 				job.Status.Succeeded = 1
 				job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
 				err = fakeClient.Status().Update(ctx, &job)
-				assert.Nil(t, err, "Fail to update Job status")
+				assert.NoError(t, err, "Fail to update Job status")
 
 				// Reconcile the RayCluster again. The controller should remove the finalizer and the RayCluster will be deleted.
 				// See https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.11/pkg/client/fake/client.go#L308-L310 for more details.
 				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-				assert.Nil(t, err, "Fail to reconcile RayCluster")
+				assert.NoError(t, err, "Fail to reconcile RayCluster")
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
-				assert.Nil(t, err, "Fail to get RayCluster list")
+				assert.NoError(t, err, "Fail to get RayCluster list")
 				assert.Equal(t, 0, len(rayClusterList.Items))
 			}
 		})
@@ -3086,7 +3086,7 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 			// Initialize a new RayClusterReconciler.
@@ -3100,13 +3100,13 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			// Since the desired state of the workerGroup is 1 replica,
 			// the controller will delete 4 worker Pods.
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, tc.desiredReplicas, len(podList.Items),
 				"Replica number is wrong after reconcile expect %d actual %d", tc.desiredReplicas, len(podList.Items))
 		})
@@ -3183,7 +3183,7 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 			// Initialize a new RayClusterReconciler.
@@ -3197,13 +3197,13 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 			// Since the desired state of the workerGroup is 1 replica,
 			// the controller will delete 4 worker Pods.
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			assert.Equal(t, tc.desiredReplicas*tc.numOfHosts, len(podList.Items),
 				"Pod list is wrong after reconcile expect %d actual %d", tc.desiredReplicas*tc.numOfHosts, len(podList.Items))
 		})
@@ -3255,7 +3255,7 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, 1, len(podList.Items), "Init pod list len is wrong")
 
 			// Initialize a new RayClusterReconciler.
@@ -3267,13 +3267,13 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 			}
 
 			err = testRayClusterReconciler.reconcilePods(ctx, cluster)
-			assert.Nil(t, err, "Fail to reconcile Pods")
+			assert.NoError(t, err, "Fail to reconcile Pods")
 
 			err = fakeClient.List(ctx, &podList, &client.ListOptions{
 				LabelSelector: workerSelector,
 				Namespace:     namespaceStr,
 			})
-			assert.Nil(t, err, "Fail to get pod list after reconcile")
+			assert.NoError(t, err, "Fail to get pod list after reconcile")
 			if tc.numOfHosts > 1 {
 				assert.Equal(t, int(tc.numOfHosts), len(podList.Items),
 					"Number of worker pods is wrong after reconcile expect %d actual %d", int(tc.numOfHosts), len(podList.Items)-1)
@@ -3374,18 +3374,18 @@ func TestDeleteAllPods(t *testing.T) {
 	ctx := context.Background()
 	// The first `deleteAllPods` function call should delete the "alive" Pod.
 	pods, err := testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"alive", "deleted"}, []string{pods.Items[0].Name, pods.Items[1].Name})
 	// The second `deleteAllPods` function call should delete no Pods because none are active.
 	pods, err = testRayClusterReconciler.deleteAllPods(ctx, common.AssociationOptions{client.InNamespace(ns), client.MatchingLabels(filter)})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(pods.Items))
 	assert.Equal(t, "deleted", pods.Items[0].Name)
 	// Make sure that the above `deleteAllPods` calls didn't remove other Pods.
 	pods = corev1.PodList{}
 	err = fakeClient.List(ctx, &pods, client.InNamespace(ns))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(pods.Items))
 	assert.Subset(t, []string{"deleted", "other"}, []string{pods.Items[0].Name, pods.Items[1].Name})
 }
@@ -3404,11 +3404,11 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
 				// Simulate the deletion of 3 worker Pods. After the deletion, the number of worker Pods should be 3.
 				err := client.Delete(ctx, &podList.Items[2])
-				assert.Nil(t, err, "Fail to delete pod")
+				assert.NoError(t, err, "Fail to delete pod")
 				err = client.Delete(ctx, &podList.Items[3])
-				assert.Nil(t, err, "Fail to delete pod")
+				assert.NoError(t, err, "Fail to delete pod")
 				err = client.Delete(ctx, &podList.Items[4])
-				assert.Nil(t, err, "Fail to delete pod")
+				assert.NoError(t, err, "Fail to delete pod")
 			},
 			name:       "failure event for failed worker pod creation",
 			failureMsg: "Failed to create worker Pod",
@@ -3419,7 +3419,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			simulate: func(ctx context.Context, t *testing.T, podList corev1.PodList, client client.WithWatch) {
 				// Simulate the deletion of head pod
 				err := client.Delete(ctx, &podList.Items[0])
-				assert.Nil(t, err, "Fail to delete pod")
+				assert.NoError(t, err, "Fail to delete pod")
 			},
 			name:       "failure event for failed head pod creation",
 			failureMsg: "Failed to create head Pod",
@@ -3462,7 +3462,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			// Get the pod list from the fake client.
 			podList := corev1.PodList{}
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-			assert.Nil(t, err, "Fail to get pod list")
+			assert.NoError(t, err, "Fail to get pod list")
 			assert.Equal(t, oldNumWorkerPods+numHeadPods, len(podList.Items), "Init pod list len is wrong")
 
 			test.simulate(ctx, t, podList, fakeClient)
@@ -3484,7 +3484,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			// the controller will try to create one worker pod.
 			err = testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
 			// We should get an error here because of simulating a pod creation failure.
-			assert.NotNil(t, err, "unexpected error")
+			assert.Error(t, err, "unexpected error")
 
 			var foundFailureEvent bool
 			events := []string{}
@@ -3559,7 +3559,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			}
 
 			result, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			if tc.shouldReconcile {
 				// finish with requeue due to detected incosistency
 				assert.Equal(t, result.RequeueAfter.Seconds(), DefaultRequeueDuration.Seconds())

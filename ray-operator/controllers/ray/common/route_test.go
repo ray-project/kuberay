@@ -42,7 +42,7 @@ var instanceWithRouteEnabled = &rayv1.RayCluster{
 
 func TestBuildRouteForHeadService(t *testing.T) {
 	route, err := BuildRouteForHeadService(*instanceWithRouteEnabled)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Test name
 	var builder strings.Builder

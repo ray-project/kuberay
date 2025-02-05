@@ -35,7 +35,7 @@ func TestRayClusterGetComplete(t *testing.T) {
 	fakeClusterGetOptions.AllNamespaces = false
 
 	err := fakeClusterGetOptions.Complete(fakeArgs)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.True(t, fakeClusterGetOptions.AllNamespaces)
 	assert.Equal(t, fakeClusterGetOptions.args, fakeArgs)
@@ -49,7 +49,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 
 	// Fake directory for kubeconfig
 	fakeDir, err := os.MkdirTemp("", "fake-config")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	// Set up fake config for kubeconfig
@@ -77,7 +77,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
 
 	err = clientcmd.WriteToFile(*config, fakeFile)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Initialize the fake config flag with the fake kubeconfig and values
 	fakeConfigFlags := &genericclioptions.ConfigFlags{
@@ -205,10 +205,10 @@ func TestRayClusterGetRun(t *testing.T) {
 	// Result buffer for the expected table result
 	var resbuffer bytes.Buffer
 	err := expectedTestResultTable.PrintObj(testResTable, &resbuffer)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	if e, a := resbuffer.String(), resBuf.String(); e != a {
 		t.Errorf("\nexpected\n%v\ngot\n%v", e, a)
