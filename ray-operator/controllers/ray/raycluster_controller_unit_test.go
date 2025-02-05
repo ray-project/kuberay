@@ -1005,8 +1005,8 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			})
 
 			assert.NoError(t, err, "Fail to get pod list after reconcile")
-			assert.Equal(t, 0, len(podList.Items),
-				"Evicted head should be deleted after reconcile expect %d actual %d", 0, len(podList.Items))
+			assert.Empty(t, podList.Items,
+				"Evicted head should be deleted after reconcile. Actual number of items: %d", len(podList.Items))
 		})
 	}
 }
@@ -2420,7 +2420,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.NoError(t, err, "Fail to get pod list")
-	assert.Equal(t, 0, len(podList.Items))
+	assert.Empty(t, podList.Items)
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
@@ -2450,7 +2450,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.NoError(t, err, "Fail to get pod list")
-	assert.Equal(t, 0, len(podList.Items))
+	assert.Empty(t, podList.Items)
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
@@ -2519,7 +2519,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	assert.Error(t, err)
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	assert.NoError(t, err, "Fail to get pod list")
-	assert.Equal(t, 0, len(podList.Items))
+	assert.Empty(t, podList.Items)
 
 	// The new head Pod will be created in this reconcile loop.
 	err = testRayClusterReconciler.reconcilePods(ctx, cluster)
@@ -2724,7 +2724,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			err := fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 			assert.NoError(t, err, "Fail to get RayCluster list")
 			assert.Equal(t, 1, len(rayClusterList.Items))
-			assert.Equal(t, 0, len(rayClusterList.Items[0].Finalizers))
+			assert.Empty(t, rayClusterList.Items[0].Finalizers)
 
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			if tc.enableGCSFTRedisCleanup == "false" {
@@ -2732,7 +2732,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				podList := corev1.PodList{}
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.NoError(t, err)
-				assert.NotEqual(t, 0, len(podList.Items))
+				assert.NotEmpty(t, podList.Items)
 			} else {
 				// Add the GCS FT Redis cleanup finalizer to the RayCluster.
 				assert.NoError(t, err)
@@ -2751,7 +2751,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 				podList := corev1.PodList{}
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.NoError(t, err, "Fail to get Pod list")
-				assert.Equal(t, 0, len(podList.Items))
+				assert.Empty(t, podList.Items)
 
 				// Reconcile the RayCluster again. The controller should create Pods.
 				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
@@ -2759,7 +2759,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 
 				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 				assert.NoError(t, err, "Fail to get Pod list")
-				assert.NotEqual(t, 0, len(podList.Items))
+				assert.NotEmpty(t, podList.Items)
 			}
 		})
 	}
@@ -2982,7 +2982,7 @@ func Test_RedisCleanup(t *testing.T) {
 			jobList := batchv1.JobList{}
 			err := fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
 			assert.NoError(t, err, "Fail to get Job list")
-			assert.Equal(t, 0, len(jobList.Items))
+			assert.Empty(t, jobList.Items)
 
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
 			assert.NoError(t, err)
@@ -3015,7 +3015,7 @@ func Test_RedisCleanup(t *testing.T) {
 				assert.NoError(t, err, "Fail to reconcile RayCluster")
 				err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
 				assert.NoError(t, err, "Fail to get RayCluster list")
-				assert.Equal(t, 0, len(rayClusterList.Items))
+				assert.Empty(t, rayClusterList.Items)
 			}
 		})
 	}
