@@ -175,71 +175,128 @@ func TestRayClusterGetValidate(t *testing.T) {
 
 // Tests the Run() step of the command and ensure that the output is as expected.
 func TestRayClusterGetRun(t *testing.T) {
-	testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
-
-	fakeClusterGetOptions := NewGetClusterOptions(testStreams)
-
-	rayCluster := &rayv1.RayCluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "raycluster-kuberay",
-			Namespace: "test",
+	tests := []struct {
+		name                  string
+		state                 rayv1.ClusterState
+		expectedConditionType string
+		expectedState         string
+		conditions            []v1.Condition
+	}{
+		{
+			name:                  "RayCluster with neither Conditions nor State should show nothing for those columns",
+			expectedConditionType: "",
+			expectedState:         "",
 		},
-		Status: rayv1.RayClusterStatus{
-			DesiredWorkerReplicas:   2,
-			AvailableWorkerReplicas: 2,
-			DesiredCPU:              resource.MustParse("6"),
-			DesiredGPU:              resource.MustParse("1"),
-			DesiredTPU:              resource.MustParse("1"),
-			DesiredMemory:           resource.MustParse("24Gi"),
-			State:                   rayv1.Ready,
+		{
+			name: "RayCluster with both Conditions and State should show the right values for those columns",
+			conditions: []v1.Condition{
+				{
+					Type:    string(rayv1.RayClusterReplicaFailure),
+					Status:  v1.ConditionFalse,
+					Reason:  rayv1.HeadPodNotFound,
+					Message: "Head Pod not found",
+					LastTransitionTime: v1.Time{
+						Time: time.Date(2024, 7, 21, 0, 0, 0, 0, time.UTC),
+					},
+				},
+				{
+					Type:    string(rayv1.RayClusterProvisioned),
+					Status:  v1.ConditionTrue,
+					Reason:  rayv1.AllPodRunningAndReadyFirstTime,
+					Message: "All Ray Pods are ready for the first time",
+					LastTransitionTime: v1.Time{
+						Time: time.Date(2025, 1, 20, 0, 0, 0, 0, time.UTC),
+					},
+				},
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  v1.ConditionTrue,
+					Reason:  rayv1.HeadPodRunningAndReady,
+					Message: "Head Pod ready",
+					LastTransitionTime: v1.Time{
+						Time: time.Date(2024, 11, 5, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+			state:                 rayv1.Ready,
+			expectedState:         string(rayv1.Ready),
+			expectedConditionType: string(rayv1.RayClusterProvisioned),
 		},
 	}
 
-	kubeClientSet := kubefake.NewClientset()
-	rayClient := rayClientFake.NewSimpleClientset(rayCluster)
-	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
+			fakeClusterGetOptions := NewGetClusterOptions(testStreams)
 
-	// Initialize the printer with an empty print options since we are setting the column definition later
-	expectedTestResultTable := printers.NewTablePrinter(printers.PrintOptions{})
+			rayCluster := &rayv1.RayCluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "raycluster-kuberay",
+					Namespace: "test",
+				},
+				Status: rayv1.RayClusterStatus{
+					DesiredWorkerReplicas:   2,
+					AvailableWorkerReplicas: 2,
+					DesiredCPU:              resource.MustParse("6"),
+					DesiredGPU:              resource.MustParse("1"),
+					DesiredTPU:              resource.MustParse("1"),
+					DesiredMemory:           resource.MustParse("24Gi"),
+					Conditions:              tc.conditions,
+					State:                   tc.state,
+				},
+			}
 
-	// Define the column names and types
-	testResTable := &v1.Table{
-		ColumnDefinitions: []v1.TableColumnDefinition{
-			{Name: "Name", Type: "string"},
-			{Name: "Namespace", Type: "string"},
-			{Name: "Desired Workers", Type: "string"},
-			{Name: "Available Workers", Type: "string"},
-			{Name: "CPUs", Type: "string"},
-			{Name: "GPUs", Type: "string"},
-			{Name: "TPUs", Type: "string"},
-			{Name: "Memory", Type: "string"},
-			{Name: "Age", Type: "string"},
-		},
+			kubeClientSet := kubefake.NewClientset()
+			rayClient := rayClientFake.NewSimpleClientset(rayCluster)
+			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
+
+			// Initialize the printer with an empty print options since we are setting the column definition later
+			expectedTestResultTable := printers.NewTablePrinter(printers.PrintOptions{})
+
+			// Define the column names and types
+			testResTable := &v1.Table{
+				ColumnDefinitions: []v1.TableColumnDefinition{
+					{Name: "Name", Type: "string"},
+					{Name: "Namespace", Type: "string"},
+					{Name: "Desired Workers", Type: "string"},
+					{Name: "Available Workers", Type: "string"},
+					{Name: "CPUs", Type: "string"},
+					{Name: "GPUs", Type: "string"},
+					{Name: "TPUs", Type: "string"},
+					{Name: "Memory", Type: "string"},
+					{Name: "Condition", Type: "string"},
+					{Name: "Status", Type: "string"},
+					{Name: "Age", Type: "string"},
+				},
+			}
+
+			testResTable.Rows = append(testResTable.Rows, v1.TableRow{
+				Cells: []interface{}{
+					"raycluster-kuberay",
+					"test",
+					"2",
+					"2",
+					"6",
+					"1",
+					"1",
+					"24Gi",
+					tc.expectedConditionType,
+					tc.expectedState,
+					"<unknown>",
+				},
+			})
+
+			// Result buffer for the expected table result
+			var resbuffer bytes.Buffer
+			err := expectedTestResultTable.PrintObj(testResTable, &resbuffer)
+			require.NoError(t, err)
+
+			err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
+			require.NoError(t, err)
+
+			assert.Equal(t, resBuf.String(), resbuffer.String())
+		})
 	}
-
-	testResTable.Rows = append(testResTable.Rows, v1.TableRow{
-		Cells: []interface{}{
-			"raycluster-kuberay",
-			"test",
-			"2",
-			"2",
-			"6",
-			"1",
-			"1",
-			"24Gi",
-			"<unknown>",
-		},
-	})
-
-	// Result buffer for the expected table result
-	var resbuffer bytes.Buffer
-	err := expectedTestResultTable.PrintObj(testResTable, &resbuffer)
-	require.NoError(t, err)
-
-	err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
-	require.NoError(t, err)
-
-	assert.Equal(t, resbuffer.String(), resBuf.String())
 }
 
 func TestGetRayClusters(t *testing.T) {
@@ -370,7 +427,23 @@ func TestPrintClusters(t *testing.T) {
 					DesiredGPU:              resource.MustParse("2"),
 					DesiredTPU:              resource.MustParse("0"),
 					DesiredMemory:           resource.MustParse("12Gi"),
-					State:                   rayv1.Ready,
+					Conditions: []v1.Condition{
+						{
+							Type:   string(rayv1.RayClusterSuspending),
+							Status: v1.ConditionTrue,
+							LastTransitionTime: v1.Time{
+								Time: time.Now().Add(-2 * time.Hour),
+							},
+						},
+						{
+							Type:   string(rayv1.HeadPodReady),
+							Status: v1.ConditionTrue,
+							LastTransitionTime: v1.Time{
+								Time: time.Now().Add(-4 * time.Hour),
+							},
+						},
+					},
+					State: rayv1.Suspended,
 				},
 			},
 		},
@@ -390,6 +463,8 @@ func TestPrintClusters(t *testing.T) {
 			{Name: "GPUs", Type: "string"},
 			{Name: "TPUs", Type: "string"},
 			{Name: "Memory", Type: "string"},
+			{Name: "Condition", Type: "string"},
+			{Name: "Status", Type: "string"},
 			{Name: "Age", Type: "string"},
 		},
 	}
@@ -405,6 +480,8 @@ func TestPrintClusters(t *testing.T) {
 				"1",
 				"1",
 				"24Gi",
+				"",
+				rayv1.Ready,
 				"24h",
 			},
 		},
@@ -418,6 +495,8 @@ func TestPrintClusters(t *testing.T) {
 				"2",
 				"0",
 				"12Gi",
+				rayv1.HeadPodReady,
+				rayv1.Suspended,
 				"<unknown>",
 			},
 		},

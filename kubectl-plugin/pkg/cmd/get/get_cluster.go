@@ -148,6 +148,8 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 			{Name: "GPUs", Type: "string"},
 			{Name: "TPUs", Type: "string"},
 			{Name: "Memory", Type: "string"},
+			{Name: "Condition", Type: "string"},
+			{Name: "Status", Type: "string"},
 			{Name: "Age", Type: "string"},
 		},
 	}
@@ -156,6 +158,11 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 		age := duration.HumanDuration(time.Since(raycluster.GetCreationTimestamp().Time))
 		if raycluster.GetCreationTimestamp().Time.IsZero() {
 			age = "<unknown>"
+		}
+		relevantConditionType := ""
+		relevantCondition := util.RelevantRayClusterCondition(raycluster)
+		if relevantCondition != nil {
+			relevantConditionType = relevantCondition.Type
 		}
 		resTable.Rows = append(resTable.Rows, v1.TableRow{
 			Cells: []interface{}{
@@ -167,6 +174,8 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 				raycluster.Status.DesiredGPU.String(),
 				raycluster.Status.DesiredTPU.String(),
 				raycluster.Status.DesiredMemory.String(),
+				relevantConditionType,
+				raycluster.Status.State, //nolint:staticcheck // Display State for now until it's removed from the CRD
 				age,
 			},
 		})
