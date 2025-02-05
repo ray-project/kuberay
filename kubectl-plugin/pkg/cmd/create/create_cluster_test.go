@@ -39,8 +39,10 @@ func TestRayCreateClusterValidate(t *testing.T) {
 		{
 			name: "Test validation when no context is set",
 			opts: &CreateClusterOptions{
-				configFlags: genericclioptions.NewConfigFlags(false),
-				ioStreams:   &testStreams,
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+				},
+				ioStreams: &testStreams,
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},

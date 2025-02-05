@@ -183,7 +183,7 @@ func (options *ClusterLogOptions) Validate() error {
 	} else if err != nil {
 		return fmt.Errorf("Error occurred will checking directory: %w", err)
 	} else if !info.IsDir() {
-		return fmt.Errorf("Path is Not a directory. Please input a directory and try again")
+		return fmt.Errorf("Path is not a directory. Please input a directory and try again")
 	}
 
 	return nil

@@ -231,7 +231,9 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Test validation when no context is set",
 			opts: &ClusterLogOptions{
-				configFlags:  genericclioptions.NewConfigFlags(false),
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+				},
 				outputDir:    fakeDir,
 				ResourceName: "fake-cluster",
 				nodeType:     "head",
@@ -323,7 +325,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				nodeType:     "head",
 				ioStreams:    &testStreams,
 			},
-			expectError: "Path is Not a directory. Please input a directory and try again",
+			expectError: "Path is not a directory. Please input a directory and try again",
 		},
 	}
 
