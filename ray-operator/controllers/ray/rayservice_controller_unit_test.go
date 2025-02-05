@@ -1158,8 +1158,7 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 }
 
 func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
-	// Trigger a zero-downtime upgrade when the cluster spec in RayService differs
-	// from the pending cluster and no current serving cluster.
+	// A new cluster will not be created if the K8s services are pointing to the pending cluster.
 	ctx := context.TODO()
 	namespace := "test-namespace"
 	pendingClusterName := "pending-cluster"
@@ -1189,17 +1188,14 @@ func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
 			},
 		},
 	}
+	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
 
 	t.Run("override the pending cluster if it is not serving", func(t *testing.T) {
-		// Update cluster spec in RayService to trigger a zero downtime upgrade.
-		rayService.Spec.RayClusterSpec.RayVersion = "new-version"
 		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, false)
 		assert.True(t, shouldPrepareNewCluster)
 	})
 
 	t.Run("do not override the pending cluster if it is serving", func(t *testing.T) {
-		// Update cluster spec in RayService to trigger a zero downtime upgrade.
-		rayService.Spec.RayClusterSpec.RayVersion = "new-version"
 		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, true)
 		assert.False(t, shouldPrepareNewCluster)
 	})
