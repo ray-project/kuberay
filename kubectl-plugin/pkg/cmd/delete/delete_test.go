@@ -110,3 +110,87 @@ func TestComplete(t *testing.T) {
 		})
 	}
 }
+
+func TestRayDeleteValidate(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+
+	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
+
+	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
+	assert.NoError(t, err)
+
+	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		opts        *DeleteOptions
+		expectError string
+	}{
+		{
+			name: "Test validation when no context is set",
+			opts: &DeleteOptions{
+				configFlags: genericclioptions.NewConfigFlags(false),
+				ioStreams:   &testStreams,
+			},
+			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch isn't set",
+			opts: &DeleteOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+				},
+				ioStreams: &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has no current context and --context switch is set",
+			opts: &DeleteOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+					Context:    &testContext,
+				},
+				ioStreams: &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch is set",
+			opts: &DeleteOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+					Context:    &testContext,
+				},
+				ioStreams: &testStreams,
+			},
+		},
+		{
+			name: "Successful submit job validation with RayJob",
+			opts: &DeleteOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					Namespace:        &testNS,
+					Context:          &testContext,
+					KubeConfig:       &kubeConfigWithCurrentContext,
+					BearerToken:      &testBT,
+					Impersonate:      &testImpersonate,
+					ImpersonateGroup: &[]string{"fake-group"},
+				},
+				ioStreams:    &testStreams,
+				ResourceType: util.RayJob,
+				ResourceName: "test-rayjob",
+				Namespace:    testNS,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.Validate()
+			if tc.expectError != "" {
+				assert.Error(t, err, tc.expectError)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

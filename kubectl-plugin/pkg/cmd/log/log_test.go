@@ -23,8 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	"k8s.io/kubectl/pkg/scheme"
@@ -206,44 +204,19 @@ func TestRayClusterLogValidate(t *testing.T) {
 
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
-	// Fake directory for kubeconfig
-	fakeDir, err := os.MkdirTemp("", "fake-config")
+	fakeDir := t.TempDir()
+
+	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
 	assert.NoError(t, err)
-	defer os.RemoveAll(fakeDir)
 
-	// Set up fake config for kubeconfig
-	config := &api.Config{
-		Clusters: map[string]*api.Cluster{
-			"test-cluster": {
-				Server:                "https://fake-kubernetes-cluster.example.com",
-				InsecureSkipTLSVerify: true, // For testing purposes
-			},
-		},
-		Contexts: map[string]*api.Context{
-			"my-fake-context": {
-				Cluster:  "my-fake-cluster",
-				AuthInfo: "my-fake-user",
-			},
-		},
-		CurrentContext: "my-fake-context",
-		AuthInfos: map[string]*api.AuthInfo{
-			"my-fake-user": {
-				Token: "", // Empty for testing without authentication
-			},
-		},
-	}
-
-	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
-
-	if err := clientcmd.WriteToFile(*config, fakeFile); err != nil {
-		t.Fatalf("Failed to write kubeconfig to temp file: %v", err)
-	}
+	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
+	assert.NoError(t, err)
 
 	// Initialize the fake config flag with the fake kubeconfig and values
 	fakeConfigFlags := &genericclioptions.ConfigFlags{
 		Namespace:        &testNS,
 		Context:          &testContext,
-		KubeConfig:       &fakeFile,
+		KubeConfig:       &kubeConfigWithCurrentContext,
 		BearerToken:      &testBT,
 		Impersonate:      &testImpersonate,
 		ImpersonateGroup: &[]string{"fake-group"},
@@ -264,7 +237,33 @@ func TestRayClusterLogValidate(t *testing.T) {
 				nodeType:     "head",
 				ioStreams:    &testStreams,
 			},
-			expectError: "no context is currently set, use \"kubectl config use-context <context>\" to select a new one",
+			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+		},
+		{
+			name: "no error when kubeconfig has current context and --context switch isn't set",
+			opts: &ClusterLogOptions{
+				// Use fake config to bypass the config flag checks
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithCurrentContext,
+				},
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
+			},
+		},
+		{
+			name: "no error when kubeconfig has no current context and --context switch is set",
+			opts: &ClusterLogOptions{
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+					Context:    &testContext,
+				},
+				outputDir:    fakeDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "head",
+				ioStreams:    &testStreams,
+			},
 		},
 		{
 			name: "Test validation when node type is `random-string`",
@@ -319,7 +318,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 			opts: &ClusterLogOptions{
 				// Use fake config to bypass the config flag checks
 				configFlags:  fakeConfigFlags,
-				outputDir:    fakeFile,
+				outputDir:    kubeConfigWithCurrentContext,
 				ResourceName: "fake-cluster",
 				nodeType:     "head",
 				ioStreams:    &testStreams,

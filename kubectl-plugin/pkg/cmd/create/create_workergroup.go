@@ -8,6 +8,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -112,8 +113,8 @@ func (options *CreateWorkerGroupOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if len(config.CurrentContext) == 0 {
-		return fmt.Errorf("no context is currently set, use %q to select a new one", "kubectl config use-context <context>")
+	if !util.HasKubectlContext(config, options.configFlags) {
+		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 
 	return nil
