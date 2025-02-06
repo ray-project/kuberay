@@ -12,6 +12,6 @@ fi
 
 charts=("kuberay-apiserver" "kuberay-operator" "ray-cluster")
 
-for chart in $charts; do
-  helm template ./helm-chart/$chart | kubeconform --summary -schema-location default -schema-location "$raycluster_crd_schema"
+for chart in "${charts[@]}"; do
+  helm template ./helm-chart/"$chart" | kubeconform --summary -schema-location default -schema-location "$raycluster_crd_schema"
 done
