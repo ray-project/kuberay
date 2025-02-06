@@ -57,3 +57,13 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.44.0
+    hooks:
+      - id: markdownlint
+        name: Markdown linting
+        args:
+          - --config
+          - ci/markdownlint.yaml
+          - --fix
