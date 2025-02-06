@@ -35,6 +35,7 @@ python3 -m venv .venv
 # Activate the virtual environment and then execute the subsequent commands
 # within the same sub-shell.
 (
+    # shellcheck disable=SC1091  # Ignore: activate script is created by venv
     source .venv/bin/activate
 
     # Install requirements

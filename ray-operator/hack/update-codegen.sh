@@ -6,8 +6,8 @@
 set -o errexit
 set -o nounset
 set -o pipefail
-
-export GOPATH=$(go env GOPATH)
+GOPATH=$(go env GOPATH)
+export GOPATH
 
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 ROOT_PKG=github.com/ray-project/kuberay/ray-operator
