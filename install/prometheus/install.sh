@@ -18,7 +18,7 @@ monitor_dir=${DIR}/../../config/prometheus
 
 # start to install monitor
 pushd ${monitor_dir}
-for file in `ls`
+for file in *
 do
 kubectl apply -f ${file}
 done
