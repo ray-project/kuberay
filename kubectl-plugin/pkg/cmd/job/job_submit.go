@@ -94,10 +94,10 @@ var (
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
 
 		# Generate Ray job with specifications and submit Ray job with runtime Env file and working directory
-		kubectl ray job submit --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+		kubectl ray job submit --name rayjob-sample --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 
 		# Generate Ray job with specifications and print out the generated RayJob YAML
-		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 	`)
 )
 
@@ -149,8 +149,8 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().BoolVar(&options.noWait, "no-wait", options.noWait, "If present, will not stream logs and wait for job to finish")
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Name of the Ray job that will be generated")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.39.0", "Ray Version to use in the Ray Cluster yaml.")
-	cmd.Flags().StringVar(&options.image, "image", "rayproject/ray:2.39.0", "Ray image to use in the Ray Cluster yaml")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray Version to use in the Ray Cluster yaml.")
+	cmd.Flags().StringVar(&options.image, "image", "rayproject/ray:2.41.0", "Ray image to use in the Ray Cluster yaml")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "Number of CPU for the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "Amount of memory to use for the Ray head")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas")
