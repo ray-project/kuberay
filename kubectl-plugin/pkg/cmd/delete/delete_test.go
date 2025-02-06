@@ -49,7 +49,7 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayjob with namespace",
+			name:                 "valid RayJob with namespace",
 			namespace:            "test-namespace",
 			expectedResourceType: util.RayJob,
 			expectedNamespace:    "test-namespace",

@@ -124,7 +124,7 @@ func TestRayClusterLogComplete(t *testing.T) {
 		hasErr               bool
 	}{
 		{
-			name:                 "valide request with raycluster with empty nodetype input",
+			name:                 "valid request with RayCluster with empty nodetype input",
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
 			expectedNodeType:     "all",
@@ -132,7 +132,7 @@ func TestRayClusterLogComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with raycluster",
+			name:                 "valid request with RayCluster",
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
 			args:                 []string{"rayCluster/test-raycluster"},
@@ -140,15 +140,15 @@ func TestRayClusterLogComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with rayservice",
+			name:                 "valid request with RayService",
 			expectedResourceType: util.RayService,
-			expectedResourceName: "test-rayService",
-			args:                 []string{"rayService/test-rayService"},
+			expectedResourceName: "test-rayservice",
+			args:                 []string{"rayservice/test-rayservice"},
 			expectedNodeType:     "all",
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with rayjob",
+			name:                 "valid request with RayJob",
 			expectedResourceType: util.RayJob,
 			expectedResourceName: "test-rayJob",
 			args:                 []string{"rayJob/test-rayJob"},

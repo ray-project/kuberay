@@ -203,13 +203,13 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 	case util.RayJob:
 		rayJob, err := clientSet.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.ResourceName, v1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to retrieve rayjob info for %s: %w", options.ResourceName, err)
+			return fmt.Errorf("failed to retrieve RayJob info for %s: %w", options.ResourceName, err)
 		}
 		clusterName = rayJob.Status.RayClusterName
 	case util.RayService:
 		rayService, err := clientSet.RayClient().RayV1().RayServices(*options.configFlags.Namespace).Get(ctx, options.ResourceName, v1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to retrieve rayjob info for %s: %w", options.ResourceName, err)
+			return fmt.Errorf("failed to retrieve RayJob info for %s: %w", options.ResourceName, err)
 		}
 		clusterName = rayService.Status.ActiveServiceStatus.RayClusterName
 	default:

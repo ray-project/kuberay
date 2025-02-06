@@ -55,7 +55,7 @@ func NewDeleteCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "delete (RAYCLUSTER | TYPE/NAME)",
-		Short:             "Delete Ray resoruce.",
+		Short:             "Delete Ray resource.",
 		Example:           deleteExample,
 		Long:              `Deletes Ray custom resources such as RayCluster, RayService, or RayJob`,
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
