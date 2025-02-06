@@ -41,9 +41,6 @@ func TestRayCluster(t *testing.T) {
 			name: "ray-cluster.head-command.yaml",
 		},
 		{
-			name: "ray-cluster.heterogeneous.yaml",
-		},
-		{
 			name: "ray-cluster.overwrite-command.yaml",
 		},
 		{

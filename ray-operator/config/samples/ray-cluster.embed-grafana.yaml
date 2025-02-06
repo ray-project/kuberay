@@ -5,12 +5,7 @@ metadata:
 spec:
   # Ray head pod configuration
   headGroupSpec:
-    serviceType: ClusterIP
-    # The `rayStartParams` are used to configure the `ray start` command.
-    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-    rayStartParams:
-      dashboard-host: '0.0.0.0'
+    rayStartParams: {}
     # pod template
     template:
       metadata:
@@ -18,7 +13,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.41.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -64,7 +59,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.41.0
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
