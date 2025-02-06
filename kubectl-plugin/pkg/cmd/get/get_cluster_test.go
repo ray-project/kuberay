@@ -217,7 +217,5 @@ func TestRayClusterGetRun(t *testing.T) {
 	err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
 	require.NoError(t, err)
 
-	if e, a := resbuffer.String(), resBuf.String(); e != a {
-		t.Errorf("\nexpected\n%v\ngot\n%v", e, a)
-	}
+	assert.Equal(t, resbuffer.String(), resBuf.String())
 }
