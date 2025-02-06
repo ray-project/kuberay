@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -20,7 +21,7 @@ func GetSampleYAMLDir(t Test) string {
 	_, b, _, _ := runtime.Caller(0)
 	sampleYAMLDir := filepath.Join(filepath.Dir(b), "../../config/samples")
 	info, err := os.Stat(sampleYAMLDir)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	assert.True(t.T(), info.IsDir())
 	return sampleYAMLDir
 }

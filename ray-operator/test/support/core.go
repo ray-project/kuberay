@@ -9,7 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 
@@ -37,7 +37,7 @@ func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
 	pods, err := t.Client().Core().CoreV1().Pods(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
@@ -56,14 +56,14 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 		t.T().Logf("Error getting logs from container %s/%s/%s", namespace.Name, podName, containerName)
 		return
 	}
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	defer func() {
-		assert.NoError(t.T(), stream.Close())
+		require.NoError(t.T(), stream.Close())
 	}()
 
 	bytes, err := io.ReadAll(stream)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	containerLogFileName := "pod-" + podName + "-" + containerName
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
@@ -88,7 +88,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	t.T().Logf("Executing command: %s", cmd)
 	cfg := t.Client().Config()
 	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	// Capture the output streams
 	var stdout, stderr bytes.Buffer
 	// Execute the command in the pod
@@ -100,7 +100,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	})
 	t.T().Logf("Command stdout: %s", stdout.String())
 	t.T().Logf("Command stderr: %s", stderr.String())
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	return stdout, stderr
 }
 
@@ -141,7 +141,7 @@ func SetupPortForward(t Test, podName, namespace string, localPort, remotePort i
 	go func() {
 		defer GinkgoRecover()
 		err := forwarder.ForwardPorts()
-		assert.NoError(t.T(), err)
+		require.NoError(t.T(), err)
 	}()
 	<-readyChan // wait for port forward to finish
 

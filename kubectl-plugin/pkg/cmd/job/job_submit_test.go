@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
@@ -21,7 +22,7 @@ func TestRayJobSubmitComplete(t *testing.T) {
 
 	err := fakeSubmitJobOptions.Complete()
 	assert.Equal(t, "default", *fakeSubmitJobOptions.configFlags.Namespace)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 }
 
@@ -42,16 +43,16 @@ spec:
 	rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
 
 	file, err := os.Create(rayJobYamlPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = file.Write([]byte(rayYaml))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -111,9 +112,9 @@ spec:
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Error(t, err, tc.expectError)
+				require.Error(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -121,7 +122,7 @@ spec:
 
 func TestDecodeRayJobYaml(t *testing.T) {
 	rayjobtmpfile, err := os.CreateTemp("./", "rayjob-temp-*.yaml")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer os.Remove(rayjobtmpfile.Name())
 
@@ -132,10 +133,10 @@ metadata:
 spec:
   submissionMode: 'InteractiveMode'`
 	_, err = rayjobtmpfile.Write([]byte(rayYaml))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	rayJobYamlActual, err := decodeRayJobYaml(filepath.Join("./", rayjobtmpfile.Name()))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "rayjob-sample", rayJobYamlActual.GetName())
 
@@ -145,7 +146,7 @@ spec:
 
 func TestRuntimeEnvHasWorkingDir(t *testing.T) {
 	runtimeEnvFile, err := os.CreateTemp("./", "runtime-env-*.yaml")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer os.Remove(runtimeEnvFile.Name())
 
@@ -157,10 +158,10 @@ env_vars:
 working_dir: /fake/dir/ray_working_dir/
 `
 	_, err = runtimeEnvFile.Write([]byte(runTimeEnv))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	runtimeEnvActual, err := runtimeEnvHasWorkingDir(filepath.Join("./", runtimeEnvFile.Name()))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotEmpty(t, runtimeEnvActual)
 	assert.Equal(t, runtimeEnvActual, "/fake/dir/ray_working_dir/")
@@ -184,7 +185,7 @@ func TestRaySubmitCmd(t *testing.T) {
 	fakeSubmitJobOptions.entryPoint = "python fake_python_script.py"
 
 	actualCmd, err := fakeSubmitJobOptions.raySubmitCmd()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	expectedCmd := []string{
 		"ray",
 		"job",

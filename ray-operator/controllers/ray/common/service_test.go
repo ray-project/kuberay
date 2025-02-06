@@ -12,6 +12,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -128,7 +129,7 @@ var (
 
 func TestBuildServiceForHeadPod(t *testing.T) {
 	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := instanceWithWrongSvc.Name
@@ -165,7 +166,7 @@ func TestBuildClusterIPServiceForHeadPod(t *testing.T) {
 	os.Setenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE, "true")
 	defer os.Unsetenv(utils.ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE)
 	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// BuildServiceForHeadPod should not generate a headless service for a Head Pod if ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE is set.
 	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
 		t.Fatalf("Not expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
@@ -177,7 +178,7 @@ func TestBuildServiceForHeadPodWithAppNameLabel(t *testing.T) {
 	labels[utils.KubernetesApplicationNameLabelKey] = "testname"
 
 	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, labels, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	actualResult := svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey]
 	expectedResult := "testname"
@@ -199,7 +200,7 @@ func TestBuildServiceForHeadPodWithAnnotations(t *testing.T) {
 	annotations["key1"] = "testvalue1"
 	annotations["key2"] = "testvalue2"
 	svc, err := BuildServiceForHeadPod(context.Background(), *instanceWithWrongSvc, nil, annotations)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !reflect.DeepEqual(svc.ObjectMeta.Annotations, annotations) {
 		t.Fatalf("Expected `%v` but got `%v`", annotations, svc.ObjectMeta.Annotations)
@@ -442,8 +443,8 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	ctx := context.Background()
 	svc1, err1 := BuildServiceForHeadPod(ctx, *instanceWithWrongSvc, nil, nil)
 	svc2, err2 := BuildServiceForHeadPod(ctx, *instanceWithWrongSvc, nil, nil)
-	assert.NoError(t, err1)
-	assert.NoError(t, err2)
+	require.NoError(t, err1)
+	require.NoError(t, err2)
 
 	ports1 := svc1.Spec.Ports
 	ports2 := svc2.Spec.Ports
@@ -501,7 +502,7 @@ func TestBuildHeadlessServiceForRayCluster(t *testing.T) {
 
 func TestBuildServeServiceForRayService(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := instanceWithWrongSvc.Name
@@ -533,7 +534,7 @@ func TestBuildServeServiceForRayService(t *testing.T) {
 
 func TestBuildServeServiceForRayCluster(t *testing.T) {
 	svc, err := BuildServeServiceForRayCluster(context.Background(), *instanceForSvc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	actualResult := svc.Spec.Selector[utils.RayClusterLabelKey]
 	expectedResult := instanceForSvc.Name
@@ -584,7 +585,7 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 		},
 	}
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, svc)
 }
 

@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,17 +48,17 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	}
 
 	hash1, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	*cluster.Spec.WorkerGroupSpecs[0].Replicas++
 	hash2, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
 
 	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
 	cluster.Spec.RayVersion = "2.100.0"
 	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
 }
 
@@ -156,7 +157,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Test 1: There is no head pod. `isHeadPodRunningAndReady` should return false.
 	// In addition, an error should be returned if the number of head pods is not 1.
 	isReady, err := r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.False(t, isReady)
 
 	// Test 2: There is one head pod, but the pod is not running and ready.
@@ -165,7 +166,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, isReady)
 
 	// Test 3: There is one head pod, and the pod is running and ready.
@@ -184,7 +185,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, isReady)
 }
 
@@ -237,11 +238,11 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	ctx := context.TODO()
 	// Create a head service.
 	_, err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.NoError(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList := corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.NoError(t, err, "Fail to get service list")
+	require.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	oldSvc := svcList.Items[0].DeepCopy()
 
@@ -253,22 +254,22 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 		},
 	}
 	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.NoError(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.NoError(t, err, "Fail to get service list")
+	require.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
 	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.NoError(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.NoError(t, err, "Fail to get service list")
+	require.NoError(t, err, "Fail to get service list")
 	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 }
@@ -290,7 +291,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	}
 
 	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
-	assert.NoError(t, err, "Fail to generate head service name")
+	require.NoError(t, err, "Fail to generate head service name")
 	headSvc := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      headSvcName,
@@ -319,7 +320,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	}
 
 	url, err := utils.FetchHeadServiceURL(ctx, r.Client, &cluster, utils.DashboardPortName)
-	assert.NoError(t, err, "Fail to fetch head service url")
+	require.NoError(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }
 
@@ -417,7 +418,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 				dashboardClient = &utils.FakeRayDashboardClient{}
 			}
 			isReady, _, err := getAndCheckServeStatus(ctx, dashboardClient)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expectedReady, isReady)
 		})
 	}
@@ -487,7 +488,7 @@ func TestReconcileRayCluster_CreatePendingCluster(t *testing.T) {
 	}
 
 	activeRayCluster, pendingRayCluster, err := r.reconcileRayCluster(ctx, &rayService)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, activeRayCluster)
 	assert.Equal(t, "pending-cluster", pendingRayCluster.Name)
 }
@@ -511,7 +512,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	activeClusterTemplate := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-cluster",
@@ -564,7 +565,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 			}
 
 			activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, cluster.Name, activeCluster.Name)
 			assert.Nil(t, pendingCluster)
 
@@ -595,7 +596,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-cluster",
@@ -623,7 +624,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	}
 
 	activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, activeCluster)
 	assert.Equal(t, cluster.Name, pendingCluster.Name)
 	assert.Equal(t, expectedWorkerGroupCount, len(pendingCluster.Spec.WorkerGroupSpecs))
@@ -721,11 +722,11 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 			}
 
 			err := r.updateHeadPodServeLabel(ctx, &rayv1.RayService{}, &cluster, tc.excludeHeadPodFromServeSvc)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			// Get latest headPod status
 			headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 			assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], tc.expectServeResult)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -965,7 +966,7 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			rayService.Namespace = "test-namespace"
 			clusterName := "test-cluster"
 			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme.Scheme)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Check ObjectMeta of the RayCluster
 			assert.Equal(t, rayCluster.ObjectMeta.Name, clusterName)
@@ -1075,7 +1076,7 @@ func TestIsClusterSpecHashEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service := rayService.DeepCopy()
 			hash, err := generateHashWithoutReplicasAndWorkersToDelete(service.Spec.RayClusterSpec)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			cluster := rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -1138,7 +1139,7 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      activeClusterName,
@@ -1176,7 +1177,7 @@ func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pendingClusterName,

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Ptr[T any](v T) *T {
@@ -21,5 +21,5 @@ const (
 func WriteToOutputDir(t Test, fileName string, fileType OutputType, data []byte) {
 	t.T().Helper()
 	err := os.WriteFile(path.Join(t.OutputDir(), fileName+"."+string(fileType)), data, fs.ModePerm)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 }

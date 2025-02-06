@@ -6,6 +6,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 )
 
@@ -100,9 +101,9 @@ func TestComplete(t *testing.T) {
 			fakeSessionOptions.configFlags.Namespace = &tc.namespace
 			err := fakeSessionOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectedNamespace, fakeSessionOptions.Namespace)
 				assert.Equal(t, tc.expectedResourceType, fakeSessionOptions.ResourceType)
 				assert.Equal(t, tc.expectedName, fakeSessionOptions.ResourceName)

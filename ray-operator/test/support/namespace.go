@@ -1,7 +1,7 @@
 package support
 
 import (
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,11 +20,11 @@ func createTestNamespace(t Test, options ...Option[*corev1.Namespace]) *corev1.N
 	}
 
 	for _, option := range options {
-		assert.NoError(t.T(), option.applyTo(namespace))
+		require.NoError(t.T(), option.applyTo(namespace))
 	}
 
 	namespace, err := t.Client().Core().CoreV1().Namespaces().Create(t.Ctx(), namespace, metav1.CreateOptions{})
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	return namespace
 }
@@ -35,5 +35,5 @@ func deleteTestNamespace(t Test, namespace *corev1.Namespace) {
 	err := t.Client().Core().CoreV1().Namespaces().Delete(t.Ctx(), namespace.Name, metav1.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	})
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 }

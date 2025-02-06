@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,14 +154,14 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	yk.populateTaskGroupsAnnotationToPod(ctx, rayClusterWithGangScheduling, rayPod)
 
 	kk, err := getTaskGroupsFromAnnotation(rayPod)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(kk), 2)
 	// verify the annotation value
 	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
 	assert.NotEmpty(t, taskGroupsSpec)
 	taskGroups := newTaskGroups()
 	err = taskGroups.unmarshalFrom(taskGroupsSpec)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(taskGroups.Groups), 2)
 
 	// verify the correctness of head group

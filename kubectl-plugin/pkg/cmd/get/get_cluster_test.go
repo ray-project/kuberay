@@ -7,6 +7,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -32,7 +33,7 @@ func TestRayClusterGetComplete(t *testing.T) {
 	fakeClusterGetOptions.AllNamespaces = false
 
 	err := fakeClusterGetOptions.Complete(fakeArgs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.True(t, fakeClusterGetOptions.AllNamespaces)
 	assert.Equal(t, fakeClusterGetOptions.args, fakeArgs)
@@ -45,10 +46,10 @@ func TestRayClusterGetValidate(t *testing.T) {
 	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -139,9 +140,9 @@ func TestRayClusterGetValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Error(t, err, tc.expectError)
+				require.Error(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -211,10 +212,10 @@ func TestRayClusterGetRun(t *testing.T) {
 	// Result buffer for the expected table result
 	var resbuffer bytes.Buffer
 	err := expectedTestResultTable.PrintObj(testResTable, &resbuffer)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = fakeClusterGetOptions.Run(context.Background(), k8sClients)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if e, a := resbuffer.String(), resBuf.String(); e != a {
 		t.Errorf("\nexpected\n%v\ngot\n%v", e, a)
