@@ -14,7 +14,7 @@ spec:
         import_path: text_ml.app
         route_prefix: /summarize_translate
         runtime_env:
-          working_dir: "https://github.com/ray-project/serve_config_examples/archive/36862c251615e258a58285934c7c41cffd1ee3b7.zip"
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/eb49e7cacd846ed12daf0d0f0cf496d3f30d8f0f.zip"
           pip:
             - torch
             - transformers
@@ -30,21 +30,20 @@ spec:
             ray_actor_options:
               num_cpus: 0.2
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
       # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams:
-        dashboard-host: '0.0.0.0'
+      rayStartParams: {}
       #pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.41.0
               resources:
                 limits:
                   cpu: 2
@@ -77,7 +76,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.41.0
                 resources:
                   limits:
                     cpu: "1"
