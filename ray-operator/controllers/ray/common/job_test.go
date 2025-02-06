@@ -22,7 +22,7 @@ var testRayJob = &rayv1.RayJob{
 		RayClusterSpec: &rayv1.RayClusterSpec{
 			RayVersion: "2.6.0",
 		},
-		Entrypoint:          "echo hello",
+		Entrypoint:          "echo no quote 'single quote' \"double quote\"",
 		EntrypointNumCpus:   1,
 		EntrypointNumGpus:   0.5,
 		EntrypointResources: `{"Custom_1": 1, "Custom_2": 5.5}`,
@@ -86,7 +86,7 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--entrypoint-num-gpus", "0.500000",
 		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
 		"--",
-		"echo", "hello",
+		"echo no quote 'single quote' \"double quote\"",
 		";", "fi",
 	}
 	command, err := GetK8sJobCommand(testRayJob)
@@ -107,7 +107,7 @@ pip: ["python-multipart==0.0.6"]
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: "2.6.0",
 			},
-			Entrypoint: "echo hello",
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
 		},
 		Status: rayv1.RayJobStatus{
 			DashboardURL: "http://127.0.0.1:8265",
@@ -125,7 +125,7 @@ pip: ["python-multipart==0.0.6"]
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
 		"--",
-		"echo", "hello",
+		"echo no quote 'single quote' \"double quote\"",
 		";", "fi",
 	}
 	command, err := GetK8sJobCommand(rayJobWithYAML)

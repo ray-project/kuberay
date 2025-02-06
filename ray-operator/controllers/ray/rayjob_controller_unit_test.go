@@ -97,7 +97,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// RayJob instance with user-provided submitter pod template.
 	rayJobInstanceWithTemplate := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Entrypoint: "echo hello world",
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
 			SubmitterPodTemplate: &corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -118,7 +118,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// In this case we should use the image of the Ray Head, so specify the image so we can test it.
 	rayJobInstanceWithoutTemplate := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Entrypoint: "echo hello world",
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: corev1.PodTemplateSpec{
@@ -165,14 +165,14 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	assert.Equal(t, []string{"/bin/bash"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	assert.Equal(t, []string{"/bin/bash"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
