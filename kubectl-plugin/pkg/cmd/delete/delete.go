@@ -28,10 +28,10 @@ type DeleteOptions struct {
 }
 
 var deleteExample = templates.Examples(`
-		# Delete RayCluster
+		# Delete Ray cluster
 		kubectl ray delete sample-raycluster
 
-		# Delete RayCluster with specificed ray resource
+		# Delete Ray cluster with specificed Ray resource
 		kubectl ray delete raycluster/sample-raycluster
 
 		# Delete RayJob
@@ -55,7 +55,7 @@ func NewDeleteCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "delete (RAYCLUSTER | TYPE/NAME)",
-		Short:             "Delete Ray resource.",
+		Short:             "Delete Ray resource",
 		Example:           deleteExample,
 		Long:              `Deletes Ray custom resources such as RayCluster, RayService, or RayJob`,
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),

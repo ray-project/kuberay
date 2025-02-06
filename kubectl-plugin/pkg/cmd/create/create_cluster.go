@@ -73,16 +73,16 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 		},
 	}
 
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.41.0")
-	cmd.Flags().StringVar(&options.image, "image", options.image, "Ray image to use in the Ray Cluster yaml")
-	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "Number of CPU for the ray head. Default to 2")
-	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "Amount of memory to use for the ray head. Default to 4Gi")
-	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "Number of GPUs for the ray head. Default to 0")
-	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas. Default of 1")
-	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "Number of CPU for the ray worker. Default to 2")
-	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "Amount of memory to use for the ray worker. Default to 4Gi")
-	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "Number of GPUs for the ray worker. Default to 0")
-	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "Will not apply the generated cluster and will print out the generated yaml")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray version to use")
+	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
+	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
+	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
+	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
+	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -146,7 +146,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 	if options.dryRun {
 		rayClusterYaml, err := generation.ConvertRayClusterApplyConfigToYaml(rayClusterac)
 		if err != nil {
-			return fmt.Errorf("Error when converting RayClusterApplyConfig to yaml: %w", err)
+			return fmt.Errorf("Error when converting RayClusterApplyConfig to YAML: %w", err)
 		}
 		fmt.Printf("%s\n", rayClusterYaml)
 		return nil
@@ -157,7 +157,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 	// Applying the YAML
 	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
 	if err != nil {
-		return fmt.Errorf("Failed to create Ray Cluster with: %w", err)
+		return fmt.Errorf("Failed to create Ray cluster with: %w", err)
 	}
 	fmt.Printf("Created Ray Cluster: %s\n", result.GetName())
 	return nil

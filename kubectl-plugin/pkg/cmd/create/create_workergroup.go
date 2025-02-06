@@ -37,11 +37,11 @@ type CreateWorkerGroupOptions struct {
 
 var (
 	createWorkerGroupLong = templates.LongDesc(`
-		Adds a worker group to an existing RayCluster.
+		Adds a worker group to an existing Ray cluster.
 	`)
 
 	createWorkerGroupExample = templates.Examples(`
-		# Create a worker group in an existing RayCluster
+		# Create a worker group in an existing Ray cluster
 		kubectl ray create worker-group example-group --cluster sample-cluster --image rayproject/ray:2.41.0 --worker-cpu=2 --worker-memory=5Gi
 	`)
 )
@@ -62,7 +62,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 
 	cmd := &cobra.Command{
 		Use:          "workergroup [WORKERGROUP]",
-		Short:        "Create worker group in an existing RayCluster",
+		Short:        "Create worker group in an existing Ray cluster",
 		Long:         createWorkerGroupLong,
 		Example:      createWorkerGroupExample,
 		SilenceUsage: true,
@@ -77,15 +77,15 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 		},
 	}
 
-	cmd.Flags().StringVar(&options.clusterName, "ray-cluster", "", "The name of the RayCluster to add a worker group.")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.41.0")
-	cmd.Flags().StringVar(&options.image, "image", options.image, "Ray image to use in the Ray Cluster yaml")
-	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas. Default of 1")
-	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "Number of the worker group replicas. Default of 10")
-	cmd.Flags().Int32Var(&options.workerMaxReplicas, "worker-max-replicas", 10, "Number of the worker group replicas. Default of 10")
-	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "Number of CPU for the ray worker. Default to 2")
-	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "Number of GPU for the ray worker. Default to 0")
-	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "Amount of memory to use for the ray worker. Default to 4Gi")
+	cmd.Flags().StringVarP(&options.clusterName, "ray-cluster", "c", "", "Ray cluster to add a worker group to")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray version to use")
+	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
+	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "minimum number of replicas")
+	cmd.Flags().Int32Var(&options.workerMaxReplicas, "worker-max-replicas", 10, "maximum number of replicas")
+	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
+	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
+	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -128,7 +128,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	rayCluster, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.clusterName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting RayCluster: %w", err)
+		return fmt.Errorf("error getting Ray cluster: %w", err)
 	}
 
 	newRayCluster := rayCluster.DeepCopy()
@@ -144,6 +144,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 							corev1.ResourceMemory: resource.MustParse(options.workerMemory),
 						},
 						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse(options.workerCPU),
 							corev1.ResourceMemory: resource.MustParse(options.workerMemory),
 						},
 					},
@@ -170,9 +171,9 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("error updating RayCluster with new worker group: %w", err)
+		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
 	}
 
-	fmt.Printf("Updated RayCluster %s/%s with new worker group\n", newRayCluster.Namespace, newRayCluster.Name)
+	fmt.Printf("Updated Ray cluster %s/%s with new worker group\n", newRayCluster.Namespace, newRayCluster.Name)
 	return nil
 }
