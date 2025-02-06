@@ -100,7 +100,7 @@ def parse_vllm_args(cli_args: Dict[str, str]):
         description="vLLM OpenAI-Compatible RESTful API server."
     )
 
-    parser = make_arg_parser(parser)
+    parser = make_arg_parser(arg_parser)
     arg_strings = []
     for key, value in cli_args.items():
         arg_strings.extend([f"--{key}", str(value)])
