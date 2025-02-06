@@ -20,6 +20,10 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 )
 
+const (
+	resourceNvidiaGPU = "nvidia.com/gpu"
+)
+
 type CreateWorkerGroupOptions struct {
 	configFlags       *genericclioptions.ConfigFlags
 	ioStreams         *genericclioptions.IOStreams
@@ -132,6 +136,19 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 	}
 
 	newRayCluster := rayCluster.DeepCopy()
+
+	newRayCluster.Spec.WorkerGroupSpecs = append(newRayCluster.Spec.WorkerGroupSpecs, createWorkerGroupSpec(options))
+
+	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
+	}
+
+	fmt.Printf("Updated Ray cluster %s/%s with new worker group\n", newRayCluster.Namespace, newRayCluster.Name)
+	return nil
+}
+
+func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupSpec {
 	podTemplate := corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -155,11 +172,11 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	gpuResource := resource.MustParse(options.workerGPU)
 	if !gpuResource.IsZero() {
-		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = gpuResource
-		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName("nvidia.com/gpu")] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
 	}
 
-	workerGroup := rayv1.WorkerGroupSpec{
+	return rayv1.WorkerGroupSpec{
 		GroupName:      options.groupName,
 		Replicas:       &options.workerReplicas,
 		MinReplicas:    &options.workerMinReplicas,
@@ -167,13 +184,4 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 		RayStartParams: map[string]string{},
 		Template:       podTemplate,
 	}
-	newRayCluster.Spec.WorkerGroupSpecs = append(newRayCluster.Spec.WorkerGroupSpecs, workerGroup)
-
-	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
-	}
-
-	fmt.Printf("Updated Ray cluster %s/%s with new worker group\n", newRayCluster.Namespace, newRayCluster.Name)
-	return nil
 }
