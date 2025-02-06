@@ -243,7 +243,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	svcList := corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	require.NoError(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	oldSvc := svcList.Items[0].DeepCopy()
 
 	// Test 1: When the service for the RayCluster already exists, it should not be updated.
@@ -259,7 +259,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	require.NoError(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 
 	// Test 2: When the RayCluster switches, the service should be updated.
@@ -270,7 +270,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
 	require.NoError(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 }
 
@@ -572,7 +572,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 			if test.updateKubeRayVersion {
 				assert.Equal(t, utils.KUBERAY_VERSION, activeCluster.Annotations[utils.KubeRayVersion])
 			}
-			assert.Equal(t, expectedWorkerGroupCount, len(activeCluster.Spec.WorkerGroupSpecs))
+			assert.Len(t, activeCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 		})
 	}
 }
@@ -627,7 +627,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, activeCluster)
 	assert.Equal(t, cluster.Name, pendingCluster.Name)
-	assert.Equal(t, expectedWorkerGroupCount, len(pendingCluster.Spec.WorkerGroupSpecs))
+	assert.Len(t, pendingCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {

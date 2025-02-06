@@ -453,7 +453,7 @@ func TestRayClusterLogRun(t *testing.T) {
 	// Check that the two directories are there
 	entries, err := os.ReadDir(fakeDir)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(entries))
+	assert.Len(t, entries, 2)
 
 	assert.Equal(t, "test-cluster-kuberay-head-1", entries[0].Name())
 	assert.Equal(t, "test-cluster-kuberay-head-2", entries[1].Name())
@@ -463,7 +463,7 @@ func TestRayClusterLogRun(t *testing.T) {
 		currPath := filepath.Join(fakeDir, entry.Name())
 		currDir, err := os.ReadDir(currPath)
 		require.NoError(t, err)
-		assert.Equal(t, 1, len(currDir))
+		assert.Len(t, currDir, 1)
 		openfile, err := os.Open(filepath.Join(currPath, "stdout.log"))
 		require.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
@@ -518,13 +518,13 @@ func TestDownloadRayLogFiles(t *testing.T) {
 
 	entries, err := os.ReadDir(fakeDir)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(entries))
+	assert.Len(t, entries, 1)
 
 	// Assert the files
 	assert.True(t, entries[0].IsDir())
 	files, err := os.ReadDir(filepath.Join(fakeDir, entries[0].Name()))
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(files))
+	assert.Len(t, files, 2)
 
 	expectedfileoutput := []struct {
 		Name string

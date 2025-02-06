@@ -110,7 +110,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	}
 
 	// rules count
-	assert.Equal(t, 1, len(ingress.Spec.Rules))
+	assert.Len(t, ingress.Spec.Rules, 1)
 
 	// paths count
 	expectedPaths := 1 // dashboard only
