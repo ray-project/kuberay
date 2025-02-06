@@ -27,6 +27,11 @@ repos:
     hooks:
       - id: gitleaks
 
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+
   - repo: local
     hooks:
       - id: golangci-lint
