@@ -41,8 +41,11 @@ var (
 	`)
 
 	createWorkerGroupExample = templates.Examples(`
+		# Create a worker group in an existing Ray cluster with defaults
+		kubectl ray create workergroup example-group --ray-cluster sample-cluster
+
 		# Create a worker group in an existing Ray cluster
-		kubectl ray create worker-group example-group --cluster sample-cluster --image rayproject/ray:2.41.0 --worker-cpu=2 --worker-memory=5Gi
+		kubectl ray create workergroup example-group --ray-cluster sample-cluster --image rayproject/ray:2.41.0 --worker-cpu 2 --worker-memory 5Gi
 	`)
 )
 
@@ -61,7 +64,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	rest.SetDefaultWarningHandler(rest.NoWarnings{})
 
 	cmd := &cobra.Command{
-		Use:          "workergroup [WORKERGROUP]",
+		Use:          "workergroup (WORKERGROUP) [(-r|--ray-cluster) RAYCLUSTER]",
 		Short:        "Create worker group in an existing Ray cluster",
 		Long:         createWorkerGroupLong,
 		Example:      createWorkerGroupExample,
