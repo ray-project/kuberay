@@ -8,6 +8,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -20,10 +21,10 @@ func TestRayVersionCheckContext(t *testing.T) {
 	testContext := "test-context"
 
 	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, "my-fake-context")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -76,7 +77,7 @@ func TestRayVersionCheckContext(t *testing.T) {
 			if tc.expectError != "" {
 				assert.Equal(t, tc.expectError, err.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -147,7 +148,7 @@ func TestRayVersionRun(t *testing.T) {
 
 			var buf bytes.Buffer
 			err := fakeVersionOptions.Run(context.Background(), fClient, &buf)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected, buf.String())
 		})
