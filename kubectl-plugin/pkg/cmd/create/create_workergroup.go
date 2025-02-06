@@ -42,7 +42,7 @@ var (
 
 	createWorkerGroupExample = templates.Examples(`
 		# Create a worker group in an existing RayCluster
-		kubectl ray create worker-group example-group --cluster sample-cluster --image rayproject/ray:2.39.0 --worker-cpu=2 --worker-memory=5Gi
+		kubectl ray create worker-group example-group --cluster sample-cluster --image rayproject/ray:2.41.0 --worker-cpu=2 --worker-memory=5Gi
 	`)
 )
 
@@ -78,7 +78,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	}
 
 	cmd.Flags().StringVar(&options.clusterName, "ray-cluster", "", "The name of the RayCluster to add a worker group.")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.39.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.39.0")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.41.0")
 	cmd.Flags().StringVar(&options.image, "image", options.image, "Ray image to use in the Ray Cluster yaml")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas. Default of 1")
 	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "Number of the worker group replicas. Default of 10")

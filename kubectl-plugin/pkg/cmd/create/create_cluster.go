@@ -41,7 +41,7 @@ var (
 		kubectl ray create cluster sample-cluster
 
 		# Creates Ray Cluster from flags input
-		kubectl ray create cluster sample-cluster --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
+		kubectl ray create cluster sample-cluster --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
 	`)
 )
 
@@ -73,7 +73,7 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 		},
 	}
 
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.39.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.39.0")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray Version to use in the Ray Cluster yaml. Default to 2.41.0")
 	cmd.Flags().StringVar(&options.image, "image", options.image, "Ray image to use in the Ray Cluster yaml")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "Number of CPU for the ray head. Default to 2")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "Amount of memory to use for the ray head. Default to 4Gi")
