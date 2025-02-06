@@ -245,14 +245,14 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, 1, len(testPod.Spec.Containers[0].VolumeMounts))
-	assert.Equal(t, 1, len(testPod.Spec.Volumes))
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 1)
+	assert.Len(t, testPod.Spec.Volumes, 1)
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, 2, len(testPod.Spec.Containers[0].VolumeMounts))
-	assert.Equal(t, 2, len(testPod.Spec.Volumes))
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 2)
+	assert.Len(t, testPod.Spec.Volumes, 2)
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, 2, len(testPod.Spec.Containers[0].VolumeMounts))
-	assert.Equal(t, 2, len(testPod.Spec.Volumes))
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 2)
+	assert.Len(t, testPod.Spec.Volumes, 2)
 }
 
 func TestGetHeadPort(t *testing.T) {
