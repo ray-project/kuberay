@@ -4,11 +4,11 @@ if [ -L "${BASH_SOURCE-$0}" ]; then
 else
   PWD=$(dirname "${BASH_SOURCE-$0}")
 fi
-CURRENT_PATH=$(cd "${PWD}">/dev/null || exit; pwd)
+CURRENT_PATH=$(cd "${PWD}">/dev/null || exit 1; pwd)
 export CURRENT_PATH
 export KUBERAY_HOME=${CURRENT_PATH}/../../
 
-cd "$KUBERAY_HOME" || exit
+cd "$KUBERAY_HOME" || exit 1
 if [ "$#" == 1 ] && [ "$1" == "local" ]; then
   ct lint --all --chart-dirs helm-chart/ --validate-maintainers=false
 else
