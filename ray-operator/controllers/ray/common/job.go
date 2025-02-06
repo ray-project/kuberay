@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
-	"github.com/google/shlex"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
@@ -60,7 +59,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	address := rayJobInstance.Status.DashboardURL
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
-	entrypoint := rayJobInstance.Spec.Entrypoint
+	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
 	entrypointNumCpus := rayJobInstance.Spec.EntrypointNumCpus
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
@@ -120,15 +119,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	k8sJobCommand = append(k8sJobCommand, "--")
-
-	commandSlice, err := shlex.Split(entrypoint)
-	if err != nil {
-		return nil, err
-	}
-	k8sJobCommand = append(k8sJobCommand, commandSlice...)
-
-	k8sJobCommand = append(k8sJobCommand, ";", "fi")
+	k8sJobCommand = append(k8sJobCommand, "--", entrypoint, ";", "fi")
 
 	return k8sJobCommand, nil
 }
