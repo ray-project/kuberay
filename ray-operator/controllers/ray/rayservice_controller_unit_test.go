@@ -979,8 +979,8 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			// Check annotations for metadata
 			assert.NotEmpty(t, rayCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey])
 			expectedNumWorkerGroups := strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
-			assert.Equal(t, rayCluster.Annotations[utils.NumWorkerGroupsKey], expectedNumWorkerGroups)
-			assert.Equal(t, rayCluster.Annotations[utils.KubeRayVersion], utils.KUBERAY_VERSION)
+			assert.Equal(t, expectedNumWorkerGroups, rayCluster.Annotations[utils.NumWorkerGroupsKey])
+			assert.Equal(t, utils.KUBERAY_VERSION, rayCluster.Annotations[utils.KubeRayVersion])
 
 			// Check whether the RayService's labels are copied to the RayCluster
 			for key, value := range rayService.Labels {

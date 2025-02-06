@@ -413,10 +413,10 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 	}
 
 	availableCount := CalculateAvailableReplicas(podList)
-	assert.Equal(t, availableCount, int32(1), "expect 1 available replica")
+	assert.Equal(t, int32(1), availableCount, "expect 1 available replica")
 
 	readyCount := CalculateReadyReplicas(podList)
-	assert.Equal(t, readyCount, int32(1), "expect 1 ready replica")
+	assert.Equal(t, int32(1), readyCount, "expect 1 ready replica")
 }
 
 func TestFindContainerPort(t *testing.T) {
@@ -455,7 +455,7 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1.RayClusterSpec{}, "raycluster-sample")
 	expectedGeneratedSvcName := "raycluster-sample-head-svc"
 	require.NoError(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Test 2: `HeadService.Name` is not empty.
 	clusterSpecWithHeadService := rayv1.RayClusterSpec{
@@ -470,19 +470,19 @@ func TestGenerateHeadServiceName(t *testing.T) {
 
 	headSvcName, err = GenerateHeadServiceName(RayClusterCRD, *clusterSpecWithHeadService.DeepCopy(), "raycluster-sample")
 	require.NoError(t, err)
-	assert.Equal(t, headSvcName, "my-head-svc")
+	assert.Equal(t, "my-head-svc", headSvcName)
 
 	// [RayService]
 	// Test 3: `HeadService.Name` is empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1.RayClusterSpec{}, "rayservice-sample")
 	expectedGeneratedSvcName = "rayservice-sample-head-svc"
 	require.NoError(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Test 4: `HeadService.Name` is not empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, *clusterSpecWithHeadService.DeepCopy(), "rayservice-sample")
 	require.NoError(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Invalid CRD type
 	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
@@ -528,7 +528,7 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
 	workerGroupSpec.Suspend = &suspend
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), int32(0))
+	assert.Zero(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec))
 }
 
 func TestCalculateMinReplicas(t *testing.T) {
@@ -550,7 +550,7 @@ func TestCalculateMinReplicas(t *testing.T) {
 	for i := range rayCluster.Spec.WorkerGroupSpecs {
 		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
 	}
-	assert.Equal(t, CalculateMinReplicas(rayCluster), int32(0))
+	assert.Zero(t, CalculateMinReplicas(rayCluster))
 }
 
 func TestCalculateMaxReplicas(t *testing.T) {
@@ -572,7 +572,7 @@ func TestCalculateMaxReplicas(t *testing.T) {
 	for i := range rayCluster.Spec.WorkerGroupSpecs {
 		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
 	}
-	assert.Equal(t, CalculateMaxReplicas(rayCluster), int32(0))
+	assert.Zero(t, CalculateMaxReplicas(rayCluster))
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
@@ -722,17 +722,17 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 }
 
 func TestErrRayClusterReplicaFailureReason(t *testing.T) {
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteAllPods), "FailedDeleteAllPods")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod), "FailedDeleteHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateHeadPod), "FailedCreateHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod), "FailedDeleteWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod), "FailedCreateWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))), "FailedDeleteAllPods")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))), "FailedDeleteHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))), "FailedCreateHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))), "FailedDeleteWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
+	assert.Equal(t, "FailedDeleteAllPods", RayClusterReplicaFailureReason(ErrFailedDeleteAllPods))
+	assert.Equal(t, "FailedDeleteHeadPod", RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod))
+	assert.Equal(t, "FailedCreateHeadPod", RayClusterReplicaFailureReason(ErrFailedCreateHeadPod))
+	assert.Equal(t, "FailedDeleteWorkerPod", RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod))
+	assert.Equal(t, "FailedCreateWorkerPod", RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod))
+	assert.Equal(t, "FailedDeleteAllPods", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))))
+	assert.Equal(t, "FailedDeleteHeadPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))))
+	assert.Equal(t, "FailedCreateHeadPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))))
+	assert.Equal(t, "FailedDeleteWorkerPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))))
+	assert.Equal(t, "FailedCreateWorkerPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))))
+	assert.Empty(t, RayClusterReplicaFailureReason(errors.New("other error")))
 }
 
 func TestIsAutoscalingEnabled(t *testing.T) {

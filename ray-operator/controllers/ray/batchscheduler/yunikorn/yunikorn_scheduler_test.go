@@ -155,14 +155,14 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 
 	kk, err := getTaskGroupsFromAnnotation(rayPod)
 	require.NoError(t, err)
-	assert.Equal(t, len(kk), 2)
+	assert.Equal(t, 2, len(kk))
 	// verify the annotation value
 	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
 	assert.NotEmpty(t, taskGroupsSpec)
 	taskGroups := newTaskGroups()
 	err = taskGroups.unmarshalFrom(taskGroupsSpec)
 	require.NoError(t, err)
-	assert.Equal(t, len(taskGroups.Groups), 2)
+	assert.Equal(t, 2, len(taskGroups.Groups))
 
 	// verify the correctness of head group
 	headGroup := taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)
