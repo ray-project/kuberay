@@ -83,7 +83,7 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
-		Short:             "Get ray cluster log",
+		Short:             "Get Ray cluster log",
 		Long:              logLong,
 		Example:           logExample,
 		Aliases:           []string{"logs"},
@@ -195,7 +195,7 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		return fmt.Errorf("failed to retrieve kubernetes client set: %w", err)
 	}
 
-	// Retrieve raycluster name for the non raycluster type node
+	// Retrieve RayCluster name for the non RayCluster type node
 	var clusterName string
 	switch options.ResourceType {
 	case util.RayCluster:
@@ -245,13 +245,13 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		if deleteOutputDir {
 			os.Remove(options.outputDir)
 		}
-		return fmt.Errorf("No ray nodes found for resource %s", clusterName)
+		return fmt.Errorf("No Ray nodes found for resource %s", clusterName)
 	}
 
-	// Get a list of logs of the ray nodes.
+	// Get a list of logs of the Ray nodes.
 	var logList []*bytes.Buffer
 	for _, rayNode := range rayNodes.Items {
-		// Since the first container is always the ray container, we will retrieve the first container logs
+		// Since the first container is always the Ray container, we will retrieve the first container logs
 		containerName := rayNode.Spec.Containers[0].Name
 		request := clientSet.KubernetesClient().CoreV1().Pods(rayNode.Namespace).GetLogs(rayNode.Name, &corev1.PodLogOptions{Container: containerName})
 
@@ -271,7 +271,7 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		logList = append(logList, buf)
 	}
 
-	// Pod file name format is name of the ray node
+	// Pod file name format is name of the Ray node
 	for ind, logList := range logList {
 		curFilePath := filepath.Join(options.outputDir, rayNodes.Items[ind].Name, "stdout.log")
 		dirPath := filepath.Join(options.outputDir, rayNodes.Items[ind].Name)
@@ -336,7 +336,7 @@ func (dre *DefaultRemoteExecutor) CreateExecutor(restConfig *rest.Config, url *u
 	return remotecommand.NewSPDYExecutor(restConfig, "POST", url)
 }
 
-// downloadRayLogFiles will use to the executor and retrieve the logs file from the inputted ray head
+// downloadRayLogFiles will use to the executor and retrieve the logs file from the inputted Ray head
 func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec remotecommand.Executor, rayNode corev1.Pod) error {
 	outreader, outStream := io.Pipe()
 	go func() {
@@ -356,7 +356,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 	tarReader := tar.NewReader(outreader)
 	header, err := tarReader.Next()
 	if err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("error will extracting head tar file for ray head %s: %w", rayNode.Name, err)
+		return fmt.Errorf("error will extracting head tar file for Ray head %s: %w", rayNode.Name, err)
 	}
 
 	fmt.Fprintf(options.ioStreams.Out, "Downloading log for Ray Node %s\n", rayNode.Name)
