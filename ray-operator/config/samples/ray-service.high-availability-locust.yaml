@@ -12,7 +12,7 @@ spec:
       args:
         num_forwards: 0
       runtime_env:
-        working_dir: https://github.com/ray-project/serve_workloads/archive/a2e2405f3117f1b4134b6924b5f44c4ff0710c00.zip
+        working_dir: https://github.com/ray-project/serve_workloads/archive/a9f184f4d9ddb7f9a578502ae106470f87a702ef.zip
       deployments:
       - name: NoOp
         autoscaling_config:
@@ -27,7 +27,7 @@ spec:
         ray_actor_options:
           num_cpus: 1
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
     enableInTreeAutoscaling: true
     autoscalerOptions:
       idleTimeoutSeconds: 1
@@ -39,13 +39,12 @@ spec:
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams:
         num-cpus: "0"
-        dashboard-host: '0.0.0.0'
       #pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.41.0
               resources:
                 limits:
                   cpu: 2
@@ -77,7 +76,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.41.0
                 resources:
                   limits:
                     cpu: 1
@@ -89,19 +88,16 @@ spec:
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
   name: locust-cluster
 spec:
-  rayVersion: '2.9.0'
+  rayVersion: '2.41.0'
   headGroupSpec:
-    rayStartParams:
-      dashboard-host: '0.0.0.0'
+    rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.41.0
           resources:
             limits:
               cpu: 3
