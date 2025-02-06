@@ -58,7 +58,6 @@ linters-settings:
   # TODO: Enable all testifylint rules
   testifylint:
     disable:
-      - float-compare
       - expected-actual
       - len
       - compares
