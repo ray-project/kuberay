@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-kuberay
 spec:
-  rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.41.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     rayStartParams: {}
@@ -16,7 +16,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.0
+          image: rayproject/ray:2.41.0
           resources:
             limits:
               cpu: 1
@@ -44,7 +44,7 @@ spec:
         spec:
           containers:
             - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.41.0
               resources:
                 limits:
                   cpu: 1
