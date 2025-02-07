@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: raycluster-tpu-v6e-256-multihost
+  name: raycluster-tpu-v6e-multihost
 spec:
   rayVersion: '2.41.0'
   headGroupSpec:
