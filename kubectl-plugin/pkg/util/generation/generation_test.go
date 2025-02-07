@@ -1,6 +1,7 @@
 package generation
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -100,7 +102,7 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
 	require.NoError(t, err)
-	expectedResultYaml := `apiVersion: ray.io/v1
+	expectedResultYaml := fmt.Sprintf(`apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: test-ray-cluster
@@ -147,7 +149,7 @@ spec:
               memory: 10Gi
             requests:
               cpu: "2"
-              memory: 10Gi`
+              memory: 10Gi`, util.RayImage, util.RayVersion, util.RayImage)
 
-	assert.Equal(t, expectedResultYaml, strings.TrimSpace(resultString))
+	assert.Equal(t, strings.TrimSpace(expectedResultYaml), strings.TrimSpace(resultString))
 }

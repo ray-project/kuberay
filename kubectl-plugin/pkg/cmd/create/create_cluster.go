@@ -39,7 +39,7 @@ var (
 	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray Cluster using default values
 		kubectl ray create cluster sample-cluster
-	
+
 		# Creates Ray Cluster from flags input
 		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
 	`, util.RayVersion, util.RayImage))

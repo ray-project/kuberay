@@ -83,19 +83,19 @@ var (
 	jobSubmitExample = templates.Examples(fmt.Sprintf(`
 		# Submit Ray job with working-directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ -- python my_script.py
-	
+
 		# Submit Ray job with runtime Env file and working directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
-	
+
 		# Submit Ray job with runtime Env file assuming runtime-env has working_dir set
 		kubectl ray job submit -f rayjob.yaml --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-	
+
 		# Submit generated Ray job with default values and with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
-	
+
 		# Generate Ray job with specifications and submit Ray job with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-	
+
 		# Generate Ray job with specifications and print out the generated RayJob YAML
 		kubectl ray job submit --dry-run --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))

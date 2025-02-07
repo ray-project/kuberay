@@ -47,7 +47,7 @@ var (
 	createWorkerGroupExample = templates.Examples(fmt.Sprintf(`
 		# Create a worker group in an existing Ray cluster with defaults
 		kubectl ray create workergroup example-group --ray-cluster sample-cluster
-	
+
 		# Create a worker group in an existing Ray cluster
 		kubectl ray create workergroup example-group --ray-cluster sample-cluster --image %s --worker-cpu 2 --worker-memory 5Gi
 	`, util.RayImage))
