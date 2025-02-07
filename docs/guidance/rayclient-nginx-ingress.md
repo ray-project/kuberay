@@ -119,9 +119,8 @@ ray.init(address="ray://localhost", logging_level="DEBUG")'
 
 The output should be similar to:
 ```
-2023-04-25 16:33:32,452	INFO client_builder.py:253 -- Passing the following kwargs to ray.init() on the server: logging_level
-2023-04-25 16:33:32,460	DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.IDLE
-2023-04-25 16:33:32,664	DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.CONNECTING
-2023-04-25 16:33:32,671	DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.READY
-
+2023-04-25 16:33:32,452   INFO client_builder.py:253 -- Passing the following kwargs to ray.init() on the server: logging_level
+2023-04-25 16:33:32,460   DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.IDLE
+2023-04-25 16:33:32,664   DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.CONNECTING
+2023-04-25 16:33:32,671   DEBUG worker.py:378 -- client gRPC channel state change: ChannelConnectivity.READY
 ```
