@@ -12,7 +12,7 @@ spec:
       - name: VLLMDeployment
         num_replicas: 1
         ray_actor_options:
-          num_cpus: 8
+          num_cpus: 1
           # NOTE: num_gpus is set automatically based on TENSOR_PARALLELISM
       runtime_env:
         working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
