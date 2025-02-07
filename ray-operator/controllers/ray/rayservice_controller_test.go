@@ -227,6 +227,7 @@ var _ = Context("RayService env tests", func() {
 		ctx := context.Background()
 		var rayService *rayv1.RayService
 		var rayCluster *rayv1.RayCluster
+		var endpoints *corev1.Endpoints
 		serveAppName := "app1"
 		namespace := "default"
 
@@ -304,7 +305,7 @@ var _ = Context("RayService env tests", func() {
 			// TODO: Verify the serve service by checking labels and annotations.
 
 			By("The RayServiceReady condition should be true when the number of endpoints is greater than 0")
-			endpoints := endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
+			endpoints = endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
 			err = k8sClient.Create(ctx, endpoints)
 			Expect(err).NotTo(HaveOccurred(), "failed to create Endpoints resource")
 			Eventually(func() int32 {
@@ -320,6 +321,9 @@ var _ = Context("RayService env tests", func() {
 			By(fmt.Sprintf("Delete the RayService custom resource %v", rayService.Name))
 			err := k8sClient.Delete(ctx, rayService)
 			Expect(err).NotTo(HaveOccurred(), "failed to delete the test RayService resource")
+			By(fmt.Sprintf("Delete the Endpoints %v", endpoints.Name))
+			err = k8sClient.Delete(ctx, endpoints)
+			Expect(err).NotTo(HaveOccurred(), "failed to delete the test Endpoints resource")
 		})
 
 		When("Testing in-place update: updating the serveConfigV2", Ordered, func() {
