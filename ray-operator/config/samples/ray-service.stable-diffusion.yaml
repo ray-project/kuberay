@@ -3,7 +3,6 @@ kind: RayService
 metadata:
   name: stable-diffusion
 spec:
-  # working_dir: "https://github.com/kevin85421/serve_config_examples/archive/refs/heads/fix-stable-diffusion-example.zip"
   serveConfigV2: |
     applications:
       - name: stable_diffusion
