@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -17,8 +18,8 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.41.0",
-			Image:          "rayproject/ray:2.41.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
 			HeadGPU:        "1",
@@ -51,8 +52,8 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 		Namespace:      "default",
 		SubmissionMode: "InteractiveMode",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.41.0",
-			Image:          "rayproject/ray:2.41.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadGPU:        "1",
 			HeadMemory:     "5Gi",
@@ -83,8 +84,8 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.41.0",
-			Image:          "rayproject/ray:2.41.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
 			HeadGPU:        "1",
@@ -111,7 +112,7 @@ spec:
     template:
       spec:
         containers:
-        - image: rayproject/ray:2.41.0
+        - image: %s
           name: ray-head
           ports:
           - containerPort: 6379
@@ -129,7 +130,7 @@ spec:
               cpu: "1"
               memory: 5Gi
               nvidia.com/gpu: "1"
-  rayVersion: 2.41.0
+  rayVersion: %s
   workerGroupSpecs:
   - groupName: default-group
     rayStartParams:
@@ -138,7 +139,7 @@ spec:
     template:
       spec:
         containers:
-        - image: rayproject/ray:2.41.0
+        - image: %s
           name: ray-worker
           resources:
             limits:

@@ -80,25 +80,25 @@ var (
 		Command will apply RayJob CR and also submit the Ray job. RayJob CR is required.
 	`)
 
-	jobSubmitExample = templates.Examples(`
+	jobSubmitExample = templates.Examples(fmt.Sprintf(`
 		# Submit Ray job with working-directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ -- python my_script.py
-
+	
 		# Submit Ray job with runtime Env file and working directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
-
+	
 		# Submit Ray job with runtime Env file assuming runtime-env has working_dir set
 		kubectl ray job submit -f rayjob.yaml --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-
+	
 		# Submit generated Ray job with default values and with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
-
+	
 		# Generate Ray job with specifications and submit Ray job with runtime Env file and working directory
-		kubectl ray job submit --name rayjob-sample --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-
+		kubectl ray job submit --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+	
 		# Generate Ray job with specifications and print out the generated RayJob YAML
-		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-	`)
+		kubectl ray job submit --dry-run --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))
 )
 
 func NewJobSubmitOptions(streams genericiooptions.IOStreams) *SubmitJobOptions {
@@ -149,7 +149,7 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().BoolVar(&options.noWait, "no-wait", options.noWait, "If present, will not stream logs and wait for job to finish")
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray version to use")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
