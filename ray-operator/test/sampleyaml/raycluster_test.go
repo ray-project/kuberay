@@ -32,6 +32,9 @@ func TestRayCluster(t *testing.T) {
 			name: "ray-cluster.deprecate-gcs-ft.yaml",
 		},
 		{
+			name: "ray-cluster.persistent-redis.yaml",
+		},
+		{
 			name: "ray-cluster.embed-grafana.yaml",
 		},
 		{
