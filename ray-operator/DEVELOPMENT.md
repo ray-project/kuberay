@@ -135,11 +135,11 @@ go fmt ./...
 go vet ./...
 ...
 setting up env vars
-?   	github.com/ray-project/kuberay/ray-operator	[no test files]
-ok  	github.com/ray-project/kuberay/ray-operator/api/v1alpha1	0.023s	coverage: 0.9% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers	9.587s	coverage: 66.8% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
+?    github.com/ray-project/kuberay/ray-operator [no test files]
+ok   github.com/ray-project/kuberay/ray-operator/api/v1alpha1 0.023s coverage: 0.9% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers 9.587s coverage: 66.8% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers/common 0.016s coverage: 75.6% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers/utils 0.015s coverage: 31.4% of statements
 ```
 
 The e2e tests can be run by executing the following command:
