@@ -63,7 +63,7 @@ make clean
 
 ```bash
 # Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.24.0
+kind create cluster
 
 # Step 2: Modify KubeRay source code
 # For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
