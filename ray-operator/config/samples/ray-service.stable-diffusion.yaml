@@ -8,24 +8,23 @@ spec:
       - name: stable_diffusion
         import_path: stable_diffusion.stable_diffusion:entrypoint
         runtime_env:
-          working_dir: "https://github.com/ray-project/serve_config_examples/archive/d6acf9b99ef076a1848f506670e1290a11654ec2.zip"
-          pip: ["diffusers==0.12.1"]
+          working_dir: "https://github.com/ray-project/serve_config_examples/archive/b8af221bc0e5d6cc7daa0dd071295fd9e456e671.zip"
+          pip: ["diffusers==0.32.2", "transformers==4.48.2"]
   rayClusterConfig:
-    rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
+    rayVersion: '2.41.0' # Should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
       # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
       # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams:
-        dashboard-host: '0.0.0.0'
+      rayStartParams: {}
       # Pod template
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-ml:2.9.0
+            image: rayproject/ray-ml:2.41.0.deprecated-gpu
             ports:
             - containerPort: 6379
               name: gcs
@@ -60,7 +59,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-ml:2.9.0
+            image: rayproject/ray-ml:2.41.0.deprecated-gpu
             resources:
               limits:
                 cpu: 4
