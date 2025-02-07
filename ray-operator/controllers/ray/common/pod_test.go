@@ -389,10 +389,10 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Validate the test input
 			if test.redisUsernameEnv != "" && test.redisUsernameRayStartParams != "" {
-				assert.True(t, test.redisUsernameRayStartParams == "$REDIS_USERNAME")
+				assert.Equal(t, test.redisUsernameRayStartParams, "$REDIS_USERNAME")
 			}
 			if test.redisPasswordEnv != "" && test.redisPasswordRayStartParams != "" {
-				assert.True(t, test.redisPasswordRayStartParams == "$REDIS_PASSWORD")
+				assert.Equal(t, test.redisPasswordRayStartParams, "$REDIS_PASSWORD")
 			}
 
 			// Prepare the cluster
