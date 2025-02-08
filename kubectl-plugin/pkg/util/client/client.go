@@ -19,6 +19,8 @@ type Client interface {
 	RayClient() rayclient.Interface
 	// GetRayHeadSvcName retrieves the name of RayHead service for the given RayCluster, RayJob, or RayService.
 	GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
+	// GetRayHeadPodName retrieves the name of the head Pod for the given RayCluster, RayJob, or RayService.
+	GetRayHeadPodName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
 	GetKubeRayOperatorVersion(ctx context.Context) (string, error)
 }
 
@@ -108,6 +110,19 @@ func (c *k8sClient) GetRayHeadSvcName(ctx context.Context, namespace string, res
 	}
 }
 
+func (c *k8sClient) GetRayHeadPodName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error) {
+	switch resourceType {
+	case util.RayCluster:
+		return c.getRayHeadPodNameByRayCluster(ctx, namespace, name)
+	case util.RayJob:
+		return c.getRayHeadPodNameByRayJob(ctx, namespace, name)
+	case util.RayService:
+		return c.getRayHeadPodNameByRayService(ctx, namespace, name)
+	default:
+		return "", fmt.Errorf("unsupported resource type: %s", resourceType)
+	}
+}
+
 func (c *k8sClient) getRayHeadSvcNameByRayCluster(ctx context.Context, namespace string, name string) (string, error) {
 	rayCluster, err := c.RayClient().RayV1().RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -140,4 +155,31 @@ func (c *k8sClient) getRayHeadSvcNameByRayService(ctx context.Context, namespace
 	}
 	svcName := rayService.Status.ActiveServiceStatus.RayClusterStatus.Head.ServiceName
 	return svcName, nil
+}
+
+func (c *k8sClient) getRayHeadPodNameByRayCluster(ctx context.Context, namespace string, name string) (string, error) {
+	rayCluster, err := c.RayClient().RayV1().RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to find RayCluster %s: %w", name, err)
+	}
+	podName := rayCluster.Status.Head.PodName
+	return podName, nil
+}
+
+func (c *k8sClient) getRayHeadPodNameByRayJob(ctx context.Context, namespace string, name string) (string, error) {
+	rayJob, err := c.RayClient().RayV1().RayJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to find RayJob %s: %w", name, err)
+	}
+	podName := rayJob.Status.RayClusterStatus.Head.PodName
+	return podName, nil
+}
+
+func (c *k8sClient) getRayHeadPodNameByRayService(ctx context.Context, namespace string, name string) (string, error) {
+	rayService, err := c.RayClient().RayV1().RayServices(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to find RayService %s: %w", name, err)
+	}
+	podName := rayService.Status.ActiveServiceStatus.RayClusterStatus.Head.PodName
+	return podName, nil
 }
