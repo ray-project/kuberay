@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -225,10 +226,10 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			}
 			err := ValidateRayClusterSpec(rayCluster)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -293,9 +294,9 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 			}
 			err := ValidateRayClusterSpec(rayCluster)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -363,10 +364,10 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 			}
 			err := ValidateRayClusterSpec(rayCluster)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -435,10 +436,10 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateRayClusterSpec(tt.rayCluster)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -512,10 +513,10 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
 			err := ValidateRayClusterSpec(tt.rayCluster)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -576,7 +577,7 @@ func TestValidateRayJobStatus(t *testing.T) {
 
 func TestValidateRayJobSpec(t *testing.T) {
 	err := ValidateRayJobSpec(&rayv1.RayJob{})
-	assert.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
+	require.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -584,7 +585,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			ShutdownAfterJobFinishes: false,
 		},
 	})
-	assert.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
+	require.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -593,7 +594,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -604,7 +605,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 		},
 	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
+	require.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -612,7 +613,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec: &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
+	require.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -620,7 +621,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec: &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
+	require.ErrorContains(t, err, "backoffLimit must be a positive integer")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -629,7 +630,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
 
 	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
 
@@ -639,7 +640,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			ClusterSelector: map[string]string{"key": "value"},
 		},
 	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
+	require.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -647,7 +648,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			ClusterSelector: map[string]string{"key": "value"},
 		},
 	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+	require.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -657,7 +658,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 		},
 	})
-	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+	require.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -666,7 +667,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -675,7 +676,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -684,7 +685,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			RayClusterSpec:           &rayv1.RayClusterSpec{},
 		},
 	})
-	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {
@@ -701,12 +702,12 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			},
 		},
 	})
-	assert.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+	require.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 
 	err = ValidateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{},
 	})
-	assert.NoError(t, err, "The RayService spec is valid.")
+	require.NoError(t, err, "The RayService spec is valid.")
 
 	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
 	err = ValidateRayServiceSpec(&rayv1.RayService{
@@ -716,5 +717,5 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			},
 		},
 	})
-	assert.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
 }

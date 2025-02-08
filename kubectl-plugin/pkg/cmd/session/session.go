@@ -54,16 +54,16 @@ var (
 	`)
 
 	sessionExample = templates.Examples(`
-		# Without specifying the resource type, forward local ports to the RayCluster resource
+		# Without specifying the resource type, forward local ports to the Ray cluster
 		kubectl ray session my-raycluster
 
-		# Forward local ports to the RayCluster resource
+		# Forward local ports to the Ray cluster
 		kubectl ray session raycluster/my-raycluster
 
-		# Forward local ports to the RayCluster used for the RayJob resource
+		# Forward local ports to the Ray cluster used for the Ray job
 		kubectl ray session rayjob/my-rayjob
 
-		# Forward local ports to the RayCluster used for the RayService resource
+		# Forward local ports to the Ray cluster used for the RayService resource
 		kubectl ray session rayservice/my-rayservice
 	`)
 )

@@ -103,13 +103,13 @@ make sure you have installed setuptool
 
 `pip install -U pip setuptools`
 
-#### run the pip command
+### run the pip command
 
 from the directory `path/to/kuberay/clients/python-client`
 
 `pip install -e .`
 
-#### to uninstall the module run
+### to uninstall the module run
 
 `pip uninstall python-client`
 

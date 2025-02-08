@@ -27,7 +27,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.9.3
+          - image: rayproject/ray:2.41.0
             name: ray-head
             ports:
             - containerPort: 6379
@@ -77,7 +77,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.9.3
+          - image: rayproject/ray:2.41.0
             name: ray-worker
             resources:
               requests:

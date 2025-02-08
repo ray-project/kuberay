@@ -18,7 +18,7 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "ray",
 		Short:        "ray kubectl plugin",
-		Long:         "Manage RayCluster resources.",
+		Long:         "Manage Ray resources on Kubernetes",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)

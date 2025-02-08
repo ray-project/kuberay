@@ -3,8 +3,6 @@ apiVersion: ray.io/v1
 kind: RayService
 metadata:
   name: rayservice-ha
-  annotations:
-    ray.io/ft-enabled: "true"
 spec:
   serveConfigV2: |
     applications:
@@ -41,28 +39,30 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.9.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
+    gcsFaultToleranceOptions:
+      # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
+      # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
+      # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
+      # [Example]:
+      # externalStorageNamespace: "my-raycluster-storage"
+      redisAddress: "redis:6379"
+      redisPassword:
+        valueFrom:
+          secretKeyRef:
+            name: redis-password-secret
+            key: password
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
-        redis-password: $REDIS_PASSWORD
       #pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.9.0
-              env:
-                - name: RAY_REDIS_ADDRESS
-                  value: redis:6379
-                # This environment variable is used in the `rayStartParams` above.
-                - name: REDIS_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: redis-password-secret
-                      key: password
+              image: rayproject/ray:2.41.0
               resources:
                 limits:
                   cpu: 1
@@ -95,7 +95,7 @@ spec:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.9.0
+                image: rayproject/ray:2.41.0
                 resources:
                   limits:
                     cpu: 1
@@ -135,7 +135,7 @@ metadata:
 spec:
   containers:
   - name: ray-container
-    image: rayproject/ray:2.9.0
+    image: rayproject/ray:2.41.0
     command: ["/bin/bash", "-c", "--"]
     args: ["while true; do sleep 30; done;"]
     volumeMounts:

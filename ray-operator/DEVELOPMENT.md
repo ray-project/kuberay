@@ -135,11 +135,11 @@ go fmt ./...
 go vet ./...
 ...
 setting up env vars
-?   	github.com/ray-project/kuberay/ray-operator	[no test files]
-ok  	github.com/ray-project/kuberay/ray-operator/api/v1alpha1	0.023s	coverage: 0.9% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers	9.587s	coverage: 66.8% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers/common	0.016s	coverage: 75.6% of statements
-ok  	github.com/ray-project/kuberay/ray-operator/controllers/utils	0.015s	coverage: 31.4% of statements
+?    github.com/ray-project/kuberay/ray-operator [no test files]
+ok   github.com/ray-project/kuberay/ray-operator/api/v1alpha1 0.023s coverage: 0.9% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers 9.587s coverage: 66.8% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers/common 0.016s coverage: 75.6% of statements
+ok   github.com/ray-project/kuberay/ray-operator/controllers/utils 0.015s coverage: 31.4% of statements
 ```
 
 The e2e tests can be run by executing the following command:
@@ -203,10 +203,7 @@ helm uninstall kuberay-operator; helm install kuberay-operator --set image.repos
 
 ## pre-commit hooks
 
-1. Install [golangci-lint](https://github.com/golangci/golangci-lint/releases).
-2. Install [kubeconform](https://github.com/yannh/kubeconform/releases).
-3. Install [pre-commit](https://pre-commit.com/).
-4. Run `pre-commit install` to install the pre-commit hooks.
+See [main development documentation][main-dev-doc].
 
 ## CI/CD
 
@@ -301,3 +298,5 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 * --tag is a remote repo_name:tag to push.
 * --push/--load optionally Push to remote registry or Load into local docker.
 * Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.
+
+[main-dev-doc]: ../docs/development/development.md#pre-commit-hooks

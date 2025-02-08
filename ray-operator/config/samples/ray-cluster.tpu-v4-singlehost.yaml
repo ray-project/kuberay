@@ -4,24 +4,16 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  # Label required for TPU webhook to initialize environments.
-  labels:
-    app.kubernetes.io/name: kuberay
-  name: example-cluster-kuberay
+  name: raycluster-tpu-v4-singlehost
 spec:
+  rayVersion: '2.41.0'
   headGroupSpec:
-    rayStartParams:
-      {}
+    rayStartParams: {}
     template:
       spec:
-        imagePullSecrets:
-          []
         containers:
-          - volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
-            name: ray-head
-            image: rayproject/ray:2.9.0-py310
+          - name: ray-head
+            image: rayproject/ray:2.41.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -32,8 +24,6 @@ spec:
                 cpu: "8"
                 ephemeral-storage: 10Gi
                 memory: 40G
-            securityContext:
-              {}
             env:
               - name: RAY_memory_monitor_refresh_ms
                 value: "0"
@@ -52,33 +42,18 @@ spec:
                 name: client
               - containerPort: 8000
                 name: serve
-        volumes:
-          - emptyDir: {}
-            name: ray-logs
-      metadata:
-        labels:
-          cloud.google.com/gke-ray-node-type: head
-          app.kubernetes.io/name: kuberay
-          app.kubernetes.io/instance: example-cluster
-
   workerGroupSpecs:
-  - rayStartParams:
-      {}
+  - rayStartParams: {}
     replicas: 1
     minReplicas: 1
     maxReplicas: 1
     numOfHosts: 1
-    groupName: workergroup
+    groupName: tpu-group
     template:
       spec:
-        imagePullSecrets:
-          []
         containers:
-          - volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
-            name: ray-worker
-            image: rayproject/ray:2.9.0-py310
+          - name: ray-worker
+            image: rayproject/ray:2.41.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -91,19 +66,6 @@ spec:
                 ephemeral-storage: 10Gi
                 google.com/tpu: "4"
                 memory: 40G
-            securityContext:
-              {}
-            env:
-            ports:
-              null
-        volumes:
-          - emptyDir: {}
-            name: ray-logs
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
           cloud.google.com/gke-tpu-topology: 2x2x1
-      metadata:
-        labels:
-          cloud.google.com/gke-ray-node-type: worker
-          app.kubernetes.io/name: kuberay
-          app.kubernetes.io/instance: example-cluster

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
@@ -39,10 +39,10 @@ func storeEvents(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
 	events, err := t.Client().Core().EventsV1().Events(namespace.Name).List(t.Ctx(), metav1.ListOptions{})
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	eventContent, err := renderEventContent(eventKeys, mapEventsToKeys(events))
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	WriteToOutputDir(t, eventLogFileName, Log, eventContent)
 }
