@@ -24,22 +24,62 @@ import (
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
-// This is to test Complete() and ensure that it is setting the namespace and arguments correctly
+// This is to test Complete() and ensure that it is setting the namespace and cluster correctly
 // No validation test is done here
 func TestRayClusterGetComplete(t *testing.T) {
 	// Initialize members of the cluster get option struct and the struct itself
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeClusterGetOptions := NewGetClusterOptions(testStreams)
-	fakeArgs := []string{"Expected", "output"}
 
-	*fakeClusterGetOptions.configFlags.Namespace = ""
-	fakeClusterGetOptions.AllNamespaces = false
+	tests := []struct {
+		name                  string
+		namespace             string
+		expectedCluster       string
+		args                  []string
+		expectedAllNamespaces bool
+	}{
+		{
+			name:                  "neither namespace nor args set",
+			namespace:             "",
+			args:                  []string{},
+			expectedAllNamespaces: true,
+			expectedCluster:       "",
+		},
+		{
+			name:                  "namespace set, args not set",
+			namespace:             "foo",
+			args:                  []string{},
+			expectedAllNamespaces: false,
+			expectedCluster:       "",
+		},
+		{
+			name:                  "namespace not set, args set",
+			namespace:             "",
+			args:                  []string{"foo", "bar"},
+			expectedAllNamespaces: true,
+			expectedCluster:       "foo",
+		},
+		{
+			name:                  "both namespace and args set",
+			namespace:             "foo",
+			args:                  []string{"bar", "qux"},
+			expectedAllNamespaces: false,
+			expectedCluster:       "bar",
+		},
+	}
 
-	err := fakeClusterGetOptions.Complete(fakeArgs)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClusterGetOptions := NewGetClusterOptions(testStreams)
 
-	assert.True(t, fakeClusterGetOptions.AllNamespaces)
-	assert.Equal(t, fakeClusterGetOptions.args, fakeArgs)
+			*fakeClusterGetOptions.configFlags.Namespace = tc.namespace
+
+			err := fakeClusterGetOptions.Complete(tc.args)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.AllNamespaces)
+			assert.Equal(t, tc.expectedCluster, fakeClusterGetOptions.cluster)
+		})
+	}
 }
 
 // Test the Validation() step of the command.
@@ -67,7 +107,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 					KubeConfig: &kubeConfigWithoutCurrentContext,
 				},
 				AllNamespaces: false,
-				args:          []string{"random_arg"},
+				cluster:       "random_arg",
 				ioStreams:     &testStreams,
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
@@ -102,24 +142,6 @@ func TestRayClusterGetValidate(t *testing.T) {
 			},
 		},
 		{
-			name: "Test validation when more than 1 arg",
-			opts: &GetClusterOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace:        &testNS,
-					Context:          &testContext,
-					KubeConfig:       &kubeConfigWithCurrentContext,
-					BearerToken:      &testBT,
-					Impersonate:      &testImpersonate,
-					ImpersonateGroup: &[]string{"fake-group"},
-				},
-				AllNamespaces: false,
-				args:          []string{"fake", "args"},
-				ioStreams:     &testStreams,
-			},
-			expectError: "too many arguments, either one or no arguments are allowed",
-		},
-		{
 			name: "Successful validation call",
 			opts: &GetClusterOptions{
 				// Use fake config to bypass the config flag checks
@@ -132,7 +154,7 @@ func TestRayClusterGetValidate(t *testing.T) {
 					ImpersonateGroup: &[]string{"fake-group"},
 				},
 				AllNamespaces: false,
-				args:          []string{"random_arg"},
+				cluster:       "random_arg",
 				ioStreams:     &testStreams,
 			},
 			expectError: "",
@@ -236,56 +258,52 @@ func TestGetRayClusters(t *testing.T) {
 		name           string
 		expectedError  string
 		expectedOutput string
-		args           []string
+		cluster        string
 		rayClusters    []runtime.Object
 	}{
 		{
 			name:        "should not error if no cluster name is provided, searching all namespaces, and no clusters are found",
-			args:        []string{},
 			namespace:   nil,
 			rayClusters: []runtime.Object{},
 		},
 		{
 			name:          "should error if a cluster name is provided, searching all namespaces, and no clusters are found",
-			args:          []string{"my-cluster"},
+			cluster:       "my-cluster",
 			namespace:     nil,
 			rayClusters:   []runtime.Object{},
 			expectedError: "Ray cluster my-cluster not found",
 		},
 		{
 			name:        "should not error if no cluster name is provided, searching one namespace, and no clusters are found",
-			args:        []string{},
 			namespace:   &namespace,
 			rayClusters: []runtime.Object{},
 		},
 		{
 			name:          "should error if a cluster name is provided, searching one namespace, and no clusters are found",
-			args:          []string{"my-cluster"},
+			cluster:       "my-cluster",
 			namespace:     &namespace,
 			rayClusters:   []runtime.Object{},
 			expectedError: fmt.Sprintf("Ray cluster my-cluster not found in namespace %s", namespace),
 		},
 		{
 			name:        "should not error if no cluster name is provided, searching all namespaces, and clusters are found",
-			args:        []string{},
 			namespace:   nil,
 			rayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:        "should not error if a cluster name is provided, searching all namespaces, and clusters are found",
-			args:        []string{"my-cluster"},
+			cluster:     "my-cluster",
 			namespace:   nil,
 			rayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:        "should not error if no cluster name is provided, searching one namespace, and clusters are found",
-			args:        []string{},
 			namespace:   &namespace,
 			rayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:        "should not error if a cluster name is provided, searching one namespace, and clusters are found",
-			args:        []string{"my-cluster"},
+			cluster:     "my-cluster",
 			namespace:   &namespace,
 			rayClusters: []runtime.Object{rayCluster},
 		},
@@ -296,7 +314,7 @@ func TestGetRayClusters(t *testing.T) {
 			fakeClusterGetOptions := GetClusterOptions{
 				configFlags: genericclioptions.NewConfigFlags(true),
 				ioStreams:   &testStreams,
-				args:        tc.args,
+				cluster:     tc.cluster,
 			}
 			if tc.namespace != nil {
 				*fakeClusterGetOptions.configFlags.Namespace = *tc.namespace
