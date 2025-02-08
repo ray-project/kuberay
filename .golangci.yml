@@ -55,9 +55,6 @@ linters-settings:
       - fieldalignment
   lll:
     line-length: 120
-  # TODO: Enable all testifylint rules
-  testifylint:
-    disable:
 linters:
   enable:
     - asciicheck
