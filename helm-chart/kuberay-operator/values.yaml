@@ -4,7 +4,7 @@
 
 image:
   repository: quay.io/kuberay/operator
-  tag: v1.3.0-rc.0
+  tag: v1.3.0-rc.1
   pullPolicy: IfNotPresent
 
 nameOverride: "kuberay-operator"
