@@ -36,13 +36,13 @@ var (
 		Creates Ray Cluster from inputed file or generate one for user.
 	`)
 
-	createClusterExample = templates.Examples(`
+	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray Cluster using default values
 		kubectl ray create cluster sample-cluster
 
 		# Creates Ray Cluster from flags input
-		kubectl ray create cluster sample-cluster --ray-version 2.41.0 --image rayproject/ray:2.41.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
-	`)
+		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
+	`, util.RayVersion, util.RayImage))
 )
 
 func NewCreateClusterOptions(streams genericclioptions.IOStreams) *CreateClusterOptions {
@@ -73,7 +73,7 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 		},
 	}
 
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.41.0", "Ray version to use")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
