@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
-	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
@@ -107,8 +106,6 @@ func (c fakeClient) RayClient() rayclient.Interface {
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
 	testContext := "test-context"
-	tf := cmdtesting.NewTestFactory().WithNamespace("test")
-	defer tf.Cleanup()
 
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 
