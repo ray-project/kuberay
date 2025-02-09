@@ -339,7 +339,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				if tc.opts.outputDir == "" {
 					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
 				}
-				assert.True(t, err == nil)
+				assert.NoError(t, err)
 			}
 		})
 	}
