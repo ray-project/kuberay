@@ -113,7 +113,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 
 			g.Expect(utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			g.Expect(utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
-			if tc.redisPassword != "" {
+			if tc.redisPassword == "" {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeFalse())
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
@@ -225,7 +225,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 
 			g.Expect(utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
 			g.Expect(utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
-			if redisPassword != "" {
+			if redisPassword == "" {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeFalse())
 			} else {
 				g.Expect(utils.EnvVarExists(utils.REDIS_PASSWORD, headPod.Spec.Containers[utils.RayContainerIndex].Env)).Should(BeTrue())
