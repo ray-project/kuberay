@@ -13,7 +13,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	kubefake "k8s.io/client-go/kubernetes/fake"
-	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
@@ -150,9 +149,6 @@ func TestRayClusterGetValidate(t *testing.T) {
 
 // Tests the Run() step of the command and ensure that the output is as expected.
 func TestRayClusterGetRun(t *testing.T) {
-	tf := cmdtesting.NewTestFactory().WithNamespace("test")
-	defer tf.Cleanup()
-
 	testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
 
 	fakeClusterGetOptions := NewGetClusterOptions(testStreams)
