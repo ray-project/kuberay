@@ -1,12 +1,16 @@
 package generation
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -16,8 +20,8 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.39.0",
-			Image:          "rayproject/ray:2.39.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
 			HeadGPU:        "1",
@@ -50,8 +54,8 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 		Namespace:      "default",
 		SubmissionMode: "InteractiveMode",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.39.0",
-			Image:          "rayproject/ray:2.39.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadGPU:        "1",
 			HeadMemory:     "5Gi",
@@ -82,8 +86,8 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     "2.39.0",
-			Image:          "rayproject/ray:2.39.0",
+			RayVersion:     util.RayVersion,
+			Image:          util.RayImage,
 			HeadCPU:        "1",
 			HeadMemory:     "5Gi",
 			HeadGPU:        "1",
@@ -97,8 +101,8 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
 	resultString, err := ConvertRayClusterApplyConfigToYaml(result)
-	assert.NoError(t, err)
-	expectedResultYaml := `apiVersion: ray.io/v1
+	require.NoError(t, err)
+	expectedResultYaml := fmt.Sprintf(`apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: test-ray-cluster
@@ -110,7 +114,7 @@ spec:
     template:
       spec:
         containers:
-        - image: rayproject/ray:2.39.0
+        - image: %s
           name: ray-head
           ports:
           - containerPort: 6379
@@ -128,7 +132,7 @@ spec:
               cpu: "1"
               memory: 5Gi
               nvidia.com/gpu: "1"
-  rayVersion: 2.39.0
+  rayVersion: %s
   workerGroupSpecs:
   - groupName: default-group
     rayStartParams:
@@ -137,7 +141,7 @@ spec:
     template:
       spec:
         containers:
-        - image: rayproject/ray:2.39.0
+        - image: %s
           name: ray-worker
           resources:
             limits:
@@ -145,7 +149,7 @@ spec:
               memory: 10Gi
             requests:
               cpu: "2"
-              memory: 10Gi`
+              memory: 10Gi`, util.RayImage, util.RayVersion, util.RayImage)
 
-	assert.Equal(t, expectedResultYaml, strings.TrimSpace(resultString))
+	assert.Equal(t, strings.TrimSpace(expectedResultYaml), strings.TrimSpace(resultString))
 }

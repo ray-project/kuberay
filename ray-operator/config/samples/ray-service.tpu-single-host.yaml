@@ -21,20 +21,14 @@ spec:
             - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
             - fastapi
   rayClusterConfig:
-    rayVersion: '2.9.0' # Should match the Ray version in the image of the containers
-    ######################headGroupSpecs#################################
-    # Ray head pod template.
+    rayVersion: '2.41.0'
     headGroupSpec:
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams: {}
-      # Pod template
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.9.0-py310
+            image: rayproject/ray:2.41.0
             ports:
             - containerPort: 6379
               name: gcs
@@ -52,19 +46,17 @@ spec:
                 cpu: "2"
                 memory: "8G"
     workerGroupSpecs:
-    # The pod replicas in this group typed worker
     - replicas: 1
       minReplicas: 1
       maxReplicas: 10
       numOfHosts: 1
       groupName: tpu-group
       rayStartParams: {}
-      # Pod template
       template:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.9.0-py310
+            image: rayproject/ray:2.41.0
             resources:
               limits:
                 # ct4p-hightpu-4t (v4) TPUs have 240 vCPUs, adjust this value based on your resource needs

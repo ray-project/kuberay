@@ -8,7 +8,7 @@ import (
 func NewJobCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "job",
-		Short:        "submit ray job",
+		Short:        "submit Ray job",
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.HelpFunc()(cmd, args)

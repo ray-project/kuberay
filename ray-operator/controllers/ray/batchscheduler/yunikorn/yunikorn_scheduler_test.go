@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,7 +86,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster1), true)
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster1))
 
 	rayCluster2 := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
@@ -97,7 +98,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster2), true)
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster2))
 
 	rayCluster3 := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
@@ -108,7 +109,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		},
 	)
 
-	assert.Equal(t, yk.isGangSchedulingEnabled(rayCluster3), false)
+	assert.False(t, yk.isGangSchedulingEnabled(rayCluster3))
 }
 
 func TestPopulateGangSchedulingAnnotations(t *testing.T) {
@@ -153,15 +154,15 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	yk.populateTaskGroupsAnnotationToPod(ctx, rayClusterWithGangScheduling, rayPod)
 
 	kk, err := getTaskGroupsFromAnnotation(rayPod)
-	assert.NoError(t, err)
-	assert.Equal(t, len(kk), 2)
+	require.NoError(t, err)
+	assert.Len(t, kk, 2)
 	// verify the annotation value
 	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
-	assert.Equal(t, true, len(taskGroupsSpec) > 0)
+	assert.NotEmpty(t, taskGroupsSpec)
 	taskGroups := newTaskGroups()
 	err = taskGroups.unmarshalFrom(taskGroupsSpec)
-	assert.NoError(t, err)
-	assert.Equal(t, len(taskGroups.Groups), 2)
+	require.NoError(t, err)
+	assert.Len(t, taskGroups.Groups, 2)
 
 	// verify the correctness of head group
 	headGroup := taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)

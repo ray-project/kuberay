@@ -417,7 +417,7 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 * [Feature][Hotfix] Add observedGeneration to the status of CRDs ([#979](https://github.com/ray-project/kuberay/pull/979), @kevin85421)
 * Customize the Prometheus export port ([#954](https://github.com/ray-project/kuberay/pull/954), @Yicheng-Lu-llll)
 * [Feature] The default ImagePullPolicy should be IfNotPresent ([#947](https://github.com/ray-project/kuberay/pull/947), @kevin85421)
-*  Inject the --block option to ray start command automatically ([#932](https://github.com/ray-project/kuberay/pull/932), @Yicheng-Lu-llll)
+* Inject the --block option to ray start command automatically ([#932](https://github.com/ray-project/kuberay/pull/932), @Yicheng-Lu-llll)
 * Inject cluster name as an environment variable into head and worker pods ([#934](https://github.com/ray-project/kuberay/pull/934), @Yicheng-Lu-llll)
 * Ensure container ports without names are also included in the head node service ([#891](https://github.com/ray-project/kuberay/pull/891), @Yicheng-Lu-llll)
 * fix: `.status.availableWorkerReplicas` ([#887](https://github.com/ray-project/kuberay/pull/887), @davidxia)

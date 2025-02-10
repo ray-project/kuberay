@@ -243,6 +243,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	rayServiceInstance.Status.ActiveServiceStatus.Applications = activeClusterServeApplications
 	rayServiceInstance.Status.PendingServiceStatus.Applications = pendingClusterServeApplications
 
+	isPendingClusterServing := false
 	if headSvc != nil && serveSvc != nil {
 		pendingClusterName := rayServiceInstance.Status.PendingServiceStatus.RayClusterName
 		activeClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
@@ -257,6 +258,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		if clusterName != pendingClusterName && clusterName != activeClusterName {
 			panic("clusterName is not equal to pendingCluster or activeCluster")
 		}
+		isPendingClusterServing = clusterName == pendingClusterName
 
 		// If services point to a different cluster than the active one, promote pending to active
 		logger.Info("calculateStatus", "clusterSvcPointingTo", clusterName, "pendingClusterName", pendingClusterName, "activeClusterName", activeClusterName)
@@ -269,7 +271,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		}
 	}
 
-	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster) {
+	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 			RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 		}
@@ -684,7 +686,10 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 	return clusterHash == goalClusterHash
 }
 
-func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster) bool {
+func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster, isPendingClusterServing bool) bool {
+	if isPendingClusterServing {
+		return false
+	}
 	if activeRayCluster == nil && pendingRayCluster == nil {
 		// Both active and pending clusters are nil, which means the RayService has just been created.
 		// Create a new pending cluster.

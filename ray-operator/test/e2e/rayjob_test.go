@@ -62,10 +62,11 @@ env_vars:
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// TODO (kevin85421): We may need to use `Eventually` instead if the assertion is flaky.
 		// Assert the RayCluster has been torn down
-		_, err = GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
-		g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		g.Eventually(func() error {
+			_, err = GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+			return err
+		}, TestTimeoutShort).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
 		// Assert the submitter Job has not been deleted
 		g.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())

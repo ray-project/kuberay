@@ -29,6 +29,12 @@ func TestRayCluster(t *testing.T) {
 			name: "ray-cluster.custom-head-service.yaml",
 		},
 		{
+			name: "ray-cluster.deprecate-gcs-ft.yaml",
+		},
+		{
+			name: "ray-cluster.persistent-redis.yaml",
+		},
+		{
 			name: "ray-cluster.embed-grafana.yaml",
 		},
 		{
@@ -39,9 +45,6 @@ func TestRayCluster(t *testing.T) {
 		},
 		{
 			name: "ray-cluster.head-command.yaml",
-		},
-		{
-			name: "ray-cluster.heterogeneous.yaml",
 		},
 		{
 			name: "ray-cluster.overwrite-command.yaml",

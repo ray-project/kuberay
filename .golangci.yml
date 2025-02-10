@@ -58,14 +58,7 @@ linters-settings:
   # TODO: Enable all testifylint rules
   testifylint:
     disable:
-      - formatter
-      - float-compare
-      - require-error
-      - expected-actual
-      - bool-compare
-      - len
       - compares
-      - empty
 linters:
   enable:
     - asciicheck

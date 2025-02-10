@@ -4,7 +4,7 @@ import (
 	"embed"
 	"strings"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -19,7 +19,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	return file
 }
 
@@ -192,7 +192,7 @@ func deployRedis(t Test, namespace string, password string) func() string {
 			WithSpec(corev1ac.PodSpec().WithContainers(redisContainer)),
 		TestApplyOptions,
 	)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
 		t.Ctx(),
@@ -205,7 +205,7 @@ func deployRedis(t Test, namespace string, password string) func() string {
 			),
 		TestApplyOptions,
 	)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	return func() string {
 		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)

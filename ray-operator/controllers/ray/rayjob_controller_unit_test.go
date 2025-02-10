@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,20 +74,20 @@ func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
 	}
 
 	err := rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test 2: Create a new k8s job if it does not already exist
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayCluster, rayJob).Build()
 	rayJobReconciler.Client = fakeClient
 
 	err = rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = fakeClient.Get(ctx, types.NamespacedName{
 		Namespace: k8sJob.Namespace,
 		Name:      k8sJob.Name,
 	}, k8sJob, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromCRNameLabelKey], rayJob.Name)
 	assert.Equal(t, k8sJob.Labels[utils.RayOriginatedFromCRDLabelKey], utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD))
@@ -96,7 +97,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// RayJob instance with user-provided submitter pod template.
 	rayJobInstanceWithTemplate := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Entrypoint: "echo hello world",
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
 			SubmitterPodTemplate: &corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -117,7 +118,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	// In this case we should use the image of the Ray Head, so specify the image so we can test it.
 	rayJobInstanceWithoutTemplate := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			Entrypoint: "echo hello world",
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: corev1.PodTemplateSpec{
@@ -157,26 +158,26 @@ func TestGetSubmitterTemplate(t *testing.T) {
 
 	// Test 1: User provided template with command
 	submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "user-command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command[0])
 
 	// Test 2: User provided template without command
 	rayJobInstanceWithTemplate.Spec.SubmitterPodTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{}
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/bin/bash"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"/bin/sh"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo hello world ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/bin/bash"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-c", "if ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job logs --address http://test-url --follow test-job-id ; else ray job submit --address http://test-url --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithoutTemplate, rayClusterInstance)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
@@ -184,7 +185,7 @@ func TestGetSubmitterTemplate(t *testing.T) {
 
 	// Test 5: Check default RAY_DASHBOARD_ADDRESS env var
 	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
@@ -300,7 +301,7 @@ func TestUpdateRayJobStatus(t *testing.T) {
 
 			newRayJob := &rayv1.RayJob{}
 			err := fakeClient.Get(ctx, types.NamespacedName{Namespace: oldRayJob.Namespace, Name: oldRayJob.Name}, newRayJob)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Update the status
 			newRayJob.Status.Message = newMessage
@@ -316,10 +317,10 @@ func TestUpdateRayJobStatus(t *testing.T) {
 			}
 
 			err = testRayJobReconciler.updateRayJobStatus(ctx, oldRayJob, newRayJob)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			err = fakeClient.Get(ctx, types.NamespacedName{Namespace: newRayJob.Namespace, Name: newRayJob.Name}, newRayJob)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, newRayJob.Status.Message == newMessage, tc.isJobDeploymentStatusChanged)
 		})
 	}
@@ -364,7 +365,7 @@ func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 
 	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
 
-	assert.Error(t, err, "Expected error due to simulated job creation failure")
+	require.Error(t, err, "Expected error due to simulated job creation failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -407,7 +408,7 @@ func TestFailedCreateRayClusterEvent(t *testing.T) {
 
 	_, err := reconciler.getOrCreateRayClusterInstance(context.Background(), rayJob)
 
-	assert.Error(t, err, "Expected error due to cluster creation failure")
+	require.Error(t, err, "Expected error due to cluster creation failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -456,7 +457,7 @@ func TestFailedDeleteRayJobSubmitterEvent(t *testing.T) {
 
 	_, err := reconciler.deleteSubmitterJob(context.Background(), rayJob)
 
-	assert.Error(t, err, "Expected error due to job deletion failure")
+	require.Error(t, err, "Expected error due to job deletion failure")
 
 	var foundFailureEvent bool
 	events := []string{}
@@ -509,7 +510,7 @@ func TestFailedDeleteRayClusterEvent(t *testing.T) {
 
 	_, err := reconciler.deleteClusterResources(context.Background(), rayJob)
 
-	assert.Error(t, err, "Expected error due to cluster deletion failure")
+	require.Error(t, err, "Expected error due to cluster deletion failure")
 
 	var foundFailureEvent bool
 	events := []string{}

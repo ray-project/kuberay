@@ -217,7 +217,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())
-		Expect(strings.TrimSpace(string(output))).To(ContainSubstring("No ray nodes found for resource fakecluster"))
+		Expect(strings.TrimSpace(string(output))).To(ContainSubstring("No Ray nodes found for resource fakecluster"))
 	})
 
 	It("should not succeed with non-existent directory set", func() {
