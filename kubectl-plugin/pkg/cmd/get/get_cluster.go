@@ -41,6 +41,7 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "cluster [NAME]",
+		Aliases:           []string{"clusters"},
 		Short:             "Get cluster information.",
 		SilenceUsage:      true,
 		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
