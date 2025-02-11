@@ -85,6 +85,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	}
 
 	cmd.Flags().StringVarP(&options.clusterName, "ray-cluster", "c", "", "Ray cluster to add a worker group to")
+	cobra.CheckErr(cmd.MarkFlagRequired("ray-cluster"))
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
