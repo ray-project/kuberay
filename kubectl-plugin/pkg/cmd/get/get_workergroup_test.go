@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
@@ -739,7 +738,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 	}
 }
 
-func TestCreateLabelSelectors(t *testing.T) {
+func TestCreateRayWorkerGroupLabelSelectors(t *testing.T) {
 	tests := []struct {
 		expected      map[string]string
 		name          string
@@ -774,7 +773,7 @@ func TestCreateLabelSelectors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			labelSelector, err := createLabelSelectors(tc.groupName, tc.cluster)
+			labelSelector, err := createRayWorkerGroupLabelSelectors(tc.groupName, tc.cluster)
 			if tc.expectedError != "" {
 				require.EqualError(t, err, tc.expectedError)
 			} else {
@@ -782,17 +781,6 @@ func TestCreateLabelSelectors(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestJoinLabelMap(t *testing.T) {
-	labels := map[string]string{
-		"lain":   "holsten",
-		"portia": "fabian",
-	}
-	output := joinLabelMap(labels)
-	parts := strings.Split(output, ",")
-	assert.Contains(t, parts, "lain=holsten")
-	assert.Contains(t, parts, "portia=fabian")
 }
 
 func TestPrintWorkerGroups(t *testing.T) {

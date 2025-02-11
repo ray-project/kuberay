@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -215,7 +214,7 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 	var workerGroups []workerGroup
 
 	for _, ewgs := range enrichedWorkerGroupSpecs {
-		selectors, err := createLabelSelectors(ewgs.spec.GroupName, ewgs.cluster)
+		selectors, err := createRayWorkerGroupLabelSelectors(ewgs.spec.GroupName, ewgs.cluster)
 		if err != nil {
 			return nil, fmt.Errorf("could not create K8s label selectors for a worker group in cluster %s, namespace %s: %w", ewgs.cluster, ewgs.namespace, err)
 		}
@@ -247,8 +246,8 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 	return workerGroups, nil
 }
 
-// createLabelSelectors creates a map of K8s label selectors for Ray worker groups
-func createLabelSelectors(groupName, cluster string) (map[string]string, error) {
+// createRayWorkerGroupLabelSelectors creates a map of K8s label selectors for Ray worker groups
+func createRayWorkerGroupLabelSelectors(groupName, cluster string) (map[string]string, error) {
 	if groupName == "" {
 		return nil, errors.New("group name cannot be empty")
 	}
@@ -262,15 +261,6 @@ func createLabelSelectors(groupName, cluster string) (map[string]string, error) 
 	}
 
 	return labelSelectors, nil
-}
-
-// joinLabelMap joins a map of K8s label key-val entries into a label selector string
-func joinLabelMap(labelMap map[string]string) string {
-	var labels []string
-	for k, v := range labelMap {
-		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
-	}
-	return strings.Join(labels, ",")
 }
 
 // printWorkerGroups prints worker groups
