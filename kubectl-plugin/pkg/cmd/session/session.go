@@ -24,11 +24,13 @@ type appPort struct {
 }
 
 type SessionOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericiooptions.IOStreams
-	ResourceType util.ResourceType
-	ResourceName string
-	Namespace    string
+	configFlags    *genericclioptions.ConfigFlags
+	ioStreams      *genericiooptions.IOStreams
+	currentContext string
+	ResourceType   util.ResourceType
+	ResourceName   string
+	Namespace      string
+	Verbose        bool
 }
 
 var (
@@ -96,6 +98,9 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 			return options.Run(cmd.Context(), factory)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
@@ -146,6 +151,7 @@ func (options *SessionOptions) Validate() error {
 	if !util.HasKubectlContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
+	options.currentContext = config.CurrentContext
 	return nil
 }
 
@@ -173,7 +179,12 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	kubectlArgs := []string{"port-forward", "-n", options.Namespace, "service/" + svcName}
+	var kubectlArgs []string
+	if options.currentContext == "" {
+		kubectlArgs = append(kubectlArgs, "--context", *options.configFlags.Context)
+	}
+
+	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.Namespace, "service/"+svcName)
 	for _, appPort := range appPorts {
 		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
@@ -191,6 +202,11 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 			const reconnectDelay = 100
 			var err error
 			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+
+			if options.Verbose {
+				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
+			}
+
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}
