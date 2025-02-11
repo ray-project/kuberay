@@ -117,18 +117,16 @@ func TestRayClusterLogComplete(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		nodeType             string
+		nodeType             nodeTypeEnum
 		expectedResourceType util.ResourceType
 		expectedResourceName string
-		expectedNodeType     string
 		args                 []string
 		hasErr               bool
 	}{
 		{
-			name:                 "valid request with RayCluster with empty nodetype input",
+			name:                 "valid request with RayCluster",
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
-			expectedNodeType:     "all",
 			args:                 []string{"test-raycluster"},
 			hasErr:               false,
 		},
@@ -137,7 +135,6 @@ func TestRayClusterLogComplete(t *testing.T) {
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
 			args:                 []string{"rayCluster/test-raycluster"},
-			expectedNodeType:     "all",
 			hasErr:               false,
 		},
 		{
@@ -145,7 +142,6 @@ func TestRayClusterLogComplete(t *testing.T) {
 			expectedResourceType: util.RayService,
 			expectedResourceName: "test-rayservice",
 			args:                 []string{"rayservice/test-rayservice"},
-			expectedNodeType:     "all",
 			hasErr:               false,
 		},
 		{
@@ -153,7 +149,6 @@ func TestRayClusterLogComplete(t *testing.T) {
 			expectedResourceType: util.RayJob,
 			expectedResourceName: "test-rayJob",
 			args:                 []string{"rayJob/test-rayJob"},
-			expectedNodeType:     "all",
 			hasErr:               false,
 		},
 		{
@@ -187,6 +182,7 @@ func TestRayClusterLogComplete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+			fakeClusterLogOptions.nodeType = tc.nodeType
 			err := fakeClusterLogOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
 				require.Error(t, err)
@@ -194,7 +190,6 @@ func TestRayClusterLogComplete(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedResourceType, fakeClusterLogOptions.ResourceType)
 				assert.Equal(t, tc.expectedResourceName, fakeClusterLogOptions.ResourceName)
-				assert.Equal(t, tc.expectedNodeType, fakeClusterLogOptions.nodeType)
 			}
 		})
 	}
@@ -237,7 +232,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				},
 				outputDir:    fakeDir,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
@@ -251,7 +246,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				},
 				outputDir:    fakeDir,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     workerNodeType,
 				ioStreams:    &testStreams,
 			},
 		},
@@ -264,7 +259,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				},
 				outputDir:    fakeDir,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     allNodeType,
 				ioStreams:    &testStreams,
 			},
 		},
@@ -287,7 +282,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				configFlags:  fakeConfigFlags,
 				outputDir:    fakeDir,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "",
@@ -299,7 +294,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				configFlags:  fakeConfigFlags,
 				outputDir:    "",
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "",
@@ -311,7 +306,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				configFlags:  fakeConfigFlags,
 				outputDir:    "randomPath-here",
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "Directory does not exist. Failed with: stat randomPath-here: no such file or directory",
@@ -323,7 +318,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 				configFlags:  fakeConfigFlags,
 				outputDir:    kubeConfigWithCurrentContext,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "Path is not a directory. Please input a directory and try again",
