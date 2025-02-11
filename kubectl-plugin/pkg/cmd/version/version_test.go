@@ -33,8 +33,10 @@ func TestRayVersionCheckContext(t *testing.T) {
 		{
 			name: "Test validation when no context is set",
 			opts: &VersionOptions{
-				configFlags: genericclioptions.NewConfigFlags(false),
-				ioStreams:   &testStreams,
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+				},
+				ioStreams: &testStreams,
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
@@ -74,7 +76,7 @@ func TestRayVersionCheckContext(t *testing.T) {
 			err := tc.opts.checkContext()
 			fmt.Printf("err: %v\n", err)
 			if tc.expectError != "" {
-				assert.Equal(t, tc.expectError, err.Error())
+				require.EqualError(t, err, tc.expectError)
 			} else {
 				require.NoError(t, err)
 			}

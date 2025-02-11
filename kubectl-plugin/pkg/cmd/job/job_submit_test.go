@@ -62,8 +62,12 @@ spec:
 		{
 			name: "Test validation when no context is set",
 			opts: &SubmitJobOptions{
-				configFlags: genericclioptions.NewConfigFlags(false),
-				ioStreams:   &testStreams,
+				configFlags: &genericclioptions.ConfigFlags{
+					KubeConfig: &kubeConfigWithoutCurrentContext,
+				},
+				ioStreams:  &testStreams,
+				fileName:   rayJobYamlPath,
+				workingDir: "Fake/File/Path",
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
@@ -112,7 +116,7 @@ spec:
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				require.Error(t, err, tc.expectError)
+				require.EqualError(t, err, tc.expectError)
 			} else {
 				require.NoError(t, err)
 			}
