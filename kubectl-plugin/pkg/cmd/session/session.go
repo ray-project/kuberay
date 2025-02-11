@@ -83,10 +83,16 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	factory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:               "session (RAYCLUSTER | TYPE/NAME)",
-		Short:             "Forward local ports to the Ray resources.",
-		Long:              sessionLong,
-		Example:           sessionExample,
+		Use:     "session (RAYCLUSTER | TYPE/NAME)",
+		Short:   "Forward local ports to the Ray resources.",
+		Long:    sessionLong,
+		Example: sessionExample,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			}
+			return nil
+		},
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
@@ -106,10 +112,6 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
-	}
-
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
 		options.ResourceType = util.RayCluster

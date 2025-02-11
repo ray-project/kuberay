@@ -82,12 +82,18 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:               "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
-		Short:             "Get Ray cluster logs",
-		Long:              logLong,
-		Example:           logExample,
-		Aliases:           []string{"logs"},
-		SilenceUsage:      true,
+		Use:          "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
+		Short:        "Get Ray cluster logs",
+		Long:         logLong,
+		Example:      logExample,
+		Aliases:      []string{"logs"},
+		SilenceUsage: true,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			}
+			return nil
+		},
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
@@ -106,10 +112,6 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 }
 
 func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
-	}
-
 	if *options.configFlags.Namespace == "" {
 		*options.configFlags.Namespace = "default"
 	}

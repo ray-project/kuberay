@@ -157,16 +157,6 @@ func TestRayClusterLogComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:   "invalid args (no args)",
-			args:   []string{},
-			hasErr: true,
-		},
-		{
-			name:   "invalid args (too many args)",
-			args:   []string{"raycluster/test-raycluster", "extra-arg"},
-			hasErr: true,
-		},
-		{
 			name:   "invalid args (no resource type)",
 			args:   []string{"/test-resource"},
 			hasErr: true,
