@@ -90,17 +90,17 @@ func (t *T) OutputDir() string {
 					parent = path.Join(cwd, parent)
 				}
 			}
-			t.T().Logf("Creating output directory in parent directory: %s", parent)
+			LogWithTimestamp(t.T(), "Creating output directory in parent directory: %s", parent)
 			dir, err := os.MkdirTemp(parent, t.T().Name())
 			if err != nil {
 				t.T().Fatalf("Error creating output directory: %v", err)
 			}
 			t.outputDir = dir
 		} else {
-			t.T().Logf("Creating ephemeral output directory as %s env variable is unset", KuberayTestOutputDir)
+			LogWithTimestamp(t.T(), "Creating ephemeral output directory as %s env variable is unset", KuberayTestOutputDir)
 			t.outputDir = t.T().TempDir()
 		}
-		t.T().Logf("Output directory has been created at: %s", t.outputDir)
+		LogWithTimestamp(t.T(), "Output directory has been created at: %s", t.outputDir)
 	})
 	return t.outputDir
 }
