@@ -61,19 +61,19 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 
 		g.Expect(err).NotTo(HaveOccurred())
-		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-		test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 		g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutLong).
 			Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
 
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 
-		test.T().Logf("HeadPod Name: %s", headPod.Name)
+		LogWithTimestamp(test.T(), "HeadPod Name: %s", headPod.Name)
 
 		rayNamespace := "testing-ray-namespace"
-		test.T().Logf("Ray namespace: %s", rayNamespace)
+		LogWithTimestamp(test.T(), "Ray namespace: %s", rayNamespace)
 
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_1.py", rayNamespace})
 
