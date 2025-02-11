@@ -2,10 +2,12 @@ package support
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"sync"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -112,4 +114,9 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 		deleteTestNamespace(t, namespace)
 	})
 	return namespace
+}
+
+func LogWithTimestamp(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
+	t.Logf("[%s] %s", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
 }
