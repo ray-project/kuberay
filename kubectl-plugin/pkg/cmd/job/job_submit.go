@@ -223,7 +223,7 @@ func (options *SubmitJobOptions) Validate() error {
 
 		options.RayJob, err = decodeRayJobYaml(options.fileName)
 		if err != nil {
-			return fmt.Errorf("Failed to decode RayJob Yaml: %w", err)
+			return fmt.Errorf("Failed to decode RayJob YAML: %w", err)
 		}
 
 		submissionMode := options.RayJob.Spec.SubmissionMode
@@ -240,7 +240,7 @@ func (options *SubmitJobOptions) Validate() error {
 			options.runtimeEnvJson = string(runtimeJson)
 		}
 	} else if strings.TrimSpace(options.rayjobName) == "" {
-		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
+		return fmt.Errorf("Must set either YAML file (--filename) or set Ray job name (--name)")
 	}
 
 	if options.workingDir == "" {
@@ -332,7 +332,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 		clusterReady = isRayClusterReady(currCluster)
 		if !clusterReady {
-			err = fmt.Errorf("Cluster is not ready: %w", err)
+			err = fmt.Errorf("cluster %s is not ready", options.cluster)
 			fmt.Println(err)
 		}
 		currTime = time.Now()
