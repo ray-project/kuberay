@@ -573,8 +573,7 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 		return "", err
 	}
 
-	workingDir := runtimeEnvYaml["working_dir"].(string)
-	if workingDir != "" {
+	if workingDir, ok := runtimeEnvYaml["working_dir"].(string); ok {
 		return workingDir, nil
 	}
 
