@@ -80,7 +80,7 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		// [Test 1: Kill GCS process to "restart" the head Pod]
 		// Assertion is implement in python, so no furthur handling needed here, and so are other ExecPodCmd
 		stdout, stderr := ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
-		t.Logf("pkill gcs_server output - stdout: %s, stderr: %s", stdout.String(), stderr.String())
+		LogWithTimestamp(test.T(), "pkill gcs_server output - stdout: %s, stderr: %s", stdout.String(), stderr.String())
 
 		// Restart count should eventually become 1, not creating a new pod
 		HeadPodRestartCount := func(p *corev1.Pod) int32 { return p.Status.ContainerStatuses[0].RestartCount }
