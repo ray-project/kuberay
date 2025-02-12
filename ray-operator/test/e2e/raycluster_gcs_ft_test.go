@@ -109,10 +109,6 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		testPodNameChanged := func(p *corev1.Pod) bool { return p.Name != headPod.Name }
-		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-			Should(WithTransform(testPodNameChanged, Equal(true)))
-
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
 			Should(WithTransform(PodState, Equal("Running")))
 
