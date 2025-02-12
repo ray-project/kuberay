@@ -85,10 +85,10 @@ class VLLMDeployment:
                 model_config,
                 served_model_names=served_model_names,
                 response_role=self.response_role,
-                lora_modules=self.lora_modules,
+                # lora_modules=self.lora_modules,
                 chat_template=self.chat_template,
-                prompt_adapters=None,
-                request_logger=None,
+                # prompt_adapters=None,
+                # request_logger=None,
             )
         logger.info(f"Request: {request}")
         
