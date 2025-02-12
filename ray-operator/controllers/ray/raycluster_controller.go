@@ -733,24 +733,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
-	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods: Found more than one head Pods; deleting extra head Pods.", "nHeadPods", len(headPods.Items))
-		// TODO (kevin85421): In-place update may not be a good idea.
-		itemLength := len(headPods.Items)
-		for index := 0; index < itemLength; index++ {
-			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
-				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // Replace healthy pod at index i with the last element from the list of pods to delete.
-				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
-				itemLength--
-			}
-		}
-		// delete all the extra head pod pods
-		for _, extraHeadPodToDelete := range headPods.Items {
-			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
-				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
-			}
-			r.rayClusterScaleExpectation.ExpectScalePod(extraHeadPodToDelete.Namespace, instance.Name, expectations.HeadGroup, extraHeadPodToDelete.Name, expectations.Delete)
-		}
 	}
 
 	// Reconcile worker pods now
