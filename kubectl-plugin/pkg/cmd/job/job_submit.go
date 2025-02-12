@@ -332,8 +332,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 		clusterReady = isRayClusterReady(currCluster)
 		if !clusterReady {
-			err = fmt.Errorf("Cluster is not ready: %w", err)
-			fmt.Println(err)
+			fmt.Println("Cluster is not ready")
 		}
 		currTime = time.Now()
 	}
