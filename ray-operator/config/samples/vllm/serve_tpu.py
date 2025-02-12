@@ -83,7 +83,7 @@ def get_tokenizer_mode() -> str:
     if 'TOKENIZER_MODE' not in os.environ or os.environ['TOKENIZER_MODE'] == "":
         return "auto"
     return os.environ['TOKENIZER_MODE']
-    
+
 def get_dtype() -> str:
     if 'DTYPE' not in os.environ or os.environ['DTYPE'] == "":
         return "auto"
