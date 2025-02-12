@@ -734,8 +734,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods", "Duplicate head pods found", headPods.Items)
-		return fmt.Errorf("%d head pods found %v", len(headPods.Items), headPods.Items)
+		logger.Info("reconcilePods", fmt.Sprintf("Multiple head pods found, it should only exist one head pod. Please delete extra head pods and leave only the head pod with name `%s-head`.", instance.Name), headPods.Items)
+		return fmt.Errorf("%d head pods found %v. Please delete extra head pods and leave only the head pod with name %s-head", len(headPods.Items), headPods.Items, instance.Name)
 	}
 
 	// Reconcile worker pods now
@@ -1077,8 +1077,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
-	podName := utils.PodGenerateName(instance.Name, rayv1.HeadNode)
-	podName = podName[:len(podName)-1]                                            // strip the last character so the `-` will be excluded from the generated podName
+	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
@@ -1105,7 +1104,7 @@ func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
-	podName := utils.PodGenerateName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode)
+	podName := utils.PodName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
