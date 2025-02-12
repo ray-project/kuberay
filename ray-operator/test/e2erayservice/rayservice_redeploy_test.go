@@ -71,6 +71,7 @@ func TestRedeployRayServe(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(endpoints.Subsets).To(HaveLen(1))
 		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.UID).NotTo(Equal(oldHeadPod.UID))
 	}, TestTimeoutMedium).Should(Succeed())
 
 	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)

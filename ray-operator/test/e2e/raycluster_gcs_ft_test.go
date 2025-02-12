@@ -109,9 +109,9 @@ func TestRayClusterGCSFaultTolerence(t *testing.T) {
 		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		HeadPodCreationTime := func(p *corev1.Pod) string { return p.CreationTimestamp.GoString() }
+		HeadPodUID := func(p *corev1.Pod) string { return string(p.UID) }
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-			ShouldNot(WithTransform(HeadPodCreationTime, Equal(headPod.CreationTimestamp.GoString()))) // Use creation time to check if the new head pod is inited.
+			ShouldNot(WithTransform(HeadPodUID, Equal(string(headPod.UID)))) // Use UID to check if the new head pod is inited.
 
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
 			Should(WithTransform(PodState, Equal("Running")))

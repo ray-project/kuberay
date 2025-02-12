@@ -733,6 +733,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
+	} else if len(headPods.Items) > 1 {
+		logger.Info("reconcilePods", "Duplicate head pods found", headPods.Items)
+		return fmt.Errorf("%d head pods found %v", len(headPods.Items), headPods.Items)
 	}
 
 	// Reconcile worker pods now
