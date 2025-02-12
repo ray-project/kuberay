@@ -29,9 +29,11 @@ spec:
             gke-gcsfuse/memory-limit: "0"
             gke-gcsfuse/ephemeral-storage-limit: "0"
         spec:
+          # replace $KSA_NAME with your Kubernetes Service Account
           serviceAccountName: $KSA_NAME
           containers:
           - name: ray-head
+            # replace $VLLM_IMAGE with your vLLM container image
             image: $VLLM_IMAGE
             imagePullPolicy: IfNotPresent
             ports:
@@ -74,6 +76,7 @@ spec:
             csi:
               driver: gcsfuse.csi.storage.gke.io
               volumeAttributes:
+                # replace $GSBUCKET with your GCS bucket
                 bucketName: $GSBUCKET
                 mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
     workerGroupSpecs:
@@ -91,9 +94,11 @@ spec:
             gke-gcsfuse/memory-limit: "0"
             gke-gcsfuse/ephemeral-storage-limit: "0"
         spec:
+          # replace $KSA_NAME with your Kubernetes Service Account
           serviceAccountName: $KSA_NAME
           containers:
             - name: ray-worker
+              # replace $VLLM_IMAGE with your vLLM container image
               image: $VLLM_IMAGE
               imagePullPolicy: IfNotPresent
               resources:
@@ -133,6 +138,7 @@ spec:
             csi:
               driver: gcsfuse.csi.storage.gke.io
               volumeAttributes:
+                # replace $GSBUCKET with your GCS bucket
                 bucketName: $GSBUCKET
                 mountOptions: "implicit-dirs,file-cache:enable-parallel-downloads:true,file-cache:parallel-downloads-per-file:100,file-cache:max-parallel-downloads:-1,file-cache:download-chunk-size-mb:10,file-cache:max-size-mb:-1"
           nodeSelector:
