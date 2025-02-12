@@ -188,25 +188,9 @@ func TestRayClusterLogComplete(t *testing.T) {
 func TestRayClusterLogValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
-
-	fakeDir := t.TempDir()
-
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
+	tempDir := t.TempDir()
+	tempFile, err := os.CreateTemp(tempDir, "temp-file")
 	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
-	// Initialize the fake config flag with the fake kubeconfig and values
-	fakeConfigFlags := &genericclioptions.ConfigFlags{
-		Namespace:        &testNS,
-		Context:          &testContext,
-		KubeConfig:       &kubeConfigWithCurrentContext,
-		BearerToken:      &testBT,
-		Impersonate:      &testImpersonate,
-		ImpersonateGroup: &[]string{"fake-group"},
-	}
 
 	tests := []struct {
 		name        string
@@ -215,101 +199,71 @@ func TestRayClusterLogValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &ClusterLogOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-				},
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     headNodeType,
-				ioStreams:    &testStreams,
+				// Use fake config to bypass the config flag checks
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
-			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     workerNodeType,
-				ioStreams:    &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &ClusterLogOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     allNodeType,
-				ioStreams:    &testStreams,
-			},
-		},
-		{
 			name: "Test validation when node type is `random-string`",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     "random-string",
-				ioStreams:    &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				outputDir:     tempDir,
+				ResourceName:  "fake-cluster",
+				nodeType:      "random-string",
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 			expectError: "unknown node type `random-string`",
 		},
 		{
 			name: "Successful validation call",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     headNodeType,
-				ioStreams:    &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				outputDir:     tempDir,
+				ResourceName:  "fake-cluster",
+				nodeType:      headNodeType,
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 			expectError: "",
 		},
 		{
 			name: "Validate output directory when no out-dir is set.",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    "",
-				ResourceName: "fake-cluster",
-				nodeType:     headNodeType,
-				ioStreams:    &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				outputDir:     "",
+				ResourceName:  "fake-cluster",
+				nodeType:      headNodeType,
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 			expectError: "",
 		},
 		{
 			name: "Failed validation call with output directory not exist",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    "randomPath-here",
-				ResourceName: "fake-cluster",
-				nodeType:     headNodeType,
-				ioStreams:    &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				outputDir:     "randomPath-here",
+				ResourceName:  "fake-cluster",
+				nodeType:      headNodeType,
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 			expectError: "Directory does not exist. Failed with: stat randomPath-here: no such file or directory",
 		},
 		{
 			name: "Failed validation call with output directory is file",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    kubeConfigWithCurrentContext,
-				ResourceName: "fake-cluster",
-				nodeType:     headNodeType,
-				ioStreams:    &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				outputDir:     tempFile.Name(),
+				ResourceName:  "fake-cluster",
+				nodeType:      headNodeType,
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 			expectError: "Path is not a directory. Please input a directory and try again",
 		},

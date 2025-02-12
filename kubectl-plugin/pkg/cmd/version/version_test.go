@@ -17,57 +17,24 @@ import (
 )
 
 func TestRayVersionCheckContext(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	testContext := "test-context"
-
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, "my-fake-context")
-	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		opts        *VersionOptions
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &VersionOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-				},
-				ioStreams: &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
+			name: "should not error when K8s context is set",
 			opts: &VersionOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &VersionOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has current context and --context switch is set",
-			opts: &VersionOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 		},
 	}
@@ -112,15 +79,9 @@ func (c fakeClient) RayClient() rayclient.Interface {
 
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
-	testContext := "test-context"
-
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-
 	fakeVersionOptions := &VersionOptions{
-		configFlags: &genericclioptions.ConfigFlags{
-			Context: &testContext,
-		},
-		ioStreams: &testStreams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		kubeContexter: util.NewMockKubeContexter(true),
 	}
 
 	tests := []struct {

@@ -16,14 +16,16 @@ import (
 var Version = "development"
 
 type VersionOptions struct {
-	configFlags *genericclioptions.ConfigFlags
-	ioStreams   *genericclioptions.IOStreams
+	configFlags   *genericclioptions.ConfigFlags
+	ioStreams     *genericclioptions.IOStreams
+	kubeContexter util.KubeContexter
 }
 
 func NewVersionOptions(streams genericclioptions.IOStreams) *VersionOptions {
 	return &VersionOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -75,7 +77,7 @@ func (options *VersionOptions) checkContext() error {
 		return fmt.Errorf("error retrieving raw config: %w", err)
 	}
 
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 	return nil

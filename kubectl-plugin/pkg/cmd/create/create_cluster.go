@@ -19,6 +19,7 @@ import (
 type CreateClusterOptions struct {
 	configFlags    *genericclioptions.ConfigFlags
 	ioStreams      *genericclioptions.IOStreams
+	kubeContexter  util.KubeContexter
 	clusterName    string
 	rayVersion     string
 	image          string
@@ -48,8 +49,9 @@ var (
 
 func NewCreateClusterOptions(streams genericclioptions.IOStreams) *CreateClusterOptions {
 	return &CreateClusterOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -112,7 +114,7 @@ func (options *CreateClusterOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 

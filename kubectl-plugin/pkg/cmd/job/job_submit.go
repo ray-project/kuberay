@@ -41,6 +41,7 @@ const (
 type SubmitJobOptions struct {
 	ioStreams          *genericiooptions.IOStreams
 	configFlags        *genericclioptions.ConfigFlags
+	kubeContexter      util.KubeContexter
 	RayJob             *rayv1.RayJob
 	submissionID       string
 	entryPoint         string
@@ -105,8 +106,9 @@ var (
 
 func NewJobSubmitOptions(streams genericiooptions.IOStreams) *SubmitJobOptions {
 	return &SubmitJobOptions{
-		ioStreams:   &streams,
-		configFlags: genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -187,7 +189,7 @@ func (options *SubmitJobOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 

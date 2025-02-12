@@ -23,6 +23,7 @@ import (
 type CreateWorkerGroupOptions struct {
 	configFlags       *genericclioptions.ConfigFlags
 	ioStreams         *genericclioptions.IOStreams
+	kubeContexter     util.KubeContexter
 	clusterName       string
 	groupName         string
 	rayVersion        string
@@ -51,8 +52,9 @@ var (
 
 func NewCreateWorkerGroupOptions(streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
 	return &CreateWorkerGroupOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -117,7 +119,7 @@ func (options *CreateWorkerGroupOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 

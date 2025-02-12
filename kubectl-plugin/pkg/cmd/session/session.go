@@ -26,6 +26,7 @@ type appPort struct {
 type SessionOptions struct {
 	configFlags    *genericclioptions.ConfigFlags
 	ioStreams      *genericiooptions.IOStreams
+	kubeContexter  util.KubeContexter
 	currentContext string
 	ResourceType   util.ResourceType
 	ResourceName   string
@@ -73,8 +74,9 @@ var (
 func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
 	configFlags := genericclioptions.NewConfigFlags(true)
 	return &SessionOptions{
-		ioStreams:   &streams,
-		configFlags: configFlags,
+		ioStreams:     &streams,
+		configFlags:   configFlags,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -150,7 +152,7 @@ func (options *SessionOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 	options.currentContext = config.CurrentContext
