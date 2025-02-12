@@ -79,10 +79,14 @@ class VLLMDeployment:
                 self.engine,
                 model_config,
                 response_role=self.response_role,
-                chat_template=self.chat_template,
-                tools=self.tools
+                chat_template=self.chat_template
             )
         logger.info(f"Request: {request}")
+        
+        # Add tools to the request if they're enabled
+        if os.environ.get('ENABLE_TOOLS', 'false').lower() == 'true':
+            request.tools = self.tools
+            
         generator = await self.openai_serving_chat.create_chat_completion(
             request, raw_request
         )
