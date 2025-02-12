@@ -2,6 +2,7 @@ package get
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -88,8 +89,17 @@ func (options *GetClusterOptions) Validate() error {
 }
 
 func (options *GetClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
-	var err error
+	rayclusterList, err := getRayClusters(ctx, options, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	return printClusters(rayclusterList, options.ioStreams.Out)
+}
+
+func getRayClusters(ctx context.Context, options *GetClusterOptions, k8sClient client.Client) (*rayv1.RayClusterList, error) {
 	var rayclusterList *rayv1.RayClusterList
+	var err error
 
 	listopts := v1.ListOptions{}
 	if len(options.args) == 1 {
@@ -101,16 +111,26 @@ func (options *GetClusterOptions) Run(ctx context.Context, k8sClient client.Clie
 	if options.AllNamespaces {
 		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters("").List(ctx, listopts)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve raycluster for all namespaces: %w", err)
+			return nil, fmt.Errorf("unable to retrieve raycluster for all namespaces: %w", err)
 		}
 	} else {
 		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).List(ctx, listopts)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve raycluster for namespace %s: %w", *options.configFlags.Namespace, err)
+			return nil, fmt.Errorf("unable to retrieve raycluster for namespace %s: %w", *options.configFlags.Namespace, err)
 		}
 	}
 
-	return printClusters(rayclusterList, options.ioStreams.Out)
+	if len(options.args) == 1 && len(rayclusterList.Items) == 0 {
+		errMsg := fmt.Sprintf("Ray cluster %s not found", options.args[0])
+		if options.AllNamespaces {
+			errMsg += " in any namespace"
+		} else {
+			errMsg += fmt.Sprintf(" in namespace %s", *options.configFlags.Namespace)
+		}
+		return nil, errors.New(errMsg)
+	}
+
+	return rayclusterList, nil
 }
 
 func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error {
