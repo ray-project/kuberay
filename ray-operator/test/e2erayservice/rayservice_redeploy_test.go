@@ -27,7 +27,7 @@ func TestRedeployRayServe(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -39,7 +39,7 @@ func TestRedeployRayServe(t *testing.T) {
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
 
-	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
+	LogWithTimestamp(test.T(), "Creating curl pod %s/%s", namespace.Name, curlPodName)
 
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -48,15 +48,15 @@ func TestRedeployRayServe(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedCurlPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
+	LogWithTimestamp(test.T(), "Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
-	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
+	LogWithTimestamp(test.T(), "Sending requests to the RayService to make sure it is ready to serve requests")
 	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	test.T().Logf("Deleting the current Head for recreating a new one")
+	LogWithTimestamp(test.T(), "Deleting the current Head for recreating a new one")
 	rayServiceUnderlyingRayCluster, err := GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 	oldHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
@@ -64,7 +64,7 @@ func TestRedeployRayServe(t *testing.T) {
 	err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), oldHeadPod.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	test.T().Logf("Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
+	LogWithTimestamp(test.T(), "Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
 		svcName := utils.GenerateServeServiceName(rayService.Name)
 		endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
@@ -74,11 +74,11 @@ func TestRedeployRayServe(t *testing.T) {
 		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(oldHeadPod.Name))
 	}, TestTimeoutMedium).Should(Succeed())
 
-	test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
-	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
+	LogWithTimestamp(test.T(), "Sending requests to the RayService to make sure it is ready to serve requests")
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
 	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)

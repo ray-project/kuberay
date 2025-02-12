@@ -31,9 +31,9 @@ func TestRayClusterManagedBy(t *testing.T) {
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
-		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-		test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 	})
@@ -47,9 +47,9 @@ func TestRayClusterManagedBy(t *testing.T) {
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
-		test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-		test.T().Logf("RayCluster %s/%s will not become ready - not reconciled", rayCluster.Namespace, rayCluster.Name)
+		LogWithTimestamp(test.T(), "RayCluster %s/%s will not become ready - not reconciled", rayCluster.Namespace, rayCluster.Name)
 		g.Consistently(func(gg Gomega) {
 			rc, err := RayCluster(test, rayCluster.Namespace, rayCluster.Name)()
 			gg.Expect(err).NotTo(HaveOccurred())
@@ -87,9 +87,9 @@ func TestRayClusterSuspend(t *testing.T) {
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-	test.T().Logf("Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
@@ -98,9 +98,9 @@ func TestRayClusterSuspend(t *testing.T) {
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(true))
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Suspend RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Suspend RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-	test.T().Logf("Waiting for RayCluster %s/%s to be suspended", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be suspended", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
@@ -111,9 +111,9 @@ func TestRayClusterSuspend(t *testing.T) {
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(false))
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Resume RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Resume RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-	test.T().Logf("Waiting for RayCluster %s/%s to be resumed", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be resumed", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionFalse, string(rayv1.RayClusterSuspended))))
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).

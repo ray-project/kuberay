@@ -2,10 +2,12 @@ package support
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"sync"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -88,17 +90,17 @@ func (t *T) OutputDir() string {
 					parent = path.Join(cwd, parent)
 				}
 			}
-			t.T().Logf("Creating output directory in parent directory: %s", parent)
+			LogWithTimestamp(t.T(), "Creating output directory in parent directory: %s", parent)
 			dir, err := os.MkdirTemp(parent, t.T().Name())
 			if err != nil {
 				t.T().Fatalf("Error creating output directory: %v", err)
 			}
 			t.outputDir = dir
 		} else {
-			t.T().Logf("Creating ephemeral output directory as %s env variable is unset", KuberayTestOutputDir)
+			LogWithTimestamp(t.T(), "Creating ephemeral output directory as %s env variable is unset", KuberayTestOutputDir)
 			t.outputDir = t.T().TempDir()
 		}
-		t.T().Logf("Output directory has been created at: %s", t.outputDir)
+		LogWithTimestamp(t.T(), "Output directory has been created at: %s", t.outputDir)
 	})
 	return t.outputDir
 }
@@ -112,4 +114,9 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 		deleteTestNamespace(t, namespace)
 	})
 	return namespace
+}
+
+func LogWithTimestamp(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
+	t.Logf("[%s] %s", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
 }

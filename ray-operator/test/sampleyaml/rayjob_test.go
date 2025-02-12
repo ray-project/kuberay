@@ -53,7 +53,7 @@ func TestRayJob(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayJob).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
+			LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
 			g.Eventually(RayCluster(test, namespace.Name, rayJob.Status.RayClusterName), TestTimeoutMedium).
 				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)

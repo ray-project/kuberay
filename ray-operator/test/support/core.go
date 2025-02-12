@@ -41,7 +41,7 @@ func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
-			t.T().Logf("Retrieving Pod Container %s/%s/%s logs", pod.Namespace, pod.Name, container.Name)
+			LogWithTimestamp(t.T(), "Retrieving Pod Container %s/%s/%s logs", pod.Namespace, pod.Name, container.Name)
 			storeContainerLog(t, namespace, pod.Name, container.Name)
 		}
 	}
@@ -53,7 +53,7 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 	options := corev1.PodLogOptions{Container: containerName}
 	stream, err := t.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(podName, &options).Stream(t.Ctx())
 	if err != nil {
-		t.T().Logf("Error getting logs from container %s/%s/%s", namespace.Name, podName, containerName)
+		LogWithTimestamp(t.T(), "Error getting logs from container %s/%s/%s", namespace.Name, podName, containerName)
 		return
 	}
 	require.NoError(t.T(), err)
@@ -85,7 +85,7 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 			TTY:       false,
 		}, clientgoscheme.ParameterCodec)
 
-	t.T().Logf("Executing command: %s", cmd)
+	LogWithTimestamp(t.T(), "Executing command: %s", cmd)
 	cfg := t.Client().Config()
 	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
 	require.NoError(t.T(), err)
@@ -98,8 +98,8 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 		Stderr: &stderr,
 		Tty:    false,
 	})
-	t.T().Logf("Command stdout: %s", stdout.String())
-	t.T().Logf("Command stderr: %s", stderr.String())
+	LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
+	LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
 	require.NoError(t.T(), err)
 	return stdout, stderr
 }
