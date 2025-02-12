@@ -1,6 +1,5 @@
 import os
-
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List
 import logging
 
 from fastapi import FastAPI
@@ -19,12 +18,32 @@ from vllm.entrypoints.openai.protocol import (
 )
 from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
 from vllm.entrypoints.openai.serving_engine import LoRAModulePath
-from vllm.utils import FlexibleArgumentParser, Tool
+from vllm.utils import FlexibleArgumentParser
 
 logger = logging.getLogger("ray.serve")
 
 app = FastAPI()
 
+# Define tools as a constant
+AVAILABLE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
+                    }
+                },
+                "required": ["location"],
+            }
+        }
+    }
+]
 
 @serve.deployment(name="VLLMDeployment")
 @serve.ingress(app)
@@ -43,22 +62,7 @@ class VLLMDeployment:
         self.lora_modules = lora_modules
         self.chat_template = chat_template
         self.engine = AsyncLLMEngine.from_engine_args(engine_args)
-        self.tools = [
-            Tool(
-                name="get_current_weather",
-                description="Get the current weather in a given location",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "location": {
-                            "type": "string",
-                            "description": "The city and state, e.g. San Francisco, CA",
-                        }
-                    },
-                    "required": ["location"],
-                }
-            ),
-        ]
+        self.tools = AVAILABLE_TOOLS
 
     @app.post("/v1/chat/completions")
     async def create_chat_completion(
@@ -71,20 +75,11 @@ class VLLMDeployment:
         """
         if not self.openai_serving_chat:
             model_config = await self.engine.get_model_config()
-            # Determine the name of the served model for the OpenAI client.
-            if self.engine_args.served_model_name is not None:
-                served_model_names = self.engine_args.served_model_name
-            else:
-                served_model_names = [self.engine_args.model]
             self.openai_serving_chat = OpenAIServingChat(
                 self.engine,
                 model_config,
-                served_model_names=served_model_names,
                 response_role=self.response_role,
-                lora_modules=self.lora_modules,
                 chat_template=self.chat_template,
-                prompt_adapters=None,
-                request_logger=None,
                 tools=self.tools
             )
         logger.info(f"Request: {request}")
