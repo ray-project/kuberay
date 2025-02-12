@@ -98,7 +98,8 @@ func TestAutoscalingRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Check the number of worker pods is correct when RayService is steady
-	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(HaveLen(numberOfPodsWhenSteady))
+	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(HaveLen(numberOfPodsWhenSteady),
+		"The WorkerGroupSpec.Replicas is %d", *rayServiceUnderlyingRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)

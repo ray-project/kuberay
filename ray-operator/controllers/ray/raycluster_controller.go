@@ -739,8 +739,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		itemLength := len(headPods.Items)
 		for index := 0; index < itemLength; index++ {
 			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
-				// Remove the healthy pod at index i from the list of pods to delete
-				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // replace last element with the healthy head.
+				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // Replace healthy pod at index i with the last element from the list of pods to delete.
 				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
 				itemLength--
 			}

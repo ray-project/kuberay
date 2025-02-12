@@ -334,7 +334,7 @@ func TestRayClusterLogValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				require.Error(t, err, tc.expectError)
+				require.EqualError(t, err, tc.expectError)
 			} else {
 				if tc.opts.outputDir == "" {
 					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
