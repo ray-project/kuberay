@@ -75,11 +75,20 @@ class VLLMDeployment:
         """
         if not self.openai_serving_chat:
             model_config = await self.engine.get_model_config()
+            # Determine the name of the served model for the OpenAI client.
+            if self.engine_args.served_model_name is not None:
+                served_model_names = self.engine_args.served_model_name
+            else:
+                served_model_names = [self.engine_args.model]
             self.openai_serving_chat = OpenAIServingChat(
                 self.engine,
                 model_config,
+                served_model_names=served_model_names,
                 response_role=self.response_role,
-                chat_template=self.chat_template
+                lora_modules=self.lora_modules,
+                chat_template=self.chat_template,
+                prompt_adapters=None,
+                request_logger=None,
             )
         logger.info(f"Request: {request}")
         
