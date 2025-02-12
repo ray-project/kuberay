@@ -29,7 +29,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving all ray cluster logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
-		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
+		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
 		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "all")
 		output, err := cmd.CombinedOutput()
@@ -84,7 +84,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving ray cluster head logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
-		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only head node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+`
+		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only head node logs\.\nDownloading log for Ray Node raycluster-kuberay-head`
 
 		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "head")
 		output, err := cmd.CombinedOutput()
@@ -191,7 +191,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving ray cluster logs within designated directory", func() {
 		expectedDirPath := "./temporary-directory"
-		expectedOutputStringFormat := `Command set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
+		expectedOutputStringFormat := `Command set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
 		err := os.MkdirAll(expectedDirPath, 0o755)
 		Expect(err).NotTo(HaveOccurred())
