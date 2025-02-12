@@ -1093,6 +1093,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodGenerateName(instance.Name, rayv1.HeadNode)
+	podName = podName[:len(podName)-1]                                            // strip the last character so the `-` will be excluded from the generated podName
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
