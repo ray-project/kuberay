@@ -1,6 +1,8 @@
 package generation
 
 import (
+	"maps"
+
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -15,15 +17,17 @@ import (
 )
 
 type RayClusterSpecObject struct {
-	RayVersion     string
-	Image          string
-	HeadCPU        string
-	HeadGPU        string
-	HeadMemory     string
-	WorkerCPU      string
-	WorkerGPU      string
-	WorkerMemory   string
-	WorkerReplicas int32
+	HeadRayStartParams   map[string]string
+	WorkerRayStartParams map[string]string
+	RayVersion           string
+	Image                string
+	HeadCPU              string
+	HeadGPU              string
+	HeadMemory           string
+	WorkerCPU            string
+	WorkerGPU            string
+	WorkerMemory         string
+	WorkerReplicas       int32
 }
 
 type RayClusterYamlObject struct {
@@ -59,10 +63,19 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 	// TODO: Look for better workaround/fixes for RayStartParams. Currently using `WithRayStartParams()` requires
 	// a non-empty map with valid key value pairs and will not populate the field with empty/nil values. This
 	// isn't ideal as it forces the generated RayCluster yamls to use those parameters.
+	headRayStartParams := map[string]string{
+		"dashboard-host": "0.0.0.0",
+	}
+	workerRayStartParams := map[string]string{
+		"metrics-export-port": "8080",
+	}
+	maps.Copy(headRayStartParams, rayClusterSpecObject.HeadRayStartParams)
+	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerRayStartParams)
+
 	rayClusterSpec := rayv1ac.RayClusterSpec().
 		WithRayVersion(rayClusterSpecObject.RayVersion).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+			WithRayStartParams(headRayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithContainers(corev1ac.Container().
@@ -81,7 +94,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 							corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard"),
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
 		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-			WithRayStartParams(map[string]string{"metrics-export-port": "8080"}).
+			WithRayStartParams(workerRayStartParams).
 			WithGroupName("default-group").
 			WithReplicas(rayClusterSpecObject.WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
