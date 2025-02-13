@@ -42,22 +42,22 @@ func TestRayJob(t *testing.T) {
 			KubectlApplyYAML(test, yamlFilePath, namespace.Name)
 
 			rayJob, err := GetRayJob(test, namespace.Name, rayJobFromYaml.Name)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(rayJob).NotTo(BeNil())
+			g.Expect(err).NotTo(HaveOccurred(), LogRayJobRelatedResources(test))
+			g.Expect(rayJob).NotTo(BeNil(), LogRayJobRelatedResources(test))
 
 			// Wait for RayCluster name to be populated
 			g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 				Should(WithTransform(RayJobClusterName, Not(BeEmpty())), LogRayJobRelatedResources(test))
 
 			rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(rayJob).NotTo(BeNil())
+			g.Expect(err).NotTo(HaveOccurred(), LogRayJobRelatedResources(test))
+			g.Expect(rayJob).NotTo(BeNil(), LogRayJobRelatedResources(test))
 
 			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
 			g.Eventually(RayCluster(test, namespace.Name, rayJob.Status.RayClusterName), TestTimeoutMedium).
 				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)), LogRayJobRelatedResources(test))
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred(), LogRayJobRelatedResources(test))
 
 			// Check if the RayCluster created correct number of pods
 			var desiredWorkerReplicas int32
@@ -67,7 +67,7 @@ func TestRayJob(t *testing.T) {
 				}
 			}
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerReplicas)), LogRayJobRelatedResources(test))
-			g.Expect(GetRayCluster(test, namespace.Name, rayCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(desiredWorkerReplicas)))
+			g.Expect(GetRayCluster(test, namespace.Name, rayCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(desiredWorkerReplicas)), LogRayJobRelatedResources(test))
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()), LogRayJobRelatedResources(test))
