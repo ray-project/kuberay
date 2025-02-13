@@ -1,15 +1,18 @@
 package sampleyaml
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -108,4 +111,67 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 			g.Expect(value.ServeApplicationStatus.Status).To(Equal(rayv1.ApplicationStatusEnum.RUNNING))
 		}
 	}
+}
+
+func LogRayJobRelatedResources(t Test) string {
+	t.T().Helper()
+	var message strings.Builder
+
+	if pods, err := t.Client().Core().CoreV1().Pods("").List(t.Ctx(), metav1.ListOptions{}); err == nil {
+		fmt.Fprintf(&message, "\n=== Pods across all namespaces ===\n")
+		for _, pod := range pods.Items {
+			podJSON, err := json.MarshalIndent(pod, "", "    ")
+			if err != nil {
+				fmt.Fprintf(&message, "Error marshaling pod %s/%s: %v\n", pod.Namespace, pod.Name, err)
+				continue
+			}
+			fmt.Fprintf(&message, "---\n# Pod: %s/%s\n%s\n", pod.Namespace, pod.Name, string(podJSON))
+		}
+	} else {
+		fmt.Fprintf(&message, "Failed to get pods: %v\n", err)
+	}
+
+	if jobs, err := t.Client().Core().BatchV1().Jobs("").List(t.Ctx(), metav1.ListOptions{}); err == nil {
+		fmt.Fprintf(&message, "\n=== Jobs across all namespaces ===\n")
+		for _, job := range jobs.Items {
+			jobJSON, err := json.MarshalIndent(job, "", "    ")
+			if err != nil {
+				fmt.Fprintf(&message, "Error marshaling job %s/%s: %v\n", job.Namespace, job.Name, err)
+				continue
+			}
+			fmt.Fprintf(&message, "---\n# Job: %s/%s\n%s\n", job.Namespace, job.Name, string(jobJSON))
+		}
+	} else {
+		fmt.Fprintf(&message, "Failed to get jobs: %v\n", err)
+	}
+
+	if services, err := t.Client().Core().CoreV1().Services("").List(t.Ctx(), metav1.ListOptions{}); err == nil {
+		fmt.Fprintf(&message, "\n=== Services across all namespaces ===\n")
+		for _, svc := range services.Items {
+			serviceJSON, err := json.MarshalIndent(svc, "", "    ")
+			if err != nil {
+				fmt.Fprintf(&message, "Error marshaling service %s/%s: %v\n", svc.Namespace, svc.Name, err)
+				continue
+			}
+			fmt.Fprintf(&message, "---\n# Service: %s/%s\n%s\n", svc.Namespace, svc.Name, string(serviceJSON))
+		}
+	} else {
+		fmt.Fprintf(&message, "Failed to get services: %v\n", err)
+	}
+
+	if rayJobs, err := t.Client().Ray().RayV1().RayJobs("").List(t.Ctx(), metav1.ListOptions{}); err == nil {
+		fmt.Fprintf(&message, "\n=== RayJobs across all namespaces ===\n")
+		for _, rayJob := range rayJobs.Items {
+			rayJobJSON, err := json.MarshalIndent(rayJob, "", "    ")
+			if err != nil {
+				fmt.Fprintf(&message, "Error marshaling rayjob %s/%s: %v\n", rayJob.Namespace, rayJob.Name, err)
+				continue
+			}
+			fmt.Fprintf(&message, "---\n# RayJob: %s/%s\n%s\n", rayJob.Namespace, rayJob.Name, string(rayJobJSON))
+		}
+	} else {
+		fmt.Fprintf(&message, "Failed to get rayjobs: %v\n", err)
+	}
+
+	return message.String()
 }
