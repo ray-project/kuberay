@@ -114,6 +114,21 @@ func (options *CreateClusterOptions) Validate() error {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 
+	resourceFields := map[string]string{
+		"head-cpu":      options.headCPU,
+		"head-gpu":      options.headGPU,
+		"head-memory":   options.headMemory,
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+
+	for name, value := range resourceFields {
+		if err := util.ValidateResourceQuantity(value, name); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
+
 	return nil
 }
 

@@ -249,6 +249,22 @@ func (options *SubmitJobOptions) Validate() error {
 
 	// Changed working dir clean to here instead of complete since calling Clean on empty string return "." and it would be dificult to determine if that is actually user input or not.
 	options.workingDir = filepath.Clean(options.workingDir)
+
+	resourceFields := map[string]string{
+		"head-cpu":      options.headCPU,
+		"head-gpu":      options.headGPU,
+		"head-memory":   options.headMemory,
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+
+	for name, value := range resourceFields {
+		if err := util.ValidateResourceQuantity(value, name); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
+
 	return nil
 }
 
