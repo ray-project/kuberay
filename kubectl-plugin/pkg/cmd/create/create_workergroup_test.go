@@ -8,6 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -34,14 +36,14 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 						Image: "DEADBEEF",
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("2"),
-								corev1.ResourceMemory: resource.MustParse("5Gi"),
-								resourceNvidiaGPU:     resource.MustParse("1"),
+								corev1.ResourceCPU:     resource.MustParse("2"),
+								corev1.ResourceMemory:  resource.MustParse("5Gi"),
+								util.ResourceNvidiaGPU: resource.MustParse("1"),
 							},
 							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("2"),
-								corev1.ResourceMemory: resource.MustParse("5Gi"),
-								resourceNvidiaGPU:     resource.MustParse("1"),
+								corev1.ResourceCPU:     resource.MustParse("2"),
+								corev1.ResourceMemory:  resource.MustParse("5Gi"),
+								util.ResourceNvidiaGPU: resource.MustParse("1"),
 							},
 						},
 					},

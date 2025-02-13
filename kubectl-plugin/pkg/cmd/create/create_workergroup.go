@@ -20,10 +20,6 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 )
 
-const (
-	resourceNvidiaGPU = "nvidia.com/gpu"
-)
-
 type CreateWorkerGroupOptions struct {
 	configFlags       *genericclioptions.ConfigFlags
 	ioStreams         *genericclioptions.IOStreams
@@ -176,8 +172,8 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 
 	gpuResource := resource.MustParse(options.workerGPU)
 	if !gpuResource.IsZero() {
-		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
-		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
 	}
 
 	return rayv1.WorkerGroupSpec{
