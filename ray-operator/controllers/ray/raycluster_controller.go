@@ -733,9 +733,18 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
-	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods", fmt.Sprintf("Multiple head pods found, it should only exist one head pod. Please delete extra head pods and leave only the head pod with name `%s-head`.", instance.Name), headPods.Items)
-		return fmt.Errorf("%d head pods found %v. Please delete extra head pods and leave only the head pod with name %s-head", len(headPods.Items), headPods.Items, instance.Name)
+	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
+		correctHeadPodName := instance.Name + "-head"
+		headPodNames := make([]string, len(headPods.Items))
+		for i, pod := range headPods.Items {
+			headPodNames[i] = pod.Name
+		}
+
+		logger.Info("Multiple head pods found, it should only exist one head pod. Please delete extra head pods.",
+			"found pods", headPodNames,
+			"should only leave", correctHeadPodName,
+		)
+		return fmt.Errorf("%d head pods found %v. Please delete extra head pods and leave only the head pod with name %s", len(headPods.Items), headPodNames, correctHeadPodName)
 	}
 
 	// Reconcile worker pods now
