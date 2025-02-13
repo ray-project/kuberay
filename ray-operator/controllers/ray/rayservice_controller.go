@@ -261,7 +261,6 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		isPendingClusterServing = clusterName == pendingClusterName
 
 		// If services point to a different cluster than the active one, promote pending to active
-		logger.Info("calculateStatus", "clusterSvcPointingTo", clusterName, "pendingClusterName", pendingClusterName, "activeClusterName", activeClusterName)
 		if activeClusterName != clusterName {
 			logger.Info("Promoting pending cluster to active",
 				"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
@@ -795,25 +794,23 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	return rayCluster, nil
 }
 
-func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveApplications map[string]rayv1.AppStatus) (bool, string) {
+func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveApplications map[string]rayv1.AppStatus) bool {
 	// If the Serve config has not been cached, update the Serve config.
 	if cachedServeConfigV2 == "" {
-		return true, "Nothing has been cached for the cluster."
+		return true
 	}
 
 	// Handle the case that the head Pod has crashed and GCS FT is not enabled.
 	if len(serveApplications) == 0 {
-		reason := "No Serve application found in the RayCluster. " +
-			"A possible reason is that the head Pod crashed and GCS FT was not enabled."
-		return true, reason
+		return true
 	}
 
 	// If the Serve config has been cached, check if it needs to be updated.
 	if cachedServeConfigV2 != serveConfigV2 {
-		return true, "Current V2 Serve config doesn't match cached Serve config."
+		return true
 	}
 
-	return false, "Current V2 Serve config matches cached Serve config."
+	return false
 }
 
 func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
@@ -957,7 +954,6 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	if err == nil {
 		// Only update the service if the RayCluster switches.
 		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
-			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster", newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", serviceType)
 			return oldSvc, nil
 		}
 
@@ -1032,9 +1028,8 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	if err != nil {
 		return false, serveApplications, err
 	}
-	shouldUpdate, reason := checkIfNeedSubmitServeApplications(cachedServeConfigV2, rayServiceInstance.Spec.ServeConfigV2, serveApplications)
-	logger.Info("checkIfNeedSubmitServeApplications", "shouldUpdate", shouldUpdate, "reason", reason)
 
+	shouldUpdate := checkIfNeedSubmitServeApplications(cachedServeConfigV2, rayServiceInstance.Spec.ServeConfigV2, serveApplications)
 	if shouldUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateServeApplications), "Failed to update serve applications to the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
