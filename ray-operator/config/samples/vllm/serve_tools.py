@@ -71,48 +71,68 @@ class VLLMDeployment:
 
     @app.post("/v1/chat/completions")
     async def create_chat_completion(
-        self, request: ChatCompletionRequest, raw_request: Request
+        self, request: Request
     ):
-        """OpenAI-compatible HTTP endpoint.
-
-        API reference:
-            - https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
-        """
-        if not self.openai_serving_chat:
-            model_config = await self.engine.get_model_config()
-            # Determine the name of the served model for the OpenAI client.
-            if self.engine_args.served_model_name is not None:
-                served_model_names = self.engine_args.served_model_name
-            else:
-                served_model_names = [self.engine_args.model]
-            self.openai_serving_chat = OpenAIServingChat(
-                self.engine,
-                model_config,
-                served_model_names,
-                self.response_role,
-                lora_modules=self.lora_modules,
-                prompt_adapters=self.prompt_adapters,
-                request_logger=self.request_logger,
-                chat_template=self.chat_template,
-            )
-        logger.info(f"Request: {request}")
-        
-        # Add tools to the request if they're enabled
-        if os.environ.get('ENABLE_TOOLS', 'false').lower() == 'true':
-            request.tools = self.tools
+        try:
+            # Parse the raw request body
+            body = await request.json()
             
-        generator = await self.openai_serving_chat.create_chat_completion(
-            request, raw_request
-        )
-        if isinstance(generator, ErrorResponse):
-            return JSONResponse(
-                content=generator.model_dump(), status_code=generator.code
+            # Convert tools format if present
+            if "tools" in body:
+                tools_dict = {}
+                for tool in body.get("tools", []):
+                    if tool["type"] == "function":
+                        func = tool["function"]
+                        tools_dict[func["name"]] = {
+                            "description": func["description"],
+                            "parameters": func["parameters"]
+                        }
+                body["tools"] = tools_dict
+
+            # Create chat request
+            chat_request = ChatCompletionRequest(**body)
+
+            if not self.openai_serving_chat:
+                model_config = await self.engine.get_model_config()
+                # Use the actual model path instead of the HF model ID
+                model_name = os.environ.get('MODEL_ID').split('/')[-1]  # Get just the model name part
+                self.openai_serving_chat = OpenAIServingChat(
+                    self.engine,
+                    model_config,
+                    served_model_names=[model_name],  # Use simplified model name
+                    response_role=self.response_role,
+                    chat_template=self.chat_template
+                )
+            
+            # Update the request model to match the served model name
+            chat_request.model = os.environ.get('MODEL_ID').split('/')[-1]
+            
+            logger.info(f"Request: {chat_request}")
+            generator = await self.openai_serving_chat.create_chat_completion(
+                chat_request, request
             )
-        if request.stream:
-            return StreamingResponse(content=generator, media_type="text/event-stream")
-        else:
-            assert isinstance(generator, ChatCompletionResponse)
-            return JSONResponse(content=generator.model_dump())
+            
+            if isinstance(generator, ErrorResponse):
+                return JSONResponse(
+                    content=generator.model_dump(), 
+                    status_code=generator.code
+                )
+            
+            if chat_request.stream:
+                return StreamingResponse(
+                    content=generator, 
+                    media_type="text/event-stream"
+                )
+            else:
+                assert isinstance(generator, ChatCompletionResponse)
+                return JSONResponse(content=generator.model_dump())
+                
+        except Exception as e:
+            logger.exception(f"Error processing chat completion request: {str(e)}")
+            return JSONResponse(
+                content={"error": str(e)},
+                status_code=500
+            )
 
     async def handle_tool_calls(self, tool_calls: List[Dict]):
         """Handle tool calls from the model"""
