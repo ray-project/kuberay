@@ -232,7 +232,7 @@ func (options *SubmitJobOptions) Validate() error {
 		}
 
 		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
-		if options.runtimeEnv == "" && options.runtimeEnvJson == "" {
+		if options.runtimeEnv == "" && options.runtimeEnvJson == "" && runtimeEnvYaml != "" {
 			runtimeJson, err := yaml.YAMLToJSON([]byte(runtimeEnvYaml))
 			if err != nil {
 				return fmt.Errorf("Failed to convert runtime env to json: %w", err)
