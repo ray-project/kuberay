@@ -64,10 +64,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService is able to serve requests
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ := curlRayServicePod(test, rayService, curlPod, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	g.Expect(requestRayService(test, rayService, curlPod)).To(Equal("6, 15 pizzas please!"))
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
@@ -88,12 +85,9 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 
-	// Validate RayService is able to serve requests
+	// Validate RayService is able to serve requests during the upgrade
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	g.Consistently(requestRayService(test, rayService, curlPod), "30s", "1s").Should(Equal("6, 15 pizzas please!"))
 
 	// Trigger a zero-downtime upgrade of the RayService
 	test.T().Logf("Upgrading the RayService to trigger a zero downtime upgrade")
@@ -119,8 +113,5 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/fruit", `["MANGO", 2]`)
-	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/calc", `["MUL", 3]`)
-	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	g.Expect(requestRayService(test, rayService, curlPod)).To(Equal("6, 15 pizzas please!"))
 }

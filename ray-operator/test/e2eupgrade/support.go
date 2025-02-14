@@ -21,6 +21,13 @@ func ProcessStateSuccess(cmd *exec.Cmd) bool {
 	return cmd.ProcessState.Success()
 }
 
+func requestRayService(t Test, rayService *rayv1.RayService, curlPod *corev1.Pod) string {
+	stdout1, _ := curlRayServicePod(t, rayService, curlPod, "/fruit", `["MANGO", 2]`)
+	stdout2, _ := curlRayServicePod(t, rayService, curlPod, "/calc", `["MUL", 3]`)
+
+	return stdout1.String() + ", " + stdout2.String()
+}
+
 func curlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
