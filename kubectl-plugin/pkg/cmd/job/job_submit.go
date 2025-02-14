@@ -164,6 +164,9 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 
+	cmd.Flags().BoolVar(&options.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "Automatically shutdown resources after job finishes")
+	cmd.Flags().StringVar(&options.deletionPolicy, "deletion-policy", "", "Policy for deleting resources after job completion. Valid values: 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone'")
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
@@ -279,9 +282,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.fileName == "" {
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
-			RayJobName:     options.rayjobName,
-			Namespace:      *options.configFlags.Namespace,
-			SubmissionMode: "InteractiveMode",
+			RayJobName:               options.rayjobName,
+			Namespace:                *options.configFlags.Namespace,
+			SubmissionMode:           "InteractiveMode",
+			DeletionPolicy:           options.deletionPolicy,
+			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
 			RayClusterSpecObject: generation.RayClusterSpecObject{
 				RayVersion:     options.rayVersion,
 				Image:          options.image,
