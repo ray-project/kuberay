@@ -80,14 +80,14 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to the latest release")
-	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", UPGRADE_VERSION))
+	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", UPGRADE_VERSION)) //nolint:gosec
 	err = cmd.Run()
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd.ProcessState.Success(), TestTimeoutShort).Should(BeTrue())
+	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 	cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", UPGRADE_VERSION)
 	err = cmd.Run()
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd.ProcessState.Success(), TestTimeoutShort).Should(BeTrue())
+	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 
 	// Validate RayService is able to serve requests
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")

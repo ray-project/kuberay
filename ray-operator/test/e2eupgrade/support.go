@@ -3,6 +3,7 @@ package e2eupgrade
 import (
 	"bytes"
 	"fmt"
+	"os/exec"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -13,13 +14,11 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-type option[T any] func(t *T) *T
-
-func apply[T any](t *T, options ...option[T]) *T {
-	for _, opt := range options {
-		t = opt(t)
+func ProcessStateSuccess(cmd *exec.Cmd) bool {
+	if cmd.ProcessState == nil {
+		return false
 	}
-	return t
+	return cmd.ProcessState.Success()
 }
 
 func curlRayServicePod(
