@@ -53,7 +53,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	curlPodName := "curl-pod"
 
 	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
-	curlPod, err := CreateCurlPod(test, curlPodName, namespace.Name)
+	curlPod, err := CreateCurlPod(test, curlPodName, "curl", namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
@@ -119,8 +119,8 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = curlRayServicePod(test, rayService, curlPod, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 }
