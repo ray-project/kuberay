@@ -165,10 +165,10 @@ func CheckRouteName(ctx context.Context, s string, n string) string {
 	return CheckName(s)
 }
 
-// PodGenerateName returns the value that should be used for a Pod's generateName
+// PodName returns the value that should be used for a Pod's Name or GenerateName
 // based on the RayCluster name and node type (head or worker).
-func PodGenerateName(prefix string, nodeType rayv1.RayNodeType) string {
-	maxPrefixLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+func PodName(prefix string, nodeType rayv1.RayNodeType, isGenerateName bool) string {
+	maxPrefixLength := 50 // 63 - ( 8 + 5 ) // 8 char are consumed at the end with "-worker-" + 5 generated.
 
 	var podPrefix string
 	if len(prefix) <= maxPrefixLength {
@@ -177,7 +177,11 @@ func PodGenerateName(prefix string, nodeType rayv1.RayNodeType) string {
 		podPrefix = prefix[:maxPrefixLength]
 	}
 
-	return strings.ToLower(podPrefix + DashSymbol + string(nodeType) + DashSymbol)
+	result := strings.ToLower(podPrefix + DashSymbol + string(nodeType))
+	if isGenerateName {
+		result += DashSymbol
+	}
+	return result
 }
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
