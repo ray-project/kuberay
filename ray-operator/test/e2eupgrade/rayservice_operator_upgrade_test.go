@@ -87,7 +87,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService is able to serve requests during the upgrade
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	g.Consistently(requestRayService(test, rayService, curlPod), "30s", "1s").Should(Equal("6, 15 pizzas please!"))
+	g.Consistently(requestRayService, "30s", "1s").WithArguments(test, rayService, curlPod).Should(Equal("6, 15 pizzas please!"))
 
 	// Trigger a zero-downtime upgrade of the RayService
 	test.T().Logf("Upgrading the RayService to trigger a zero downtime upgrade")
