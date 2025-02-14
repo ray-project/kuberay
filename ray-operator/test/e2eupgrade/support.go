@@ -25,7 +25,6 @@ func curlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
 	curlPod *corev1.Pod,
-	curlPodContainerName,
 	rayServicePath,
 	body string,
 ) (bytes.Buffer, bytes.Buffer) {
