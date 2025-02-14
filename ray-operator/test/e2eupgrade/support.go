@@ -37,7 +37,7 @@ func curlRayServicePod(
 		"-d", body,
 	}
 
-	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
+	return ExecPodCmd(t, curlPod, "curl", cmd)
 }
 
 func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
