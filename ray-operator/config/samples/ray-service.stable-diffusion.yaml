@@ -24,7 +24,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-ml:2.41.0.deprecated-gpu
+            image: rayproject/ray-ml:2.41.0.deprecated
             ports:
             - containerPort: 6379
               name: gcs
@@ -59,7 +59,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-ml:2.41.0.deprecated-gpu
+            image: rayproject/ray-ml:2.41.0.deprecated
             resources:
               limits:
                 cpu: 4
