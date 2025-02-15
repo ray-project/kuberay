@@ -4,8 +4,11 @@ metadata:
   name: rayjob-interactive-mode
   namespace: default
 spec:
-  # InteractiveMode is only used in kubectl plugin
+  # InteractiveMode means KubeRay doesn't submit job for you.
+  # Instead, wait for user to submit job and provide the job submission ID.
   submissionMode: InteractiveMode
+  # In interactive mode, the job is created externally, and the job ID is provided by the user
+  jobId: "example-job-id"
   rayClusterSpec:
     headGroupSpec:
       rayStartParams:
