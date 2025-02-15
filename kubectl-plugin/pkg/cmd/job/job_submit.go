@@ -166,6 +166,7 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd.Flags().BoolVar(&options.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "Automatically shutdown resources after job finishes")
 	cmd.Flags().StringVar(&options.deletionPolicy, "deletion-policy", "", "Policy for deleting resources after job completion. Valid values: 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone'")
+	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL to clean up RayCluster. Only works ShutdownAfterJobFinishes set to true")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -213,6 +214,10 @@ func (options *SubmitJobOptions) Validate() error {
 		if len(runtimeEnvWorkingDir) > 0 && options.workingDir == "" {
 			options.workingDir = runtimeEnvWorkingDir
 		}
+	}
+
+	if !options.shutdownAfterJobFinishes && options.ttlSecondsAfterFinished > 0 {
+		return fmt.Errorf("TTLSecondsAfterFinished only working when ShutdownAfterJobFinishes set to true when ShutdownAfterJobFinishes is set to true")
 	}
 
 	// Take care of case where there is a filename input
@@ -287,6 +292,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			SubmissionMode:           "InteractiveMode",
 			DeletionPolicy:           options.deletionPolicy,
 			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
 			RayClusterSpecObject: generation.RayClusterSpecObject{
 				RayVersion:     options.rayVersion,
 				Image:          options.image,
@@ -326,6 +332,8 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 	}
 	fmt.Printf("Submitted RayJob %s.\n", options.RayJob.GetName())
+
+	// TODO: Check if there are any events related to RayJobDeletionPolicy
 
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?
