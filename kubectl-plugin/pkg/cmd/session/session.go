@@ -3,17 +3,20 @@ package session
 import (
 	"context"
 	"fmt"
-	"os/exec"
+	"net/http"
+	"net/url"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
+	cmdportforward "k8s.io/kubectl/pkg/cmd/portforward"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 )
@@ -33,7 +36,15 @@ type SessionOptions struct {
 	Verbose        bool
 }
 
+type defaultPortForwarder struct {
+	genericiooptions.IOStreams
+}
+
 var (
+	gcsPort = appPort{
+		name: "Ray GCS Server",
+		port: 6379,
+	}
 	dashboardPort = appPort{
 		name: "Ray Dashboard",
 		port: 8265,
@@ -87,6 +98,7 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 		Short:             "Forward local ports to the Ray resources.",
 		Long:              sessionLong,
 		Example:           sessionExample,
+		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
@@ -106,10 +118,6 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
-	}
-
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
 		options.ResourceType = util.RayCluster
@@ -146,7 +154,7 @@ func (options *SessionOptions) Validate() error {
 	// Overrides and binds the kube config then retrieves the merged result
 	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
+		return fmt.Errorf("error retrieving raw config: %w", err)
 	}
 	if !util.HasKubectlContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
@@ -156,21 +164,26 @@ func (options *SessionOptions) Validate() error {
 }
 
 func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+	fmt.Printf("Forwarding ports to %s %s in namespace %s\n", options.ResourceType, options.ResourceName, options.Namespace)
+
 	k8sClient, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
+	podName, err := k8sClient.GetRayHeadPodName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Forwarding ports to service %s\n", svcName)
+
+	if options.Verbose {
+		fmt.Printf("using Pod %s\n", podName)
+	}
 
 	var appPorts []appPort
 	switch options.ResourceType {
 	case util.RayCluster:
-		appPorts = []appPort{dashboardPort, clientPort}
+		appPorts = []appPort{gcsPort, dashboardPort, clientPort}
 	case util.RayJob:
 		appPorts = []appPort{dashboardPort}
 	case util.RayService:
@@ -179,42 +192,66 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	var kubectlArgs []string
-	if options.currentContext == "" {
-		kubectlArgs = append(kubectlArgs, "--context", *options.configFlags.Context)
-	}
-
-	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.Namespace, "service/"+svcName)
+	var ports []string
 	for _, appPort := range appPorts {
-		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
+		ports = append(ports, fmt.Sprintf("%d", appPort.port))
 	}
 
-	for _, appPort := range appPorts {
-		fmt.Printf("%s: http://localhost:%d\n", appPort.name, appPort.port)
+	config, err := factory.ToRESTConfig()
+	if err != nil {
+		return err
 	}
-	fmt.Println()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			const reconnectDelay = 100
-			var err error
-			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+	pfo := cmdportforward.PortForwardOptions{
+		Namespace:  options.Namespace,
+		PodName:    podName,
+		RESTClient: k8sClient.KubernetesClient().CoreV1().RESTClient(),
+		Config:     config,
+		PodClient:  k8sClient.KubernetesClient().CoreV1(),
+		Address:    []string{"localhost"},
+		Ports:      ports,
+		PortForwarder: &defaultPortForwarder{
+			IOStreams: *options.ioStreams,
+		},
+	}
 
-			if options.Verbose {
-				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
-			}
+	err = pfo.Validate()
+	if err != nil {
+		return err
+	}
 
-			if err = portforwardCmd.Run(); err == nil {
-				return
-			}
-			fmt.Printf("failed to port-forward: %v, try to reconnect after %d miliseconds...\n", err, reconnectDelay)
-			time.Sleep(reconnectDelay * time.Millisecond)
+	return pfo.RunPortForwardContext(ctx)
+}
+
+// copied from https://github.com/kubernetes/kubectl/blob/v0.31.1/pkg/cmd/portforward/portforward.go#L158-L168
+func (f *defaultPortForwarder) ForwardPorts(method string, url *url.URL, opts cmdportforward.PortForwardOptions) error {
+	dialer, err := createDialer(method, url, opts)
+	if err != nil {
+		return err
+	}
+	fw, err := portforward.NewOnAddresses(dialer, opts.Address, opts.Ports, opts.StopChannel, opts.ReadyChannel, f.Out, f.ErrOut)
+	if err != nil {
+		return err
+	}
+	return fw.ForwardPorts()
+}
+
+// copied from https://github.com/kubernetes/kubectl/blob/v0.31.1/pkg/cmd/portforward/portforward.go#L139-L156
+func createDialer(method string, url *url.URL, opts cmdportforward.PortForwardOptions) (httpstream.Dialer, error) {
+	transport, upgrader, err := spdy.RoundTripperFor(opts.Config)
+	if err != nil {
+		return nil, err
+	}
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, method, url)
+	if !cmdutil.PortForwardWebsockets.IsDisabled() {
+		tunnelingDialer, err := portforward.NewSPDYOverWebsocketDialer(url, opts.Config)
+		if err != nil {
+			return nil, err
 		}
-	}()
-
-	wg.Wait()
-	return nil
+		// First attempt tunneling (websocket) dialer, then fallback to spdy dialer.
+		dialer = portforward.NewFallbackDialer(tunnelingDialer, dialer, func(err error) bool {
+			return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err)
+		})
+	}
+	return dialer, nil
 }

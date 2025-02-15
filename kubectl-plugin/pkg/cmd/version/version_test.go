@@ -97,6 +97,10 @@ func (c fakeClient) GetRayHeadSvcName(_ context.Context, _ string, _ util.Resour
 	return "", nil
 }
 
+func (c fakeClient) GetRayHeadPodName(_ context.Context, _ string, _ util.ResourceType, _ string) (string, error) {
+	return "", nil
+}
+
 func (c fakeClient) KubernetesClient() kubernetes.Interface {
 	return nil
 }
