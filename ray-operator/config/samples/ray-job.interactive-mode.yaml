@@ -4,15 +4,17 @@ metadata:
   name: rayjob-interactive-mode
   namespace: default
 spec:
-  # InteractiveMode means KubeRay doesn't submit job for you.
-  # Instead, wait for user to submit job and provide the job submission ID.
+  # InteractiveMode means KubeRay doesn't submit the job for you.
+  # KubeRay will create the RayJob and transition it to the Waiting state.
+  # The user needs to submit the job manually via the `ray job submit` command
+  # and then update the `spec.jobId` field with the job ID.
+  # After that, KubeRay will handle the rest of the lifecycle for the RayJob.
   submissionMode: InteractiveMode
-  # In interactive mode, the job is created externally, and the job ID is provided by the user
-  jobId: "example-job-id"
+  # User needs to update this field with the job ID after submitting the job
+  jobId: ""
   rayClusterSpec:
     headGroupSpec:
-      rayStartParams:
-        dashboard-host: 0.0.0.0
+      rayStartParams: {}
       template:
         spec:
           containers:
@@ -35,8 +37,7 @@ spec:
     rayVersion: 2.41.0
     workerGroupSpecs:
       - groupName: default-group
-        rayStartParams:
-          metrics-export-port: "8080"
+        rayStartParams: {}
         replicas: 1
         template:
           spec:
