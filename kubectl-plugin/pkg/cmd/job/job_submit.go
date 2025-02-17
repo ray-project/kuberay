@@ -335,8 +335,8 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	fmt.Printf("Submitted RayJob %s.\n", options.RayJob.GetName())
 
-	// Check for events in a goroutine with timeout
-	// If RayJobDeletionPolicy feature gate is not enabled, throw an error and delete the RayJob
+	// Continuously checks for Kubernetes events related to the RayJobDeletionPolicy.
+	// If an event indicates that the RayJobDeletionPolicy feature gate must be enabled, throw an error and delete the RayJob.
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
