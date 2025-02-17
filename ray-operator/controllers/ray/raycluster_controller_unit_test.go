@@ -1766,7 +1766,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
 
 	// disable feature gate for the following tests
-	restoreFeatureFlag := features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
@@ -1842,7 +1842,7 @@ func TestCalculateStatus(t *testing.T) {
 	assert.Empty(t, newInstance.Status.Conditions)
 
 	// enable feature gate for the following tests
-	restoreFeatureFlag()
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	// Test CheckRayHeadRunningAndReady with head pod running and ready
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
