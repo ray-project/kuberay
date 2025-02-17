@@ -50,9 +50,12 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 
 func TestGenerateRayJobApplyConfig(t *testing.T) {
 	testRayJobYamlObject := RayJobYamlObject{
-		RayJobName:     "test-ray-job",
-		Namespace:      "default",
-		SubmissionMode: "InteractiveMode",
+		RayJobName:               "test-ray-job",
+		Namespace:                "default",
+		SubmissionMode:           "InteractiveMode",
+		DeletionPolicy:           "DeleteCluster",
+		TTLSecondsAfterFinished:  100,
+		ShutdownAfterJobFinishes: true,
 		RayClusterSpecObject: RayClusterSpecObject{
 			RayVersion:     util.RayVersion,
 			Image:          util.RayImage,
@@ -80,6 +83,9 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 	assert.Equal(t, testRayJobYamlObject.WorkerReplicas, *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, resource.MustParse(testRayJobYamlObject.WorkerCPU), *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse(testRayJobYamlObject.WorkerMemory), *result.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+	assert.Equal(t, rayv1.DeletionPolicy(testRayJobYamlObject.DeletionPolicy), *result.Spec.DeletionPolicy)
+	assert.Equal(t, testRayJobYamlObject.TTLSecondsAfterFinished, *result.Spec.TTLSecondsAfterFinished)
+	assert.Equal(t, testRayJobYamlObject.ShutdownAfterJobFinishes, *result.Spec.ShutdownAfterJobFinishes)
 }
 
 func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
