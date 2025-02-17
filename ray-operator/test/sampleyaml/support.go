@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/types" // needed for GomegaTestingT
+	"github.com/onsi/gomega/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
