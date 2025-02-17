@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
@@ -34,9 +33,10 @@ import (
 )
 
 const (
-	dashboardAddr      = "http://localhost:8265"
-	clusterTimeout     = 120.0
-	portforwardtimeout = 60.0
+	dashboardAddr         = "http://localhost:8265"
+	clusterTimeout        = 120.0
+	portforwardtimeout    = 60.0
+	rayjobDeletionTimeout = 30.0
 )
 
 type SubmitJobOptions struct {
@@ -335,44 +335,18 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	fmt.Printf("Submitted RayJob %s.\n", options.RayJob.GetName())
 
-	// Continuously checks for Kubernetes events related to the RayJobDeletionPolicy.
-	// If an event indicates that the RayJobDeletionPolicy feature gate must be enabled, throw an error and delete the RayJob.
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-time.After(clusterTimeout * time.Second):
-				return
-			case <-ticker.C:
-				eventList, err := k8sClients.KubernetesClient().CoreV1().Events(*options.configFlags.Namespace).List(ctx, metav1.ListOptions{
-					FieldSelector: fmt.Sprintf("involvedObject.name=%s", options.RayJob.GetName()),
-				})
-				if err != nil {
-					fmt.Printf("Error listing events: %v\n", err)
-					return
-				}
-
-				// Check for error events related to RayJobDeletionPolicy feature gate
-				for _, event := range eventList.Items {
-					if strings.Contains(event.Message, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature") {
-						if event.FirstTimestamp.Time.After(startTime) || event.LastTimestamp.Time.After(startTime) {
-							fmt.Printf("Deleting RayJob...\n")
-							err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
-							if err != nil {
-								fmt.Printf("Failed to clean up Ray job: %v\n", err)
-							} else {
-								fmt.Printf("Cleaned Up RayJob: %s\n", options.RayJob.GetName())
-							}
-							log.Fatalf("%s", event.Message)
-						}
-					}
-				}
-				return
+	if options.deletionPolicy != "" {
+		err = k8sClients.WaitRayJobDeletionPolicyEnabled(ctx, *options.configFlags.Namespace, options.RayJob.Name, startTime, rayjobDeletionTimeout)
+		if err != nil {
+			fmt.Printf("Deleting RayJob...\n")
+			deleteErr := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+			if deleteErr != nil {
+				return fmt.Errorf("Failed to clean up Ray job after time out.: %w", deleteErr)
 			}
+			fmt.Printf("Cleaned Up RayJob: %s\n", options.RayJob.GetName())
+			return fmt.Errorf("%w", err)
 		}
-	}()
+	}
 
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?

@@ -77,6 +77,10 @@ func (c fakeClient) RayClient() rayclient.Interface {
 	return nil
 }
 
+func (c fakeClient) WaitRayJobDeletionPolicyEnabled(_ context.Context, _, _ string, _ time.Time, _ time.Duration) error {
+	return nil
+}
+
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
 	fakeVersionOptions := &VersionOptions{
