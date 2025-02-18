@@ -32,12 +32,51 @@ import (
 
 const filePathInPod = "/tmp/ray/session_latest/logs/"
 
+type nodeTypeEnum string
+
+const (
+	allNodeType    nodeTypeEnum = "all"
+	headNodeType   nodeTypeEnum = "head"
+	workerNodeType nodeTypeEnum = "worker"
+)
+
+// String is used both by fmt.Print and by Cobra in help text
+func (e *nodeTypeEnum) String() string {
+	return string(*e)
+}
+
+// Set must have pointer receiver so it doesn't change the value of a copy
+func (e *nodeTypeEnum) Set(v string) error {
+	val := strings.ToLower(v)
+
+	switch val {
+	case string(allNodeType), string(headNodeType), string(workerNodeType):
+		*e = nodeTypeEnum(val)
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q, %q, or %q", allNodeType, headNodeType, workerNodeType)
+	}
+}
+
+// Type is only used in help text
+func (e *nodeTypeEnum) Type() string {
+	return "enum"
+}
+
+func nodeTypeCompletion(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return []string{
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", allNodeType, allNodeType),
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", headNodeType, headNodeType),
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", workerNodeType, workerNodeType),
+	}, cobra.ShellCompDirectiveDefault
+}
+
 type ClusterLogOptions struct {
 	configFlags  *genericclioptions.ConfigFlags
 	ioStreams    *genericclioptions.IOStreams
 	Executor     RemoteExecutor
 	outputDir    string
-	nodeType     string
+	nodeType     nodeTypeEnum
 	ResourceName string
 	ResourceType util.ResourceType
 }
@@ -73,6 +112,7 @@ func NewClusterLogOptions(streams genericclioptions.IOStreams) *ClusterLogOption
 		configFlags: genericclioptions.NewConfigFlags(true),
 		ioStreams:   &streams,
 		Executor:    &DefaultRemoteExecutor{},
+		nodeType:    allNodeType,
 	}
 }
 
@@ -106,7 +146,10 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&options.outputDir, "out-dir", options.outputDir, "directory to save the logs to")
-	cmd.Flags().StringVar(&options.nodeType, "node-type", options.nodeType, "type of Ray node from which to download log, supports 'worker', 'head', or 'all'")
+	cmd.Flags().Var(&options.nodeType, "node-type", "type of Ray node from which to download logs, supports: 'worker', 'head', or 'all'")
+
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("node-type", nodeTypeCompletion))
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
@@ -137,12 +180,6 @@ func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) er
 		}
 
 		options.ResourceName = typeAndName[1]
-	}
-
-	if options.nodeType == "" {
-		options.nodeType = "all"
-	} else {
-		options.nodeType = strings.ToLower(options.nodeType)
 	}
 
 	return nil
