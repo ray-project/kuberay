@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
@@ -95,6 +96,10 @@ func (c fakeClient) GetKubeRayOperatorVersion(_ context.Context) (string, error)
 
 func (c fakeClient) GetRayHeadSvcName(_ context.Context, _ string, _ util.ResourceType, _ string) (string, error) {
 	return "", nil
+}
+
+func (c fakeClient) WaitRayClusterProvisioned(_ context.Context, _ string, _ string, _ time.Duration) error {
+	return nil
 }
 
 func (c fakeClient) KubernetesClient() kubernetes.Interface {
