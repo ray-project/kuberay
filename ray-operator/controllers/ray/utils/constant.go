@@ -47,6 +47,8 @@ const (
 
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+	// Finalizers for worker deletion
+	WorkerDeletionFinalizer = "ray.io/worker-deletion-finalizer"
 
 	// EnableServeServiceKey is exclusively utilized to indicate if a RayCluster is directly used for serving.
 	// See https://github.com/ray-project/kuberay/pull/1672 for more details.
