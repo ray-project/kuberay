@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	UPGRADE_VERSION = "v1.3.0-rc.1"
+	UPGRADE_VERSION = "v1.3.0"
 )
 
 func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
