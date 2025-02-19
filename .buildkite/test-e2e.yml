@@ -61,7 +61,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Deploy previous KubeRay operator release (v1.2.2) using helm
     - echo Deploying KubeRay operator
-    - kind load docker-image kuberay/operator:1.2.2
+    - kind load docker-image kuberay/operator:v1.2.2
     - helm install kuberay-operator kuberay/kuberay-operator --version 1.2.2
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
