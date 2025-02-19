@@ -23,80 +23,24 @@ func TestRayCreateClusterComplete(t *testing.T) {
 }
 
 func TestRayCreateClusterValidate(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
-
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		opts        *CreateClusterOptions
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &CreateClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-				},
-				ioStreams: &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
+			name: "should not error when K8s context is set",
 			opts: &CreateClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &CreateClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has current context and --context switch is set",
-			opts: &CreateClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "Successful submit job validation with RayJob",
-			opts: &CreateClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace:        &testNS,
-					Context:          &testContext,
-					KubeConfig:       &kubeConfigWithCurrentContext,
-					BearerToken:      &testBT,
-					Impersonate:      &testImpersonate,
-					ImpersonateGroup: &[]string{"fake-group"},
-				},
-				ioStreams:      &testStreams,
-				clusterName:    "fakeclustername",
-				rayVersion:     "ray-version",
-				image:          "ray-image",
-				headCPU:        "5",
-				headGPU:        "1",
-				headMemory:     "5Gi",
-				workerReplicas: 3,
-				workerCPU:      "4",
-				workerMemory:   "5Gi",
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 		},
 	}

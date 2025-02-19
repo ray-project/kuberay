@@ -72,13 +72,14 @@ func nodeTypeCompletion(_ *cobra.Command, _ []string, _ string) ([]string, cobra
 }
 
 type ClusterLogOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericclioptions.IOStreams
-	Executor     RemoteExecutor
-	outputDir    string
-	nodeType     nodeTypeEnum
-	ResourceName string
-	ResourceType util.ResourceType
+	configFlags   *genericclioptions.ConfigFlags
+	ioStreams     *genericclioptions.IOStreams
+	kubeContexter util.KubeContexter
+	Executor      RemoteExecutor
+	outputDir     string
+	nodeType      nodeTypeEnum
+	ResourceName  string
+	ResourceType  util.ResourceType
 }
 
 var (
@@ -109,10 +110,11 @@ var (
 
 func NewClusterLogOptions(streams genericclioptions.IOStreams) *ClusterLogOptions {
 	return &ClusterLogOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
-		Executor:    &DefaultRemoteExecutor{},
-		nodeType:    allNodeType,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
+		Executor:      &DefaultRemoteExecutor{},
+		nodeType:      allNodeType,
 	}
 }
 
@@ -191,7 +193,7 @@ func (options *ClusterLogOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 

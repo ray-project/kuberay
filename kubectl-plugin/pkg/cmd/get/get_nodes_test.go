@@ -91,14 +91,6 @@ func TestRayNodesGetComplete(t *testing.T) {
 }
 
 func TestRayNodesGetValidate(t *testing.T) {
-	testContext := "test-context"
-
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		opts        *GetNodesOptions
@@ -106,38 +98,18 @@ func TestRayNodesGetValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "should error when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-				},
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
+			name: "should not error when K8s context is set",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-			},
-		},
-		{
-			name: "no error when kubeconfig has current context and --context switch is set",
-			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-					Context:    &testContext,
-				},
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(true),
 			},
 		},
 	}

@@ -20,11 +20,12 @@ import (
 )
 
 type DeleteOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericiooptions.IOStreams
-	ResourceType util.ResourceType
-	ResourceName string
-	Namespace    string
+	configFlags   *genericclioptions.ConfigFlags
+	ioStreams     *genericiooptions.IOStreams
+	kubeContexter util.KubeContexter
+	ResourceType  util.ResourceType
+	ResourceName  string
+	Namespace     string
 }
 
 var deleteExample = templates.Examples(`
@@ -44,8 +45,9 @@ var deleteExample = templates.Examples(`
 func NewDeleteOptions(streams genericiooptions.IOStreams) *DeleteOptions {
 	configFlags := genericclioptions.NewConfigFlags(true)
 	return &DeleteOptions{
-		ioStreams:   &streams,
-		configFlags: configFlags,
+		ioStreams:     &streams,
+		configFlags:   configFlags,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -118,7 +120,7 @@ func (options *DeleteOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 	return nil

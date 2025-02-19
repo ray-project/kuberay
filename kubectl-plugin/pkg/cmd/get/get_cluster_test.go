@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,6 +17,7 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -76,7 +76,7 @@ func TestRayClusterGetComplete(t *testing.T) {
 			err := fakeClusterGetOptions.Complete(tc.args)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.AllNamespaces)
+			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.allNamespaces)
 			assert.Equal(t, tc.expectedCluster, fakeClusterGetOptions.cluster)
 		})
 	}
@@ -84,16 +84,6 @@ func TestRayClusterGetComplete(t *testing.T) {
 
 // Test the Validation() step of the command.
 func TestRayClusterGetValidate(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
-
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		opts        *GetClusterOptions
@@ -101,63 +91,21 @@ func TestRayClusterGetValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &GetClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-				},
-				AllNamespaces: false,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 				cluster:       "random_arg",
-				ioStreams:     &testStreams,
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
+			name: "should not error when K8s context is set",
 			opts: &GetClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				ioStreams: &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(true),
+				cluster:       "my-cluster",
 			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &GetClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "no error when kubeconfig has current context and --context switch is set",
-			opts: &GetClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams: &testStreams,
-			},
-		},
-		{
-			name: "Successful validation call",
-			opts: &GetClusterOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace:        &testNS,
-					Context:          &testContext,
-					KubeConfig:       &kubeConfigWithCurrentContext,
-					BearerToken:      &testBT,
-					Impersonate:      &testImpersonate,
-					ImpersonateGroup: &[]string{"fake-group"},
-				},
-				AllNamespaces: false,
-				cluster:       "random_arg",
-				ioStreams:     &testStreams,
-			},
-			expectError: "",
 		},
 	}
 
