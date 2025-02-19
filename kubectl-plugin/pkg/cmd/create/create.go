@@ -22,6 +22,7 @@ func NewCreateCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(NewCreateClusterCommand(streams))
+	cmd.AddCommand(NewCreateServiceCommand(streams))
 	cmd.AddCommand(NewCreateWorkerGroupCommand(streams))
 	return cmd
 }

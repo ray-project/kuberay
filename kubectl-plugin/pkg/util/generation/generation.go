@@ -39,6 +39,13 @@ type RayJobYamlObject struct {
 	RayClusterSpecObject
 }
 
+type RayServiceYamlObject struct {
+	RayServiceName string
+	Namespace      string
+	ServeConfig    string
+	RayClusterSpecObject
+}
+
 func (rayClusterObject *RayClusterYamlObject) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
 	rayClusterApplyConfig := rayv1ac.RayCluster(rayClusterObject.ClusterName, rayClusterObject.Namespace).
 		WithSpec(rayClusterObject.generateRayClusterSpec())
@@ -53,6 +60,19 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 			WithRayClusterSpec(rayJobObject.generateRayClusterSpec()))
 
 	return rayJobApplyConfig
+}
+
+func (rayServiceObject *RayServiceYamlObject) GenerateRayServiceApplyConfig() *rayv1ac.RayServiceApplyConfiguration {
+	rayServiceApplyConfig := rayv1ac.RayService(rayServiceObject.RayServiceName, rayServiceObject.Namespace).
+		WithSpec(rayv1ac.RayServiceSpec().
+			WithServeConfigV2(rayServiceObject.ServeConfig).
+			WithRayClusterSpec(rayServiceObject.generateRayClusterSpec()))
+
+	headPorts := rayServiceApplyConfig.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports
+	headPorts = append(headPorts, *corev1ac.ContainerPort().WithContainerPort(8000).WithName("serve"))
+	rayServiceApplyConfig.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Ports = headPorts
+
+	return rayServiceApplyConfig
 }
 
 func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
@@ -144,6 +164,21 @@ func ConvertRayClusterApplyConfigToYaml(rayClusterac *rayv1ac.RayClusterApplyCon
 // Converts RayJobApplyConfiguration object into a yaml string
 func ConvertRayJobApplyConfigToYaml(rayJobac *rayv1ac.RayJobApplyConfiguration) (string, error) {
 	resource, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rayJobac)
+	if err != nil {
+		return "", err
+	}
+
+	podByte, err := yaml.Marshal(resource)
+	if err != nil {
+		return "", err
+	}
+
+	return string(podByte), nil
+}
+
+// Converts RayServiceApplyConfiguration object into a yaml string
+func ConvertRayServiceApplyConfigToYaml(rayServiceac *rayv1ac.RayServiceApplyConfiguration) (string, error) {
+	resource, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rayServiceac)
 	if err != nil {
 		return "", err
 	}
