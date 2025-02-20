@@ -32,6 +32,7 @@ func TestRayService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
+			g.ConfigureWithT(WithRayServiceResourceLogger(test))
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
