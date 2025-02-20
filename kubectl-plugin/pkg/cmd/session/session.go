@@ -24,11 +24,14 @@ type appPort struct {
 }
 
 type SessionOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericiooptions.IOStreams
-	ResourceType util.ResourceType
-	ResourceName string
-	Namespace    string
+	configFlags    *genericclioptions.ConfigFlags
+	ioStreams      *genericiooptions.IOStreams
+	kubeContexter  util.KubeContexter
+	currentContext string
+	ResourceType   util.ResourceType
+	ResourceName   string
+	Namespace      string
+	Verbose        bool
 }
 
 var (
@@ -71,8 +74,9 @@ var (
 func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
 	configFlags := genericclioptions.NewConfigFlags(true)
 	return &SessionOptions{
-		ioStreams:   &streams,
-		configFlags: configFlags,
+		ioStreams:     &streams,
+		configFlags:   configFlags,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -81,10 +85,16 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	factory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:               "session (RAYCLUSTER | TYPE/NAME)",
-		Short:             "Forward local ports to the Ray resources.",
-		Long:              sessionLong,
-		Example:           sessionExample,
+		Use:     "session (RAYCLUSTER | TYPE/NAME)",
+		Short:   "Forward local ports to the Ray resources.",
+		Long:    sessionLong,
+		Example: sessionExample,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			}
+			return nil
+		},
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
@@ -96,15 +106,14 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 			return options.Run(cmd.Context(), factory)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
-	}
-
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
 		options.ResourceType = util.RayCluster
@@ -143,9 +152,10 @@ func (options *SessionOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
+	options.currentContext = config.CurrentContext
 	return nil
 }
 
@@ -173,7 +183,12 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	kubectlArgs := []string{"port-forward", "-n", options.Namespace, "service/" + svcName}
+	var kubectlArgs []string
+	if options.currentContext == "" {
+		kubectlArgs = append(kubectlArgs, "--context", *options.configFlags.Context)
+	}
+
+	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.Namespace, "service/"+svcName)
 	for _, appPort := range appPorts {
 		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
@@ -191,6 +206,11 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 			const reconnectDelay = 100
 			var err error
 			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+
+			if options.Verbose {
+				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
+			}
+
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}

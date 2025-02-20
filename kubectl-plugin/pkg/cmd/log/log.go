@@ -32,14 +32,54 @@ import (
 
 const filePathInPod = "/tmp/ray/session_latest/logs/"
 
+type nodeTypeEnum string
+
+const (
+	allNodeType    nodeTypeEnum = "all"
+	headNodeType   nodeTypeEnum = "head"
+	workerNodeType nodeTypeEnum = "worker"
+)
+
+// String is used both by fmt.Print and by Cobra in help text
+func (e *nodeTypeEnum) String() string {
+	return string(*e)
+}
+
+// Set must have pointer receiver so it doesn't change the value of a copy
+func (e *nodeTypeEnum) Set(v string) error {
+	val := strings.ToLower(v)
+
+	switch val {
+	case string(allNodeType), string(headNodeType), string(workerNodeType):
+		*e = nodeTypeEnum(val)
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q, %q, or %q", allNodeType, headNodeType, workerNodeType)
+	}
+}
+
+// Type is only used in help text
+func (e *nodeTypeEnum) Type() string {
+	return "enum"
+}
+
+func nodeTypeCompletion(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return []string{
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", allNodeType, allNodeType),
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", headNodeType, headNodeType),
+		fmt.Sprintf("%s\tdownload logs from %s Ray nodes", workerNodeType, workerNodeType),
+	}, cobra.ShellCompDirectiveDefault
+}
+
 type ClusterLogOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericclioptions.IOStreams
-	Executor     RemoteExecutor
-	outputDir    string
-	nodeType     string
-	ResourceName string
-	ResourceType util.ResourceType
+	configFlags   *genericclioptions.ConfigFlags
+	ioStreams     *genericclioptions.IOStreams
+	kubeContexter util.KubeContexter
+	Executor      RemoteExecutor
+	outputDir     string
+	nodeType      nodeTypeEnum
+	ResourceName  string
+	ResourceType  util.ResourceType
 }
 
 var (
@@ -70,9 +110,11 @@ var (
 
 func NewClusterLogOptions(streams genericclioptions.IOStreams) *ClusterLogOptions {
 	return &ClusterLogOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
-		Executor:    &DefaultRemoteExecutor{},
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
+		Executor:      &DefaultRemoteExecutor{},
+		nodeType:      allNodeType,
 	}
 }
 
@@ -82,12 +124,18 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmdFactory := cmdutil.NewFactory(options.configFlags)
 
 	cmd := &cobra.Command{
-		Use:               "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
-		Short:             "Get Ray cluster logs",
-		Long:              logLong,
-		Example:           logExample,
-		Aliases:           []string{"logs"},
-		SilenceUsage:      true,
+		Use:          "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
+		Short:        "Get Ray cluster logs",
+		Long:         logLong,
+		Example:      logExample,
+		Aliases:      []string{"logs"},
+		SilenceUsage: true,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			}
+			return nil
+		},
 		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
@@ -100,16 +148,15 @@ func NewClusterLogCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&options.outputDir, "out-dir", options.outputDir, "directory to save the logs to")
-	cmd.Flags().StringVar(&options.nodeType, "node-type", options.nodeType, "type of Ray node from which to download log, supports 'worker', 'head', or 'all'")
+	cmd.Flags().Var(&options.nodeType, "node-type", "type of Ray node from which to download logs, supports: 'worker', 'head', or 'all'")
+
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("node-type", nodeTypeCompletion))
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
-	}
-
 	if *options.configFlags.Namespace == "" {
 		*options.configFlags.Namespace = "default"
 	}
@@ -137,12 +184,6 @@ func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) er
 		options.ResourceName = typeAndName[1]
 	}
 
-	if options.nodeType == "" {
-		options.nodeType = "all"
-	} else {
-		options.nodeType = strings.ToLower(options.nodeType)
-	}
-
 	return nil
 }
 
@@ -152,7 +193,7 @@ func (options *ClusterLogOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 

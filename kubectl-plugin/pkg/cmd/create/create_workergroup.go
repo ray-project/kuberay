@@ -20,13 +20,10 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 )
 
-const (
-	resourceNvidiaGPU = "nvidia.com/gpu"
-)
-
 type CreateWorkerGroupOptions struct {
 	configFlags       *genericclioptions.ConfigFlags
 	ioStreams         *genericclioptions.IOStreams
+	kubeContexter     util.KubeContexter
 	clusterName       string
 	groupName         string
 	rayVersion        string
@@ -55,8 +52,9 @@ var (
 
 func NewCreateWorkerGroupOptions(streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
 	return &CreateWorkerGroupOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -85,6 +83,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	}
 
 	cmd.Flags().StringVarP(&options.clusterName, "ray-cluster", "c", "", "Ray cluster to add a worker group to")
+	cobra.CheckErr(cmd.MarkFlagRequired("ray-cluster"))
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
@@ -120,7 +119,7 @@ func (options *CreateWorkerGroupOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 
@@ -175,8 +174,8 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 
 	gpuResource := resource.MustParse(options.workerGPU)
 	if !gpuResource.IsZero() {
-		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
-		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(resourceNvidiaGPU)] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
 	}
 
 	return rayv1.WorkerGroupSpec{

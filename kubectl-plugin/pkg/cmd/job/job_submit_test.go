@@ -29,8 +29,6 @@ func TestRayJobSubmitComplete(t *testing.T) {
 func TestRayJobSubmitValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-context", "test-bearer-token", "test-person"
-
 	fakeDir := t.TempDir()
 
 	rayYaml := `apiVersion: ray.io/v1
@@ -48,62 +46,27 @@ spec:
 	_, err = file.Write([]byte(rayYaml))
 	require.NoError(t, err)
 
-	kubeConfigWithCurrentContext, err := util.CreateTempKubeConfigFile(t, testContext)
-	require.NoError(t, err)
-
-	kubeConfigWithoutCurrentContext, err := util.CreateTempKubeConfigFile(t, "")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		opts        *SubmitJobOptions
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
+			name: "should error when no K8s context is set",
 			opts: &SubmitJobOptions{
-				configFlags: genericclioptions.NewConfigFlags(false),
-				ioStreams:   &testStreams,
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(false),
 			},
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
-			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
-			},
-		},
-		{
 			name: "Successful submit job validation with RayJob",
 			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace:        &testNS,
-					Context:          &testContext,
-					KubeConfig:       &kubeConfigWithCurrentContext,
-					BearerToken:      &testBT,
-					Impersonate:      &testImpersonate,
-					ImpersonateGroup: &[]string{"fake-group"},
-				},
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				ioStreams:     &testStreams,
+				kubeContexter: util.NewMockKubeContexter(true),
+				fileName:      rayJobYamlPath,
+				workingDir:    "Fake/File/Path",
 			},
 		},
 	}
@@ -112,7 +75,7 @@ spec:
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				require.Error(t, err, tc.expectError)
+				require.EqualError(t, err, tc.expectError)
 			} else {
 				require.NoError(t, err)
 			}

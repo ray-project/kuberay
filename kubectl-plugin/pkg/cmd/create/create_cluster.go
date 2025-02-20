@@ -3,6 +3,7 @@ package create
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
@@ -18,6 +19,7 @@ import (
 type CreateClusterOptions struct {
 	configFlags    *genericclioptions.ConfigFlags
 	ioStreams      *genericclioptions.IOStreams
+	kubeContexter  util.KubeContexter
 	clusterName    string
 	rayVersion     string
 	image          string
@@ -29,26 +31,27 @@ type CreateClusterOptions struct {
 	workerGPU      string
 	workerReplicas int32
 	dryRun         bool
+	wait           bool
+	timeout        time.Duration
 }
 
 var (
-	createClusterLong = templates.LongDesc(`
-		Creates Ray Cluster from inputed file or generate one for user.
-	`)
+	defaultProvisionedTimeout = 5 * time.Minute
 
 	createClusterExample = templates.Examples(fmt.Sprintf(`
-		# Create a Ray Cluster using default values
+		# Create a Ray cluster using default values
 		kubectl ray create cluster sample-cluster
 
-		# Creates Ray Cluster from flags input
+		# Create a Ray cluster from flags input
 		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
 	`, util.RayVersion, util.RayImage))
 )
 
 func NewCreateClusterOptions(streams genericclioptions.IOStreams) *CreateClusterOptions {
 	return &CreateClusterOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -58,8 +61,7 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 
 	cmd := &cobra.Command{
 		Use:          "cluster [CLUSTERNAME]",
-		Short:        "Create Ray Cluster resource",
-		Long:         createClusterLong,
+		Short:        "Create Ray cluster",
 		Example:      createClusterExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -83,6 +85,8 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
+	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
+	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -108,10 +112,25 @@ func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string)
 func (options *CreateClusterOptions) Validate() error {
 	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
+		return fmt.Errorf("error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
+	}
+
+	resourceFields := map[string]string{
+		"head-cpu":      options.headCPU,
+		"head-gpu":      options.headGPU,
+		"head-memory":   options.headMemory,
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+
+	for name, value := range resourceFields {
+		if err := util.ValidateResourceQuantity(value, name); err != nil {
+			return fmt.Errorf("%w", err)
+		}
 	}
 
 	return nil
@@ -123,7 +142,6 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	// Will generate yaml file
 	rayClusterObject := generation.RayClusterYamlObject{
 		Namespace:   *options.configFlags.Namespace,
 		ClusterName: options.clusterName,
@@ -142,23 +160,31 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 
 	rayClusterac := rayClusterObject.GenerateRayClusterApplyConfig()
 
-	// If dry run is enabled, it will call the yaml converter and print out the yaml
+	// If dry run is enabled, it will call the YAML converter and print out the YAML
 	if options.dryRun {
 		rayClusterYaml, err := generation.ConvertRayClusterApplyConfigToYaml(rayClusterac)
 		if err != nil {
-			return fmt.Errorf("Error when converting RayClusterApplyConfig to YAML: %w", err)
+			return fmt.Errorf("error creating RayCluster YAML: %w", err)
 		}
 		fmt.Printf("%s\n", rayClusterYaml)
 		return nil
 	}
 
-	// TODO: Decide whether to save yaml to file or not.
+	// TODO: Decide whether to save YAML to file or not.
 
-	// Applying the YAML
 	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
 	if err != nil {
-		return fmt.Errorf("Failed to create Ray cluster with: %w", err)
+		return fmt.Errorf("failed to create Ray cluster: %w", err)
 	}
-	fmt.Printf("Created Ray Cluster: %s\n", result.GetName())
+	fmt.Printf("Created Ray cluster: %s\n", result.GetName())
+
+	if options.wait {
+		err = k8sClient.WaitRayClusterProvisioned(ctx, *options.configFlags.Namespace, result.GetName(), options.timeout)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Ray cluster %s is provisioned\n", result.GetName())
+	}
+
 	return nil
 }

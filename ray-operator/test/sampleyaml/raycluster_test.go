@@ -80,7 +80,7 @@ func TestRayCluster(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayCluster).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
+			LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
 			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).

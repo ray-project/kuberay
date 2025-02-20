@@ -293,7 +293,7 @@ The KubeRay 0.5.2 patch release includes the following improvements.
 * Allow watching multiple namespaces
   * [Feature] Watch CR in multiple namespaces with namespaced RBAC resources ([#1106](https://github.com/ray-project/kuberay/pull/1106), [@kevin85421](https://github.com/kevin85421))
 * Autoscaler stability improvements
-   * [Bug] RayService restarts repeatedly with Autoscaler ([#1037](https://github.com/ray-project/kuberay/pull/1037), [@kevin85421](https://github.com/kevin85421))
+  * [Bug] RayService restarts repeatedly with Autoscaler ([#1037](https://github.com/ray-project/kuberay/pull/1037), [@kevin85421](https://github.com/kevin85421))
   * [Bug] autoscaler not working properly in rayjob ([#1064](https://github.com/ray-project/kuberay/pull/1064), [@Yicheng-Lu-llll](https://github.com/Yicheng-Lu-llll))
   * [Bug][Autoscaler] Operator does not remove workers ([#1139](https://github.com/ray-project/kuberay/pull/1139), [@kevin85421](https://github.com/kevin85421))
 

@@ -5,12 +5,12 @@ This document provides an example for connecting Ray client to a Raycluster via 
 
 # Requirements
 * Environment:
-    * `Ubuntu`
-    * `Kind`
+  * `Ubuntu`
+  * `Kind`
 
 * Computing resources:
-    * 16GB RAM
-    * 8 CPUs
+  * 16GB RAM
+  * 8 CPUs
 
 ## Step 1: Create a Kind cluster
 The extra arg prepares the Kind cluster for deploying the ingress controller

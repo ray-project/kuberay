@@ -2,8 +2,6 @@
 # Default state for all rules
 default: true
 
-MD005: false
-MD007: false
 MD012: false
 MD013: false
 MD022: false

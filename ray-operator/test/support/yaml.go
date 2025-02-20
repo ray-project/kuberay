@@ -53,7 +53,7 @@ func KubectlApplyYAML(t Test, filename string, namespace string) {
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "apply", "-f", filename, "-n", namespace)
 	err := kubectlCmd.Run()
 	require.NoError(t.T(), err, "Failed to apply %s to namespace %s", filename, namespace)
-	t.T().Logf("Successfully applied %s to namespace %s", filename, namespace)
+	LogWithTimestamp(t.T(), "Successfully applied %s to namespace %s", filename, namespace)
 }
 
 func KubectlApplyQuota(t Test, namespace, quota string) {
@@ -61,7 +61,7 @@ func KubectlApplyQuota(t Test, namespace, quota string) {
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "create", "quota", namespace, "-n", namespace, quota)
 	err := kubectlCmd.Run()
 	require.NoError(t.T(), err, "Failed to apply quota %s in %s", quota, namespace)
-	t.T().Logf("Successfully applied quota %s in %s", quota, namespace)
+	LogWithTimestamp(t.T(), "Successfully applied quota %s in %s", quota, namespace)
 }
 
 func KubectlDeleteAllPods(t Test, namespace string) {
@@ -69,5 +69,5 @@ func KubectlDeleteAllPods(t Test, namespace string) {
 	kubectlCmd := exec.CommandContext(t.Ctx(), "kubectl", "delete", "--all", "pods", "-n", namespace)
 	err := kubectlCmd.Run()
 	require.NoError(t.T(), err, "Failed to delete pods in %s", namespace)
-	t.T().Logf("Successfully delete pods in %s", namespace)
+	LogWithTimestamp(t.T(), "Successfully delete pods in %s", namespace)
 }

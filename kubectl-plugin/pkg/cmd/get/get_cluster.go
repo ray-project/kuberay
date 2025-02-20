@@ -2,6 +2,7 @@ package get
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -22,14 +23,16 @@ import (
 type GetClusterOptions struct {
 	configFlags   *genericclioptions.ConfigFlags
 	ioStreams     *genericclioptions.IOStreams
-	args          []string
-	AllNamespaces bool
+	kubeContexter util.KubeContexter
+	cluster       string
+	allNamespaces bool
 }
 
 func NewGetClusterOptions(streams genericclioptions.IOStreams) *GetClusterOptions {
 	return &GetClusterOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		configFlags:   genericclioptions.NewConfigFlags(true),
+		ioStreams:     &streams,
+		kubeContexter: &util.DefaultKubeContexter{},
 	}
 }
 
@@ -40,9 +43,11 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "cluster [NAME]",
+		Aliases:           []string{"clusters"},
 		Short:             "Get cluster information.",
 		SilenceUsage:      true,
 		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
+		Args:              cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args); err != nil {
 				return err
@@ -58,17 +63,20 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 			return options.Run(cmd.Context(), k8sClient)
 		},
 	}
-	cmd.Flags().BoolVarP(&options.AllNamespaces, "all-namespaces", "A", options.AllNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", options.allNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *GetClusterOptions) Complete(args []string) error {
 	if *options.configFlags.Namespace == "" {
-		options.AllNamespaces = true
+		options.allNamespaces = true
 	}
 
-	options.args = args
+	if len(args) >= 1 {
+		options.cluster = args[0]
+	}
+
 	return nil
 }
 
@@ -78,39 +86,55 @@ func (options *GetClusterOptions) Validate() error {
 	if err != nil {
 		return fmt.Errorf("Error retrieving raw config: %w", err)
 	}
-	if !util.HasKubectlContext(config, options.configFlags) {
+	if !options.kubeContexter.HasContext(config, options.configFlags) {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-	if len(options.args) > 1 {
-		return fmt.Errorf("too many arguments, either one or no arguments are allowed")
 	}
 	return nil
 }
 
 func (options *GetClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
-	var err error
+	rayclusterList, err := getRayClusters(ctx, options, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	return printClusters(rayclusterList, options.ioStreams.Out)
+}
+
+func getRayClusters(ctx context.Context, options *GetClusterOptions, k8sClient client.Client) (*rayv1.RayClusterList, error) {
 	var rayclusterList *rayv1.RayClusterList
+	var err error
 
 	listopts := v1.ListOptions{}
-	if len(options.args) == 1 {
+	if options.cluster != "" {
 		listopts = v1.ListOptions{
-			FieldSelector: fmt.Sprintf("metadata.name=%s", options.args[0]),
+			FieldSelector: fmt.Sprintf("metadata.name=%s", options.cluster),
 		}
 	}
 
-	if options.AllNamespaces {
+	if options.allNamespaces {
 		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters("").List(ctx, listopts)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve raycluster for all namespaces: %w", err)
+			return nil, fmt.Errorf("unable to retrieve Ray clusters for all namespaces: %w", err)
 		}
 	} else {
 		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).List(ctx, listopts)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve raycluster for namespace %s: %w", *options.configFlags.Namespace, err)
+			return nil, fmt.Errorf("unable to retrieve Ray clusters for namespace %s: %w", *options.configFlags.Namespace, err)
 		}
 	}
 
-	return printClusters(rayclusterList, options.ioStreams.Out)
+	if options.cluster != "" && len(rayclusterList.Items) == 0 {
+		errMsg := fmt.Sprintf("Ray cluster %s not found", options.cluster)
+		if options.allNamespaces {
+			errMsg += " in any namespace"
+		} else {
+			errMsg += fmt.Sprintf(" in namespace %s", *options.configFlags.Namespace)
+		}
+		return nil, errors.New(errMsg)
+	}
+
+	return rayclusterList, nil
 }
 
 func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error {

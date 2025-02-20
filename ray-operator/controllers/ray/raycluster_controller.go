@@ -733,25 +733,18 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 		common.SuccessfulClustersCounterInc(instance.Namespace)
-	} else if len(headPods.Items) > 1 {
-		logger.Info("reconcilePods: Found more than one head Pods; deleting extra head Pods.", "nHeadPods", len(headPods.Items))
-		// TODO (kevin85421): In-place update may not be a good idea.
-		itemLength := len(headPods.Items)
-		for index := 0; index < itemLength; index++ {
-			if headPods.Items[index].Status.Phase == corev1.PodRunning || headPods.Items[index].Status.Phase == corev1.PodPending {
-				// Remove the healthy pod at index i from the list of pods to delete
-				headPods.Items[index] = headPods.Items[len(headPods.Items)-1] // replace last element with the healthy head.
-				headPods.Items = headPods.Items[:len(headPods.Items)-1]       // Truncate slice.
-				itemLength--
-			}
+	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
+		correctHeadPodName := instance.Name + "-head"
+		headPodNames := make([]string, len(headPods.Items))
+		for i, pod := range headPods.Items {
+			headPodNames[i] = pod.Name
 		}
-		// delete all the extra head pod pods
-		for _, extraHeadPodToDelete := range headPods.Items {
-			if err := r.Delete(ctx, &extraHeadPodToDelete); err != nil {
-				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
-			}
-			r.rayClusterScaleExpectation.ExpectScalePod(extraHeadPodToDelete.Namespace, instance.Name, expectations.HeadGroup, extraHeadPodToDelete.Name, expectations.Delete)
-		}
+
+		logger.Info("Multiple head pods found, it should only exist one head pod. Please delete extra head pods.",
+			"found pods", headPodNames,
+			"should only leave", correctHeadPodName,
+		)
+		return fmt.Errorf("%d head pods found %v. Please delete extra head pods and leave only the head pod with name %s", len(headPods.Items), headPodNames, correctHeadPodName)
 	}
 
 	// Reconcile worker pods now
@@ -1081,19 +1074,19 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	replica := pod
 	if err := r.Create(ctx, &replica); err != nil {
-		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod %s/%s, %v", pod.Namespace, pod.Name, err)
+		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
 		return err
 	}
 	r.rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
-	logger.Info("Created worker Pod for RayCluster", "name", pod.Name)
-	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", pod.Namespace, pod.Name)
+	logger.Info("Created worker Pod for RayCluster", "name", replica.Name)
+	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
 	return nil
 }
 
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
-	podName := utils.PodGenerateName(instance.Name, rayv1.HeadNode)
+	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
@@ -1120,7 +1113,7 @@ func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
 // Build worker instance pods.
 func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
-	podName := utils.PodGenerateName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode)
+	podName := utils.PodName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)

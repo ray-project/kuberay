@@ -48,8 +48,8 @@ Bug fix pull requests to fix bugs which found in the documentation testing proce
 
 Manual testing can be time-consuming, and to relieve the workload, we plan to add more CI tests. The minimum requirements to move forward are:
 
-   * All example configurations can work with `kuberay/operator:nightly` and the latest release of Ray (i.e. 2.3.0 for KubeRay v0.5.0).
-   * Update all version strings in the documents.
+* All example configurations can work with `kuberay/operator:nightly` and the latest release of Ray (i.e. 2.3.0 for KubeRay v0.5.0).
+* Update all version strings in the documents.
 
 #### Step 2. Create a new branch in ray-project/kuberay repository
 
@@ -123,8 +123,8 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 #### Step 7. Update KubeRay documentation in Ray repository.
 
 * Update KubeRay documentation in Ray repository with v0.5.0. Examples for v0.5.0:
-    * https://github.com/ray-project/ray/pull/33339
-    * https://github.com/ray-project/ray/pull/34178
+  * https://github.com/ray-project/ray/pull/33339
+  * https://github.com/ray-project/ray/pull/34178
 
 #### Step 8. Generate release
 

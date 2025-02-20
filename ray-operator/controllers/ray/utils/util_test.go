@@ -103,7 +103,7 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	}
 }
 
-func TestPodGenerateName(t *testing.T) {
+func TestPodName(t *testing.T) {
 	tests := []struct {
 		name     string
 		prefix   string
@@ -114,7 +114,7 @@ func TestPodGenerateName(t *testing.T) {
 			name:     "short cluster name, head pod",
 			prefix:   "ray-cluster-01",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-01-head-",
+			expected: "ray-cluster-01-head",
 		},
 		{
 			name:     "short cluster name, worker pod",
@@ -126,7 +126,7 @@ func TestPodGenerateName(t *testing.T) {
 			name:     "long cluster name, head pod",
 			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
+			expected: "ray-cluster-00000000000000000000000111111111222222-head",
 		},
 		{
 			name:     "long cluster name, worker pod",
@@ -138,11 +138,12 @@ func TestPodGenerateName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			str := PodGenerateName(test.prefix, test.nodeType)
+			isPodNameGenerated := test.nodeType == rayv1.WorkerNode // HeadPod name is now fixed
+			str := PodName(test.prefix, test.nodeType, isPodNameGenerated)
 			if str != test.expected {
 				t.Logf("expected: %q", test.expected)
 				t.Logf("actual: %q", str)
-				t.Error("PodGenerateName returned an unexpected string")
+				t.Error("PodName returned an unexpected string")
 			}
 
 			// 63 (max pod name length) - 5 random hexadecimal characters from generateName

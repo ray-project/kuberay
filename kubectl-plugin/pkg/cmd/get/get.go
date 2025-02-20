@@ -24,5 +24,16 @@ func NewGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	cmd.AddCommand(NewGetClusterCommand(streams))
+	cmd.AddCommand(NewGetWorkerGroupCommand(streams))
+	cmd.AddCommand(NewGetNodesCommand(streams))
 	return cmd
+}
+
+// joinLabelMap joins a map of K8s label key-val entries into a label selector string
+func joinLabelMap(labelMap map[string]string) string {
+	var labels []string
+	for k, v := range labelMap {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(labels, ",")
 }

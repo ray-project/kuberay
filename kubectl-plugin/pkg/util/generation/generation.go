@@ -8,12 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
-)
-
-const (
-	resourceNvidiaGPU = "nvidia.com/gpu"
 )
 
 type RayClusterSpecObject struct {
@@ -101,34 +99,28 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}))))))
 
-	// If the HeadGPU resource is set with a value, then proceed with parsing.
-	if rayClusterSpecObject.HeadGPU != "" {
-		headGPUResource := resource.MustParse(rayClusterSpecObject.HeadGPU)
-		if !headGPUResource.IsZero() {
-			var requests, limits corev1.ResourceList
-			requests = *rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests
-			limits = *rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits
-			requests[corev1.ResourceName(resourceNvidiaGPU)] = headGPUResource
-			limits[corev1.ResourceName(resourceNvidiaGPU)] = headGPUResource
+	headGPUResource := resource.MustParse(rayClusterSpecObject.HeadGPU)
+	if !headGPUResource.IsZero() {
+		var requests, limits corev1.ResourceList
+		requests = *rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests
+		limits = *rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits
+		requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = headGPUResource
+		limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = headGPUResource
 
-			rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = &requests
-			rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = &limits
-		}
+		rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = &requests
+		rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = &limits
 	}
 
-	// If the workerGPU resource is set with a value, then proceed with parsing.
-	if rayClusterSpecObject.WorkerGPU != "" {
-		workerGPUResource := resource.MustParse(rayClusterSpecObject.WorkerGPU)
-		if !workerGPUResource.IsZero() {
-			var requests, limits corev1.ResourceList
-			requests = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests
-			limits = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits
-			requests[corev1.ResourceName(resourceNvidiaGPU)] = workerGPUResource
-			limits[corev1.ResourceName(resourceNvidiaGPU)] = workerGPUResource
+	workerGPUResource := resource.MustParse(rayClusterSpecObject.WorkerGPU)
+	if !workerGPUResource.IsZero() {
+		var requests, limits corev1.ResourceList
+		requests = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests
+		limits = *rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits
+		requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = workerGPUResource
+		limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = workerGPUResource
 
-			rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = &requests
-			rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits = &limits
-		}
+		rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = &requests
+		rayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits = &limits
 	}
 
 	return rayClusterSpec
