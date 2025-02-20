@@ -60,40 +60,11 @@ spec:
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
-			name: "no error when kubeconfig has current context and --context switch isn't set",
-			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithCurrentContext,
-				},
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
-			},
-		},
-		{
-			name: "no error when kubeconfig has no current context and --context switch is set",
-			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					KubeConfig: &kubeConfigWithoutCurrentContext,
-					Context:    &testContext,
-				},
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
-			},
-		},
-		{
 			name: "TTLSecondsAfterFinished with shutdownAfterJobFinishes disabled should error",
 			opts: &SubmitJobOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace:        &testNS,
-					Context:          &testContext,
-					KubeConfig:       &kubeConfigWithCurrentContext,
-					BearerToken:      &testBT,
-					Impersonate:      &testImpersonate,
-					ImpersonateGroup: &[]string{"fake-group"},
-				},
+				configFlags:              genericclioptions.NewConfigFlags(true),
 				ioStreams:                &testStreams,
+				kubeContexter:            util.NewMockKubeContexter(true),
 				fileName:                 rayJobYamlPath,
 				workingDir:               "Fake/File/Path",
 				shutdownAfterJobFinishes: false,

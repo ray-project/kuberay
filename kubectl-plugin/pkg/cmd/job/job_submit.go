@@ -40,38 +40,41 @@ const (
 )
 
 type SubmitJobOptions struct {
-	ioStreams          *genericiooptions.IOStreams
-	configFlags        *genericclioptions.ConfigFlags
-	kubeContexter      util.KubeContexter
-	RayJob             *rayv1.RayJob
-	submissionID       string
-	entryPoint         string
-	fileName           string
-	workingDir         string
-	runtimeEnv         string
-	headers            string
-	verify             string
-	cluster            string
-	runtimeEnvJson     string
-	entryPointResource string
-	metadataJson       string
-	logStyle           string
-	logColor           string
-	rayjobName         string
-	rayVersion         string
-	image              string
-	headCPU            string
-	headMemory         string
-	headGPU            string
-	workerCPU          string
-	workerMemory       string
-	workerGPU          string
-	entryPointCPU      float32
-	entryPointGPU      float32
-	entryPointMemory   int
-	workerReplicas     int32
-	noWait             bool
-	dryRun             bool
+	ioStreams                *genericiooptions.IOStreams
+	configFlags              *genericclioptions.ConfigFlags
+	kubeContexter            util.KubeContexter
+	RayJob                   *rayv1.RayJob
+	deletionPolicy           string
+	submissionID             string
+	entryPoint               string
+	fileName                 string
+	workingDir               string
+	runtimeEnv               string
+	headers                  string
+	verify                   string
+	cluster                  string
+	runtimeEnvJson           string
+	entryPointResource       string
+	metadataJson             string
+	logStyle                 string
+	logColor                 string
+	rayjobName               string
+	rayVersion               string
+	image                    string
+	headCPU                  string
+	headMemory               string
+	headGPU                  string
+	workerCPU                string
+	workerMemory             string
+	workerGPU                string
+	entryPointCPU            float32
+	entryPointGPU            float32
+	entryPointMemory         int
+	workerReplicas           int32
+	ttlSecondsAfterFinished  int32
+	noWait                   bool
+	dryRun                   bool
+	shutdownAfterJobFinishes bool
 }
 
 var (
