@@ -16,6 +16,8 @@ const (
 
 	// KuberayTestRayImage is the Ray image to use for testing.
 	KuberayTestRayImage = "KUBERAY_TEST_RAY_IMAGE"
+
+	KuberayTestUpgradeImage = "KUBERAY_TEST_UPGRADE_IMAGE"
 )
 
 func GetRayVersion() string {
@@ -32,6 +34,10 @@ func GetRayImage() string {
 		fmt.Printf("Modified Ray Image to: %s for ARM chips\n", rayImage)
 	}
 	return rayImage
+}
+
+func GetKubeRayUpgradeVersion() string {
+	return lookupEnvOrDefault(KuberayTestUpgradeImage, KuberayUpgradeVersion)
 }
 
 func lookupEnvOrDefault(key, value string) string {

@@ -1,4 +1,4 @@
-package e2e
+package e2erayservice
 
 import (
 	"bytes"
@@ -71,7 +71,7 @@ func files(t Test, fileNames ...string) option[corev1ac.ConfigMapApplyConfigurat
 	return options(files...)
 }
 
-func curlRayServicePod(
+func CurlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
 	curlPod *corev1.Pod,
@@ -90,7 +90,7 @@ func curlRayServicePod(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
-func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
+func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
       - name: fruit_app
         import_path: fruit.deployment_graph

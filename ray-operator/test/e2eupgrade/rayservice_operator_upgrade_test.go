@@ -12,12 +12,9 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	e2e "github.com/ray-project/kuberay/ray-operator/test/e2erayservice"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
-)
-
-const (
-	UPGRADE_VERSION = "v1.3.0"
 )
 
 func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
@@ -33,8 +30,11 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-sample"
 
+	// Get the upgrade version from environment
+	upgradeVersion := GetKubeRayUpgradeVersion()
+
 	// Create RayService custom resource
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(e2e.RayServiceSampleYamlApplyConfiguration())
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -51,9 +51,10 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Create a curl Pod to query RayService
 	curlPodName := "curl-pod"
+	curlContainerName := "curl-container"
 
 	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
-	curlPod, err := CreateCurlPod(test, curlPodName, "curl", namespace.Name)
+	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
@@ -64,7 +65,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService is able to serve requests
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	g.Expect(requestRayService(test, rayService, curlPod)).To(Equal("6, 15 pizzas please!"))
+	g.Expect(requestRayService(test, rayService, curlPod, curlContainerName)).To(Equal("6, 15 pizzas please!"))
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
@@ -76,18 +77,18 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to the latest release")
-	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", UPGRADE_VERSION)) //nolint:gosec // required for upgrade
+	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
 	err = cmd.Run()
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
-	cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", UPGRADE_VERSION)
+	cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
 	err = cmd.Run()
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 
 	// Validate RayService is able to serve requests during the upgrade
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	g.Consistently(requestRayService, "30s", "1s").WithArguments(test, rayService, curlPod).Should(Equal("6, 15 pizzas please!"))
+	g.Consistently(requestRayService, "30s", "1s").WithArguments(test, rayService, curlPod, curlContainerName).Should(Equal("6, 15 pizzas please!"))
 
 	// Trigger a zero-downtime upgrade of the RayService
 	test.T().Logf("Upgrading the RayService to trigger a zero downtime upgrade")
@@ -113,5 +114,5 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	g.Expect(requestRayService(test, rayService, curlPod)).To(Equal("6, 15 pizzas please!"))
+	g.Expect(requestRayService(test, rayService, curlPod, curlContainerName)).To(Equal("6, 15 pizzas please!"))
 }

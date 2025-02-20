@@ -1,4 +1,4 @@
-package e2e
+package e2erayservice
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ func TestRedeployRayServe(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-sample"
 
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfiguration())
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(RayServiceSampleYamlApplyConfiguration())
 
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -51,9 +51,9 @@ func TestRedeployRayServe(t *testing.T) {
 	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ := curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ := CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 	test.T().Logf("Deleting the current Head for recreating a new one")
@@ -79,8 +79,8 @@ func TestRedeployRayServe(t *testing.T) {
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = curlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 }
