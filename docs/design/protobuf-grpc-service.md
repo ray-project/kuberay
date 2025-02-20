@@ -281,7 +281,6 @@ Since we may have different clients to interactive with our services, we will ge
 
 The GRPC protocol provides an extremely efficient way of cross-service communication for distributed applications. The public toolkit includes instruments to generate client and server code-bases for many languages allowing the developer to use the most optimal language for the task.
 
-
 The service will implement gPRC server as following graph shows.
 
 - A `ResourceManager` will be used to abstract the implementation of CRUD operators.

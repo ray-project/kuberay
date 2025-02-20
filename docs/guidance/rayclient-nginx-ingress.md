@@ -1,9 +1,11 @@
 # Connect to Rayclient with NGINX Ingress
+>
 > Warning: Ray client has some known [limitations](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/ray-client.html#things-to-know) and is not actively maintained.
 
 This document provides an example for connecting Ray client to a Raycluster via [NGINX Ingress](https://kubernetes.github.io/ingress-nginx/) on Kind. Although this is a Kind example, the steps applies to any Kubernetes Cluster that runs the NGINX Ingress Controller.
 
 # Requirements
+
 * Environment:
   * `Ubuntu`
   * `Kind`
@@ -13,6 +15,7 @@ This document provides an example for connecting Ray client to a Raycluster via 
   * 8 CPUs
 
 ## Step 1: Create a Kind cluster
+
 The extra arg prepares the Kind cluster for deploying the ingress controller
 ```sh
 cat <<EOF | kind create cluster --config=-
@@ -37,6 +40,7 @@ EOF
 ```
 
 ## Step 2: Deploy NGINX Ingress Controller
+
 The [SSL Passthrough feature](https://kubernetes.github.io/ingress-nginx/user-guide/tls/#ssl-passthrough) is required to pass on the encryption to the backend service directly.
 ```sh
 # Deploy the NGINX Ingress Controller
@@ -50,9 +54,11 @@ kubectl logs deploy/ingress-nginx-controller -n ingress-nginx
 ```
 
 ## Step 3: Install KubeRay operator
+
 Follow this [document](../../helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
 ## Step 4: Create a Raycluster with TLS enabled
+
 The Ray client server is a GRPC service. The NGINX Ingress Controller supports GRPC backend service which uses http/2 and requires secured connection. The command below creates a Raycluster with TLS enabled:
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/master/ray-operator/config/samples/ray-cluster.tls.yaml
@@ -60,6 +66,7 @@ kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/master/ra
 Refer to the [TLS document](tls.md) for more detail.
 
 ## Step 5: Create an ingress for the Ray client service
+
 With the Raycluster running, create an ingress for the Ray client backend service using the [rayclient-ingress](../../ray-operator/config/samples/ingress-rayclient-tls.yaml) example below:
 ```sh
 cat << EOF | kubectl apply -f -
@@ -88,6 +95,7 @@ EOF
 The annotation, `nginx.ingress.kubernetes.io/backend-protocol: "GRPC"` sets up the appropriate NGINX configuration to route http/2 traffic to a GRPC backend service. The `nginx.ingress.kubernetes.io/ssl-passthrough: "true"` annotation tells the ingress to forward the encrypted traffic to the backend service to be handled inside the Raycluster itself.
 
 ## Step 6: Connecting to Ray client service via the ingress
+
 Since the Raycluster uses TLS, the local Ray client would require a set of certificates to connect to Raycluster.
 > Warning: Ray client has some known [limitations](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/ray-client.html#things-to-know) and is not actively maintained.
 ```sh

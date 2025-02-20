@@ -24,6 +24,7 @@ https://github.com/ray-project/ray/blob/98be9fb5e08befbd6cac3ffbcaa477c5117b0eef
 It retries 600 times and each interval is 1s, resulting in total 600s timeout, i.e. 10 min. So immediately after 10-min wait for retries, each client exits and gets restarted while connecting to the new head IP. This issue exists in stable ray versions under 1.9.1. This has been reduced to 60s in recent commit under Kuberay 0.3.0.
 
 ## Solution
+
 We recommend using the latest version of KubeRay. After version 0.5.0, the GCS Fault-Tolerance feature is now in beta and can help resolve this reconnection issue.
 
 ## Best Practice

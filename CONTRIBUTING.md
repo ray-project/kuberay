@@ -9,6 +9,7 @@ This guide details how to use issues and pull requests to improve KubeRay projec
 ## General Guidelines
 
 ### Getting involved
+
 Kuberay has an active community of developers. Here’s how to get involved with the Kuberay community:
 
 Join our community: Join [Ray community slack](https://forms.gle/9TSdDYUgxYs8SA9e8) (search for Kuberay channel) or use our [discussion board](https://discuss.ray.io/c/ray-clusters/ray-kubernetes) to ask questions and get answers.
@@ -61,7 +62,6 @@ When you're done making the changes, open a pull request and fill PR template so
 Don't forget to link PR to issue if you are solving one.
 
 If you run into any merge issues, checkout this [git tutorial](https://lab.github.com/githubtraining/managing-merge-conflicts) to help you resolve merge conflicts and other issues.
-
 
 ### Release Acknowledgements
 

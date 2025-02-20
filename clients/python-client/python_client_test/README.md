@@ -8,7 +8,6 @@ make sure you have installed setuptool
 
 **run the pip command**
 
-
 from the directory `path/to/kuberay/clients/python-client`
 
 `pip install -e .`
