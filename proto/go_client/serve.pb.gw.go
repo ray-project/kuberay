@@ -587,7 +587,7 @@ func RegisterRayServeServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 // RegisterRayServeServiceHandlerFromEndpoint is same as RegisterRayServeServiceHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
 func RegisterRayServeServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
-	conn, err := grpc.NewClient(endpoint, opts...)
+	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return err
 	}
