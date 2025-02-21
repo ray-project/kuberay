@@ -9,6 +9,8 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/printers"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 var _ = Describe("Calling ray plugin `get` command", func() {
@@ -38,6 +40,8 @@ var _ = Describe("Calling ray plugin `get` command", func() {
 				{Name: "GPUs", Type: "string"},
 				{Name: "TPUs", Type: "string"},
 				{Name: "Memory", Type: "string"},
+				{Name: "Condition", Type: "string"},
+				{Name: "Status", Type: "string"},
 				{Name: "Age", Type: "string"},
 			},
 		}
@@ -52,6 +56,8 @@ var _ = Describe("Calling ray plugin `get` command", func() {
 				"0",
 				"0",
 				"3G",
+				rayv1.RayClusterProvisioned,
+				rayv1.Ready,
 			},
 		})
 
