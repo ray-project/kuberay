@@ -1343,6 +1343,44 @@
         "rayStartParams"
       ]
     },
+    "protoInitContainer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Required. Group name of the current worker group",
+          "required": [
+            "name"
+          ]
+        },
+        "image": {
+          "type": "string",
+          "title": "Required. This field will be used to retrieve right init container",
+          "required": [
+            "image"
+          ]
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoVolume"
+          },
+          "title": "Optional. The volumes mount to init container"
+        },
+        "environment": {
+          "$ref": "#/definitions/protoEnvironmentVariables",
+          "title": "Optional. Environment variables for init container"
+        },
+        "imagePullPolicy": {
+          "type": "string",
+          "title": "Optional image pull policy We only support Always and ifNotPresent"
+        }
+      },
+      "required": [
+        "name",
+        "image"
+      ]
+    },
     "protoListAllClustersResponse": {
       "type": "object",
       "properties": {
@@ -1517,6 +1555,13 @@
         "securityContext": {
           "$ref": "#/definitions/protoSecurityContext",
           "description": "Optional. Configure the security context for the worker container for debugging etc."
+        },
+        "initContainers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protoInitContainer"
+          },
+          "title": "Optional. init container specs"
         }
       },
       "required": [

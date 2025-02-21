@@ -426,6 +426,62 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				HTTPStatusCode: http.StatusBadRequest,
 			},
 		},
+		{
+			Name: "Create cluster with init container in worker group",
+			Input: &api.CreateClusterRequest{
+				Cluster: &api.Cluster{
+					Name:        tCtx.GetNextName(),
+					Namespace:   tCtx.GetNamespaceName(),
+					User:        "boris",
+					Version:     tCtx.GetRayVersion(),
+					Environment: api.Cluster_DEV,
+					ClusterSpec: &api.ClusterSpec{
+						HeadGroupSpec: &api.HeadGroupSpec{
+							ComputeTemplate: tCtx.GetComputeTemplateName(),
+							Image:           tCtx.GetRayImage(),
+							ServiceType:     "NodePort",
+							RayStartParams: map[string]string{
+								"dashboard-host":      "0.0.0.0",
+								"metrics-export-port": "8080",
+							},
+						},
+						WorkerGroupSpec: []*api.WorkerGroupSpec{
+							{
+								GroupName:       "small-wg",
+								ComputeTemplate: tCtx.GetComputeTemplateName(),
+								Image:           tCtx.GetRayImage(),
+								Replicas:        1,
+								MinReplicas:     1,
+								MaxReplicas:     5,
+								InitContainers: []*api.InitContainer{
+									{
+										Name:  "init-container-demo",
+										Image: "busybox",
+										Volumes: []*api.Volume{
+											{
+												MountPath:  "/data",
+												VolumeType: api.Volume_PERSISTENT_VOLUME_CLAIM,
+												Name:       "init-data-volume",
+												Source:     "data-pvc",
+												ReadOnly:   false,
+											},
+										},
+										Environment: &api.EnvironmentVariables{
+											Values: map[string]string{
+												"INIT_TASK_TYPE": "worker",
+												"INIT_COMMAND":   "echo Initializing worker node; sleep 5",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Namespace: tCtx.GetNamespaceName(),
+			},
+			ExpectedError: nil,
+		},
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {

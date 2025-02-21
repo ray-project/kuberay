@@ -42,6 +42,32 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
             "source": "ray-job-code-sample",
             "items": {"sample_code.py" : "sample_code.py"}
           }
+        ],
+        "initContainers": [
+          {
+            "name": "init-container-demo",
+            "image": "busybox",
+            "volumes": [
+              {
+                "mountPath": "/data",
+                "volumeType": "PERSISTENT_VOLUME_CLAIM",
+                "name": "init-data-volume",
+                "source": "data-pvc",
+                "readOnly": false,
+                "accessMode": "RWO",
+                "hostPathType": "DIRECTORY",
+                "storageClassName": "standard",
+                "storage": "1Gi"
+              }
+            ],
+            "environment": {
+              "values": {
+                "INIT_JOB_TYPE": "worker",
+                "INIT_COMMAND":   "echo Initializing worker node; sleep 5",
+              }
+            },
+            "imagePullPolicy": "IfNotPresent"
+          }
         ]
       }
     ]

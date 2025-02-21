@@ -352,6 +352,21 @@ message WorkerGroupSpec {
   string imagePullPolicy = 14;
   // Optional. Configure the security context for the worker container for debugging etc.
   SecurityContext security_context = 15;
+  // Optional. init container specs
+  repeated InitContainer init_containers = 16;
+}
+
+message InitContainer {
+  // Required. Group name of the current worker group
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+  // Required. This field will be used to retrieve right init container
+  string image = 2 [(google.api.field_behavior) = REQUIRED];
+  // Optional. The volumes mount to init container
+  repeated Volume volumes = 3;
+  // Optional. Environment variables for init container
+  EnvironmentVariables environment = 5;
+  // Optional image pull policy We only support Always and ifNotPresent
+  string imagePullPolicy = 6;
 }
 
 message ClusterEvent {
