@@ -28,7 +28,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Deploy KubeRay operator
     - pushd ray-operator
-    - IMG=quay.io/kuberay/operator:v1.2.2 make deploy
+    - IMG=quay.io/kuberay/operator:v1.3.0 make deploy
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run sample YAML tests
     - echo "--- START:Running Sample YAMLs (latest release) tests"
