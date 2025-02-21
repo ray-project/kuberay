@@ -69,6 +69,7 @@ if succeeded:
 Finally, the cluster_api is the one you always use to implement your cluster change in k8s. You can use it with raw `JSON` if you wish. The director/cluster_builder/cluster_utils are just tools to shield the user from using raw `JSON`.
 
 ## Code Organization
+
 ```
 clients/
 └── python-client
@@ -97,6 +98,7 @@ clients/
     │   └── test_utils.py
     └── setup.cfg
 ```
+
 ## For developers
 
 make sure you have installed setuptool

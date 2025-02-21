@@ -79,7 +79,6 @@ KubeRay Helm charts are hosted on the [ray-project/kuberay-helm](https://github.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster.
 To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
 
-
 ```sh
 # Add the Helm repo
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/

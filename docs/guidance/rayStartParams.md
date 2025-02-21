@@ -3,7 +3,6 @@
 
 This document outlines the default settings for `rayStartParams` in KubeRay.
 
-
 ### Options Exclusive to the Head Pod
 
 - `--dashboard-host`: Host for the dashboard server, either `localhost` (127.0.0.1) or `0.0.0.0`.

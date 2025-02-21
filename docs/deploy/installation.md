@@ -12,7 +12,9 @@ kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?re
 ```
 
 ### Stable version
+
 #### Method 1: Install charts from Helm repository (Recommended)
+
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
@@ -21,6 +23,7 @@ helm install kuberay-operator kuberay/kuberay-operator
 ```
 
 #### Method 2: Kustomize
+
 ```sh
 # Install CRD and KubeRay operator
 kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.1.0&timeout=90s"

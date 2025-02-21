@@ -17,6 +17,7 @@ Make as many release candidates as necessary until a stable final release commit
 Then build final release artifacts, publish release notes, and announce the release.
 
 ### KubeRay release schedule
+
 KubeRay release plans to synchronize with every two Ray releases. KubeRay v0.5.0 synchronizes with Ray 2.4.0, so v0.6.0 should synchronize with Ray 2.6.0.
 
 * **KubeRay feature freeze**: Two weeks before the official Ray release.
@@ -117,8 +118,6 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 * Merge the pull requests in Step 1 (i.e. [#997](https://github.com/ray-project/kuberay/pull/997), [#999](https://github.com/ray-project/kuberay/pull/999), [#1004](https://github.com/ray-project/kuberay/pull/1004), [#1012](https://github.com/ray-project/kuberay/pull/1012))
 
 * Merge post-release pull requests (example: [#1010](https://github.com/ray-project/kuberay/pull/1010)). See [here](https://github.com/ray-project/kuberay/issues/940) to understand the definition of "post-release" and the compatibility philosophy for KubeRay.
-
-
 
 #### Step 7. Update KubeRay documentation in Ray repository.
 

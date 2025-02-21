@@ -37,7 +37,9 @@ Another issue that users may encounter is related to **RayService**.
 If the `working_dir` for RayService is set to a zip file located in a private S3 bucket, it can prevent the Ray Serve application from starting. Users can confirm this by executing `serve status` in the head Pod, which will return an error like `An error occurred (AccessDenied) when calling the GetObject operation: Access Denied`. In this case, users can build their custom images with upgrading the `boto3` package (i.e. [Solution 2](#solution-2-upgrade-the-boto3-package)).
 
 ## Workaround solutions
+
 ### Solution 1: Setup the credentials explicitly
+
 ```python
 # boto3_example_2.py
 import os
@@ -64,6 +66,7 @@ s3.download_file(bucket_name, key, filename)
 ```
 
 ### Solution 2: Upgrade the boto3 package
+
 ```shell
 pip install --upgrade boto3
 python3 -m pip install -U pyOpenSSL cryptography

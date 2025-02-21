@@ -1,4 +1,5 @@
 # RayService high availability
+
 RayService provides high availability (HA) to ensure services continue serving requests without failure during scaling up, scaling down, and upgrading the RayService configuration (zero-downtime upgrade).
 
 ## Quickstart
@@ -10,9 +11,11 @@ kind create cluster --image=kindest/node:v1.24.0
 ```
 
 ### Step 2: Install the KubeRay operator
+
 Follow the instructions in [this document](/helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator, or follow the instructions in [DEVELOPMENT.md](/ray-operator/DEVELOPMENT.md) to install the nightly KubeRay operator.
 
 ### Step 3: Create a RayService and a locust cluster
+
 ```sh
 # Path: kuberay/
 kubectl apply -f ./ray-operator/config/samples/ray-service.high-availability-locust.yaml
@@ -28,6 +31,7 @@ The [ray-service.high-availability-locust.yaml](/ray-operator/config/samples/ray
 - A configmap with a locustfile sets user request levels: starts low, spikes, then drops.
 
 ### Step 4: Use Locust cluster to simulate users sending requests
+
 ```sh
 # Open a new terminal and log into the locust cluster.
 kubectl exec -it $(kubectl get pods -o=name | grep locust-cluster-head) -- bash
@@ -87,6 +91,7 @@ When serve replicas scale down:
   > Note, the default value of `RAY_SERVE_PROXY_MIN_DRAINING_PERIOD_S` is 30s. You may change it to fit with your k8s cluster.
 
 ### Step 6: Verify high availability during upgrade
+
 The locust cluster will continue sending requests for 600s. Before the 600s is up, upgrade the RayService configuration by adding a new environment variable. This will trigger a rolling update. You can verify the high availability by observing the Ray Pod and the failure rate in the locust terminal.
 ```sh
 kubectl patch rayservice rayservice-ha --type='json' -p='[
@@ -123,6 +128,7 @@ Here are the details of the rolling update:
 3. After the serve service is fully updated, KubeRay removes the old RayCluster. The traffic is now fully served by the new RayCluster.
 
 ### Step 7: Examine the locust results
+
 In your locust terminal, You will see the failed rate is 0.00%.
 ```sh
       # fails |
@@ -133,6 +139,7 @@ In your locust terminal, You will see the failed rate is 0.00%.
 ```
 
 ### Step 8: Clean up
+
 ```sh
 kubectl delete -f ./ray-operator/config/samples/ray-service.high-availability-locust.yaml
 kind delete cluster

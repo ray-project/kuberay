@@ -277,7 +277,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Improve the observability of the init container ([#1149](https://github.com/ray-project/kuberay/pull/1149), @Yicheng-Lu-llll)
 * [Ray Observability] Disk usage in Dashboard ([#1152](https://github.com/ray-project/kuberay/pull/1152), @kevin85421)
 
-
 ## v0.5.2 (2023-06-14)
 
 ### Highlights
@@ -296,7 +295,6 @@ The KubeRay 0.5.2 patch release includes the following improvements.
   * [Bug] RayService restarts repeatedly with Autoscaler ([#1037](https://github.com/ray-project/kuberay/pull/1037), [@kevin85421](https://github.com/kevin85421))
   * [Bug] autoscaler not working properly in rayjob ([#1064](https://github.com/ray-project/kuberay/pull/1064), [@Yicheng-Lu-llll](https://github.com/Yicheng-Lu-llll))
   * [Bug][Autoscaler] Operator does not remove workers ([#1139](https://github.com/ray-project/kuberay/pull/1139), [@kevin85421](https://github.com/kevin85421))
-
 
 ### Contributors
 
@@ -347,6 +345,7 @@ We'd like to thank the following contributors for their contributions to this re
 * [Helm][ray-cluster] Fix parsing envFrom field in additionalWorkerGroups ([#1039](https://github.com/ray-project/kuberay/pull/1039), @dirtyValera)
 
 ### Documentation
+
 * [Doc] Copyedit dev guide ([#1012](https://github.com/ray-project/kuberay/pull/1012), @architkulkarni)
 * [Doc] Update nav to include missing files and reorganize nav ([#1011](https://github.com/ray-project/kuberay/pull/1011), @architkulkarni)
 * [Doc] Update version from 0.4.0 to 0.5.0 on remaining kuberay docs files ([#1018](https://github.com/ray-project/kuberay/pull/1018), @architkulkarni)
@@ -388,31 +387,38 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 @akanso @alex-treebeard @architkulkarni @cadedaniel @cskornel-doordash @davidxia @Dmitrigekhtman @ducviet00 @gvspraveen @harryge00 @jasoonn @Jeffwan @kevin85421 @psschwei @scarlet25151 @sihanwang41 @wilsonwang371 @Yicheng-lu-llll
 
 ### Python client (alpha)(New!)
+
 * Alkanso/python client ([#901](https://github.com/ray-project/kuberay/pull/901), @akanso)
 * Reorganize python client library ([#984](https://github.com/ray-project/kuberay/pull/984), @jasoonn)
 
 ### Kubeflow (New!)
+
 * [Feature][Doc] Kubeflow integration ([#937](https://github.com/ray-project/kuberay/pull/937), @kevin85421)
 * [Feature] Ray restricted podsecuritystandards for enterprise security and Kubeflow integration ([#750](https://github.com/ray-project/kuberay/pull/750), @kevin85421)
 
 ### TLS authentication (New!)
+
 * [Feature] TLS authentication ([#989](https://github.com/ray-project/kuberay/pull/989), @kevin85421)
 
 ### AWS EKS (New!)
+
 * [Feature][Doc] Access S3 bucket from Pods in EKS ([#958](https://github.com/ray-project/kuberay/pull/958), @kevin85421)
 
 ### Kubernetes networking (New!)
+
 * Read cluster domain from resolv.conf or env ([#951](https://github.com/ray-project/kuberay/pull/951), @harryge00)
 * [Feature] Replace service name with Fully Qualified Domain Name  ([#938](https://github.com/ray-project/kuberay/pull/938), @kevin85421)
 * [Feature] Add default init container in workers to wait for GCS to be ready ([#973](https://github.com/ray-project/kuberay/pull/973), @kevin85421)
 
 ### Observability
+
 * Fix issue with head pod not monitered by Prometheus under certain condition ([#963](https://github.com/ray-project/kuberay/pull/963), @Yicheng-Lu-llll)
 * [Feature] Improve and fix Prometheus & Grafana integrations ([#895](https://github.com/ray-project/kuberay/pull/895), @kevin85421)
 * Add example and tutorial to explain how to create custom metrics for Prometheus ([#914](https://github.com/ray-project/kuberay/pull/914), @Yicheng-Lu-llll)
 * feat: enrich `kubectl get` output ([#878](https://github.com/ray-project/kuberay/pull/878), @davidxia)
 
 ### RayCluster
+
 * Fix issue with operator OOM restart ([#946](https://github.com/ray-project/kuberay/pull/946), @wilsonwang371)
 * [Feature][Hotfix] Add observedGeneration to the status of CRDs ([#979](https://github.com/ray-project/kuberay/pull/979), @kevin85421)
 * Customize the Prometheus export port ([#954](https://github.com/ray-project/kuberay/pull/954), @Yicheng-Lu-llll)
@@ -429,14 +435,17 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 * [RayCluster controller] Add headServiceAnnotations field to RayCluster CR ([#841](https://github.com/ray-project/kuberay/pull/841), @cskornel-doordash)
 
 ### RayJob (alpha)
+
 * [Hotfix][release blocker][RayJob] HTTP client from submitting jobs before dashboard initialization completes ([#1000](https://github.com/ray-project/kuberay/pull/1000), @kevin85421)
 * [RayJob] Propagate error traceback string when GetJobInfo doesn't return valid JSON ([#943](https://github.com/ray-project/kuberay/pull/943), @architkulkarni)
 * [RayJob][Doc] Fix RayJob sample config. ([#807](https://github.com/ray-project/kuberay/pull/807), @DmitriGekhtman)
 
 ### RayService (alpha)
+
 * [RayService] Skip update events without change ([#811](https://github.com/ray-project/kuberay/pull/811), @sihanwang41)
 
 ### Helm
+
 * Add rayVersion in the RayCluster chart ([#975](https://github.com/ray-project/kuberay/pull/975), @Yicheng-Lu-llll)
 * [Feature] Support environment variables for KubeRay operator chart ([#978](https://github.com/ray-project/kuberay/pull/978), @kevin85421)
 * [Feature] Add service account section in helm chart ([#969](https://github.com/ray-project/kuberay/pull/969), @ducviet00)
@@ -450,6 +459,7 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 * [helm] Add memory limits and resource documentation. ([#789](https://github.com/ray-project/kuberay/pull/789), @DmitriGekhtman)
 
 ### CI
+
 * [Feature] Add python client test to action ([#993](https://github.com/ray-project/kuberay/pull/993), @jasoonn)
 * [CI][Buildkite] Fix the PATH issue ([#952](https://github.com/ray-project/kuberay/pull/952), @kevin85421)
 * [CI][Buildkite] An example test for Buildkite ([#919](https://github.com/ray-project/kuberay/pull/919), @kevin85421)
@@ -469,6 +479,7 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 * [Feature] Improve the observability of integration tests ([#775](https://github.com/ray-project/kuberay/pull/775), @jasoonn)
 
 ### Sample YAML files
+
 * Improve ray-cluster.external-redis.yaml ([#986](https://github.com/ray-project/kuberay/pull/986), @Yicheng-Lu-llll)
 * remove ray-cluster.getting-started.yaml ([#987](https://github.com/ray-project/kuberay/pull/987), @Yicheng-Lu-llll)
 * [Feature] Read Redis password from Kubernetes Secret ([#950](https://github.com/ray-project/kuberay/pull/950), @kevin85421)
@@ -478,6 +489,7 @@ The following individuals contributed to KubeRay 0.5.0. This list is alphabetica
 * [Post Ray 2.2.0 Release] Update Ray versions to Ray 2.2.0 ([#822](https://github.com/ray-project/kuberay/pull/822), @DmitriGekhtman)
 
 ### Documentation
+
 * Update contribution doc to show users how to reach out via slack ([#936](https://github.com/ray-project/kuberay/pull/936), @gvspraveen)
 * [Feature][Docs] Explain how to specify container command for head pod ([#912](https://github.com/ray-project/kuberay/pull/912), @kevin85421)
 * [post-0.4.0 KubeRay release] update proto version to 0.4.0 ([#830](https://github.com/ray-project/kuberay/pull/830), @scarlet25151)
@@ -839,7 +851,6 @@ The changes pertain to the RayService controller sub-component of the KubeRay Op
 * Use mhausenblas/mkdocs-deploy-gh-pages action for docs ([#233](https://github.com/ray-project/kuberay/pull/233), @Jeffwan)
 * Build KubeRay Github site ([#216](https://github.com/ray-project/kuberay/pull/216), @Jeffwan)
 
-
 ## [v0.2.0](https://github.com/ray-project/kuberay/tree/v0.2.0) (2022-03-13)
 
 ### Features
@@ -912,7 +923,6 @@ The changes pertain to the RayService controller sub-component of the KubeRay Op
 * Add core API and backend service design doc ([#98](https://github.com/ray-project/kuberay/pull/98), @Jeffwan)
 * [Feature] add more options in bug template ([#121](https://github.com/ray-project/kuberay/pull/121), @wilsonwang371)
 * Rename service module to apiserver ([#118](https://github.com/ray-project/kuberay/pull/118), @Jeffwan)
-
 
 ## [v0.1.0](https://github.com/ray-project/kuberay/tree/v0.1.0) (2021-10-16)
 

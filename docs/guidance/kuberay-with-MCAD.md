@@ -13,12 +13,12 @@ MCAD allows you to deploy Ray cluster with a guarantee that sufficient resources
 - Quota management that goes across namespaces.
 - Support for multiple Kubernetes clusters; dispatching jobs to any one of a number of Kubernetes clusters.
 
-
 In order to queue Ray cluster(s) and `gang dispatch` them when aggregated resources are available please create a KinD cluster using the [instruction](#create-kind-cluster) below and then refer to the setup [KubeRay-MCAD integration](https://github.com/project-codeflare/multi-cluster-app-dispatcher/blob/main/doc/usage/examples/kuberay/kuberay-mcad.md) on a Kubernetes Cluster or an OpenShift Cluster.
 
 On OpenShift, MCAD and KubeRay are already part of the Open Data Hub Distributed Workload Stack. The stack provides a simple, user-friendly abstraction for scaling, queuing and resource management of distributed AI/ML and Python workloads. Please follow the Quick Start in the [Distributed Workloads](https://github.com/opendatahub-io/distributed-workloads) for installation.
 
 ## Create KinD cluster
+
  We need a KinD cluster with the specified cluster resources to consistently observe the expected behavior described in the [demo](#submitting-kuberay-cluster-to-mcad) below. This can be done with running KinD with [Podman](https://podman.io/docs/installation).
 
 > Note: Without Podman, a KinD worker node is allowed to see the cpu/memory resources on the host. In addition, this environment is created to run the tutorial on a resource-constrained local Kubernetes environment. It is not recommended for real workloads or production.
