@@ -56,13 +56,15 @@ Manual testing can be time-consuming, and to relieve the workload, we plan to ad
 
 * Depending on whether the release is for a major, minor, or patch version, take the following steps.
   * **Major or Minor version** (e.g. `0.5.0` or `1.0.0`). Create a release branch named `release-X.Y`:
+
     ```
     git checkout -b release-0.5
     git push -u upstream release-0.5
     ```
+
   * **Patch version** (e.g. `0.5.1`). You don't need to cut a release branch for a patch version. Instead add commits to the release branch.
 
-#### Step 3. Create a first release candidate (`v0.5.0-rc.0`).
+#### Step 3. Create a first release candidate (`v0.5.0-rc.0`)
 
 * Merge a PR into the release branch updating Helm chart versions, Helm chart image tags, and kustomize manifest image tags. For `v0.5.0-rc0`, we did this in [PR #1001](https://github.com/ray-project/kuberay/pull/1001)
 
@@ -72,12 +74,14 @@ Manual testing can be time-consuming, and to relieve the workload, we plan to ad
 You will be prompted for a commit reference and an image tag. The commit reference should be the SHA of the tip of the release branch. The image tag should be `vX.Y.Z-rc.0`.
 
 * Tag the tip of release branch with `vX.Y.Z-rc.0`.
+
     ```
     git tag v0.5.0-rc.0
     git push upstream v0.5.0-rc.0
     ```
 
 * The [image release CI pipeline](https://github.com/ray-project/kuberay/blob/master/.github/workflows/image-release.yaml) also publishes the `github.com/ray-project/kuberay/ray-operator@vX.Y.Z-rc.0` Go module. KubeRay has supported Go modules since v0.6.0. Follow these instructions to verify the Go module installation.
+
     ```sh
     # Install the module. This step is highly possible to fail because the module is not available in the proxy server.
     go install github.com/ray-project/kuberay/ray-operator@v1.0.0-rc.0
@@ -119,7 +123,7 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 
 * Merge post-release pull requests (example: [#1010](https://github.com/ray-project/kuberay/pull/1010)). See [here](https://github.com/ray-project/kuberay/issues/940) to understand the definition of "post-release" and the compatibility philosophy for KubeRay.
 
-#### Step 7. Update KubeRay documentation in Ray repository.
+#### Step 7. Update KubeRay documentation in Ray repository
 
 * Update KubeRay documentation in Ray repository with v0.5.0. Examples for v0.5.0:
   * https://github.com/ray-project/ray/pull/33339
@@ -130,7 +134,7 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 * Manually trigger the `release-kubectl-plugin` CI job to generate the release.
 * Follow the [instructions](../release/changelog.md) to generate release notes and add notes in the GitHub release.
 
-#### Step 9. Announce the release on the KubeRay slack!
+#### Step 9. Announce the release on the KubeRay slack
 
 * Announce the release on the KubeRay slack ([example](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1681244150758839))!
 
@@ -138,6 +142,6 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 
 * Send a PR to add the release notes to [CHANGELOG.md](../../CHANGELOG.md).
 
-#### Step 11. Update and improve this release document!
+#### Step 11. Update and improve this release document
 
 * Update this document and optimize the release process!
