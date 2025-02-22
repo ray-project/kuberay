@@ -205,26 +205,20 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: tt.annotations,
-				},
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
+			err := ValidateGCSFaultTolerance(&rayv1.RayClusterSpec{
+				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Env: tt.envVars,
 								},
 							},
 						},
 					},
 				},
-			}
-			err := ValidateRayClusterSpec(rayCluster)
+			}, tt.annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)

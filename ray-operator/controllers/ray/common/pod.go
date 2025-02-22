@@ -74,7 +74,7 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
 	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
 	// Note that both `podTemplate` and `instance` will be modified.
-	ftEnabled := utils.IsGCSFaultToleranceEnabled(instance)
+	ftEnabled := utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations)
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}
