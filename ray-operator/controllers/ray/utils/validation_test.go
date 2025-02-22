@@ -576,6 +576,14 @@ func TestValidateRayJobStatus(t *testing.T) {
 }
 
 func TestValidateRayJobSpec(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+
 	err := ValidateRayJobSpec(&rayv1.RayJob{})
 	require.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
@@ -591,7 +599,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			Suspend:                  true,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -610,15 +620,19 @@ func TestValidateRayJobSpec(t *testing.T) {
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			BackoffLimit:   ptr.To[int32](-1),
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			BackoffLimit: ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "backoffLimit must be a positive integer")
@@ -627,7 +641,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
@@ -655,6 +671,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To[bool](true),
+				HeadGroupSpec:           headGroupSpecWithOneContainer,
 			},
 		},
 	})
@@ -664,7 +681,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -673,7 +692,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           nil,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -682,7 +703,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
