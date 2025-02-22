@@ -31,20 +31,7 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 		}
 	}
 
-	if instance.Annotations[RayFTEnabledAnnotationKey] != "" && instance.Spec.GcsFaultToleranceOptions != nil {
-		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
-			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", RayFTEnabledAnnotationKey)
-	}
-
-	if !IsGCSFaultToleranceEnabled(*instance) {
-		if EnvVarExists(RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
-			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
-				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
-				"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
-		}
-	}
-
-	if err := ValidateGCSFaultToleranceRedis(&instance.Spec, instance.Annotations); err != nil {
+	if err := ValidateGCSFaultTolerance(&instance.Spec, instance.Annotations); err != nil {
 		return err
 	}
 
@@ -93,7 +80,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// The above check ensures that one of RayClusterSpec or ClusterSelector exists.
 	// If it is not a ClusterSelector mode, we need to validate the RayClusterSpec.
 	if !isClusterSelectorMode {
-		if err := ValidateGCSFaultToleranceRedis(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
+		if err := ValidateGCSFaultTolerance(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err
 		}
 	}
@@ -151,7 +138,20 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	return nil
 }
 
-func ValidateGCSFaultToleranceRedis(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+func ValidateGCSFaultTolerance(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
+		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
+			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", RayFTEnabledAnnotationKey)
+	}
+
+	if !IsGCSFaultToleranceEnabled(spec, annotations) {
+		if EnvVarExists(RAY_REDIS_ADDRESS, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
+			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
+				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
+				"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
+		}
+	}
+
 	headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
 	if spec.GcsFaultToleranceOptions != nil {
 		if redisPassword := spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
