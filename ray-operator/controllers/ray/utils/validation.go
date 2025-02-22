@@ -44,31 +44,8 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 		}
 	}
 
-	headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
-	if instance.Spec.GcsFaultToleranceOptions != nil {
-		if redisPassword := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
-			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
-		}
-
-		if EnvVarExists(REDIS_PASSWORD, headContainer.Env) {
-			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
-		}
-
-		if EnvVarExists(RAY_REDIS_ADDRESS, headContainer.Env) {
-			return fmt.Errorf("cannot set `RAY_REDIS_ADDRESS` env var in head Pod when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead")
-		}
-
-		if instance.Annotations[RayExternalStorageNSAnnotationKey] != "" {
-			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
-				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
-		}
-	}
-	if instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
-		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
-			" - use GcsFaultToleranceOptions.RedisUsername instead")
+	if err := ValidateGCSFaultToleranceRedis(&instance.Spec, instance.Annotations); err != nil {
+		return err
 	}
 
 	if !features.Enabled(features.RayJobDeletionPolicy) {
@@ -112,6 +89,15 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+
+	// The above check ensures that one of RayClusterSpec or ClusterSelector exists.
+	// If it is not a ClusterSelector mode, we need to validate the RayClusterSpec.
+	if !isClusterSelectorMode {
+		if err := ValidateGCSFaultToleranceRedis(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
+			return err
+		}
+	}
+
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
 	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
@@ -162,5 +148,36 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
 		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
 	}
+	return nil
+}
+
+func ValidateGCSFaultToleranceRedis(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+	headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+	if spec.GcsFaultToleranceOptions != nil {
+		if redisPassword := spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
+			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
+		}
+
+		if EnvVarExists(REDIS_PASSWORD, headContainer.Env) {
+			return fmt.Errorf("cannot set `REDIS_PASSWORD` env var in head Pod when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
+		}
+
+		if EnvVarExists(RAY_REDIS_ADDRESS, headContainer.Env) {
+			return fmt.Errorf("cannot set `RAY_REDIS_ADDRESS` env var in head Pod when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead")
+		}
+
+		if annotations[RayExternalStorageNSAnnotationKey] != "" {
+			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
+				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
+		}
+	}
+	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
+		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
+			" - use GcsFaultToleranceOptions.RedisUsername instead")
+	}
+
 	return nil
 }
