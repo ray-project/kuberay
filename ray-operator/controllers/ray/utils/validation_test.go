@@ -99,12 +99,19 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
 		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
 		"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
+	errorMessageRedisPasswordConflictWithRayStartParam := "cannot set `redis-password` in rayStartParams when " +
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead"
+	errorMessageRedisPasswordConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead", REDIS_PASSWORD)
 	errorMessageRedisAddressConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead", RAY_REDIS_ADDRESS)
 	errorMessageExternalStorageNamespaceConflict := fmt.Sprintf("cannot set `%s` annotation when "+
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", RayExternalStorageNSAnnotationKey)
+	errorMessageRedisUsername := "cannot set redis username in rayStartParams or environment variables" +
+		" - use GcsFaultToleranceOptions.RedisUsername instead"
 
 	tests := []struct {
+		rayStartParams           map[string]string
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
 		name                     string
@@ -157,6 +164,27 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
+			name: "gcsFaultToleranceOptions is set and REDIS_PASSWORD is set in rayStartParams",
+			rayStartParams: map[string]string{
+				"redis-password": "password",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisPasswordConflictWithRayStartParam,
+		},
+		{
+			name: "gcsFaultToleranceOptions is set and REDIS_PASSWORD is set",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_PASSWORD,
+					Value: "password",
+				},
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisPasswordConflict,
+		},
+		{
 			name: "gcsFaultToleranceOptions is set and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
@@ -201,6 +229,25 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
+		{
+			name: "redis-username is set in rayStartParams",
+			rayStartParams: map[string]string{
+				"redis-username": "username",
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
+		{
+			name: "REDIS_USERNAME env var is set in the head Pod",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_USERNAME,
+					Value: "username",
+				},
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
 	}
 
 	for _, tt := range tests {
@@ -208,6 +255,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			err := ValidateGCSFaultTolerance(&rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: tt.rayStartParams,
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
