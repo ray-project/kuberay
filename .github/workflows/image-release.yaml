@@ -2,13 +2,6 @@ name: release-image-build
 
 on:
   workflow_dispatch:
-    inputs:
-      commit:
-        description: 'Commit reference (branch or SHA) from which to build the images.'
-        required: true
-      tag:
-        description: 'Desired release version tag (e.g. v1.1.0-rc.1).'
-        required: true
 
 jobs:
   release_apiserver_image:
