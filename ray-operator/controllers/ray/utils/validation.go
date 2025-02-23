@@ -77,9 +77,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
 
-	// The above check ensures that one of RayClusterSpec or ClusterSelector exists.
-	// If it is not a ClusterSelector mode, we need to validate the RayClusterSpec.
-	if !isClusterSelectorMode {
+	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateGCSFaultTolerance(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err
 		}
