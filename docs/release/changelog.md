@@ -5,6 +5,7 @@
 1. Prepare your [Github Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 
 1. Install the Github python dependencies needed to generate the changelog.
+
     ```
     pip install PyGithub
     ```
@@ -69,10 +70,12 @@ Run the script to generate changelogs.
 
 1. To create the release notes, save the output of the script. Modify the script's output as follows.
     - Remove extraneous data, such as commits with tag information or links to other PRs, e.g.
+
     ```
     - c1cbaed (tag: v0.4.0-rc.0) Update chart versions for 0.4.0-rc.0 (#804) -> c1cbaed Update chart versions for 0.4.0-rc.0 (#804)
     - 86b0af2 Remove ingress.enabled from KubeRay operator chart (#812) (#816) -> 86b0af2 Remove ingress.enabled from KubeRay operator chart (#816)
     ```
+
     - Group commits by category e.g. `KubeRay Operator`, `Documentation`, etc. (The choice of categories is at the release manager's discretion.)
     - Add a section summarizing important changes.
     - Add a section listing individuals who contributed to the release.

@@ -13,6 +13,7 @@ helm version
 ## Install KubeRay API Server
 
 * Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
@@ -26,6 +27,7 @@ helm version
   ```
 
 * Install the nightly version
+
   ```sh
   # Step1: Clone KubeRay repository
 

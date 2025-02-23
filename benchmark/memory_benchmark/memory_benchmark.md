@@ -1,14 +1,14 @@
 # KubeRay memory benchmark
 
-# Running benchmark experiments on a Google GKE Cluster
+## Running benchmark experiments on a Google GKE Cluster
 
-## Architecture
+### Architecture
 
 ![benchmark architecture](images/benchmark_architecture.png)
 
 This architecture is not a good practice, but it can fulfill the current requirements.
 
-## Step 1: Create a new Kubernetes cluster
+### Step 1: Create a new Kubernetes cluster
 
 We will create a GKE cluster with autoscaling enabled.
 The following command creates a Kubernetes cluster named `kuberay-benchmark-cluster` on Google GKE.
@@ -21,7 +21,7 @@ gcloud container clusters create kuberay-benchmark-cluster \
     --zone=us-west1-b --machine-type e2-highcpu-16
 ```
 
-## Step 2: Install Prometheus and Grafana
+### Step 2: Install Prometheus and Grafana
 
 ```sh
 # Path: kuberay/
@@ -30,19 +30,21 @@ gcloud container clusters create kuberay-benchmark-cluster \
 
 Follow "Step 2: Install Kubernetes Prometheus Stack via Helm chart" in [prometheus-grafana.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/prometheus-grafana.md#step-2-install-kubernetes-prometheus-stack-via-helm-chart) to install the [kube-prometheus-stack v48.2.1](https://github.com/prometheus-community/helm-charts/tree/kube-prometheus-stack-48.2.1/charts/kube-prometheus-stack) chart and related custom resources.
 
-## Step 3: Install a KubeRay operator
+### Step 3: Install a KubeRay operator
 
 Follow [this document](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator via Helm repository.
 
-## Step 4: Run experiments
+### Step 4: Run experiments
 
 * Step 4.1: Make sure the `kubectl` CLI can connect to your GKE cluster. If not, please run `gcloud auth login`.
 * Step 4.2: Run an experiment
+
   ```sh
   # You can modify `memory_benchmark_utils` to run the experiment you want to run.
   # (path: benchmark/memory_benchmark/scripts)
   python3 memory_benchmark_utils.py | tee benchmark_log
   ```
+
 * Step 4.3: Follow [prometheus-grafana.md](https://github.com/ray-project/kuberay/blob/master/docs/guidance/prometheus-grafana.md#step-2-install-kubernetes-prometheus-stack-via-helm-chart) to access Grafana's dashboard.
   * Sign into the Grafana dashboard.
   * Click on "Dashboards"
@@ -50,12 +52,14 @@ Follow [this document](https://github.com/ray-project/kuberay/blob/master/helm-c
   * You will see the "Memory Usage" panel for the KubeRay operator Pod.
   * Select the time range, then click on "Inspect" followed by "Data" to download the memory usage data of the KubeRay operator Pod.
 * Step 4.4: Delete all RayCluster custom resources.
+
   ```sh
   kubectl delete --all rayclusters.ray.io --namespace=default
   ```
+
 * Step 4.5: Repeat Step 4.2 to Step 4.4 for other experiments.
 
-# Experiments
+## Experiments
 
 We've designed three benchmark experiments:
 
@@ -65,11 +69,12 @@ We've designed three benchmark experiments:
 
 Based on [the survey](https://forms.gle/KtMLzjXcKoeSTj359) for KubeRay users, we decided to set our benchmark target at 150 Ray Pods which can cover most use cases.
 
-## Experiment results (KubeRay v0.6.0)
+### Experiment results (KubeRay v0.6.0)
 
 ![benchmark result](images/benchmark_result.png)
 
 * You can generate the figure by running:
+
   ```sh
   # (path: benchmark/memory_benchmark/scripts)
   python3 experiment_figures.py

@@ -55,7 +55,7 @@ If you spot a problem with the problem, [search if an issue already exists](http
 
 KubeRay has subproject and each of them may have different development and testing procedure. Please check `DEVELOPMENT.md` in sub folder to get familar with running and testing codes.
 
-### Open a Pull request.
+### Open a Pull request
 
 When you're done making the changes, open a pull request and fill PR template so we can better review your PR. The template helps reviewers understand your changes and the purpose of your pull request.
 

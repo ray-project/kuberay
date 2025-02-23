@@ -31,6 +31,7 @@ kuberay-operator-785476b948-fmlm7                         1/1     Running   0   
 In issue [#29](https://github.com/ray-project/kuberay/issues/29), `RayCluster` CRD clientset has been generated and gRPC service can leverage it to operate Custom Resources.
 
 A simple flow would be like this. (Thanks [@akanso](https://github.com/akanso) for providing the flow)
+
 ```
 client --> GRPC Server --> [created Custom Resources] <-- Ray Operator (reads CR and accordingly performs CRUD)
 ```
