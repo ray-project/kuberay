@@ -56,7 +56,7 @@ func TestStaticRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 	// Install Locust in the head Pod
-	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
+	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
 	// Run Locust test
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
@@ -116,7 +116,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 	// Install Locust in the head Pod
-	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
+	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
 	// Run Locust test
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
@@ -173,7 +173,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 	// Install Locust in the head Pod
-	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
+	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
 	// Start a goroutine to perform zero-downtime upgrade
 	var wg sync.WaitGroup
@@ -268,7 +268,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	LogWithTimestamp(test.T(), "Found head pod %s/%s", locustHeadPod.Namespace, locustHeadPod.Name)
 
 	// Install Locust in the Locust head Pod
-	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust"})
+	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
 	// Get current head pod
 	oldHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
