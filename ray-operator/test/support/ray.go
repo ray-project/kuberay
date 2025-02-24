@@ -2,6 +2,7 @@ package support
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
@@ -98,7 +99,11 @@ func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
 	if !ok {
 		return false, errors.New("<actual> should be a metav1.Condition")
 	}
-	return a.Reason == c.expected.Reason && a.Status == c.expected.Status, nil
+	messageMatch := true
+	if c.expected.Message != "" {
+		messageMatch = strings.Contains(a.Message, c.expected.Message)
+	}
+	return a.Reason == c.expected.Reason && a.Status == c.expected.Status && messageMatch, nil
 }
 
 func (c *ConditionMatcher) FailureMessage(actual interface{}) (message string) {
@@ -113,6 +118,10 @@ func (c *ConditionMatcher) NegatedFailureMessage(actual interface{}) (message st
 
 func MatchCondition(status metav1.ConditionStatus, reason string) types.GomegaMatcher {
 	return &ConditionMatcher{expected: metav1.Condition{Status: status, Reason: reason}}
+}
+
+func MatchConditionContainsMessage(status metav1.ConditionStatus, reason string, message string) types.GomegaMatcher {
+	return &ConditionMatcher{expected: metav1.Condition{Status: status, Reason: reason, Message: message}}
 }
 
 func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {

@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -140,16 +139,6 @@ func TestRayClusterWithResourceQuota(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to have ReplicaFailure condition", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(func() bool {
-		rc, err := RayCluster(test, namespace.Name, rayCluster.Name)()
-		if err != nil {
-			return false
-		}
-		for _, condition := range rc.Status.Conditions {
-			if condition.Type == "ReplicaFailure" && strings.Contains(condition.Message, "forbidden: exceeded quota") {
-				return true
-			}
-		}
-		return false
-	}, TestTimeoutShort).Should(BeTrue(), "Expected ReplicaFailure condition with message containing 'forbidden: exceeded quota'")
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutShort).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterReplicaFailure), MatchConditionContainsMessage(metav1.ConditionTrue, utils.ErrFailedCreateHeadPod.Error(), "forbidden: exceeded quota")))
 }
