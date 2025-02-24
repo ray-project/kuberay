@@ -70,7 +70,7 @@ Finally, the cluster_api is the one you always use to implement your cluster cha
 
 ## Code Organization
 
-```
+```text
 clients/
 └── python-client
     ├── LICENSE

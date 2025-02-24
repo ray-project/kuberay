@@ -57,7 +57,7 @@ Manual testing can be time-consuming, and to relieve the workload, we plan to ad
 * Depending on whether the release is for a major, minor, or patch version, take the following steps.
   * **Major or Minor version** (e.g. `0.5.0` or `1.0.0`). Create a release branch named `release-X.Y`:
 
-    ```
+    ```console
     git checkout -b release-0.5
     git push -u upstream release-0.5
     ```
@@ -75,7 +75,7 @@ You will be prompted for a commit reference and an image tag. The commit referen
 
 * Tag the tip of release branch with `vX.Y.Z-rc.0`.
 
-    ```
+    ```console
     git tag v0.5.0-rc.0
     git push upstream v0.5.0-rc.0
     ```
