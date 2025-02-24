@@ -16,6 +16,7 @@ func TestComplete(t *testing.T) {
 	tests := []struct {
 		name                 string
 		namespace            string
+		expectedResources    map[util.ResourceType][]string
 		expectedResourceType util.ResourceType
 		expectedNamespace    string
 		expectedName         string
@@ -23,35 +24,33 @@ func TestComplete(t *testing.T) {
 		hasErr               bool
 	}{
 		{
-			name:                 "valid raycluster without explicit resource and without namespace",
-			namespace:            "",
-			expectedResourceType: util.RayCluster,
-			expectedNamespace:    "default",
-			expectedName:         "test-raycluster",
-			args:                 []string{"test-raycluster"},
-			hasErr:               false,
+			name:              "valid raycluster without explicit resource and without namespace",
+			namespace:         "",
+			expectedResources: map[util.ResourceType][]string{util.RayCluster: {"test-raycluster"}},
+			expectedNamespace: "default",
+			args:              []string{"test-raycluster"},
+			hasErr:            false,
 		},
 		{
-			name:                 "valid raycluster with explicit resource and with namespace",
-			namespace:            "test-namespace",
-			expectedResourceType: util.RayCluster,
-			expectedNamespace:    "test-namespace",
-			expectedName:         "test-raycluster",
-			args:                 []string{"raycluster/test-raycluster"},
-			hasErr:               false,
+			name:              "valid raycluster with explicit resource and with namespace",
+			namespace:         "test-namespace",
+			expectedResources: map[util.ResourceType][]string{util.RayCluster: {"test-raycluster"}},
+			expectedNamespace: "test-namespace",
+			args:              []string{"raycluster/test-raycluster"},
+			hasErr:            false,
 		},
 		{
-			name:                 "valid raycluster without explicit resource and with namespace",
-			namespace:            "test-namespace",
-			expectedResourceType: util.RayCluster,
-			expectedNamespace:    "test-namespace",
-			expectedName:         "test-raycluster",
-			args:                 []string{"test-raycluster"},
-			hasErr:               false,
+			name:              "valid raycluster without explicit resource and with namespace",
+			namespace:         "test-namespace",
+			expectedResources: map[util.ResourceType][]string{util.RayCluster: {"test-raycluster"}},
+			expectedNamespace: "test-namespace",
+			args:              []string{"test-raycluster"},
+			hasErr:            false,
 		},
 		{
 			name:                 "valid RayJob with namespace",
 			namespace:            "test-namespace",
+			expectedResources:    map[util.ResourceType][]string{util.RayJob: {"test-rayjob"}},
 			expectedResourceType: util.RayJob,
 			expectedNamespace:    "test-namespace",
 			expectedName:         "test-rayjob",
@@ -59,13 +58,12 @@ func TestComplete(t *testing.T) {
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayservice with namespace",
-			namespace:            "test-namespace",
-			expectedResourceType: util.RayService,
-			expectedNamespace:    "test-namespace",
-			expectedName:         "test-rayservice",
-			args:                 []string{"rayservice/test-rayservice"},
-			hasErr:               false,
+			name:              "valid rayservice with namespace",
+			namespace:         "test-namespace",
+			expectedResources: map[util.ResourceType][]string{util.RayService: {"test-rayservice"}},
+			expectedNamespace: "test-namespace",
+			args:              []string{"rayservice/test-rayservice"},
+			hasErr:            false,
 		},
 		{
 			name:      "invalid service type",
@@ -74,22 +72,27 @@ func TestComplete(t *testing.T) {
 			hasErr:    true,
 		},
 		{
-			name:                 "valid raycluster with namespace but weird ray type casing",
-			namespace:            "test-namespace",
-			expectedResourceType: util.RayCluster,
-			expectedNamespace:    "test-namespace",
-			expectedName:         "test-raycluster",
-			args:                 []string{"rayCluStER/test-raycluster"},
-			hasErr:               false,
+			name:              "valid raycluster with namespace but weird ray type casing",
+			namespace:         "test-namespace",
+			expectedResources: map[util.ResourceType][]string{util.RayCluster: {"test-raycluster"}},
+			expectedNamespace: "test-namespace",
+			args:              []string{"rayCluStER/test-raycluster"},
+			hasErr:            false,
 		},
 		{
-			name:   "invalid args, too many args",
-			args:   []string{"test", "raytype", "raytypename"},
-			hasErr: true,
+			name: "valid args with multiple resources",
+			args: []string{"raycluster/test", "rayjob/my-job", "rayservice/barista", "other-cluster"},
+			expectedResources: map[util.ResourceType][]string{
+				util.RayCluster: {"test", "other-cluster"},
+				util.RayJob:     {"my-job"},
+				util.RayService: {"barista"},
+			},
+			expectedNamespace: "default",
+			hasErr:            false,
 		},
 		{
 			name:   "invalid args, non valid resource type",
-			args:   []string{"test/test"},
+			args:   []string{"raycluster/test-raycluster", "test/test"},
 			hasErr: true,
 		},
 	}
@@ -104,9 +107,8 @@ func TestComplete(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tc.expectedName, fakeDeleteOptions.ResourceName)
-				assert.Equal(t, tc.expectedNamespace, fakeDeleteOptions.Namespace)
-				assert.Equal(t, tc.expectedResourceType, fakeDeleteOptions.ResourceType)
+				assert.Equal(t, tc.expectedResources, fakeDeleteOptions.resources)
+				assert.Equal(t, tc.expectedNamespace, fakeDeleteOptions.namespace)
 			}
 		})
 	}
