@@ -20,31 +20,31 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 }
 
 // Validation for invalid Ray Cluster configurations.
-func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
-	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+	for _, workerGroup := range spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 	}
 
-	if err := ValidateGCSFaultTolerance(&instance.Spec, instance.Annotations); err != nil {
+	if err := ValidateGCSFaultTolerance(spec, annotations); err != nil {
 		return err
 	}
 
 	if !features.Enabled(features.RayJobDeletionPolicy) {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
 			}
 		}
 	}
 
-	if IsAutoscalingEnabled(&instance.Spec) {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+	if IsAutoscalingEnabled(spec) {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
 				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
@@ -177,5 +177,21 @@ func ValidateGCSFaultTolerance(spec *rayv1.RayClusterSpec, annotations map[strin
 			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}
 
+	if !features.Enabled(features.RayJobDeletionPolicy) {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
+			}
+		}
+	}
+
+	if IsAutoscalingEnabled(spec) {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
+			if workerGroup.Suspend != nil && *workerGroup.Suspend {
+				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
+				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
+			}
+		}
+	}
 	return nil
 }

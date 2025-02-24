@@ -252,7 +252,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateGCSFaultTolerance(&rayv1.RayClusterSpec{
+			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: tt.rayStartParams,
@@ -334,7 +334,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -404,7 +404,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -476,7 +476,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -553,7 +553,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
