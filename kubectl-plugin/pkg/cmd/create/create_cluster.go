@@ -14,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
 type CreateClusterOptions struct {
@@ -71,7 +73,13 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			return options.Run(cmd.Context(), cmdFactory)
+
+			k8sClient, err := client.NewClient(cmdFactory)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
+
+			return options.Run(cmd.Context(), k8sClient)
 		},
 	}
 
@@ -136,10 +144,9 @@ func (options *CreateClusterOptions) Validate() error {
 	return nil
 }
 
-func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-	k8sClient, err := client.NewClient(factory)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
+	if clusterExists(k8sClient.RayClient(), *options.configFlags.Namespace, options.clusterName) {
+		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, *options.configFlags.Namespace)
 	}
 
 	rayClusterObject := generation.RayClusterYamlObject{
@@ -187,4 +194,12 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 	}
 
 	return nil
+}
+
+// clusterExists checks if a RayCluster with the given name exists in the given namespace
+func clusterExists(client rayclient.Interface, namespace, name string) bool {
+	if _, err := client.RayV1().RayClusters(namespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+		return true
+	}
+	return false
 }
