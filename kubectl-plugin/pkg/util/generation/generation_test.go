@@ -15,10 +15,21 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-func TestGenerateRayCluterApplyConfig(t *testing.T) {
+func TestGenerateRayClusterApplyConfig(t *testing.T) {
+	labels := map[string]string{
+		"blue":    "jay",
+		"eastern": "bluebird",
+	}
+	annotations := map[string]string{
+		"mourning":  "dove",
+		"baltimore": "oriole",
+	}
+
 	testRayClusterYamlObject := RayClusterYamlObject{
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
+		Labels:      labels,
+		Annotations: annotations,
 		RayClusterSpecObject: RayClusterSpecObject{
 			RayVersion:     util.RayVersion,
 			Image:          util.RayImage,
@@ -36,6 +47,8 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 
 	assert.Equal(t, testRayClusterYamlObject.ClusterName, *result.Name)
 	assert.Equal(t, testRayClusterYamlObject.Namespace, *result.Namespace)
+	assert.Equal(t, testRayClusterYamlObject.Labels, labels)
+	assert.Equal(t, testRayClusterYamlObject.Annotations, annotations)
 	assert.Equal(t, testRayClusterYamlObject.RayVersion, *result.Spec.RayVersion)
 	assert.Equal(t, testRayClusterYamlObject.Image, *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Image)
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadCPU), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Cpu())
@@ -86,6 +99,14 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	testRayClusterYamlObject := RayClusterYamlObject{
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
+		Labels: map[string]string{
+			"purple":     "finch",
+			"red-tailed": "hawk",
+		},
+		Annotations: map[string]string{
+			"american": "goldfinch",
+			"piping":   "plover",
+		},
 		RayClusterSpecObject: RayClusterSpecObject{
 			RayVersion:     util.RayVersion,
 			Image:          util.RayImage,
@@ -106,6 +127,12 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 	expectedResultYaml := fmt.Sprintf(`apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
+  annotations:
+    american: goldfinch
+    piping: plover
+  labels:
+    purple: finch
+    red-tailed: hawk
   name: test-ray-cluster
   namespace: default
 spec:
