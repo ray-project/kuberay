@@ -31,7 +31,7 @@ podman machine list
 
 Expect the Podman Machine running with the follow CPU and MEMORY resources
 
-```
+```text
 NAME                     VM TYPE     CREATED        LAST UP            CPUS        MEMORY      DISK SIZE
 podman-machine-default*  qemu        2 minutes ago  Currently running  8           8.594GB     107.4GB
 ```
@@ -44,7 +44,7 @@ KIND_EXPERIMENTAL_PROVIDER=podman kind create cluster
 
 Creating a KinD cluster should take less than 1 minute. Expect the output similar to:
 
-```
+```console
 using podman due to KIND_EXPERIMENTAL_PROVIDER
 enabling experimental podman provider
 Creating cluster "kind" ...
@@ -64,13 +64,13 @@ Have a nice day! 👋
 
 Describe the single node cluster:
 
-```
+```console
 kubectl describe node kind-control-plane
 ```
 
 Expect the `cpu` and `memory` in the `Allocatable` section to be similar to:
 
-```
+```text
 Allocatable:
   cpu:            8
   hugepages-1Gi:  0
@@ -97,13 +97,13 @@ Let's create two RayClusters using the AppWrapper custom resource(CR) on the sam
 
   Check AppWrapper status by describing the job.
 
-  ```
+  ```console
   kubectl describe appwrapper raycluster-complete -n default
   ```
 
   The `Status:` stanza would show the `State` of `Running` if the wrapped RayCluster has been deployed. The 2 Pods associated with the RayCluster were also created.
 
-  ```
+  ```text
   Status:
     Canrun:  true
     Conditions:
@@ -146,13 +146,13 @@ Let's create two RayClusters using the AppWrapper custom resource(CR) on the sam
 
   Check the raycluster-complete-1 AppWrapper
 
-  ```
+  ```console
   kubectl describe appwrapper raycluster-complete-1 -n default
   ```
 
   The `Status:` stanza should show the `State` of `Pending` if the wrapped object (RayCluster) has been queued. No pods from the second `AppWrapper` were created due to `Insufficient resources to dispatch AppWrapper`.
 
-  ```
+  ```text
   Status:
     Conditions:
       Last Transition Micro Time:  2023-08-29T17:39:08.406401Z
@@ -191,7 +191,7 @@ kubectl describe node kind-control-plane
 
 The `Allocated resources` section showed cpu Requests as 6050m(75%) therefore the remaining cpu resource did not satisfy the second AppWrapper.
 
-```
+```text
 Allocated resources:
   (Total limits may be over 100 percent, i.e., overcommitted.)
   Resource           Requests         Limits

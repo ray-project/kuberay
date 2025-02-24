@@ -6,7 +6,7 @@
 
 1. Install the Github python dependencies needed to generate the changelog.
 
-    ```
+    ```console
     pip install PyGithub
     ```
 
@@ -14,20 +14,20 @@
 
 1. Run the following command and fetch oneline git commits from the last release (v0.3.0) to current release (v0.4.0).
 
-    ```
+    ```console
     git log v0.3.0..v0.4.0 --oneline
     ```
 
     You may need to run the following command first:
 
-    ```
+    ```console
     git fetch --tags
     ```
 
 1. Copy the above commit history to `scripts/changelog-generator.py` and replace `<your_github_token>` with your Github token.
 Run the script to generate changelogs.
 
-    ```
+    ```python
     from github import Github
     import re
 
@@ -71,7 +71,7 @@ Run the script to generate changelogs.
 1. To create the release notes, save the output of the script. Modify the script's output as follows.
     - Remove extraneous data, such as commits with tag information or links to other PRs, e.g.
 
-    ```
+    ```text
     - c1cbaed (tag: v0.4.0-rc.0) Update chart versions for 0.4.0-rc.0 (#804) -> c1cbaed Update chart versions for 0.4.0-rc.0 (#804)
     - 86b0af2 Remove ingress.enabled from KubeRay operator chart (#812) (#816) -> 86b0af2 Remove ingress.enabled from KubeRay operator chart (#816)
     ```
