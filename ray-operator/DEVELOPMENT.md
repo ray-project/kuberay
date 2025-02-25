@@ -29,9 +29,7 @@ export GOROOT=$(go1.23.2 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
-## Development
-
-### IDE Setup (VS Code)
+## IDE Setup (VS Code)
 
 * Step 1: Install the [VS Code Go extension](https://marketplace.visualstudio.com/items?itemName=golang.go).
 * Step 2: Import the KubeRay workspace configuration by using the file `kuberay.code-workspace` in the root of the KubeRay git repo:
@@ -47,7 +45,7 @@ All the following guidance require you to switch your working directory to the `
 cd ray-operator
 ```
 
-### Cleanup local binaries, such as controller-gen and kustomize
+## Cleanup local binaries, such as controller-gen and kustomize
 
 To keep consistent results of code generation and testing, you need to remove outdated binaries installed by the Makefile.
 
@@ -57,9 +55,9 @@ rm -rf bin
 make clean
 ```
 
-### End-to-end local development process on Kind
+## End-to-end local development process on Kind
 
-#### Run the operator inside the cluster
+### Run the operator inside the cluster
 
 ```bash
 # Step 1: Create a Kind cluster
@@ -100,7 +98,7 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 * The command `make docker-build` (Step 3) will also run `make test` (unit tests).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
-#### Run the operator outside the cluster
+### Run the operator outside the cluster
 
 > Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
 
@@ -118,7 +116,7 @@ make -C ray-operator build
 ./ray-operator/bin/manager -leader-election-namespace default -use-kubernetes-proxy
 ```
 
-### Running the tests
+## Running the tests
 
 The unit tests can be run by executing the following command:
 
@@ -187,7 +185,7 @@ If not set, it defaults to a temporary directory that's removed once the tests e
 
 Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 
-### Manually test new image in running cluster
+## Manually test new image in running cluster
 
 Build and apply the CRD:
 
