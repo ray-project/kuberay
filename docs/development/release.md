@@ -126,8 +126,8 @@ Now, we have the Docker images and Helm charts for v0.5.0.
 #### Step 7. Update KubeRay documentation in Ray repository
 
 * Update KubeRay documentation in Ray repository with v0.5.0. Examples for v0.5.0:
-  * https://github.com/ray-project/ray/pull/33339
-  * https://github.com/ray-project/ray/pull/34178
+  * <https://github.com/ray-project/ray/pull/33339>
+  * <https://github.com/ray-project/ray/pull/34178>
 
 #### Step 8. Generate release
 

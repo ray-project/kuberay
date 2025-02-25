@@ -24,7 +24,7 @@ s3.download_file(bucket_name, key, filename)
 ```
 
 The root cause is that the version of `boto3` in the Ray image is too old. To elaborate, `rayproject/ray:2.3.0` provides boto3 version 1.4.8 (Nov. 21, 2017),
-a more recent version (1.26) is currently available as per https://pypi.org/project/boto3/#history. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`).
+a more recent version (1.26) is currently available as per <https://pypi.org/project/boto3/#history>. The `boto3` 1.4.8 does not support to initialize the security credentials automatically in some cases (e.g. `AssumeRoleWithWebIdentity`).
 
 ```shell
 # image: rayproject/ray:2.5.0

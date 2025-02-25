@@ -97,7 +97,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Numerous fixes to the API server to make RayJob APIs working ([#1447](https://github.com/ray-project/kuberay/pull/1447), @blublinsky)
 * Updated API server documentation ([#1435](https://github.com/ray-project/kuberay/pull/1435), @z103cb)
 * servev2 support for API server ([#1419](https://github.com/ray-project/kuberay/pull/1419), @blublinsky)
-* replacement for https://github.com/ray-project/kuberay/pull/1312 ([#1409](https://github.com/ray-project/kuberay/pull/1409), @blublinsky)
+* replacement for <https://github.com/ray-project/kuberay/pull/1312> ([#1409](https://github.com/ray-project/kuberay/pull/1409), @blublinsky)
 * Updates to the apiserver swagger-ui ([#1410](https://github.com/ray-project/kuberay/pull/1410), @z103cb)
 * implemented liveness/readyness probe for the API server ([#1369](https://github.com/ray-project/kuberay/pull/1369), @blublinsky)
 * Operator support for openShift ([#1371](https://github.com/ray-project/kuberay/pull/1371), @blublinsky)
