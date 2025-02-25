@@ -99,12 +99,19 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	errorMessageRedisAddressSet := fmt.Sprintf("%s is set which implicitly enables GCS fault tolerance, "+
 		"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
 		"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
+	errorMessageRedisPasswordConflictWithRayStartParam := "cannot set `redis-password` in rayStartParams when " +
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead"
+	errorMessageRedisPasswordConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
+		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead", REDIS_PASSWORD)
 	errorMessageRedisAddressConflict := fmt.Sprintf("cannot set `%s` env var in head Pod when "+
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead", RAY_REDIS_ADDRESS)
 	errorMessageExternalStorageNamespaceConflict := fmt.Sprintf("cannot set `%s` annotation when "+
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", RayExternalStorageNSAnnotationKey)
+	errorMessageRedisUsername := "cannot set redis username in rayStartParams or environment variables" +
+		" - use GcsFaultToleranceOptions.RedisUsername instead"
 
 	tests := []struct {
+		rayStartParams           map[string]string
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
 		name                     string
@@ -157,6 +164,27 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: errorMessageRedisAddressSet,
 		},
 		{
+			name: "gcsFaultToleranceOptions is set and REDIS_PASSWORD is set in rayStartParams",
+			rayStartParams: map[string]string{
+				"redis-password": "password",
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisPasswordConflictWithRayStartParam,
+		},
+		{
+			name: "gcsFaultToleranceOptions is set and REDIS_PASSWORD is set",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_PASSWORD,
+					Value: "password",
+				},
+			},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			expectError:              true,
+			errorMessage:             errorMessageRedisPasswordConflict,
+		},
+		{
 			name: "gcsFaultToleranceOptions is set and RAY_REDIS_ADDRESS is set",
 			envVars: []corev1.EnvVar{
 				{
@@ -201,30 +229,44 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
+		{
+			name: "redis-username is set in rayStartParams",
+			rayStartParams: map[string]string{
+				"redis-username": "username",
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
+		{
+			name: "REDIS_USERNAME env var is set in the head Pod",
+			envVars: []corev1.EnvVar{
+				{
+					Name:  REDIS_USERNAME,
+					Value: "username",
+				},
+			},
+			expectError:  true,
+			errorMessage: errorMessageRedisUsername,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: tt.annotations,
-				},
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
+			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
+				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: tt.rayStartParams,
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Env: tt.envVars,
 								},
 							},
 						},
 					},
 				},
-			}
-			err := ValidateRayClusterSpec(rayCluster)
+			}, tt.annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -292,7 +334,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -362,7 +404,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -434,7 +476,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -511,7 +553,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -576,6 +618,14 @@ func TestValidateRayJobStatus(t *testing.T) {
 }
 
 func TestValidateRayJobSpec(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+
 	err := ValidateRayJobSpec(&rayv1.RayJob{})
 	require.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
@@ -591,7 +641,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			Suspend:                  true,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -610,15 +662,19 @@ func TestValidateRayJobSpec(t *testing.T) {
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			BackoffLimit:   ptr.To[int32](-1),
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			BackoffLimit: ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "backoffLimit must be a positive integer")
@@ -627,7 +683,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
@@ -655,6 +713,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To[bool](true),
+				HeadGroupSpec:           headGroupSpecWithOneContainer,
 			},
 		},
 	})
@@ -664,7 +723,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -673,7 +734,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           nil,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -682,7 +745,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
