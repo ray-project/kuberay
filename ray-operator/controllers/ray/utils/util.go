@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	RayClusterSuffix    = "-raycluster-"
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
@@ -314,7 +313,7 @@ func GenerateRouteName(clusterName string) string {
 
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
-	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
+	return fmt.Sprintf("%s-%s", serviceName, rand.String(5))
 }
 
 // GenerateRayJobId generates a ray job id for submission
