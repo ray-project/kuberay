@@ -3,7 +3,7 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

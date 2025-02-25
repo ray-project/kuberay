@@ -2,7 +2,7 @@
 
 package v1
 
-// GcsFaultToleranceOptionsApplyConfiguration represents an declarative configuration of the GcsFaultToleranceOptions type for use
+// GcsFaultToleranceOptionsApplyConfiguration represents a declarative configuration of the GcsFaultToleranceOptions type for use
 // with apply.
 type GcsFaultToleranceOptionsApplyConfiguration struct {
 	RedisUsername            *RedisCredentialApplyConfiguration `json:"redisUsername,omitempty"`
@@ -11,7 +11,7 @@ type GcsFaultToleranceOptionsApplyConfiguration struct {
 	RedisAddress             *string                            `json:"redisAddress,omitempty"`
 }
 
-// GcsFaultToleranceOptionsApplyConfiguration constructs an declarative configuration of the GcsFaultToleranceOptions type for use with
+// GcsFaultToleranceOptionsApplyConfiguration constructs a declarative configuration of the GcsFaultToleranceOptions type for use with
 // apply.
 func GcsFaultToleranceOptions() *GcsFaultToleranceOptionsApplyConfiguration {
 	return &GcsFaultToleranceOptionsApplyConfiguration{}

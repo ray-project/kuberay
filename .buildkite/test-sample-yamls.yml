@@ -1,6 +1,6 @@
 - label: 'Test Sample YAMLs (nightly operator)'
   instance_size: large
-  image: golang:1.22
+  image: golang:1.23
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
@@ -21,7 +21,7 @@
 
 - label: 'Test Sample YAMLs (latest release)'
   instance_size: large
-  image: golang:1.22
+  image: golang:1.23
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml

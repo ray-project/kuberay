@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // RayServiceLister helps list RayServices.
@@ -14,7 +14,7 @@ import (
 type RayServiceLister interface {
 	// List lists all RayServices in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayService, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayService, err error)
 	// RayServices returns an object that can list and get RayServices.
 	RayServices(namespace string) RayServiceNamespaceLister
 	RayServiceListerExpansion
@@ -22,25 +22,17 @@ type RayServiceLister interface {
 
 // rayServiceLister implements the RayServiceLister interface.
 type rayServiceLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*rayv1.RayService]
 }
 
 // NewRayServiceLister returns a new RayServiceLister.
 func NewRayServiceLister(indexer cache.Indexer) RayServiceLister {
-	return &rayServiceLister{indexer: indexer}
-}
-
-// List lists all RayServices in the indexer.
-func (s *rayServiceLister) List(selector labels.Selector) (ret []*v1.RayService, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayService))
-	})
-	return ret, err
+	return &rayServiceLister{listers.New[*rayv1.RayService](indexer, rayv1.Resource("rayservice"))}
 }
 
 // RayServices returns an object that can list and get RayServices.
 func (s *rayServiceLister) RayServices(namespace string) RayServiceNamespaceLister {
-	return rayServiceNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return rayServiceNamespaceLister{listers.NewNamespaced[*rayv1.RayService](s.ResourceIndexer, namespace)}
 }
 
 // RayServiceNamespaceLister helps list and get RayServices.
@@ -48,36 +40,15 @@ func (s *rayServiceLister) RayServices(namespace string) RayServiceNamespaceList
 type RayServiceNamespaceLister interface {
 	// List lists all RayServices in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayService, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayService, err error)
 	// Get retrieves the RayService from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.RayService, error)
+	Get(name string) (*rayv1.RayService, error)
 	RayServiceNamespaceListerExpansion
 }
 
 // rayServiceNamespaceLister implements the RayServiceNamespaceLister
 // interface.
 type rayServiceNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all RayServices in the indexer for a given namespace.
-func (s rayServiceNamespaceLister) List(selector labels.Selector) (ret []*v1.RayService, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayService))
-	})
-	return ret, err
-}
-
-// Get retrieves the RayService from the indexer for a given namespace and name.
-func (s rayServiceNamespaceLister) Get(name string) (*v1.RayService, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("rayservice"), name)
-	}
-	return obj.(*v1.RayService), nil
+	listers.ResourceIndexer[*rayv1.RayService]
 }

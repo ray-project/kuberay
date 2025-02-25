@@ -3,13 +3,13 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	apisrayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	versioned "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/ray-project/kuberay/ray-operator/pkg/client/listers/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/listers/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -20,7 +20,7 @@ import (
 // RayJobs.
 type RayJobInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.RayJobLister
+	Lister() rayv1.RayJobLister
 }
 
 type rayJobInformer struct {
@@ -55,7 +55,7 @@ func NewFilteredRayJobInformer(client versioned.Interface, namespace string, res
 				return client.RayV1().RayJobs(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&rayv1.RayJob{},
+		&apisrayv1.RayJob{},
 		resyncPeriod,
 		indexers,
 	)
@@ -66,9 +66,9 @@ func (f *rayJobInformer) defaultInformer(client versioned.Interface, resyncPerio
 }
 
 func (f *rayJobInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&rayv1.RayJob{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisrayv1.RayJob{}, f.defaultInformer)
 }
 
-func (f *rayJobInformer) Lister() v1.RayJobLister {
-	return v1.NewRayJobLister(f.Informer().GetIndexer())
+func (f *rayJobInformer) Lister() rayv1.RayJobLister {
+	return rayv1.NewRayJobLister(f.Informer().GetIndexer())
 }
