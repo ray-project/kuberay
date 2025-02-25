@@ -33,6 +33,8 @@ type RayClusterSpecObject struct {
 type RayClusterYamlObject struct {
 	ClusterName string
 	Namespace   string
+	Labels      map[string]string
+	Annotations map[string]string
 	RayClusterSpecObject
 }
 
@@ -45,6 +47,8 @@ type RayJobYamlObject struct {
 
 func (rayClusterObject *RayClusterYamlObject) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
 	rayClusterApplyConfig := rayv1ac.RayCluster(rayClusterObject.ClusterName, rayClusterObject.Namespace).
+		WithLabels(rayClusterObject.Labels).
+		WithAnnotations(rayClusterObject.Annotations).
 		WithSpec(rayClusterObject.generateRayClusterSpec())
 
 	return rayClusterApplyConfig
