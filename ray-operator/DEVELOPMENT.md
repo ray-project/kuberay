@@ -221,7 +221,7 @@ Run tests with docker
 
 Run tests on your local environment
 
-* Step1: Install `ct` (chart-testing) and related dependencies. See https://github.com/helm/chart-testing for more details.
+* Step1: Install `ct` (chart-testing) and related dependencies. See <https://github.com/helm/chart-testing> for more details.
 * Step2: `./helm-chart/script/chart-test.sh local`
 
 ### Generating API Reference
