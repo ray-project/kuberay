@@ -51,7 +51,7 @@ func (v *VolcanoBatchScheduler) Name() string {
 func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
 	var minMember int32
 	var totalResource corev1.ResourceList
-	if !utils.IsAutoscalingEnabled(&app.Spec) {
+	if !utils.IsAutoscalingEnabled(app) {
 		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
 		totalResource = utils.CalculateDesiredResources(app)
 	} else {

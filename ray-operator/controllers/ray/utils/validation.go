@@ -79,7 +79,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
-	if IsAutoscalingEnabled(spec) {
+	if IsAutoscalingEnabledFromRayClusterSpec(spec) {
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
@@ -145,7 +145,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 			}
 		}
 
-		if policy == rayv1.DeleteWorkersDeletionPolicy && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
+		if policy == rayv1.DeleteWorkersDeletionPolicy && IsAutoscalingEnabledFromRayClusterSpec(rayJob.Spec.RayClusterSpec) {
 			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
 			return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 		}
