@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## v1.0.0 (2023-11-06)
 
-### KubeRay is officially in General Availability!
+### KubeRay is officially in General Availability
 
 * Bump the CRD version from v1alpha1 to v1.
 * Relocate almost all documentation to the Ray website.
@@ -282,6 +282,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Highlights
 
 The KubeRay 0.5.2 patch release includes the following improvements.
+
 * Allow specifying the entire headService and serveService YAML spec. Previously, only certain special fields such as `labels` and `annotations` were exposed to the user.
   * Expose entire head pod Service to the user ([#1040](https://github.com/ray-project/kuberay/pull/1040), [@architkulkarni](https://github.com/architkulkarni))
   * Exposing Serve Service ([#1117](https://github.com/ray-project/kuberay/pull/1117), [@kodwanis](https://github.com/kodwanis))

@@ -13,6 +13,7 @@ helm version
 ## Install CRDs and KubeRay operator
 
 * Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
@@ -26,6 +27,7 @@ helm version
   ```
 
 * Install the nightly version
+
   ```sh
   # Step1: Clone KubeRay repository
 
@@ -38,6 +40,7 @@ helm version
 * Install KubeRay operator without installing CRDs
   * In some cases, the installation of the CRDs and the installation of the operator may require different levels of admin permissions, so these two installations could be handled as different steps by different roles.
   * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
+
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
   kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.1.0&timeout=90s"

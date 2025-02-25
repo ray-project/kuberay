@@ -4,14 +4,9 @@ default: true
 
 MD013: false
 MD024: false
-MD025: false
-MD026: false
-MD031: false
-MD032: false
 MD033: false
 MD034: false
 MD036: false
-MD040: false
 MD041: false
 MD050: false
 MD052: false

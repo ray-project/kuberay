@@ -5,6 +5,7 @@ RayCluster is a custom resource definition (CRD). **KubeRay operator** will list
 ## Prerequisites
 
 See [kuberay-operator/README.md](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) for more details.
+
 * Helm
 * Install custom resource definition and KubeRay operator (covered by the following end-to-end example.)
 

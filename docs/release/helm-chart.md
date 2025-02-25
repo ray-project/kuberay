@@ -29,6 +29,7 @@ You can validate the charts as follows:
 * Check the creation/update time of all releases and `index.yaml` to ensure they are updated.
 
 * Install charts from Helm repository.
+
     ```sh
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
     helm repo update
@@ -59,6 +60,7 @@ If you really need to do that, please read this section carefully before you do 
     # The following command deletes the tag "ray-cluster-0.4.0".
     git push --delete upstream ray-cluster-0.4.0
     ```
+
 * Remove `index.yaml`
 * Trigger kuberay-helm CI again to create new releases and a new index.yaml.
 * Follow "Step 3: Validate the charts" to test it.

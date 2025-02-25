@@ -128,7 +128,7 @@ make test
 
 Example output:
 
-```
+```console
 ✗ make test
 ...
 go fmt ./...
@@ -190,11 +190,13 @@ Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 ### Manually test new image in running cluster
 
 Build and apply the CRD:
+
 ```bash
 make install
 ```
 
 Deploy the manifests and controller
+
 ```bash
 helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 ```
@@ -212,10 +214,13 @@ See [main development documentation][main-dev-doc].
 We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
 
 Run tests with docker
+
 ```bash
 ./helm-chart/script/chart-test.sh
 ```
+
 Run tests on your local environment
+
 * Step1: Install `ct` (chart-testing) and related dependencies. See https://github.com/helm/chart-testing for more details.
 * Step2: `./helm-chart/script/chart-test.sh local`
 
@@ -268,15 +273,20 @@ python3 ../scripts/rbac-check.py
 
 Most of image repositories supports multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct the image with a matching architectures. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
 Verify Buildx installation and make sure it does not return error
-```
+
+```console
 docker buildx version
 ```
+
 Verify the builder instance has a default(with *) DRIVER/ENDPOINT starting with `docker-container` by running:
-```
+
+```console
 docker buildx ls
 ```
+
 You may see something:
-```
+
+```console
 NAME/NODE    DRIVER/ENDPOINT             STATUS  BUILDKIT             PLATFORMS
 sad_brown *  docker-container
   sad_brown0 unix:///var/run/docker.sock running v0.12.4              linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/amd64/v4, linux/arm64, linux/riscv64, linux/ppc64le, linux/s390x, linux/386, linux/mips64le, linux/mips64, linux/arm/v7, linux/arm/v6
@@ -285,15 +295,18 @@ default      docker
 ```
 
 If not, create the instance by running:
-```
+
+```console
 docker buildx create --use --bootstrap
 ```
 
 Run the following `docker buildx build` command to build and push linux/arm64 and linux/amd64 images(manifests) in a single command:
-```
+
+```console
 cd ray-operator
 docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my org>/operator:latest --platform linux/amd64,linux/arm64 --push --provenance=false .
 ```
+
 * --platform is a comma separated list of targeted platforms to build.
 * --tag is a remote repo_name:tag to push.
 * --push/--load optionally Push to remote registry or Load into local docker.
