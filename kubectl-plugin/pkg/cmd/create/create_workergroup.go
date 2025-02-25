@@ -26,6 +26,7 @@ type CreateWorkerGroupOptions struct {
 	kubeContexter     util.KubeContexter
 	clusterName       string
 	groupName         string
+	rayStartParams    map[string]string
 	rayVersion        string
 	image             string
 	workerCPU         string
@@ -92,6 +93,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
+	cmd.Flags().StringToStringVar(&options.rayStartParams, "worker-ray-start-params", options.rayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -183,7 +185,7 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 		Replicas:       &options.workerReplicas,
 		MinReplicas:    &options.workerMinReplicas,
 		MaxReplicas:    &options.workerMaxReplicas,
-		RayStartParams: map[string]string{},
+		RayStartParams: options.rayStartParams,
 		Template:       podTemplate,
 	}
 }

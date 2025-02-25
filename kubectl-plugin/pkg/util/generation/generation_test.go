@@ -2,6 +2,7 @@ package generation
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
@@ -20,17 +21,29 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 		ClusterName: "test-ray-cluster",
 		Namespace:   "default",
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     util.RayVersion,
-			Image:          util.RayImage,
-			HeadCPU:        "1",
-			HeadMemory:     "5Gi",
-			HeadGPU:        "1",
+			RayVersion: util.RayVersion,
+			Image:      util.RayImage,
+			HeadCPU:    "1",
+			HeadMemory: "5Gi",
+			HeadGPU:    "1",
+			HeadRayStartParams: map[string]string{
+				"dashboard-host": "1.2.3.4",
+				"num-cpus":       "0",
+			},
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
 			WorkerGPU:      "1",
+			WorkerRayStartParams: map[string]string{
+				"dagon":    "azathoth",
+				"shoggoth": "cthulhu",
+			},
 		},
 	}
+	expectedWorkerRayStartParams := map[string]string{
+		"metrics-export-port": "8080",
+	}
+	maps.Copy(expectedWorkerRayStartParams, testRayClusterYamlObject.WorkerRayStartParams)
 
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
@@ -41,11 +54,13 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadCPU), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadGPU), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.HeadMemory), *result.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Memory())
+	assert.Equal(t, testRayClusterYamlObject.HeadRayStartParams, result.Spec.HeadGroupSpec.RayStartParams)
 	assert.Equal(t, "default-group", *result.Spec.WorkerGroupSpecs[0].GroupName)
 	assert.Equal(t, testRayClusterYamlObject.WorkerReplicas, *result.Spec.WorkerGroupSpecs[0].Replicas)
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerCPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerGPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerMemory), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+	assert.Equal(t, expectedWorkerRayStartParams, result.Spec.WorkerGroupSpecs[0].RayStartParams)
 }
 
 func TestGenerateRayJobApplyConfig(t *testing.T) {
