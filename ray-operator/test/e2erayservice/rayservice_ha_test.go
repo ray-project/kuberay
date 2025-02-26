@@ -98,7 +98,10 @@ func TestAutoscalingRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Check the number of worker pods is correct when RayService is steady
-	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(HaveLen(numberOfPodsWhenSteady),
+	// TODO (rueian): with the current Ray version (2.43.0), autoscaler can have races with the scheduler and that causes overprovisioning.
+	// So, we use TestTimeoutLong for here to wait for the autoscaler to do a scale down in the case of overprovisioning.
+	// We may revisit the timeout again if the issue has been solved. See: https://github.com/ray-project/kuberay/issues/2981#issuecomment-2686172278
+	g.Eventually(WorkerPods(test, rayServiceUnderlyingRayCluster), TestTimeoutLong).Should(HaveLen(numberOfPodsWhenSteady),
 		"The WorkerGroupSpec.Replicas is %d", *rayServiceUnderlyingRayCluster.Spec.WorkerGroupSpecs[0].Replicas)
 
 	// Create Locust RayCluster
