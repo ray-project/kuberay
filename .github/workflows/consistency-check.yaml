@@ -86,7 +86,7 @@ jobs:
         uses: tj-actions/verify-changed-files@v17
         with:
           files: |
-            ./config/bases/*.yaml
+            ./config/crd/bases/*.yaml
             ./config/rbac/*.yaml
 
       - name: Check changed files
