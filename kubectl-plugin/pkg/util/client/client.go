@@ -8,6 +8,7 @@ import (
 
 	dockerparser "github.com/novln/docker-parser"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -25,6 +26,7 @@ type Client interface {
 	// GetRayHeadSvcName retrieves the name of RayHead service for the given RayCluster, RayJob, or RayService.
 	GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
 	GetKubeRayOperatorVersion(ctx context.Context) (string, error)
+	WaitRayJobDeletionPolicyEnabled(ctx context.Context, namespace, name string, startTime time.Time, timeout time.Duration) error
 	WaitRayClusterProvisioned(ctx context.Context, namespace, name string, timeout time.Duration) error
 }
 
@@ -184,4 +186,41 @@ func (c *k8sClient) getRayHeadSvcNameByRayService(ctx context.Context, namespace
 	}
 	svcName := rayService.Status.ActiveServiceStatus.RayClusterStatus.Head.ServiceName
 	return svcName, nil
+}
+
+// WaitRayJobDeletionPolicyEnabled blocks until an event indicates that the RayJobDeletionPolicy feature gate must be enabled.
+func (c *k8sClient) WaitRayJobDeletionPolicyEnabled(ctx context.Context, namespace, name string, startTime time.Time, timeout time.Duration) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout*time.Second)
+	defer cancel()
+
+	watcher, err := c.KubernetesClient().CoreV1().Events(namespace).Watch(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s", name),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to watch events for RayJob %s in namespace %s: %w", name, namespace, err)
+	}
+	defer watcher.Stop()
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			// If the RayJobDeletionPolicy feature event is not received within the timeout period, it is considered enabled.
+			return nil
+		case event := <-watcher.ResultChan():
+			if event.Type == watch.Error {
+				return fmt.Errorf("error watching events: %v", event.Object)
+			}
+
+			e, ok := event.Object.(*corev1.Event)
+			if !ok {
+				continue
+			}
+
+			if strings.Contains(e.Message, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature") {
+				if e.FirstTimestamp.Time.After(startTime) || e.LastTimestamp.Time.After(startTime) {
+					return fmt.Errorf("%s", e.Message)
+				}
+			}
+		}
+	}
 }

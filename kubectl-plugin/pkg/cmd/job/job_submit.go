@@ -33,44 +33,48 @@ import (
 )
 
 const (
-	dashboardAddr      = "http://localhost:8265"
-	clusterTimeout     = 120.0
-	portforwardtimeout = 60.0
+	dashboardAddr         = "http://localhost:8265"
+	clusterTimeout        = 120.0
+	portforwardtimeout    = 60.0
+	rayjobDeletionTimeout = 30.0
 )
 
 type SubmitJobOptions struct {
-	ioStreams          *genericiooptions.IOStreams
-	configFlags        *genericclioptions.ConfigFlags
-	kubeContexter      util.KubeContexter
-	RayJob             *rayv1.RayJob
-	submissionID       string
-	entryPoint         string
-	fileName           string
-	workingDir         string
-	runtimeEnv         string
-	headers            string
-	verify             string
-	cluster            string
-	runtimeEnvJson     string
-	entryPointResource string
-	metadataJson       string
-	logStyle           string
-	logColor           string
-	rayjobName         string
-	rayVersion         string
-	image              string
-	headCPU            string
-	headMemory         string
-	headGPU            string
-	workerCPU          string
-	workerMemory       string
-	workerGPU          string
-	entryPointCPU      float32
-	entryPointGPU      float32
-	entryPointMemory   int
-	workerReplicas     int32
-	noWait             bool
-	dryRun             bool
+	ioStreams                *genericiooptions.IOStreams
+	configFlags              *genericclioptions.ConfigFlags
+	kubeContexter            util.KubeContexter
+	RayJob                   *rayv1.RayJob
+	deletionPolicy           string
+	submissionID             string
+	entryPoint               string
+	fileName                 string
+	workingDir               string
+	runtimeEnv               string
+	headers                  string
+	verify                   string
+	cluster                  string
+	runtimeEnvJson           string
+	entryPointResource       string
+	metadataJson             string
+	logStyle                 string
+	logColor                 string
+	rayjobName               string
+	rayVersion               string
+	image                    string
+	headCPU                  string
+	headMemory               string
+	headGPU                  string
+	workerCPU                string
+	workerMemory             string
+	workerGPU                string
+	entryPointCPU            float32
+	entryPointGPU            float32
+	entryPointMemory         int
+	workerReplicas           int32
+	ttlSecondsAfterFinished  int32
+	noWait                   bool
+	dryRun                   bool
+	shutdownAfterJobFinishes bool
 }
 
 var (
@@ -164,6 +168,10 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 
+	cmd.Flags().BoolVar(&options.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "Automatically shutdown resources after job finishes")
+	cmd.Flags().StringVar(&options.deletionPolicy, "deletion-policy", "", "Policy for deleting resources after job completion. Valid values: 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone'")
+	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL to clean up RayCluster. Only works ShutdownAfterJobFinishes set to true")
+
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
@@ -210,6 +218,10 @@ func (options *SubmitJobOptions) Validate() error {
 		if len(runtimeEnvWorkingDir) > 0 && options.workingDir == "" {
 			options.workingDir = runtimeEnvWorkingDir
 		}
+	}
+
+	if !options.shutdownAfterJobFinishes && options.ttlSecondsAfterFinished > 0 {
+		return fmt.Errorf("TTLSecondsAfterFinished only working when ShutdownAfterJobFinishes set to true when ShutdownAfterJobFinishes is set to true")
 	}
 
 	// Take care of case where there is a filename input
@@ -276,12 +288,16 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("failed to initialize clientset: %w", err)
 	}
 
+	startTime := time.Now()
 	if options.fileName == "" {
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
-			RayJobName:     options.rayjobName,
-			Namespace:      *options.configFlags.Namespace,
-			SubmissionMode: "InteractiveMode",
+			RayJobName:               options.rayjobName,
+			Namespace:                *options.configFlags.Namespace,
+			SubmissionMode:           "InteractiveMode",
+			DeletionPolicy:           options.deletionPolicy,
+			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
 			RayClusterSpecObject: generation.RayClusterSpecObject{
 				RayVersion:     options.rayVersion,
 				Image:          options.image,
@@ -321,6 +337,19 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 	}
 	fmt.Printf("Submitted RayJob %s.\n", options.RayJob.GetName())
+
+	if options.deletionPolicy != "" {
+		err = k8sClients.WaitRayJobDeletionPolicyEnabled(ctx, *options.configFlags.Namespace, options.RayJob.Name, startTime, rayjobDeletionTimeout)
+		if err != nil {
+			fmt.Printf("Deleting RayJob...\n")
+			deleteErr := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+			if deleteErr != nil {
+				return fmt.Errorf("Failed to clean up Ray job after time out.: %w", deleteErr)
+			}
+			fmt.Printf("Cleaned Up RayJob: %s\n", options.RayJob.GetName())
+			return fmt.Errorf("%w", err)
+		}
+	}
 
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?

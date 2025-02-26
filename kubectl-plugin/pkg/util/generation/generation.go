@@ -42,7 +42,10 @@ type RayJobYamlObject struct {
 	RayJobName     string
 	Namespace      string
 	SubmissionMode string
+	DeletionPolicy string
 	RayClusterSpecObject
+	TTLSecondsAfterFinished  int32
+	ShutdownAfterJobFinishes bool
 }
 
 func (rayClusterObject *RayClusterYamlObject) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
@@ -58,8 +61,13 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 	rayJobApplyConfig := rayv1ac.RayJob(rayJobObject.RayJobName, rayJobObject.Namespace).
 		WithSpec(rayv1ac.RayJobSpec().
 			WithSubmissionMode(rayv1.JobSubmissionMode(rayJobObject.SubmissionMode)).
+			WithShutdownAfterJobFinishes(rayJobObject.ShutdownAfterJobFinishes).
+			WithTTLSecondsAfterFinished(rayJobObject.TTLSecondsAfterFinished).
 			WithRayClusterSpec(rayJobObject.generateRayClusterSpec()))
 
+	if rayJobObject.DeletionPolicy != "" {
+		rayJobApplyConfig.Spec.WithDeletionPolicy(rayv1.DeletionPolicy(rayJobObject.DeletionPolicy))
+	}
 	return rayJobApplyConfig
 }
 

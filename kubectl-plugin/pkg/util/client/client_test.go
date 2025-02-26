@@ -461,3 +461,93 @@ func TestWaitRayClusterProvisioned(t *testing.T) {
 		})
 	}
 }
+
+func TestWaitRayJobDeletionPolicyEnabled(t *testing.T) {
+	tests := []struct {
+		name        string
+		errorMsg    string
+		startTime   time.Time
+		events      []runtime.Object
+		timeout     time.Duration
+		expectError bool
+	}{
+		{
+			name:      "timeout without error",
+			startTime: time.Now(),
+			events:    []runtime.Object{},
+			timeout:   1,
+		},
+		{
+			name:      "feature gate error after start time",
+			startTime: time.Now().Add(-time.Hour),
+			events: []runtime.Object{
+				&corev1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-event",
+						Namespace: "default",
+					},
+					InvolvedObject: corev1.ObjectReference{
+						Name: "test-rayjob",
+					},
+					Message:        "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature",
+					FirstTimestamp: metav1.NewTime(time.Now()),
+					LastTimestamp:  metav1.NewTime(time.Now()),
+				},
+			},
+			expectError: true,
+			errorMsg:    "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature",
+			timeout:     5,
+		},
+		{
+			name:      "feature gate error before start time",
+			startTime: time.Now(),
+			events: []runtime.Object{
+				&corev1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-event",
+						Namespace: "default",
+					},
+					InvolvedObject: corev1.ObjectReference{
+						Name: "test-rayjob",
+					},
+					Message:        "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature",
+					FirstTimestamp: metav1.NewTime(time.Now().Add(-time.Hour)),
+					LastTimestamp:  metav1.NewTime(time.Now().Add(-time.Hour)),
+				},
+			},
+			expectError: false,
+			timeout:     1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeWatcher := watch.NewFake()
+
+			// Create a fake clientset; events will be injected via the fakeWatcher
+			kubeClientSet := kubeFake.NewSimpleClientset()
+			// Use a reactor to intercept the Watch call for events and return the fakeWatcher
+			kubeClientSet.PrependWatchReactor("events", func(_ kubetesting.Action) (bool, watch.Interface, error) {
+				return true, fakeWatcher, nil
+			})
+
+			client := NewClientForTesting(kubeClientSet, nil)
+
+			if len(tc.events) > 0 {
+				go func() {
+					for _, obj := range tc.events {
+						fakeWatcher.Add(obj)
+					}
+				}()
+			}
+
+			err := client.WaitRayJobDeletionPolicyEnabled(context.Background(), "default", "test-rayjob", tc.startTime, tc.timeout)
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

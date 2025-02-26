@@ -60,6 +60,19 @@ spec:
 			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
 		},
 		{
+			name: "TTLSecondsAfterFinished with shutdownAfterJobFinishes disabled should error",
+			opts: &SubmitJobOptions{
+				configFlags:              genericclioptions.NewConfigFlags(true),
+				ioStreams:                &testStreams,
+				kubeContexter:            util.NewMockKubeContexter(true),
+				fileName:                 rayJobYamlPath,
+				workingDir:               "Fake/File/Path",
+				shutdownAfterJobFinishes: false,
+				ttlSecondsAfterFinished:  100,
+			},
+			expectError: "TTLSecondsAfterFinished only working when ShutdownAfterJobFinishes set to true when ShutdownAfterJobFinishes is set to true",
+		},
+		{
 			name: "Successful submit job validation with RayJob",
 			opts: &SubmitJobOptions{
 				configFlags:   genericclioptions.NewConfigFlags(true),
