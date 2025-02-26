@@ -5,15 +5,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/kubernetes"
-
-	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
 func TestRayVersionCheckContext(t *testing.T) {
@@ -52,31 +49,6 @@ func TestRayVersionCheckContext(t *testing.T) {
 	}
 }
 
-type fakeClient struct {
-	err                 error
-	kuberayImageVersion string
-}
-
-func (c fakeClient) GetKubeRayOperatorVersion(_ context.Context) (string, error) {
-	return c.kuberayImageVersion, c.err
-}
-
-func (c fakeClient) GetRayHeadSvcName(_ context.Context, _ string, _ util.ResourceType, _ string) (string, error) {
-	return "", nil
-}
-
-func (c fakeClient) WaitRayClusterProvisioned(_ context.Context, _ string, _ string, _ time.Duration) error {
-	return nil
-}
-
-func (c fakeClient) KubernetesClient() kubernetes.Interface {
-	return nil
-}
-
-func (c fakeClient) RayClient() rayclient.Interface {
-	return nil
-}
-
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
 	fakeVersionOptions := &VersionOptions{
@@ -109,7 +81,7 @@ func TestRayVersionRun(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fClient := fakeClient{kuberayImageVersion: tc.kuberayImageVersion, err: tc.getKubeRayOperatorVersionError}
+			fClient := fake.FakeClient{KuberayImageVersion: tc.kuberayImageVersion, Err: tc.getKubeRayOperatorVersionError}
 
 			var buf bytes.Buffer
 			err := fakeVersionOptions.Run(context.Background(), fClient, &buf)
