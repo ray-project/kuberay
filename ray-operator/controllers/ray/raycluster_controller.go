@@ -1292,7 +1292,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredCPU = totalResources[corev1.ResourceCPU]
 	newInstance.Status.DesiredMemory = totalResources[corev1.ResourceMemory]
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
-	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
+	newInstance.Status.DesiredTPU = totalResources[utils.GoogleTPUResourceName]
 
 	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
 		if utils.CheckAllPodsRunning(ctx, runtimePods) {

@@ -144,9 +144,9 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	//   nvidia.com/gpu: 1
 	addWorkerPodSpec(rayClusterWithGangScheduling,
 		"worker-group-1", 1, 1, 2, v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("2"),
-			v1.ResourceMemory: resource.MustParse("10Gi"),
-			"nvidia.com/gpu":  resource.MustParse("1"),
+			v1.ResourceCPU:              resource.MustParse("2"),
+			v1.ResourceMemory:           resource.MustParse("10Gi"),
+			utils.NvidiaGPUResourceName: resource.MustParse("1"),
 		})
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
@@ -177,7 +177,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	assert.Equal(t, int32(1), workerGroup.MinMember)
 	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[v1.ResourceCPU.String()])
 	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[v1.ResourceMemory.String()])
-	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
+	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource[utils.NvidiaGPUResourceName.String()])
 }
 
 func createRayClusterWithLabels(name string, namespace string, labels map[string]string) *rayv1.RayCluster {

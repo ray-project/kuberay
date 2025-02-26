@@ -447,15 +447,16 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 }
 
 // CalculatePodResource returns the total resources of a pod.
-// Request values take precedence over limit values.
+// Limit values take precedence over request values.
+// See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/config.html#resources:~:text=On%20the%20other%20hand%20CPU%2C%20GPU%2C%20and%20memory%20requests%20will%20be%20ignored%20by%20Ray.%20For%20this%20reason%2C%20it%20is%20best%20when%20possible%20to%20set%20resource%20requests%20equal%20to%20resource%20limits.
 func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
-		containerResource := container.Resources.Requests
+		containerResource := container.Resources.Limits
 		if containerResource == nil {
 			containerResource = corev1.ResourceList{}
 		}
-		for name, quantity := range container.Resources.Limits {
+		for name, quantity := range container.Resources.Requests {
 			if _, ok := containerResource[name]; !ok {
 				containerResource[name] = quantity
 			}

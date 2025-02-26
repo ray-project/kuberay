@@ -84,9 +84,9 @@ var instance = rayv1.RayCluster{
 								Image: "repo/image:custom",
 								Resources: corev1.ResourceRequirements{
 									Limits: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("1"),
-										corev1.ResourceMemory: testMemoryLimit,
-										"nvidia.com/gpu":      resource.MustParse("3"),
+										corev1.ResourceCPU:          resource.MustParse("1"),
+										corev1.ResourceMemory:       testMemoryLimit,
+										utils.NvidiaGPUResourceName: resource.MustParse("3"),
 									},
 								},
 								Env: []corev1.EnvVar{
@@ -718,9 +718,9 @@ func TestBuildPod(t *testing.T) {
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	expectedResources := corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("1"),
-			corev1.ResourceMemory: testMemoryLimit,
-			"nvidia.com/gpu":      resource.MustParse("3"),
+			corev1.ResourceCPU:          resource.MustParse("1"),
+			corev1.ResourceMemory:       testMemoryLimit,
+			utils.NvidiaGPUResourceName: resource.MustParse("3"),
 		},
 	}
 	assert.Equal(t, expectedResources.Limits, rayContainer.Resources.Limits, "Resource limits do not match")
@@ -767,8 +767,8 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 		},
 
 		Limits: corev1.ResourceList{
-			corev1.ResourceMemory: testMemoryLimit,
-			"nvidia.com/gpu":      resource.MustParse("3"),
+			corev1.ResourceMemory:       testMemoryLimit,
+			utils.NvidiaGPUResourceName: resource.MustParse("3"),
 		},
 	}
 
@@ -1632,7 +1632,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					"nvidia.com/gpu": resource.MustParse("1"),
+					utils.NvidiaGPUResourceName: resource.MustParse("1"),
 				},
 			},
 			expected: "ray start  --num-gpus=1 ",
@@ -1643,7 +1643,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					"google.com/tpu": resource.MustParse("4"),
+					utils.GoogleTPUResourceName: resource.MustParse("4"),
 				},
 			},
 			expected: `ray start  --resources='{"TPU":4}' `,
@@ -1666,7 +1666,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
-					"nvidia.com/gpu":            resource.MustParse("1"),
+					utils.NvidiaGPUResourceName: resource.MustParse("1"),
 				},
 			},
 			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
@@ -1677,9 +1677,9 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			rayStartParams: map[string]string{},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					"google.com/tpu":            resource.MustParse("8"),
+					utils.GoogleTPUResourceName: resource.MustParse("8"),
 					"aws.amazon.com/neuroncore": resource.MustParse("4"),
-					"nvidia.com/gpu":            resource.MustParse("1"),
+					utils.NvidiaGPUResourceName: resource.MustParse("1"),
 				},
 			},
 			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
@@ -1718,7 +1718,7 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			},
 			resource: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
-					"google.com/tpu": resource.MustParse("8"),
+					utils.GoogleTPUResourceName: resource.MustParse("8"),
 				},
 			},
 			expected: `ray start --head  --resources='{"custom_resource":2,"TPU":4}' `,

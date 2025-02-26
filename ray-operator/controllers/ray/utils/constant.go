@@ -1,6 +1,10 @@
 package utils
 
-import "errors"
+import (
+	"errors"
+
+	corev1 "k8s.io/api/core/v1"
+)
 
 const (
 
@@ -308,4 +312,7 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	NvidiaGPUResourceName = corev1.ResourceName("nvidia.com/gpu")
+	GoogleTPUResourceName = corev1.ResourceName("google.com/tpu")
 )
