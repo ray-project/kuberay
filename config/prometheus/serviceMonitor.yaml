@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    # `release: $HELM_RELEASE`: Prometheus can only detect ServiceMonitor with this label.
+    release: prometheus
+  name: kuberay-operator-monitor
+  namespace: prometheus-system
+spec:
+  jobLabel: kuberay-operator
+  # Only select Kubernetes Services in the "default" namespace.
+  namespaceSelector:
+    matchNames:
+      - default
+  # Only select Kubernetes Services with "matchLabels".
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kuberay-operator
+  endpoints:
+    - port: http
+      path: /metrics
