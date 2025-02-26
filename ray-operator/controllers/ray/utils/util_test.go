@@ -739,18 +739,18 @@ func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 func TestIsAutoscalingEnabled(t *testing.T) {
 	// Test: RayCluster
 	cluster := &rayv1.RayCluster{}
-	assert.False(t, IsAutoscalingEnabled(cluster))
+	assert.False(t, IsAutoscalingEnabled(&cluster.Spec))
 
 	cluster = &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: ptr.To[bool](true),
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(cluster))
+	assert.True(t, IsAutoscalingEnabled(&cluster.Spec))
 
 	// Test: RayJob
 	job := &rayv1.RayJob{}
-	assert.False(t, IsAutoscalingEnabled(job))
+	assert.False(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
 
 	job = &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -759,11 +759,11 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(job))
+	assert.True(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
 
 	// Test: RayService
 	service := &rayv1.RayService{}
-	assert.False(t, IsAutoscalingEnabled(service))
+	assert.False(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
 
 	service = &rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
@@ -772,7 +772,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(service))
+	assert.True(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
 }
 
 func TestIsGCSFaultToleranceEnabled(t *testing.T) {
