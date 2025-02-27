@@ -2,13 +2,13 @@
 
 package v1
 
-// ScaleStrategyApplyConfiguration represents an declarative configuration of the ScaleStrategy type for use
+// ScaleStrategyApplyConfiguration represents a declarative configuration of the ScaleStrategy type for use
 // with apply.
 type ScaleStrategyApplyConfiguration struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
-// ScaleStrategyApplyConfiguration constructs an declarative configuration of the ScaleStrategy type for use with
+// ScaleStrategyApplyConfiguration constructs a declarative configuration of the ScaleStrategy type for use with
 // apply.
 func ScaleStrategy() *ScaleStrategyApplyConfiguration {
 	return &ScaleStrategyApplyConfiguration{}

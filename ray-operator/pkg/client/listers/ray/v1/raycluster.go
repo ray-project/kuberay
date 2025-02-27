@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // RayClusterLister helps list RayClusters.
@@ -14,7 +14,7 @@ import (
 type RayClusterLister interface {
 	// List lists all RayClusters in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayCluster, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayCluster, err error)
 	// RayClusters returns an object that can list and get RayClusters.
 	RayClusters(namespace string) RayClusterNamespaceLister
 	RayClusterListerExpansion
@@ -22,25 +22,17 @@ type RayClusterLister interface {
 
 // rayClusterLister implements the RayClusterLister interface.
 type rayClusterLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*rayv1.RayCluster]
 }
 
 // NewRayClusterLister returns a new RayClusterLister.
 func NewRayClusterLister(indexer cache.Indexer) RayClusterLister {
-	return &rayClusterLister{indexer: indexer}
-}
-
-// List lists all RayClusters in the indexer.
-func (s *rayClusterLister) List(selector labels.Selector) (ret []*v1.RayCluster, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayCluster))
-	})
-	return ret, err
+	return &rayClusterLister{listers.New[*rayv1.RayCluster](indexer, rayv1.Resource("raycluster"))}
 }
 
 // RayClusters returns an object that can list and get RayClusters.
 func (s *rayClusterLister) RayClusters(namespace string) RayClusterNamespaceLister {
-	return rayClusterNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return rayClusterNamespaceLister{listers.NewNamespaced[*rayv1.RayCluster](s.ResourceIndexer, namespace)}
 }
 
 // RayClusterNamespaceLister helps list and get RayClusters.
@@ -48,36 +40,15 @@ func (s *rayClusterLister) RayClusters(namespace string) RayClusterNamespaceList
 type RayClusterNamespaceLister interface {
 	// List lists all RayClusters in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayCluster, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayCluster, err error)
 	// Get retrieves the RayCluster from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.RayCluster, error)
+	Get(name string) (*rayv1.RayCluster, error)
 	RayClusterNamespaceListerExpansion
 }
 
 // rayClusterNamespaceLister implements the RayClusterNamespaceLister
 // interface.
 type rayClusterNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all RayClusters in the indexer for a given namespace.
-func (s rayClusterNamespaceLister) List(selector labels.Selector) (ret []*v1.RayCluster, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayCluster))
-	})
-	return ret, err
-}
-
-// Get retrieves the RayCluster from the indexer for a given namespace and name.
-func (s rayClusterNamespaceLister) Get(name string) (*v1.RayCluster, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("raycluster"), name)
-	}
-	return obj.(*v1.RayCluster), nil
+	listers.ResourceIndexer[*rayv1.RayCluster]
 }

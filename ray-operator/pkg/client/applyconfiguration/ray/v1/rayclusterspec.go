@@ -2,7 +2,7 @@
 
 package v1
 
-// RayClusterSpecApplyConfiguration represents an declarative configuration of the RayClusterSpec type for use
+// RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
 type RayClusterSpecApplyConfiguration struct {
 	Suspend                  *bool                                       `json:"suspend,omitempty"`
@@ -16,7 +16,7 @@ type RayClusterSpecApplyConfiguration struct {
 	WorkerGroupSpecs         []WorkerGroupSpecApplyConfiguration         `json:"workerGroupSpecs,omitempty"`
 }
 
-// RayClusterSpecApplyConfiguration constructs an declarative configuration of the RayClusterSpec type for use with
+// RayClusterSpecApplyConfiguration constructs a declarative configuration of the RayClusterSpec type for use with
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
