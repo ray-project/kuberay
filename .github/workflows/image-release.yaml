@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
 
+    - name: Error if not a tag
+      uses: actions/github-script@v7
+      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+      with:
+        script: core.setFailed('This action can only be run on tags')
+    
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
@@ -21,11 +27,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Error if not a tag
-      uses: actions/github-script@v7
-      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-      with:
-        script: core.setFailed('This action can only be run on tags')
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
     - name: Install kubebuilder
       run: |
@@ -67,8 +71,8 @@ jobs:
       run: |
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ github.ref_name }};
-        docker push quay.io/kuberay/apiserver:${{ github.ref_name }}
+        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.tag.outputs.tag }};
+        docker push quay.io/kuberay/apiserver:${{ steps.tag.outputs.tag }}
 
   release_operator_image:
     env:
@@ -76,6 +80,12 @@ jobs:
     name: Release Operator Docker Images
     runs-on: ubuntu-22.04
     steps:
+
+    - name: Error if not a tag
+      uses: actions/github-script@v7
+      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+      with:
+        script: core.setFailed('This action can only be run on tags')
 
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -87,11 +97,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Error if not a tag
-      uses: actions/github-script@v7
-      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-      with:
-        script: core.setFailed('This action can only be run on tags')
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
     - name: Install kubebuilder
       run: |
@@ -165,7 +173,7 @@ jobs:
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ github.ref_name }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.tag.outputs.tag }}
 
     - name: Create tag
       uses: actions/github-script@v6
@@ -174,6 +182,6 @@ jobs:
           await github.rest.git.createRef({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            ref: 'refs/tags/ray-operator/${{ github.ref_name }}',
-            sha: context.sha,
+            ref: 'refs/tags/ray-operator/${{ steps.tag.outputs.tag }}',
+            sha: '${{ github.sha }}'
           })
