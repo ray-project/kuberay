@@ -175,5 +175,5 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             ref: 'refs/tags/ray-operator/${{ github.ref_name }}',
-            sha: '${{ github.sha }}'
+            sha: context.sha,
           })
