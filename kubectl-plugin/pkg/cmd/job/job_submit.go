@@ -282,6 +282,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			RayJobName:     options.rayjobName,
 			Namespace:      *options.configFlags.Namespace,
 			SubmissionMode: "InteractiveMode",
+			// Prior to kuberay 1.2.2, the entry point is required. To maintain
+			// backwards compatability with 1.2.x, we submit the entry point
+			// here, even though it will be ignored.
+			// See https://github.com/ray-project/kuberay/issues/3126.
+			Entrypoint: options.entryPoint,
 			RayClusterSpecObject: generation.RayClusterSpecObject{
 				RayVersion:     options.rayVersion,
 				Image:          options.image,
