@@ -179,7 +179,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	initTemplateAnnotations(instance, &podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
-	if utils.IsAutoscalingEnabled(&instance) {
+	if utils.IsAutoscalingEnabled(&instance.Spec) {
 		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
 		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"
