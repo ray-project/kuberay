@@ -2,6 +2,9 @@
 # See https://pre-commit.com/hooks.html for more hooks
 exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
 
+default_language_version:
+  golang: 1.22.9
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
