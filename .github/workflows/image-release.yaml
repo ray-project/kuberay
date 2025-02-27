@@ -27,7 +27,7 @@ jobs:
       with:
         script: core.setFailed('This action can only be run on tags')
 
-    - name: install kubebuilder
+    - name: Install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
         sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
@@ -93,7 +93,7 @@ jobs:
       with:
         script: core.setFailed('This action can only be run on tags')
 
-    - name: install kubebuilder
+    - name: Install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
         sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
