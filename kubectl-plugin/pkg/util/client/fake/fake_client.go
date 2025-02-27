@@ -10,51 +10,41 @@ import (
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
-type FakeClient interface {
-	WithKubeRayImageVersion(version string) FakeClient
-	WithKubeRayOperatorVersionError(err error) FakeClient
-	GetKubeRayOperatorVersion(ctx context.Context) (string, error)
-	GetRayHeadSvcName(ctx context.Context, namespace string, resourceType util.ResourceType, name string) (string, error)
-	WaitRayClusterProvisioned(ctx context.Context, namespace, name string, timeout time.Duration) error
-	KubernetesClient() kubernetes.Interface
-	RayClient() rayclient.Interface
-}
-
-type fakeClient struct {
+type FakeClient struct {
 	err                 error
 	kuberayImageVersion string
 }
 
-func NewFakeClient() FakeClient {
-	return &fakeClient{}
+func NewFakeClient() *FakeClient {
+	return &FakeClient{}
 }
 
-func (c *fakeClient) WithKubeRayImageVersion(version string) FakeClient {
+func (c *FakeClient) WithKubeRayImageVersion(version string) *FakeClient {
 	c.kuberayImageVersion = version
 	return c
 }
 
-func (c *fakeClient) WithKubeRayOperatorVersionError(err error) FakeClient {
+func (c *FakeClient) WithKubeRayOperatorVersionError(err error) *FakeClient {
 	c.err = err
 	return c
 }
 
-func (c fakeClient) GetKubeRayOperatorVersion(_ context.Context) (string, error) {
+func (c *FakeClient) GetKubeRayOperatorVersion(_ context.Context) (string, error) {
 	return c.kuberayImageVersion, c.err
 }
 
-func (c fakeClient) GetRayHeadSvcName(_ context.Context, _ string, _ util.ResourceType, _ string) (string, error) {
+func (c *FakeClient) GetRayHeadSvcName(_ context.Context, _ string, _ util.ResourceType, _ string) (string, error) {
 	return "", nil
 }
 
-func (c fakeClient) WaitRayClusterProvisioned(_ context.Context, _ string, _ string, _ time.Duration) error {
+func (c *FakeClient) WaitRayClusterProvisioned(_ context.Context, _ string, _ string, _ time.Duration) error {
 	return nil
 }
 
-func (c fakeClient) KubernetesClient() kubernetes.Interface {
+func (c *FakeClient) KubernetesClient() kubernetes.Interface {
 	return nil
 }
 
-func (c fakeClient) RayClient() rayclient.Interface {
+func (c *FakeClient) RayClient() rayclient.Interface {
 	return nil
 }
