@@ -3,7 +3,7 @@
   image: golang:1.22
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
@@ -22,7 +22,7 @@
   image: golang:1.22
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
@@ -41,7 +41,7 @@
   image: golang:1.22
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
@@ -60,7 +60,7 @@
   image: golang:1.22
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./tests/framework/config/kind-config-buildkite.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Deploy previous KubeRay operator release (v1.2.2) using helm
     - echo Deploying KubeRay operator
