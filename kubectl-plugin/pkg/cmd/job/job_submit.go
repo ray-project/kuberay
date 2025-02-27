@@ -498,7 +498,18 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 
 	// Patch the ray job with the correct Ray job ID.
-	patch := []jsonpatch.Operation{jsonpatch.NewOperation("add", "/spec/jobId", rayJobID)}
+	// A Patch request is used (instead of Update) to work around an empty
+	// entryPoint being omitted, which fails validation pre-kuberay 1.3.
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("Failed to get latest version of Ray job")
+	}
+	patch := []jsonpatch.Operation{
+		// Set the Job ID, then test the resource version has not changed to
+		// prevent data races.
+		jsonpatch.NewOperation("add", "/spec/jobId", rayJobID),
+		jsonpatch.NewOperation("test", "/metadata/resourceVersion", options.RayJob.GetResourceVersion()),
+	}
 	raw, err := json.Marshal(patch)
 	if err != nil {
 		return fmt.Errorf("Generate Ray Job ID patch: %w", err)
