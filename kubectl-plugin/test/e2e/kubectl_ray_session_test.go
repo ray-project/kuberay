@@ -64,7 +64,6 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 	})
 
 	It("should reconnect after pod connection is lost", func() {
-		Skip("Skip this because it is flaky now")
 		sessionCmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 
 		err := sessionCmd.Start()
@@ -103,7 +102,7 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the new pod to be ready
-		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod", newPodName, "--for=condition=Ready", "--timeout=60s")
+		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod", newPodName, "--for=condition=Ready", "--timeout=120s")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
