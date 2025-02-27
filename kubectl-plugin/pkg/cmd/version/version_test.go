@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	. "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/fake"
+	clientFake "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -81,10 +81,10 @@ func TestRayVersionRun(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fClient := NewFakeClient().WithKubeRayImageVersion(tc.kuberayImageVersion).WithKubeRayOperatorVersionError(tc.getKubeRayOperatorVersionError)
+			client := clientFake.NewFakeClient().WithKubeRayImageVersion(tc.kuberayImageVersion).WithKubeRayOperatorVersionError(tc.getKubeRayOperatorVersionError)
 
 			var buf bytes.Buffer
-			err := fakeVersionOptions.Run(context.Background(), fClient, &buf)
+			err := fakeVersionOptions.Run(context.Background(), client, &buf)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected, buf.String())
