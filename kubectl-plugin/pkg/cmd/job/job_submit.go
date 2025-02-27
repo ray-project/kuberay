@@ -503,7 +503,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("Generate Ray Job ID patch: %w", err)
 	}
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Patch(ctx, options.RayJob.Name, types.JSONPatchType, raw, v1.PatchOptions{})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Patch(ctx, options.RayJob.Name, types.JSONPatchType, raw, v1.PatchOptions{FieldManager: "ray-kubectl-plugin"})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
