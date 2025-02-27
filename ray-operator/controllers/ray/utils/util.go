@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	RayClusterSuffix    = "-raycluster-"
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
@@ -314,7 +313,7 @@ func GenerateRouteName(clusterName string) string {
 
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
-	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
+	return fmt.Sprintf("%s-%s", serviceName, rand.String(5))
 }
 
 // GenerateRayJobId generates a ray job id for submission
@@ -630,17 +629,9 @@ func ManagedByExternalController(controllerName *string) *string {
 	return nil
 }
 
-func IsAutoscalingEnabled[T *rayv1.RayCluster | *rayv1.RayJob | *rayv1.RayService](obj T) bool {
-	switch obj := (interface{})(obj).(type) {
-	case *rayv1.RayCluster:
-		return obj.Spec.EnableInTreeAutoscaling != nil && *obj.Spec.EnableInTreeAutoscaling
-	case *rayv1.RayJob:
-		return obj.Spec.RayClusterSpec != nil && obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
-	case *rayv1.RayService:
-		return obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
-	default:
-		panic(fmt.Sprintf("unsupported type: %T", obj))
-	}
+func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.EnableInTreeAutoscaling != nil &&
+		*spec.EnableInTreeAutoscaling
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.

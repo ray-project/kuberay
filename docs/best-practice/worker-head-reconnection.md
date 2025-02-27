@@ -11,7 +11,7 @@ It was an issue that only happened with old version In the Kuberay version under
 
 When the head pod was deleted, it will be recreated with a new IP by KubeRay controller，and the GCS server address is changed accordingly. The Raylets of all workers will try to get GCS address from Redis in `ReconnectGcsServer`, but the redis_clients always use the previous head IP, so they will always fail to get new GCS address. The Raylets will not exit until max retries are reached. There are two configurations determining this long delay:
 
-```
+```text
 /// The interval at which the gcs rpc client will check if gcs rpc server is ready.
 RAY_CONFIG(int64_t, ping_gcs_rpc_server_interval_milliseconds, 1000)
 

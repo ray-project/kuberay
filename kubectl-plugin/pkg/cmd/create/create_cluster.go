@@ -14,25 +14,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
 type CreateClusterOptions struct {
-	configFlags    *genericclioptions.ConfigFlags
-	ioStreams      *genericclioptions.IOStreams
-	kubeContexter  util.KubeContexter
-	clusterName    string
-	rayVersion     string
-	image          string
-	headCPU        string
-	headMemory     string
-	headGPU        string
-	workerCPU      string
-	workerMemory   string
-	workerGPU      string
-	workerReplicas int32
-	dryRun         bool
-	wait           bool
-	timeout        time.Duration
+	configFlags          *genericclioptions.ConfigFlags
+	ioStreams            *genericclioptions.IOStreams
+	workerRayStartParams map[string]string
+	headRayStartParams   map[string]string
+	kubeContexter        util.KubeContexter
+	clusterName          string
+	rayVersion           string
+	image                string
+	headCPU              string
+	headMemory           string
+	headGPU              string
+	workerCPU            string
+	workerMemory         string
+	workerGPU            string
+	workerReplicas       int32
+	dryRun               bool
+	wait                 bool
+	timeout              time.Duration
 }
 
 var (
@@ -44,6 +48,9 @@ var (
 
 		# Create a Ray cluster from flags input
 		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
+
+		# Create a Ray cluster with K8s labels and annotations
+		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
 	`, util.RayVersion, util.RayImage))
 )
 
@@ -71,7 +78,13 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 			if err := options.Validate(); err != nil {
 				return err
 			}
-			return options.Run(cmd.Context(), cmdFactory)
+
+			k8sClient, err := client.NewClient(cmdFactory)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
+
+			return options.Run(cmd.Context(), k8sClient)
 		},
 	}
 
@@ -80,10 +93,12 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
+	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
@@ -136,25 +151,26 @@ func (options *CreateClusterOptions) Validate() error {
 	return nil
 }
 
-func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-	k8sClient, err := client.NewClient(factory)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
+	if clusterExists(k8sClient.RayClient(), *options.configFlags.Namespace, options.clusterName) {
+		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, *options.configFlags.Namespace)
 	}
 
 	rayClusterObject := generation.RayClusterYamlObject{
 		Namespace:   *options.configFlags.Namespace,
 		ClusterName: options.clusterName,
 		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:     options.rayVersion,
-			Image:          options.image,
-			HeadCPU:        options.headCPU,
-			HeadMemory:     options.headMemory,
-			HeadGPU:        options.headGPU,
-			WorkerReplicas: options.workerReplicas,
-			WorkerCPU:      options.workerCPU,
-			WorkerMemory:   options.workerMemory,
-			WorkerGPU:      options.workerGPU,
+			RayVersion:           options.rayVersion,
+			Image:                options.image,
+			HeadCPU:              options.headCPU,
+			HeadMemory:           options.headMemory,
+			HeadGPU:              options.headGPU,
+			HeadRayStartParams:   options.headRayStartParams,
+			WorkerReplicas:       options.workerReplicas,
+			WorkerCPU:            options.workerCPU,
+			WorkerMemory:         options.workerMemory,
+			WorkerGPU:            options.workerGPU,
+			WorkerRayStartParams: options.workerRayStartParams,
 		},
 	}
 
@@ -187,4 +203,12 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 	}
 
 	return nil
+}
+
+// clusterExists checks if a RayCluster with the given name exists in the given namespace
+func clusterExists(client rayclient.Interface, namespace, name string) bool {
+	if _, err := client.RayV1().RayClusters(namespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
+		return true
+	}
+	return false
 }
