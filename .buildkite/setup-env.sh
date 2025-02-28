@@ -29,7 +29,7 @@ helm repo update
 
 # Install python 3.11 and pip
 apt-get update
-apt-get install -y python3.11
+apt-get install -y python3.11 python3-pip
 
 # Install requirements
 pip install ray==2.41.0 ray\[default\]==2.41.0
