@@ -32,7 +32,7 @@ apt-get update
 apt-get install -y python3.11 python3-pip
 
 # Install requirements
-pip install --break-system-packages ray==2.41.0 ray\[default\]==2.41.0
+pip install --break-system-packages ray[default]==2.41.0
 
 # Bypass Git's ownership check due to unconventional user IDs in Docker containers
 git config --global --add safe.directory /workdir
