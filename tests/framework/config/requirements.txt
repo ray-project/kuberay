@@ -1,7 +1,0 @@
-docker
-GitPython
-kubernetes
-jsonpatch
-pytest
-ray
-ray[default]
