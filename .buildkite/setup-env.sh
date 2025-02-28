@@ -29,17 +29,10 @@ helm repo update
 
 # Install python 3.11 and pip
 apt-get update
-apt-get install -y python3.11 python3.11-venv
-python3 -m venv .venv
-
-# Activate the virtual environment and then execute the subsequent commands
-
-# shellcheck disable=SC1091  # Ignore: activate script is created by venv
-source .venv/bin/activate
+apt-get install -y python3.11
 
 # Install requirements
-pip install -r tests/framework/config/requirements.txt
-
+pip install ray==2.41.0 ray\[default\]==2.41.0
 
 # Bypass Git's ownership check due to unconventional user IDs in Docker containers
 git config --global --add safe.directory /workdir
