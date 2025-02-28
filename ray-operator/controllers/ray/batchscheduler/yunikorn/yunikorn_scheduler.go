@@ -105,7 +105,7 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(ctx context.Contex
 	logger.Info("Gang Scheduling enabled for RayCluster")
 }
 
-func (yf *YuniKornSchedulerFactory) New(_ *rest.Config) (schedulerinterface.BatchScheduler, error) {
+func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config) (schedulerinterface.BatchScheduler, error) {
 	return &YuniKornScheduler{}, nil
 }
 
