@@ -705,6 +705,15 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{},
+			},
+		},
+	})
+	require.ErrorContains(t, err, "headGroupSpec should have at least one container")
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {
