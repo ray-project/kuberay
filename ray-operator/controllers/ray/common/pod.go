@@ -36,13 +36,12 @@ const (
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
 	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
 	NeuronCoreRayResourceName          = "neuron_cores"
-	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
-	NeuronCoreContainerResourceName: NeuronCoreRayResourceName,
-	TPUContainerResourceName:        TPURayResourceName,
+	NeuronCoreContainerResourceName:      NeuronCoreRayResourceName,
+	utils.GoogleTPUResourceName.String(): TPURayResourceName,
 }
 
 // Get the port required to connect to the Ray cluster by worker nodes and drivers

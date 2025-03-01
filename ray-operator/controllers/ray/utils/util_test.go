@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -838,6 +839,64 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := IsGCSFaultToleranceEnabled(test.instance)
 			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
+func TestCalculatePodResource(t *testing.T) {
+	tests := []struct {
+		expected corev1.ResourceList
+		name     string
+		podSpec  corev1.PodSpec
+	}{
+		{
+			name: "limits take precedence over requests",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("5"),
+								GoogleTPUResourceName: resource.MustParse("1"),
+							},
+							Requests: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("10Mi"),
+								NvidiaGPUResourceName: resource.MustParse("2"),
+							},
+						},
+					},
+					{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("5Mi"),
+								GoogleTPUResourceName: resource.MustParse("1"),
+							},
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("2"),
+								corev1.ResourceMemory: resource.MustParse("100Mi"),
+								NvidiaGPUResourceName: resource.MustParse("2"),
+							},
+						},
+					},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("6"),
+				corev1.ResourceMemory: resource.MustParse("15Mi"),
+				NvidiaGPUResourceName: resource.MustParse("4"),
+				GoogleTPUResourceName: resource.MustParse("2"),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := CalculatePodResource(tc.podSpec)
+			assert.Equal(t, len(tc.expected), len(result))
+			for name, resource := range result {
+				assert.True(t, resource.Equal(tc.expected[name]))
+			}
 		})
 	}
 }
