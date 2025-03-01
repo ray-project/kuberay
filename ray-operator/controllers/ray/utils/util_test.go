@@ -836,7 +836,7 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := IsGCSFaultToleranceEnabled(test.instance)
+			result := IsGCSFaultToleranceEnabled(&test.instance.Spec, test.instance.Annotations)
 			assert.Equal(t, test.expected, result)
 		})
 	}

@@ -635,9 +635,9 @@ func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.
-func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
-	v, ok := instance.Annotations[RayFTEnabledAnnotationKey]
-	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
+func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
+	v, ok := annotations[RayFTEnabledAnnotationKey]
+	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
