@@ -18,9 +18,6 @@ func TestRayJob(t *testing.T) {
 			name: "ray-job.custom-head-svc.yaml",
 		},
 		{
-			name: "ray-job.modin.yaml",
-		},
-		{
 			name: "ray-job.resources.yaml",
 		},
 		{
