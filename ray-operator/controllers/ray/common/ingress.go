@@ -21,7 +21,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                cluster.Name,
-		utils.RayIDLabelKey:                     utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode),
+		utils.RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}

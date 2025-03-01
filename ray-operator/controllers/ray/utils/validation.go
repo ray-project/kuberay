@@ -21,11 +21,17 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 
 // Validation for invalid Ray Cluster configurations.
 func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
+	if len(instance.Name) > 46 {
+		return fmt.Errorf("RayCluster name should be no more than 46 characters")
+	}
 	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
 	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		if len(workerGroup.GroupName) > 46 {
+			return fmt.Errorf("group name should be no more than 46 characters")
+		}
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
