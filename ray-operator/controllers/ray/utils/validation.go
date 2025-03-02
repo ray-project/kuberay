@@ -20,7 +20,11 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 }
 
 // Validation for invalid Ray Cluster configurations.
-func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+func ValidateRayClusterSpec(name string, spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+	if len(name) > MaxRayClusterNameLength {
+		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
+	}
+
 	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
@@ -98,6 +102,10 @@ func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
 }
 
 func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
+	if len(rayJob.Name) > MaxRayJobNameLength {
+		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
+	}
+
 	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
 	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
 	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
@@ -114,7 +122,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
-		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
+		if err := ValidateRayClusterSpec("", rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err
 		}
 	}
@@ -158,6 +166,10 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if len(rayService.Name) > MaxRayServiceNameLength {
+		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+	}
+
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}

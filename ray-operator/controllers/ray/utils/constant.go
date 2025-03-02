@@ -192,6 +192,17 @@ const (
 	KubeRayController = "ray.io/kuberay-operator"
 
 	ServeConfigLRUSize = 1000
+
+	// MaxRayClusterNameLength is the maximum RayCluster name to make sure we don't truncate
+	// their k8s service names. Currently, "-serve-svc" is the longest service suffix:
+	// 63 - len("-serve-svc") == 53, so the name should not be longer than 53 characters.
+	MaxRayClusterNameLength = 53
+	// MaxRayServiceNameLength is the maximum RayService name to make sure it pass the RayCluster validation.
+	// Minus 6 since we append 6 characters to the RayService name to create the cluster (GenerateRayClusterName).
+	MaxRayServiceNameLength = MaxRayClusterNameLength - 6
+	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
+	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
+	MaxRayJobNameLength = MaxRayClusterNameLength - 6
 )
 
 type ServiceType string

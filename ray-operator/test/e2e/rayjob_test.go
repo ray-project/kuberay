@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +82,54 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Successful RayJob with a maximum name", func(_ *testing.T) {
+		// RayJob
+		rayJobAC := rayv1ac.RayJob(strings.Repeat("j", utils.MaxRayJobNameLength), namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Refresh the RayJob status
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Assert the RayCluster has been torn down
+		g.Eventually(func() error {
+			_, err = GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+			return err
+		}, TestTimeoutShort).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+		// Assert the submitter Job has not been deleted
+		g.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})

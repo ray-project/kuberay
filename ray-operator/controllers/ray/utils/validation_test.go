@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -206,7 +207,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
+			err := ValidateRayClusterSpec("", &rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					RayStartParams: tt.rayStartParams,
@@ -288,7 +289,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
+			err := ValidateRayClusterSpec(rayCluster.Name, &rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -358,7 +359,56 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
+			err := ValidateRayClusterSpec(rayCluster.Name, &rayCluster.Spec, rayCluster.Annotations)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecNames(t *testing.T) {
+	tests := []struct {
+		rayCluster   *rayv1.RayCluster
+		name         string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name: "RayCluster name is too long (> MaxRayClusterNameLength characters)",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strings.Repeat("A", MaxRayClusterNameLength+1),
+				},
+			},
+			expectError:  true,
+			errorMessage: fmt.Sprintf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength),
+		},
+		{
+			name: "Both RayCluster name is ok (== MaxRayClusterNameLength)",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: strings.Repeat("A", MaxRayClusterNameLength),
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "ray-head"}},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(tt.rayCluster.Name, &tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -430,7 +480,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
+			err := ValidateRayClusterSpec(tt.rayCluster.Name, &tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -507,7 +557,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
+			err := ValidateRayClusterSpec(tt.rayCluster.Name, &tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -714,6 +764,25 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, err, "headGroupSpec should have at least one container")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strings.Repeat("j", MaxRayJobNameLength+1),
+		},
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayJob name should be no more than %d characters", MaxRayJobNameLength))
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strings.Repeat("j", MaxRayJobNameLength),
+		},
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
+		},
+	})
+	require.NoError(t, err)
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {
@@ -736,6 +805,20 @@ func TestValidateRayServiceSpec(t *testing.T) {
 		Spec: rayv1.RayServiceSpec{},
 	})
 	require.NoError(t, err, "The RayService spec is valid.")
+
+	err = ValidateRayServiceSpec(&rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strings.Repeat("j", MaxRayServiceNameLength+1),
+		},
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
+
+	err = ValidateRayServiceSpec(&rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: strings.Repeat("j", MaxRayServiceNameLength),
+		},
+	})
+	require.NoError(t, err)
 
 	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
 	err = ValidateRayServiceSpec(&rayv1.RayService{
