@@ -1,10 +1,6 @@
 from ray import serve
 
-@serve.deployment(
-    ray_actor_options={
-        "num_cpus": 0.1,
-    }
-)
+@serve.deployment()
 class BaseService:
     async def __call__(self):
         return "hello world"
