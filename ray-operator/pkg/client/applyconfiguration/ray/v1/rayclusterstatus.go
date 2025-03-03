@@ -3,34 +3,35 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	applyconfigurationsmetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// RayClusterStatusApplyConfiguration represents an declarative configuration of the RayClusterStatus type for use
+// RayClusterStatusApplyConfiguration represents a declarative configuration of the RayClusterStatus type for use
 // with apply.
 type RayClusterStatusApplyConfiguration struct {
-	State                   *v1.ClusterState                 `json:"state,omitempty"`
-	DesiredCPU              *resource.Quantity               `json:"desiredCPU,omitempty"`
-	DesiredMemory           *resource.Quantity               `json:"desiredMemory,omitempty"`
-	DesiredGPU              *resource.Quantity               `json:"desiredGPU,omitempty"`
-	DesiredTPU              *resource.Quantity               `json:"desiredTPU,omitempty"`
-	LastUpdateTime          *metav1.Time                     `json:"lastUpdateTime,omitempty"`
-	StateTransitionTimes    map[v1.ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`
-	Endpoints               map[string]string                `json:"endpoints,omitempty"`
-	Head                    *HeadInfoApplyConfiguration      `json:"head,omitempty"`
-	Reason                  *string                          `json:"reason,omitempty"`
-	Conditions              []metav1.Condition               `json:"conditions,omitempty"`
-	ReadyWorkerReplicas     *int32                           `json:"readyWorkerReplicas,omitempty"`
-	AvailableWorkerReplicas *int32                           `json:"availableWorkerReplicas,omitempty"`
-	DesiredWorkerReplicas   *int32                           `json:"desiredWorkerReplicas,omitempty"`
-	MinWorkerReplicas       *int32                           `json:"minWorkerReplicas,omitempty"`
-	MaxWorkerReplicas       *int32                           `json:"maxWorkerReplicas,omitempty"`
-	ObservedGeneration      *int64                           `json:"observedGeneration,omitempty"`
+	State                   *rayv1.ClusterState                                     `json:"state,omitempty"`
+	DesiredCPU              *resource.Quantity                                      `json:"desiredCPU,omitempty"`
+	DesiredMemory           *resource.Quantity                                      `json:"desiredMemory,omitempty"`
+	DesiredGPU              *resource.Quantity                                      `json:"desiredGPU,omitempty"`
+	DesiredTPU              *resource.Quantity                                      `json:"desiredTPU,omitempty"`
+	LastUpdateTime          *metav1.Time                                            `json:"lastUpdateTime,omitempty"`
+	StateTransitionTimes    map[rayv1.ClusterState]*metav1.Time                     `json:"stateTransitionTimes,omitempty"`
+	Endpoints               map[string]string                                       `json:"endpoints,omitempty"`
+	Head                    *HeadInfoApplyConfiguration                             `json:"head,omitempty"`
+	Reason                  *string                                                 `json:"reason,omitempty"`
+	Conditions              []applyconfigurationsmetav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	ReadyWorkerReplicas     *int32                                                  `json:"readyWorkerReplicas,omitempty"`
+	AvailableWorkerReplicas *int32                                                  `json:"availableWorkerReplicas,omitempty"`
+	DesiredWorkerReplicas   *int32                                                  `json:"desiredWorkerReplicas,omitempty"`
+	MinWorkerReplicas       *int32                                                  `json:"minWorkerReplicas,omitempty"`
+	MaxWorkerReplicas       *int32                                                  `json:"maxWorkerReplicas,omitempty"`
+	ObservedGeneration      *int64                                                  `json:"observedGeneration,omitempty"`
 }
 
-// RayClusterStatusApplyConfiguration constructs an declarative configuration of the RayClusterStatus type for use with
+// RayClusterStatusApplyConfiguration constructs a declarative configuration of the RayClusterStatus type for use with
 // apply.
 func RayClusterStatus() *RayClusterStatusApplyConfiguration {
 	return &RayClusterStatusApplyConfiguration{}
@@ -39,7 +40,7 @@ func RayClusterStatus() *RayClusterStatusApplyConfiguration {
 // WithState sets the State field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the State field is set to the value of the last call.
-func (b *RayClusterStatusApplyConfiguration) WithState(value v1.ClusterState) *RayClusterStatusApplyConfiguration {
+func (b *RayClusterStatusApplyConfiguration) WithState(value rayv1.ClusterState) *RayClusterStatusApplyConfiguration {
 	b.State = &value
 	return b
 }
@@ -88,9 +89,9 @@ func (b *RayClusterStatusApplyConfiguration) WithLastUpdateTime(value metav1.Tim
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the StateTransitionTimes field,
 // overwriting an existing map entries in StateTransitionTimes field with the same key.
-func (b *RayClusterStatusApplyConfiguration) WithStateTransitionTimes(entries map[v1.ClusterState]*metav1.Time) *RayClusterStatusApplyConfiguration {
+func (b *RayClusterStatusApplyConfiguration) WithStateTransitionTimes(entries map[rayv1.ClusterState]*metav1.Time) *RayClusterStatusApplyConfiguration {
 	if b.StateTransitionTimes == nil && len(entries) > 0 {
-		b.StateTransitionTimes = make(map[v1.ClusterState]*metav1.Time, len(entries))
+		b.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time, len(entries))
 	}
 	for k, v := range entries {
 		b.StateTransitionTimes[k] = v
@@ -131,9 +132,12 @@ func (b *RayClusterStatusApplyConfiguration) WithReason(value string) *RayCluste
 // WithConditions adds the given value to the Conditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *RayClusterStatusApplyConfiguration) WithConditions(values ...metav1.Condition) *RayClusterStatusApplyConfiguration {
+func (b *RayClusterStatusApplyConfiguration) WithConditions(values ...*applyconfigurationsmetav1.ConditionApplyConfiguration) *RayClusterStatusApplyConfiguration {
 	for i := range values {
-		b.Conditions = append(b.Conditions, values[i])
+		if values[i] == nil {
+			panic("nil value passed to WithConditions")
+		}
+		b.Conditions = append(b.Conditions, *values[i])
 	}
 	return b
 }

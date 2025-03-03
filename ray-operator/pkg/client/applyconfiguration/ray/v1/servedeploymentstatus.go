@@ -2,14 +2,14 @@
 
 package v1
 
-// ServeDeploymentStatusApplyConfiguration represents an declarative configuration of the ServeDeploymentStatus type for use
+// ServeDeploymentStatusApplyConfiguration represents a declarative configuration of the ServeDeploymentStatus type for use
 // with apply.
 type ServeDeploymentStatusApplyConfiguration struct {
 	Status  *string `json:"status,omitempty"`
 	Message *string `json:"message,omitempty"`
 }
 
-// ServeDeploymentStatusApplyConfiguration constructs an declarative configuration of the ServeDeploymentStatus type for use with
+// ServeDeploymentStatusApplyConfiguration constructs a declarative configuration of the ServeDeploymentStatus type for use with
 // apply.
 func ServeDeploymentStatus() *ServeDeploymentStatusApplyConfiguration {
 	return &ServeDeploymentStatusApplyConfiguration{}
