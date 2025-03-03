@@ -41,9 +41,9 @@ func TestCreatePodGroup(t *testing.T) {
 				Name: "ray-worker",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
-						corev1.ResourceMemory: resource.MustParse("512Mi"),
-						"nvidia.com/gpu":      resource.MustParse("1"),
+						corev1.ResourceCPU:          resource.MustParse("500m"),
+						corev1.ResourceMemory:       resource.MustParse("512Mi"),
+						utils.NvidiaGPUResourceName: resource.MustParse("1"),
 					},
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("256m"),
@@ -87,12 +87,12 @@ func TestCreatePodGroup(t *testing.T) {
 	// 1 head + 2 workers (desired, not min replicas)
 	a.Equal(int32(3), pg.Spec.MinMember)
 
-	// 256m * 3 (requests, not limits)
-	a.Equal("768m", pg.Spec.MinResources.Cpu().String())
+	// 500m * 3 (limits, not requests)
+	a.Equal("1500m", pg.Spec.MinResources.Cpu().String())
 
-	// 256Mi * 3 (requests, not limits)
-	a.Equal("768Mi", pg.Spec.MinResources.Memory().String())
+	// 512Mi * 3 (limits, not requests)
+	a.Equal("1536Mi", pg.Spec.MinResources.Memory().String())
 
 	// 2 GPUs total
-	a.Equal("2", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+	a.Equal("2", pg.Spec.MinResources.Name(utils.NvidiaGPUResourceName, resource.BinarySI).String())
 }

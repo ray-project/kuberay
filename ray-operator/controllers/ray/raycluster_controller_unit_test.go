@@ -3287,9 +3287,6 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 }
 
 func TestSumGPUs(t *testing.T) {
-	nvidiaGPUResourceName := corev1.ResourceName("nvidia.com/gpu")
-	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
-
 	tests := []struct {
 		name     string
 		input    map[corev1.ResourceName]resource.Quantity
@@ -3305,9 +3302,9 @@ func TestSumGPUs(t *testing.T) {
 		{
 			name: "one GPU type specified",
 			input: map[corev1.ResourceName]resource.Quantity{
-				corev1.ResourceCPU:    resource.MustParse("1"),
-				nvidiaGPUResourceName: resource.MustParse("1"),
-				googleTPUResourceName: resource.MustParse("1"),
+				corev1.ResourceCPU:          resource.MustParse("1"),
+				utils.NvidiaGPUResourceName: resource.MustParse("1"),
+				utils.GoogleTPUResourceName: resource.MustParse("1"),
 			},
 			expected: resource.MustParse("1"),
 		},
@@ -3315,9 +3312,9 @@ func TestSumGPUs(t *testing.T) {
 			name: "multiple GPUs specified",
 			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU:                 resource.MustParse("1"),
-				nvidiaGPUResourceName:              resource.MustParse("3"),
+				utils.NvidiaGPUResourceName:        resource.MustParse("3"),
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
-				googleTPUResourceName:              resource.MustParse("1"),
+				utils.GoogleTPUResourceName:        resource.MustParse("1"),
 			},
 			expected: resource.MustParse("5"),
 		},
