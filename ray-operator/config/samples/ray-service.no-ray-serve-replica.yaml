@@ -10,7 +10,7 @@ spec:
   # serveConfigV2 takes a yaml multi-line scalar, which should be a Ray Serve multi-application config. See https://docs.ray.io/en/latest/serve/multi-app.html.
   serveConfigV2: |
     applications:
-      - name: app
+      - name: simple_app
         import_path: ray-operator.config.samples.ray-serve.single_deployment_dag:DagNode
         route_prefix: /basic
         runtime_env:
