@@ -53,6 +53,16 @@ func TestRayCreateClusterValidate(t *testing.T) {
 				kubeContexter: util.NewMockKubeContexter(true),
 			},
 		},
+		{
+			name: "should error when a resource quantity is invalid",
+			opts: &CreateClusterOptions{
+				configFlags:   genericclioptions.NewConfigFlags(true),
+				kubeContexter: util.NewMockKubeContexter(true),
+				headCPU:       "1",
+				headMemory:    "softmax",
+			},
+			expectError: "head-memory is not a valid resource quantity: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
+		},
 	}
 
 	for _, tc := range tests {

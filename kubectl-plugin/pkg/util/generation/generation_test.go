@@ -10,10 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 )
 
 func TestGenerateRayClusterApplyConfig(t *testing.T) {
@@ -195,4 +198,140 @@ spec:
               memory: 10Gi`, util.RayImage, util.RayVersion, util.RayImage)
 
 	assert.Equal(t, strings.TrimSpace(expectedResultYaml), strings.TrimSpace(resultString))
+}
+
+func TestGenerateResources(t *testing.T) {
+	tests := []struct {
+		expectedResources corev1.ResourceList
+		name              string
+		cpu               string
+		memory            string
+		ephemeralStorage  string
+		gpu               string
+	}{
+		{
+			name:             "should generate resources with CPU, memory, ephemeral storage, and GPU",
+			cpu:              "1",
+			memory:           "5Gi",
+			ephemeralStorage: "10Gi",
+			gpu:              "1",
+			expectedResources: corev1.ResourceList{
+				corev1.ResourceCPU:                          resource.MustParse("1"),
+				corev1.ResourceMemory:                       resource.MustParse("5Gi"),
+				corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
+				corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
+			},
+		},
+		{
+			name:             "should only generate resources with CPU and memory if ephemeral storage isn't set and GPUs are 0",
+			cpu:              "1",
+			memory:           "5Gi",
+			ephemeralStorage: "",
+			gpu:              "0",
+			expectedResources: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("5Gi"),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedResources, generateResources(test.cpu, test.memory, test.ephemeralStorage, test.gpu))
+		})
+	}
+}
+
+func TestGenerateRayClusterSpec(t *testing.T) {
+	testRayClusterSpecObject := RayClusterSpecObject{
+		RayVersion:           "1.2.3",
+		Image:                "rayproject/ray:1.2.3",
+		HeadCPU:              "1",
+		HeadMemory:           "5Gi",
+		HeadGPU:              "1",
+		HeadEphemeralStorage: "10Gi",
+		HeadRayStartParams: map[string]string{
+			"softmax": "GELU",
+		},
+		WorkerReplicas: 3,
+		WorkerCPU:      "2",
+		WorkerMemory:   "10Gi",
+		WorkerGPU:      "0",
+	}
+
+	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
+		RayVersion: ptr.To("1.2.3"),
+		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
+			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
+			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
+				Spec: &corev1ac.PodSpecApplyConfiguration{
+					Containers: []corev1ac.ContainerApplyConfiguration{
+						{
+							Name:  ptr.To("ray-head"),
+							Image: ptr.To("rayproject/ray:1.2.3"),
+							Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
+								Requests: &corev1.ResourceList{
+									corev1.ResourceCPU:                          resource.MustParse("1"),
+									corev1.ResourceMemory:                       resource.MustParse("5Gi"),
+									corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
+									corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
+								},
+								Limits: &corev1.ResourceList{
+									corev1.ResourceCPU:                          resource.MustParse("1"),
+									corev1.ResourceMemory:                       resource.MustParse("5Gi"),
+									corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
+									corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
+								},
+							},
+							Ports: []corev1ac.ContainerPortApplyConfiguration{
+								{
+									ContainerPort: ptr.To(int32(6379)),
+									Name:          ptr.To("gcs-server"),
+								},
+								{
+									ContainerPort: ptr.To(int32(8265)),
+									Name:          ptr.To("dashboard"),
+								},
+								{
+									ContainerPort: ptr.To(int32(10001)),
+									Name:          ptr.To("client"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		WorkerGroupSpecs: []rayv1ac.WorkerGroupSpecApplyConfiguration{
+			{
+				GroupName:      ptr.To("default-group"),
+				Replicas:       ptr.To(int32(3)),
+				RayStartParams: map[string]string{"metrics-export-port": "8080"},
+				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
+					Spec: &corev1ac.PodSpecApplyConfiguration{
+						Containers: []corev1ac.ContainerApplyConfiguration{
+							{
+								Name:  ptr.To("ray-worker"),
+								Image: ptr.To("rayproject/ray:1.2.3"),
+								Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
+									Requests: &corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("10Gi"),
+									},
+									Limits: &corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("2"),
+										corev1.ResourceMemory: resource.MustParse("10Gi"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result := testRayClusterSpecObject.generateRayClusterSpec()
+
+	assert.Equal(t, expected, result)
 }
