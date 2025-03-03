@@ -10,6 +10,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/get"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/job"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/log"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/scale"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/session"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/version"
 )
@@ -35,6 +36,7 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 	cmd.AddCommand(version.NewVersionCommand(streams))
 	cmd.AddCommand(create.NewCreateCommand(streams))
 	cmd.AddCommand(kubectlraydelete.NewDeleteCommand(streams))
+	cmd.AddCommand(scale.NewScaleCommand(streams))
 
 	return cmd
 }
