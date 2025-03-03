@@ -2,7 +2,7 @@
 
 package v1
 
-// AppStatusApplyConfiguration represents an declarative configuration of the AppStatus type for use
+// AppStatusApplyConfiguration represents a declarative configuration of the AppStatus type for use
 // with apply.
 type AppStatusApplyConfiguration struct {
 	Deployments map[string]ServeDeploymentStatusApplyConfiguration `json:"serveDeploymentStatuses,omitempty"`
@@ -10,7 +10,7 @@ type AppStatusApplyConfiguration struct {
 	Message     *string                                            `json:"message,omitempty"`
 }
 
-// AppStatusApplyConfiguration constructs an declarative configuration of the AppStatus type for use with
+// AppStatusApplyConfiguration constructs a declarative configuration of the AppStatus type for use with
 // apply.
 func AppStatus() *AppStatusApplyConfiguration {
 	return &AppStatusApplyConfiguration{}

@@ -2,13 +2,13 @@
 
 package v1
 
-// SubmitterConfigApplyConfiguration represents an declarative configuration of the SubmitterConfig type for use
+// SubmitterConfigApplyConfiguration represents a declarative configuration of the SubmitterConfig type for use
 // with apply.
 type SubmitterConfigApplyConfiguration struct {
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
-// SubmitterConfigApplyConfiguration constructs an declarative configuration of the SubmitterConfig type for use with
+// SubmitterConfigApplyConfiguration constructs a declarative configuration of the SubmitterConfig type for use with
 // apply.
 func SubmitterConfig() *SubmitterConfigApplyConfiguration {
 	return &SubmitterConfigApplyConfiguration{}
