@@ -556,8 +556,8 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(tt.rayCluster.Name, &tt.rayCluster.Spec, tt.rayCluster.Annotations)
+			features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)
+			err := ValidateRayClusterSpec("", &tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -694,7 +694,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
 
-	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{

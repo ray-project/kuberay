@@ -3,19 +3,19 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RayJobStatusApplyConfiguration represents an declarative configuration of the RayJobStatus type for use
+// RayJobStatusApplyConfiguration represents a declarative configuration of the RayJobStatus type for use
 // with apply.
 type RayJobStatusApplyConfiguration struct {
 	JobId               *string                             `json:"jobId,omitempty"`
 	RayClusterName      *string                             `json:"rayClusterName,omitempty"`
 	DashboardURL        *string                             `json:"dashboardURL,omitempty"`
-	JobStatus           *v1.JobStatus                       `json:"jobStatus,omitempty"`
-	JobDeploymentStatus *v1.JobDeploymentStatus             `json:"jobDeploymentStatus,omitempty"`
-	Reason              *v1.JobFailedReason                 `json:"reason,omitempty"`
+	JobStatus           *rayv1.JobStatus                    `json:"jobStatus,omitempty"`
+	JobDeploymentStatus *rayv1.JobDeploymentStatus          `json:"jobDeploymentStatus,omitempty"`
+	Reason              *rayv1.JobFailedReason              `json:"reason,omitempty"`
 	Message             *string                             `json:"message,omitempty"`
 	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
 	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
@@ -25,7 +25,7 @@ type RayJobStatusApplyConfiguration struct {
 	ObservedGeneration  *int64                              `json:"observedGeneration,omitempty"`
 }
 
-// RayJobStatusApplyConfiguration constructs an declarative configuration of the RayJobStatus type for use with
+// RayJobStatusApplyConfiguration constructs a declarative configuration of the RayJobStatus type for use with
 // apply.
 func RayJobStatus() *RayJobStatusApplyConfiguration {
 	return &RayJobStatusApplyConfiguration{}
@@ -58,7 +58,7 @@ func (b *RayJobStatusApplyConfiguration) WithDashboardURL(value string) *RayJobS
 // WithJobStatus sets the JobStatus field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the JobStatus field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithJobStatus(value v1.JobStatus) *RayJobStatusApplyConfiguration {
+func (b *RayJobStatusApplyConfiguration) WithJobStatus(value rayv1.JobStatus) *RayJobStatusApplyConfiguration {
 	b.JobStatus = &value
 	return b
 }
@@ -66,7 +66,7 @@ func (b *RayJobStatusApplyConfiguration) WithJobStatus(value v1.JobStatus) *RayJ
 // WithJobDeploymentStatus sets the JobDeploymentStatus field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the JobDeploymentStatus field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithJobDeploymentStatus(value v1.JobDeploymentStatus) *RayJobStatusApplyConfiguration {
+func (b *RayJobStatusApplyConfiguration) WithJobDeploymentStatus(value rayv1.JobDeploymentStatus) *RayJobStatusApplyConfiguration {
 	b.JobDeploymentStatus = &value
 	return b
 }
@@ -74,7 +74,7 @@ func (b *RayJobStatusApplyConfiguration) WithJobDeploymentStatus(value v1.JobDep
 // WithReason sets the Reason field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Reason field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithReason(value v1.JobFailedReason) *RayJobStatusApplyConfiguration {
+func (b *RayJobStatusApplyConfiguration) WithReason(value rayv1.JobFailedReason) *RayJobStatusApplyConfiguration {
 	b.Reason = &value
 	return b
 }
