@@ -5,7 +5,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: rayservice-worker-no-serve
+  name: rayservice-no-ray-serve-replica
 spec:
   # serveConfigV2 takes a yaml multi-line scalar, which should be a Ray Serve multi-application config. See https://docs.ray.io/en/latest/serve/multi-app.html.
   serveConfigV2: |
