@@ -3,18 +3,15 @@
 package v1
 
 import (
-	"context"
-	json "encoding/json"
-	"fmt"
-	"time"
+	context "context"
 
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	applyconfigurationrayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	scheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // RayServicesGetter has a method to return a RayServiceInterface.
@@ -25,216 +22,37 @@ type RayServicesGetter interface {
 
 // RayServiceInterface has methods to work with RayService resources.
 type RayServiceInterface interface {
-	Create(ctx context.Context, rayService *v1.RayService, opts metav1.CreateOptions) (*v1.RayService, error)
-	Update(ctx context.Context, rayService *v1.RayService, opts metav1.UpdateOptions) (*v1.RayService, error)
-	UpdateStatus(ctx context.Context, rayService *v1.RayService, opts metav1.UpdateOptions) (*v1.RayService, error)
+	Create(ctx context.Context, rayService *rayv1.RayService, opts metav1.CreateOptions) (*rayv1.RayService, error)
+	Update(ctx context.Context, rayService *rayv1.RayService, opts metav1.UpdateOptions) (*rayv1.RayService, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, rayService *rayv1.RayService, opts metav1.UpdateOptions) (*rayv1.RayService, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
-	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1.RayService, error)
-	List(ctx context.Context, opts metav1.ListOptions) (*v1.RayServiceList, error)
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*rayv1.RayService, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*rayv1.RayServiceList, error)
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayService, err error)
-	Apply(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error)
-	ApplyStatus(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *rayv1.RayService, err error)
+	Apply(ctx context.Context, rayService *applyconfigurationrayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *rayv1.RayService, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, rayService *applyconfigurationrayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *rayv1.RayService, err error)
 	RayServiceExpansion
 }
 
 // rayServices implements RayServiceInterface
 type rayServices struct {
-	client rest.Interface
-	ns     string
+	*gentype.ClientWithListAndApply[*rayv1.RayService, *rayv1.RayServiceList, *applyconfigurationrayv1.RayServiceApplyConfiguration]
 }
 
 // newRayServices returns a RayServices
 func newRayServices(c *RayV1Client, namespace string) *rayServices {
 	return &rayServices{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClientWithListAndApply[*rayv1.RayService, *rayv1.RayServiceList, *applyconfigurationrayv1.RayServiceApplyConfiguration](
+			"rayservices",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *rayv1.RayService { return &rayv1.RayService{} },
+			func() *rayv1.RayServiceList { return &rayv1.RayServiceList{} },
+		),
 	}
-}
-
-// Get takes name of the rayService, and returns the corresponding rayService object, and an error if there is any.
-func (c *rayServices) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.RayService, err error) {
-	result = &v1.RayService{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of RayServices that match those selectors.
-func (c *rayServices) List(ctx context.Context, opts metav1.ListOptions) (result *v1.RayServiceList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1.RayServiceList{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("rayservices").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested rayServices.
-func (c *rayServices) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Namespace(c.ns).
-		Resource("rayservices").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a rayService and creates it.  Returns the server's representation of the rayService, and an error, if there is any.
-func (c *rayServices) Create(ctx context.Context, rayService *v1.RayService, opts metav1.CreateOptions) (result *v1.RayService, err error) {
-	result = &v1.RayService{}
-	err = c.client.Post().
-		Namespace(c.ns).
-		Resource("rayservices").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(rayService).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a rayService and updates it. Returns the server's representation of the rayService, and an error, if there is any.
-func (c *rayServices) Update(ctx context.Context, rayService *v1.RayService, opts metav1.UpdateOptions) (result *v1.RayService, err error) {
-	result = &v1.RayService{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(rayService.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(rayService).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *rayServices) UpdateStatus(ctx context.Context, rayService *v1.RayService, opts metav1.UpdateOptions) (result *v1.RayService, err error) {
-	result = &v1.RayService{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(rayService.Name).
-		SubResource("status").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(rayService).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the rayService and deletes it. Returns an error if one occurs.
-func (c *rayServices) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *rayServices) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("rayservices").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched rayService.
-func (c *rayServices) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RayService, err error) {
-	result = &v1.RayService{}
-	err = c.client.Patch(pt).
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Apply takes the given apply declarative configuration, applies it and returns the applied rayService.
-func (c *rayServices) Apply(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error) {
-	if rayService == nil {
-		return nil, fmt.Errorf("rayService provided to Apply must not be nil")
-	}
-	patchOpts := opts.ToPatchOptions()
-	data, err := json.Marshal(rayService)
-	if err != nil {
-		return nil, err
-	}
-	name := rayService.Name
-	if name == nil {
-		return nil, fmt.Errorf("rayService.Name must be provided to Apply")
-	}
-	result = &v1.RayService{}
-	err = c.client.Patch(types.ApplyPatchType).
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(*name).
-		VersionedParams(&patchOpts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// ApplyStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
-func (c *rayServices) ApplyStatus(ctx context.Context, rayService *rayv1.RayServiceApplyConfiguration, opts metav1.ApplyOptions) (result *v1.RayService, err error) {
-	if rayService == nil {
-		return nil, fmt.Errorf("rayService provided to Apply must not be nil")
-	}
-	patchOpts := opts.ToPatchOptions()
-	data, err := json.Marshal(rayService)
-	if err != nil {
-		return nil, err
-	}
-
-	name := rayService.Name
-	if name == nil {
-		return nil, fmt.Errorf("rayService.Name must be provided to Apply")
-	}
-
-	result = &v1.RayService{}
-	err = c.client.Patch(types.ApplyPatchType).
-		Namespace(c.ns).
-		Resource("rayservices").
-		Name(*name).
-		SubResource("status").
-		VersionedParams(&patchOpts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

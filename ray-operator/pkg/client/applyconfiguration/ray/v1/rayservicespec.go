@@ -3,22 +3,22 @@
 package v1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
-// RayServiceSpecApplyConfiguration represents an declarative configuration of the RayServiceSpec type for use
+// RayServiceSpecApplyConfiguration represents a declarative configuration of the RayServiceSpec type for use
 // with apply.
 type RayServiceSpecApplyConfiguration struct {
 	ServiceUnhealthySecondThreshold    *int32                                       `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                                       `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	ServeService                       *v1.Service                                  `json:"serveService,omitempty"`
+	ServeService                       *corev1.Service                              `json:"serveService,omitempty"`
 	UpgradeStrategy                    *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
 	ServeConfigV2                      *string                                      `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     *RayClusterSpecApplyConfiguration            `json:"rayClusterConfig,omitempty"`
 	ExcludeHeadPodFromServeSvc         *bool                                        `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
 
-// RayServiceSpecApplyConfiguration constructs an declarative configuration of the RayServiceSpec type for use with
+// RayServiceSpecApplyConfiguration constructs a declarative configuration of the RayServiceSpec type for use with
 // apply.
 func RayServiceSpec() *RayServiceSpecApplyConfiguration {
 	return &RayServiceSpecApplyConfiguration{}
@@ -43,7 +43,7 @@ func (b *RayServiceSpecApplyConfiguration) WithDeploymentUnhealthySecondThreshol
 // WithServeService sets the ServeService field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ServeService field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithServeService(value v1.Service) *RayServiceSpecApplyConfiguration {
+func (b *RayServiceSpecApplyConfiguration) WithServeService(value corev1.Service) *RayServiceSpecApplyConfiguration {
 	b.ServeService = &value
 	return b
 }
