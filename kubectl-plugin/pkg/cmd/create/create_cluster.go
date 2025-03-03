@@ -19,24 +19,26 @@ import (
 )
 
 type CreateClusterOptions struct {
-	configFlags          *genericclioptions.ConfigFlags
-	ioStreams            *genericclioptions.IOStreams
-	workerRayStartParams map[string]string
-	headRayStartParams   map[string]string
-	kubeContexter        util.KubeContexter
-	clusterName          string
-	rayVersion           string
-	image                string
-	headCPU              string
-	headMemory           string
-	headGPU              string
-	workerCPU            string
-	workerMemory         string
-	workerGPU            string
-	workerReplicas       int32
-	dryRun               bool
-	wait                 bool
-	timeout              time.Duration
+	configFlags            *genericclioptions.ConfigFlags
+	ioStreams              *genericclioptions.IOStreams
+	workerRayStartParams   map[string]string
+	headRayStartParams     map[string]string
+	kubeContexter          util.KubeContexter
+	clusterName            string
+	rayVersion             string
+	image                  string
+	headCPU                string
+	headMemory             string
+	headEphemeralStorage   string
+	headGPU                string
+	workerCPU              string
+	workerMemory           string
+	workerEphemeralStorage string
+	workerGPU              string
+	workerReplicas         int32
+	dryRun                 bool
+	wait                   bool
+	timeout                time.Duration
 }
 
 var (
@@ -47,7 +49,7 @@ var (
 		kubectl ray create cluster sample-cluster
 
 		# Create a Ray cluster from flags input
-		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi
+		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --head-ephemeral-storage 10Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --worker-ephemeral-storage 10Gi
 
 		# Create a Ray cluster with K8s labels and annotations
 		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
@@ -93,11 +95,13 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
+	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", "", "amount of ephemeral storage in the Ray head")
 	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerEphemeralStorage, "worker-ephemeral-storage", "", "amount of ephemeral storage in each worker group replica")
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
@@ -134,15 +138,20 @@ func (options *CreateClusterOptions) Validate() error {
 	}
 
 	resourceFields := map[string]string{
-		"head-cpu":      options.headCPU,
-		"head-gpu":      options.headGPU,
-		"head-memory":   options.headMemory,
-		"worker-cpu":    options.workerCPU,
-		"worker-gpu":    options.workerGPU,
-		"worker-memory": options.workerMemory,
+		"head-cpu":                 options.headCPU,
+		"head-gpu":                 options.headGPU,
+		"head-memory":              options.headMemory,
+		"head-ephemeral-storage":   options.headEphemeralStorage,
+		"worker-cpu":               options.workerCPU,
+		"worker-gpu":               options.workerGPU,
+		"worker-memory":            options.workerMemory,
+		"worker-ephemeral-storage": options.workerEphemeralStorage,
 	}
 
 	for name, value := range resourceFields {
+		if (name == "head-ephemeral-storage" || name == "worker-ephemeral-storage") && value == "" {
+			continue
+		}
 		if err := util.ValidateResourceQuantity(value, name); err != nil {
 			return fmt.Errorf("%w", err)
 		}
@@ -160,17 +169,19 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 		Namespace:   *options.configFlags.Namespace,
 		ClusterName: options.clusterName,
 		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:           options.rayVersion,
-			Image:                options.image,
-			HeadCPU:              options.headCPU,
-			HeadMemory:           options.headMemory,
-			HeadGPU:              options.headGPU,
-			HeadRayStartParams:   options.headRayStartParams,
-			WorkerReplicas:       options.workerReplicas,
-			WorkerCPU:            options.workerCPU,
-			WorkerMemory:         options.workerMemory,
-			WorkerGPU:            options.workerGPU,
-			WorkerRayStartParams: options.workerRayStartParams,
+			RayVersion:             options.rayVersion,
+			Image:                  options.image,
+			HeadCPU:                options.headCPU,
+			HeadMemory:             options.headMemory,
+			HeadEphemeralStorage:   options.headEphemeralStorage,
+			HeadGPU:                options.headGPU,
+			HeadRayStartParams:     options.headRayStartParams,
+			WorkerReplicas:         options.workerReplicas,
+			WorkerCPU:              options.workerCPU,
+			WorkerMemory:           options.workerMemory,
+			WorkerEphemeralStorage: options.workerEphemeralStorage,
+			WorkerGPU:              options.workerGPU,
+			WorkerRayStartParams:   options.workerRayStartParams,
 		},
 	}
 
