@@ -29,6 +29,21 @@ func InconsistentRayClusterStatus(oldStatus rayv1.RayClusterStatus, newStatus ra
 	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
 		return true
 	}
+	if features.Enabled(features.RayServiceIncrementalUpgrade) {
+		// Also check for changes in IncrementalUpgrade related Status fields.
+		if oldStatus.TrafficRoutedPercent != newStatus.TrafficRoutedPercent {
+			logger.Info("inconsistentRayServiceStatus RayService updated TrafficRoutedPercent", "old TrafficRoutedPercent", oldStatus.TrafficRoutedPercent, "new TrafficRoutedPercent", newStatus.TrafficRoutedPercent)
+			return true
+		}
+		if oldStatus.TargetCapacity != newStatus.TargetCapacity {
+			logger.Info("inconsistentRayServiceStatus RayService updated TargetCapacity", "old TargetCapacity", oldStatus.TargetCapacity, "new TargetCapacity", newStatus.TargetCapacity)
+			return true
+		}
+		if oldStatus.LastTrafficMigratedTime != newStatus.LastTrafficMigratedTime {
+			logger.Info("inconsistentRayServiceStatus RayService updated LastTrafficMigratedTime", "old LastTrafficMigratedTime", oldStatus.LastTrafficMigratedTime, "new LastTrafficMigratedTime", newStatus.LastTrafficMigratedTime)
+			return true
+		}
+	}
 	return false
 }
 

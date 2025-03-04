@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/lru"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -90,6 +92,8 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 
@@ -142,10 +146,30 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
+	// Check if IncrementalUpgrade is enabled, if so reconcile Gateway objects.
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeRayClusterInstance != nil {
+		// Creates a Gateway CR that points to the head services of
+		// the active and pending (if it exists) RayClusters. For incremental upgrades,
+		// the Gateway endpoint is used rather than the Serve service.
+		gateway, err := r.reconcileGateway(ctx, rayServiceInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		rayServiceInstance.Spec.Gateway = gateway
+		// Create or update the HTTPRoute attached to this RayService's Gateway
+		httpRoute, err := r.reconcileHTTPRoute(ctx, rayServiceInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		rayServiceInstance.Spec.HTTPRoute = httpRoute
+	}
+
 	// Reconcile serve applications for active and/or pending clusters
 	// 1. If there is a pending cluster, reconcile serve applications for the pending cluster.
 	// 2. If there are both active and pending clusters, reconcile serve applications for the pending cluster only.
 	// 3. If there is no pending cluster, reconcile serve applications for the active cluster.
+	// 4. During an IncrementalUpgrade, reconcileServe will reconcile either the pending or active cluster based
+	//    on total TargetCapacity.
 	var isActiveClusterReady, isPendingClusterReady bool = false, false
 	var activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus = nil, nil
 	if pendingRayClusterInstance != nil {
@@ -278,6 +302,21 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		}
 		logger.Info("Preparing a new pending RayCluster instance by setting RayClusterName",
 			"clusterName", rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
+
+		if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+			// Set IncrementalUpgrade related Status fields for new pending RayCluster if enabled
+			if rayServiceInstance.Status.ActiveServiceStatus.RayClusterName == "" {
+				// If no Active RayCluster exists - default to starting with 100% TargetCapacity.
+				if rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity == nil {
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(100))
+				}
+			} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+				// Pending RayCluster during an upgrade should start with 0% TargetCapacity.
+				if rayServiceInstance.Status.PendingServiceStatus.TargetCapacity == nil {
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(0))
+				}
+			}
+		}
 	}
 
 	serveEndPoints := &corev1.Endpoints{}
@@ -302,6 +341,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
 		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 	}
+
 	return nil
 }
 
@@ -392,8 +432,8 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 	if upgradeStrategy != nil {
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
-			if *upgradeType != rayv1.NewCluster {
-				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to NewCluster.")
+			if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.IncrementalUpgrade {
+				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.IncrementalUpgrade))
 				return false
 			}
 			return true
@@ -405,6 +445,282 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		return false
 	}
 	return true
+}
+
+func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
+	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
+	if options == nil {
+		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
+	}
+	gatewayName := rayServiceInstance.Name + "-gateway"
+
+	// Define the desired Gateway object
+	rayServiceGateway := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gatewayName,
+			Namespace: rayServiceInstance.Namespace,
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: gwv1.ObjectName(options.GatewayClassName),
+		},
+	}
+
+	rayServiceGateway.Spec.Listeners = utils.GetGatewayListenersForRayService(rayServiceInstance)
+
+	return rayServiceGateway, nil
+}
+
+// `reconcileGateway` reconciles a Gateway resource for a RayService. The possible cases are:
+// (1) Create a new Gateway instance. (2) Update the Gateway instance if RayService has updated. (3) Do nothing.
+func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	var err error
+
+	// Construct desired Gateway object for RayService
+	desiredGateway, err := r.createGateway(rayServiceInstance)
+	if err != nil {
+		logger.Error(err, "Failed to build Gateway object for Rayservice")
+		return nil, err
+	}
+
+	// Check for existing RayService Gateway, create the desired Gateway if none is found
+	existingGateway := &gwv1.Gateway{}
+	if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), existingGateway); err != nil {
+		if errors.IsNotFound(err) {
+			// Set the ownership in order to do the garbage collection by k8s.
+			if err := ctrl.SetControllerReference(rayServiceInstance, desiredGateway, r.Scheme); err != nil {
+				return nil, err
+			}
+			logger.Info("Creating a new Gateway instance", "Gateway Listeners", desiredGateway.Spec.Listeners)
+			if err := r.Create(ctx, desiredGateway); err != nil {
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
+				return nil, err
+			}
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
+			return desiredGateway, nil
+		}
+		return nil, err
+	}
+
+	// If Gateway already exists, check if update is needed to reach desired state
+	if !reflect.DeepEqual(existingGateway.Spec, desiredGateway.Spec) {
+		logger.Info("Updating existing Gateway", "name", existingGateway.Name)
+		existingGateway.Spec = desiredGateway.Spec
+		if err := r.Update(ctx, existingGateway); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), "Failed to update the Gateway %s/%s: %v", existingGateway.Namespace, existingGateway.Name, err)
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedGateway), "Updated the Gateway %s/%s", existingGateway.Namespace, existingGateway.Name)
+	}
+
+	return existingGateway, nil
+}
+
+// createHTTPRoute creates a desired HTTPRoute object based on a given RayService instance with
+// weights based on TrafficRoutedPercent.
+func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Retrieve Gateway instance to attach this HTTPRoute to
+	gatewayInstance := &gwv1.Gateway{}
+	if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gatewayInstance); err != nil {
+		return nil, err
+	}
+
+	// Define the desired HTTPRoute name and basic object
+	httpRouteName := fmt.Sprintf("httproute-%s", rayServiceInstance.Name)
+	desiredHTTPRoute := &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteName,
+			Namespace: rayServiceInstance.Namespace,
+		},
+		Spec: gwv1.HTTPRouteSpec{
+			CommonRouteSpec: gwv1.CommonRouteSpec{
+				ParentRefs: []gwv1.ParentReference{
+					{
+						Name:      gwv1.ObjectName(gatewayInstance.Name),
+						Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
+					},
+				},
+			},
+		},
+	}
+
+	// Retrieve the active RayCluster
+	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
+	if err != nil || activeRayCluster == nil || activeRayCluster.Status.Head.ServiceName == "" {
+		logger.Info("No active RayCluster, skipping HTTPRoute creation")
+		return nil, err
+	}
+	oldClusterHeadSvcName := activeRayCluster.Status.Head.ServiceName
+	oldHeadSvc := &corev1.Service{}
+	if err := r.Get(ctx, client.ObjectKey{Name: oldClusterHeadSvcName, Namespace: rayServiceInstance.Namespace}, oldHeadSvc); err != nil {
+		logger.Error(err, "Failed to retrieve active RayCluster head service")
+		return nil, err
+	}
+
+	// Attempt to retrieve pending RayCluster
+	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
+	hasPendingCluster := (err == nil && pendingRayCluster != nil && pendingRayCluster.Status.Head.ServiceName != "")
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Info("Failed to retrieve pending RayCluster.")
+	}
+
+	activeServiceStatus := rayServiceInstance.Status.ActiveServiceStatus
+
+	var backendRefs []gwv1.HTTPBackendRef
+
+	// Configure HTTPRoute to split traffic between active and pending clusters during an incremental upgrade
+	if hasPendingCluster {
+		newClusterHeadSvcName := pendingRayCluster.Status.Head.ServiceName
+		newHeadSvc := &corev1.Service{}
+		if err := r.Get(ctx, client.ObjectKey{Name: newClusterHeadSvcName, Namespace: rayServiceInstance.Namespace}, newHeadSvc); err != nil {
+			logger.Error(err, "Failed to retrieve pending RayCluster head service")
+			return nil, err
+		}
+
+		options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
+		if options == nil {
+			return nil, errstd.New("Missing RayService IncrementalUpgradeOptions")
+		}
+
+		// Retrieve TrafficRoutedPercent for old and upgraded RayClusters.
+		pendingServiceStatus := rayServiceInstance.Status.PendingServiceStatus
+		newClusterWeight := pendingServiceStatus.TrafficRoutedPercent
+		oldClusterWeight := activeServiceStatus.TrafficRoutedPercent
+
+		// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate
+		// StepSizePercent traffic to the pending cluster.
+		intervalSeconds := time.Duration(*options.IntervalSeconds) * time.Second
+		lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
+		if (newClusterWeight != nil && oldClusterWeight != nil) && (lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= intervalSeconds) {
+			// Wait an initial iteration before migrating StepSizePercent.
+			if lastTrafficMigratedTime != nil {
+				logger.Info("Updating cluster weights by StepSizePercent each")
+				oldClusterWeight = ptr.To(max(*oldClusterWeight-*options.StepSizePercent, 0))
+				newClusterWeight = ptr.To(min(*newClusterWeight+*options.StepSizePercent, 100))
+			}
+			rayServiceInstance.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
+			rayServiceInstance.Status.ActiveServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
+		}
+
+		// Set weights for initial iteration.
+		if newClusterWeight == nil {
+			// Pending RayCluster should scale up from 0 TrafficRoutedPercent.
+			newClusterWeight = ptr.To(int32(0))
+		}
+		if oldClusterWeight == nil {
+			// Active RayCluster should scale down from 100 TrafficRoutedPercent.
+			oldClusterWeight = ptr.To(int32(100))
+		}
+		// HTTPRoute weights should never exceed current TargetCapacity for each cluster.
+		newClusterTargetCapacity := pendingServiceStatus.TargetCapacity
+		oldClusterTargetCapacity := activeServiceStatus.TargetCapacity
+		if newClusterTargetCapacity != nil {
+			newClusterWeight = ptr.To(min(*newClusterWeight, *newClusterTargetCapacity))
+		}
+		if oldClusterTargetCapacity != nil {
+			oldClusterWeight = ptr.To(min(*oldClusterWeight, *oldClusterTargetCapacity))
+		}
+
+		backendRefs = []gwv1.HTTPBackendRef{
+			{
+				BackendRef: gwv1.BackendRef{
+					BackendObjectReference: gwv1.BackendObjectReference{
+						Name:      gwv1.ObjectName(oldClusterHeadSvcName),
+						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
+						Port:      ptr.To(gwv1.PortNumber(8000)), // set to Serve port
+					},
+					Weight: oldClusterWeight,
+				},
+			},
+			{
+				BackendRef: gwv1.BackendRef{
+					BackendObjectReference: gwv1.BackendObjectReference{
+						Name:      gwv1.ObjectName(newClusterHeadSvcName),
+						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
+						Port:      ptr.To(gwv1.PortNumber(8000)),
+					},
+					Weight: newClusterWeight,
+				},
+			},
+		}
+		logger.Info("Updating TrafficRoutedPercent to", "oldClusterWeight", oldClusterWeight, "newClusterWeight", newClusterWeight)
+		rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = oldClusterWeight
+		rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = newClusterWeight
+	} else {
+		// No pending cluster — route 100% to active RayCluster
+		backendRefs = []gwv1.HTTPBackendRef{
+			{
+				BackendRef: gwv1.BackendRef{
+					BackendObjectReference: gwv1.BackendObjectReference{
+						Name:      gwv1.ObjectName(oldClusterHeadSvcName),
+						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
+						Port:      ptr.To(gwv1.PortNumber(8000)),
+					},
+					Weight: ptr.To(int32(100)),
+				},
+			},
+		}
+		rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = ptr.To(int32(100))
+	}
+
+	desiredHTTPRoute.Spec.Rules = []gwv1.HTTPRouteRule{
+		{
+			Matches: []gwv1.HTTPRouteMatch{
+				{
+					Path: &gwv1.HTTPPathMatch{
+						Type:  ptr.To(gwv1.PathMatchPathPrefix),
+						Value: ptr.To("/"),
+					},
+				},
+			},
+			BackendRefs: backendRefs,
+		},
+	}
+
+	return desiredHTTPRoute, nil
+}
+
+// reconcileHTTPRoute reconciles a HTTPRoute resource for a RayService to route traffic during an IncrementalUpgrade.
+func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	var err error
+
+	desiredHTTPRoute, err := r.createHTTPRoute(ctx, rayServiceInstance)
+	if err != nil {
+		logger.Error(err, "Failed to build HTTPRoute for RayService upgrade")
+		return nil, err
+	}
+
+	// Check for existing HTTPRoute for RayService
+	existingHTTPRoute := &gwv1.HTTPRoute{}
+	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), existingHTTPRoute); err != nil {
+		if errors.IsNotFound(err) {
+			// Set the ownership in order to do the garbage collection by k8s.
+			if err := ctrl.SetControllerReference(rayServiceInstance, desiredHTTPRoute, r.Scheme); err != nil {
+				return nil, err
+			}
+			if err = r.Create(ctx, desiredHTTPRoute); err != nil {
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
+				return nil, err
+			}
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.FailedToCreateHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
+			return desiredHTTPRoute, nil
+		}
+		return nil, err
+	}
+
+	// If HTTPRoute already exists, check if update is needed
+	if !reflect.DeepEqual(existingHTTPRoute.Spec, desiredHTTPRoute.Spec) {
+		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
+		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
+		if err := r.Update(ctx, existingHTTPRoute); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
+	}
+
+	return existingHTTPRoute, nil
 }
 
 // `reconcileRayCluster` reconciles the active and pending Ray clusters. There are 4 possible cases:
@@ -767,6 +1083,151 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	return nil
 }
 
+// checkIfNeedIncrementalUpgradeUpdate returns whether the controller should adjust the target_capacity
+// of the Serve config associated with a RayCluster during an IncrementalUpgrade.
+func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, string) {
+	activeRayServiceStatus := rayServiceInstance.Status.ActiveServiceStatus
+	pendingRayServiceStatus := rayServiceInstance.Status.PendingServiceStatus
+
+	if activeRayServiceStatus.RayClusterName == "" || pendingRayServiceStatus.RayClusterName == "" {
+		return false, "Both active and pending RayCluster instances required for incremental upgrade."
+	}
+
+	// Validate Gateway and HTTPRoute objects are ready
+	gatewayInstance := &gwv1.Gateway{}
+	if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gatewayInstance); err != nil {
+		return false, "Failed to retrieve Gateway for RayService."
+	}
+	if !utils.IsGatewayReady(gatewayInstance) {
+		return false, "Gateway for RayService IncrementalUpgrade is not ready."
+	}
+
+	httpRouteInstance := &gwv1.HTTPRoute{}
+	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRouteInstance); err != nil {
+		return false, "Failed to retrieve HTTPRoute for RayService."
+	}
+	if !utils.IsHTTPRouteReady(gatewayInstance, httpRouteInstance) {
+		return false, "HTTPRoute for RayService IncrementalUpgrade is not ready."
+	}
+
+	// Retrieve the current observed IncrementalUpgrade Status fields for each RayService.
+	if activeRayServiceStatus.TargetCapacity == nil || activeRayServiceStatus.TrafficRoutedPercent == nil {
+		return true, "Active RayServiceStatus missing TargetCapacity or TrafficRoutedPercent."
+	}
+	if pendingRayServiceStatus.TargetCapacity == nil || pendingRayServiceStatus.TrafficRoutedPercent == nil {
+		return true, "Pending RayServiceStatus missing TargetCapacity or TrafficRoutedPercent."
+	}
+	activeTargetCapacity := int(*activeRayServiceStatus.TargetCapacity)
+	pendingTargetCapacity := int(*pendingRayServiceStatus.TargetCapacity)
+	pendingTrafficRoutedPercent := int(*pendingRayServiceStatus.TrafficRoutedPercent)
+
+	if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
+		return true, "Pending RayCluster has not finished scaling up."
+	} else if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
+		return false, "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete."
+	}
+	return true, "Active RayCluster TargetCapacity has not finished scaling down."
+}
+
+// updateServeTargetCapacity reconcile the target_capacity of the ServeConfig for a given RayCluster during
+// an IncrementalUpgrade while also updating the Status.TargetCapacity of the Active and Pending RayServices.
+func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("reconcileServeTargetCapacity", "RayService", rayServiceInstance.Name)
+
+	if !utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		return nil
+	}
+
+	activeRayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
+	pendingRayServiceStatus := &rayServiceInstance.Status.PendingServiceStatus
+
+	// Set initial TargetCapacity values if unset
+	if activeRayServiceStatus.TargetCapacity == nil {
+		activeRayServiceStatus.TargetCapacity = ptr.To(int32(100))
+	}
+	if pendingRayServiceStatus.TargetCapacity == nil {
+		pendingRayServiceStatus.TargetCapacity = ptr.To(int32(0))
+	}
+
+	// Retrieve the current observed Status fields for IncrementalUpgrade
+	activeTargetCapacity := *activeRayServiceStatus.TargetCapacity
+	pendingTargetCapacity := *pendingRayServiceStatus.TargetCapacity
+	pendingTrafficRoutedPercent := *pendingRayServiceStatus.TrafficRoutedPercent
+
+	// Defer updating the target_capacity until traffic weights are updated
+	if pendingTargetCapacity != pendingTrafficRoutedPercent {
+		logger.Info("Traffic is currently being migrated to pending cluster", "RayCluster", pendingRayServiceStatus.RayClusterName, "TargetCapacity", pendingTargetCapacity, "TrafficRoutedPercent", pendingTrafficRoutedPercent)
+		return nil
+	}
+
+	// Retrieve MaxSurgePercent - the maximum amount to change TargetCapacity by
+	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
+	if options == nil {
+		return errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
+	}
+	maxSurgePercent := *options.MaxSurgePercent
+
+	// There are two cases:
+	// 1. The total target_capacity is greater than 100. This means the pending RayCluster has
+	// scaled up traffic and the active RayCluster can be scaled down by MaxSurgePercent.
+	// 2. The total target_capacity is equal to 100. This means the pending RayCluster can
+	// increase its target_capacity by MaxSurgePercent.
+	var clusterName string
+	var goalTargetCapacity int32
+	if activeTargetCapacity+pendingTargetCapacity > int32(100) {
+		// Scale down the Active RayCluster TargetCapacity on this iteration.
+		goalTargetCapacity = max(int32(0), activeTargetCapacity-maxSurgePercent)
+		clusterName = activeRayServiceStatus.RayClusterName
+		activeRayServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		logger.Info("Setting target_capacity for active Raycluster", "Raycluster", clusterName, "target_capacity", goalTargetCapacity)
+	} else {
+		// Scale up the Pending RayCluster TargetCapacity on this iteration.
+		goalTargetCapacity = min(int32(100), pendingTargetCapacity+maxSurgePercent)
+		clusterName = pendingRayServiceStatus.RayClusterName
+		pendingRayServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		logger.Info("Setting target_capacity for pending Raycluster", "Raycluster", clusterName, "target_capacity", goalTargetCapacity)
+	}
+
+	// Retrieve cached ServeConfig from last reconciliation for cluster to update
+	cachedConfig := r.getServeConfigFromCache(rayServiceInstance, clusterName)
+	if cachedConfig == "" {
+		cachedConfig = rayServiceInstance.Spec.ServeConfigV2
+	}
+	logger.Info("Retrieving ServeConfig", "cached", cachedConfig, "ServeConfigV2", rayServiceInstance.Spec.ServeConfigV2)
+	serveConfig := make(map[string]interface{})
+	if err := yaml.Unmarshal([]byte(cachedConfig), &serveConfig); err != nil {
+		return err
+	}
+
+	// Check if ServeConfig requires update
+	if currentTargetCapacity, ok := serveConfig["target_capacity"].(float64); ok {
+		if int32(currentTargetCapacity) == goalTargetCapacity {
+			// No update required, return early
+			return nil
+		}
+	}
+
+	// Otherwise, update the target_capacity for the cached ServeConfig
+	serveConfig["target_capacity"] = goalTargetCapacity
+	configJson, err := json.Marshal(serveConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal converted serve config into bytes: %w", err)
+	}
+	logger.Info("reconcileServeTargetCapacity", "MULTI_APP json config", string(configJson))
+	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
+		err = fmt.Errorf(
+			"fail to create / update target_capacity for Serve applications. err: %w", err)
+		return err
+	}
+
+	// Only update the target_capacity of one RayCluster at a time.
+	r.cacheServeConfig(rayServiceInstance, clusterName)
+	logger.Info("reconcileServeTargetCapacity", "message", "Cached Serve config for Ray cluster with the key", "rayClusterName", clusterName)
+
+	return nil
+}
+
 // `getAndCheckServeStatus` gets Serve applications' and deployments' statuses and check whether the
 // Serve applications are ready to serve incoming traffic or not. It returns three values:
 //
@@ -965,6 +1426,22 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeApplications), "Updated serve applications to the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 	}
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+		incrementalUpgradeUpdate, reason := r.checkIfNeedIncrementalUpgradeUpdate(ctx, rayServiceInstance)
+		logger.Info("checkIfNeedIncrementalUpgradeUpdate", "incrementalUpgradeUpdate", incrementalUpgradeUpdate, "reason", reason)
+		if incrementalUpgradeUpdate {
+			if err := r.reconcileServeTargetCapacity(ctx, rayServiceInstance, rayDashboardClient); err != nil {
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateTargetCapacity), "Failed to update target_capacity of serve applications to the RayService %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+				return false, serveApplications, err
+			}
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeTargetCapacity),
+				"Updated target_capacity of serve applications to the RayService %s/%s", rayServiceInstance.Namespace, rayServiceInstance.Name)
+
+			// Don't switch to the pending RayCluster until IncrementalUpgrade is complete.
+			return false, serveApplications, nil
+		}
+	}
+
 	return isReady, serveApplications, nil
 }
 

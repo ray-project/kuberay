@@ -4,6 +4,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	apisv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // RayServiceSpecApplyConfiguration represents a declarative configuration of the RayServiceSpec type for use
@@ -13,6 +14,8 @@ type RayServiceSpecApplyConfiguration struct {
 	ServiceUnhealthySecondThreshold    *int32                                       `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                                       `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	ServeService                       *corev1.Service                              `json:"serveService,omitempty"`
+	Gateway                            *apisv1.Gateway                              `json:"gateway,omitempty"`
+	HTTPRoute                          *apisv1.HTTPRoute                            `json:"httpRoute,omitempty"`
 	UpgradeStrategy                    *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
 	ServeConfigV2                      *string                                      `json:"serveConfigV2,omitempty"`
 	RayClusterSpec                     *RayClusterSpecApplyConfiguration            `json:"rayClusterConfig,omitempty"`
@@ -54,6 +57,22 @@ func (b *RayServiceSpecApplyConfiguration) WithDeploymentUnhealthySecondThreshol
 // If called multiple times, the ServeService field is set to the value of the last call.
 func (b *RayServiceSpecApplyConfiguration) WithServeService(value corev1.Service) *RayServiceSpecApplyConfiguration {
 	b.ServeService = &value
+	return b
+}
+
+// WithGateway sets the Gateway field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Gateway field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithGateway(value apisv1.Gateway) *RayServiceSpecApplyConfiguration {
+	b.Gateway = &value
+	return b
+}
+
+// WithHTTPRoute sets the HTTPRoute field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HTTPRoute field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithHTTPRoute(value apisv1.HTTPRoute) *RayServiceSpecApplyConfiguration {
+	b.HTTPRoute = &value
 	return b
 }
 
