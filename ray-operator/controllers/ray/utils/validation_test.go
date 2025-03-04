@@ -784,6 +784,18 @@ func TestValidateRayServiceSpec(t *testing.T) {
 		},
 	})
 	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+
+	err = ValidateRayServiceSpec(&rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadServiceAnnotations: map[string]string{
+					"foo": "bar",
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{},
+			},
+		},
+	})
+	require.Error(t, err, "headGroupSpec should have at least one container")
 }
 
 func TestValidateRayServiceMetadata(t *testing.T) {
