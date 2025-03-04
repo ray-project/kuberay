@@ -8221,6 +8221,25 @@ spec:
                 type: integer
               upgradeStrategy:
                 properties:
+                  incrementalUpgradeOptions:
+                    properties:
+                      gatewayClassName:
+                        type: string
+                      intervalSeconds:
+                        format: int32
+                        type: integer
+                      maxSurgePercent:
+                        default: 100
+                        format: int32
+                        type: integer
+                      stepSizePercent:
+                        format: int32
+                        type: integer
+                    required:
+                    - gatewayClassName
+                    - intervalSeconds
+                    - stepSizePercent
+                    type: object
                   type:
                     type: string
                 type: object
