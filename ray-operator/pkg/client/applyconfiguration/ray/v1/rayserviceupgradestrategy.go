@@ -9,7 +9,7 @@ import (
 // RayServiceUpgradeStrategyApplyConfiguration represents a declarative configuration of the RayServiceUpgradeStrategy type for use
 // with apply.
 type RayServiceUpgradeStrategyApplyConfiguration struct {
-	Type                      *v1.RayServiceUpgradeType                    `json:"type,omitempty"`
+	Type                      *rayv1.RayServiceUpgradeType                 `json:"type,omitempty"`
 	IncrementalUpgradeOptions *IncrementalUpgradeOptionsApplyConfiguration `json:"incrementalUpgradeOptions,omitempty"`
 }
 
