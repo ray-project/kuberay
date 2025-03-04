@@ -8,6 +8,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -104,6 +105,11 @@ func NewGetWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Comman
 
 	cmd.Flags().StringVarP(&options.cluster, "ray-cluster", "c", "", "Ray cluster")
 	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list nodes across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+
+	err := cmd.RegisterFlagCompletionFunc("ray-cluster", completion.RayClusterCompletionFunc(cmdFactory))
+	if err != nil {
+		fmt.Fprintf(streams.ErrOut, "Error registering completion function for --ray-cluster: %v\n", err)
+	}
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
