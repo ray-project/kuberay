@@ -105,6 +105,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", RayExternalStorageNSAnnotationKey)
 
 	tests := []struct {
+		rayStartParams           map[string]string
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
 		name                     string
@@ -205,26 +206,21 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: tt.annotations,
-				},
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
+			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
+				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: tt.rayStartParams,
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Env: tt.envVars,
 								},
 							},
 						},
 					},
 				},
-			}
-			err := ValidateRayClusterSpec(rayCluster)
+			}, tt.annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -292,7 +288,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
@@ -362,7 +358,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -434,7 +430,7 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -510,8 +506,8 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
@@ -576,6 +572,14 @@ func TestValidateRayJobStatus(t *testing.T) {
 }
 
 func TestValidateRayJobSpec(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+
 	err := ValidateRayJobSpec(&rayv1.RayJob{})
 	require.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
 
@@ -591,7 +595,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			Suspend:                  true,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -610,15 +616,19 @@ func TestValidateRayJobSpec(t *testing.T) {
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			BackoffLimit:   ptr.To[int32](-1),
-			RayClusterSpec: &rayv1.RayClusterSpec{},
+			BackoffLimit: ptr.To[int32](-1),
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "backoffLimit must be a positive integer")
@@ -627,12 +637,14 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
 
-	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -655,6 +667,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To[bool](true),
+				HeadGroupSpec:           headGroupSpecWithOneContainer,
 			},
 		},
 	})
@@ -664,7 +677,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -673,7 +688,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           nil,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -682,10 +699,21 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: headGroupSpecWithOneContainer,
+			},
 		},
 	})
 	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+
+	err = ValidateRayJobSpec(&rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{},
+			},
+		},
+	})
+	require.ErrorContains(t, err, "headGroupSpec should have at least one container")
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {

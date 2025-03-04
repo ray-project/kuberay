@@ -158,7 +158,7 @@ $(LOCALBIN):
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 $(CONTROLLER_GEN): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0
+	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5
 
 KUSTOMIZE = $(LOCALBIN)/kustomize
 $(KUSTOMIZE): $(LOCALBIN)

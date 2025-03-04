@@ -30,7 +30,7 @@ type BatchScheduler interface {
 // necessary callbacks with the operator, and the creation of the BatchScheduler itself.
 type BatchSchedulerFactory interface {
 	// New creates a new BatchScheduler for the scheduler plugin.
-	New(config *rest.Config) (BatchScheduler, error)
+	New(ctx context.Context, config *rest.Config) (BatchScheduler, error)
 
 	// AddToScheme adds the types in this scheduler to the given scheme (runs during init).
 	AddToScheme(scheme *runtime.Scheme)
@@ -59,7 +59,7 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (df *DefaultBatchSchedulerFactory) New(_ *rest.Config) (BatchScheduler, error) {
+func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config) (BatchScheduler, error) {
 	return &DefaultBatchScheduler{}, nil
 }
 
