@@ -24,9 +24,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -673,6 +675,83 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 		return ""
 	}
 	return svc.Spec.Selector[RayClusterLabelKey]
+}
+
+func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
+	if gatewayInstance == nil {
+		return false
+	}
+	for _, condition := range gatewayInstance.Status.Conditions {
+		if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+
+	// If no accepted condition found then it is not ready yet
+	return false
+}
+
+// IsHTTPRouteReady returns whether the HTTPRoute associated with a given Gateway has a ready condition
+func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTTPRoute) bool {
+	if httpRouteInstance == nil {
+		return false
+	}
+	for _, parent := range httpRouteInstance.Status.Parents {
+		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) {
+			continue
+		}
+		if parent.ParentRef.Namespace != nil && *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+			continue
+		}
+		hasAccepted := false
+		hasResolved := false
+
+		for _, condition := range parent.Conditions {
+			switch gwv1.RouteConditionType(condition.Type) {
+			case gwv1.RouteConditionAccepted:
+				if condition.Status == metav1.ConditionTrue {
+					hasAccepted = true
+				}
+			case gwv1.RouteConditionResolvedRefs:
+				if condition.Status == metav1.ConditionTrue {
+					hasResolved = true
+				}
+			}
+		}
+		if hasAccepted && hasResolved {
+			return true
+		}
+	}
+	return false
+}
+
+func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
+	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
+		return false
+	}
+	return spec != nil && spec.UpgradeStrategy != nil &&
+		*spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade
+}
+
+func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.IncrementalUpgradeOptions {
+	if spec != nil && spec.UpgradeStrategy != nil {
+		return spec.UpgradeStrategy.IncrementalUpgradeOptions
+	}
+	return nil
+}
+
+// addGatewayListenersForRayService is a helper function to returns Gateway Listeners
+func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
+	listeners := make([]gwv1.Listener, 0, 1)
+	listenerName := fmt.Sprintf("%s-listener", rayServiceInstance.Name)
+	listener := gwv1.Listener{
+		Name:     gwv1.SectionName(listenerName),
+		Protocol: gwv1.HTTPProtocolType,      // only support HTTP
+		Port:     gwv1.PortNumber(int32(80)), // hardcoded to 80 for now
+	}
+	listeners = append(listeners, listener)
+
+	return listeners
 }
 
 // Check where we are running. We are trying to distinguish here whether
