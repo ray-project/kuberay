@@ -229,8 +229,9 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.IncrementalUpgrade {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.IncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 	return nil
 }
