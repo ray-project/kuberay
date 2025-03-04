@@ -3,6 +3,7 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 
@@ -158,6 +159,12 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if !reflect.DeepEqual(rayService.Spec.RayClusterSpec, rayv1.RayClusterSpec{}) {
+		if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
+			return err
+		}
+	}
+
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
