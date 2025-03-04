@@ -477,7 +477,7 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
 			if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.IncrementalUpgrade {
-				logger.Infof("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", rayv1.NewCluster, rayv1.IncrementalUpgrade)
+				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", rayv1.NewCluster, rayv1.IncrementalUpgrade)
 				return false
 			}
 			return true
@@ -489,6 +489,137 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		return false
 	}
 	return true
+}
+
+// reconcileGateway creates a Gateway resource for a RayService.
+func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	err := utils.ValidateIncrementalUpgradeOptions(rayServiceInstance)
+	if err != nil {
+		return nil, err
+	}
+	options := rayServiceInstance.Spec.UpgradeStrategy.IncrementalUpgradeOptions
+	gatewayName := rayServiceInstance.Name + "-gateway"
+
+	rayContainer := rayServiceInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
+
+	// Define the desired Gateway object
+	rayServiceGateway := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gatewayName,
+			Namespace: rayServiceInstance.Namespace,
+		},
+		Spec: gwv1.GatewaySpec{
+			GatewayClassName: gwv1.ObjectName(options.GatewayClassName),
+			Listeners: []gwv1.Listener{{
+				Name:     "http",
+				Protocol: gwv1.ProtocolType("HTTP"),
+				Port:     gwv1.PortNumber(servingPort),
+			}},
+		},
+	}
+
+	if err = r.Create(ctx, rayServiceGateway); err != nil {
+		logger.Error(err, "Failed to create the Gateway")
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create the Gateway for namespace %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+		return nil, err
+	}
+
+	return rayServiceGateway, nil
+}
+
+// reconcileHTTPRoute creates a HTTPRoute resource for a RayService to route traffic during an IncrementalUpgrade.
+func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	httpRouteName := "httproute-" + gatewayName
+	namespace := rs.Namespace
+
+	// Define the desired HTTPRoute
+	desiredHTTPRoute := &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteName,
+			Namespace: namespace,
+		},
+		Spec: gwv1.HTTPRouteSpec{
+			ParentRefs: gwv1.ParentReference{{
+				Kind:      ptr.To(gwv1.Kind("Gateway")),
+				Name:      gwv1.ObjectName(gatewayName),
+				Namespace: ptr.To(namespace),
+			}},
+			Hostnames: gwv1.Hostname{
+				gwv1.Hostname(rs.Name + ".example.com"), // Or get this from RayService spec
+			},
+			Rules: gwv1.HTTPRouteRule{{
+				Matches: gwv1.HTTPRouteMatch{{
+					Path: &gwv1.HTTPPathMatch{
+						Type:  ptr.To(gwv1.PathMatchType(gwv1.PathTypePrefix)),
+						Value: ptr.To("/"),
+					},
+				}},
+				BackendRefs: gwv1.HTTPBackendRef{
+					{
+						BackendRef: gwv1.BackendRef{
+							BackendObjectReference: gwv1.BackendObjectReference{
+								Kind:      ptr.To(gwv1.Kind("Service")),
+								Name:      gwv1.ObjectName(oldClusterSvcName),
+								Namespace: ptr.To(namespace),
+								Port:      ptr.To[int32](8000), // Or get this from RayService spec
+							},
+							Weight: ptr.To(oldWeight),
+						},
+					},
+					{
+						BackendRef: gwv1.BackendRef{
+							BackendObjectReference: gwv1.BackendObjectReference{
+								Kind:      ptr.To(gwv1.Kind("Service")),
+								Name:      gwv1.ObjectName(newClusterSvcName),
+								Namespace: ptr.To(namespace),
+								Port:      ptr.To[int32](8000), // Or get this from RayService spec
+							},
+							Weight: ptr.To(newWeight),
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	// Try to get the existing HTTPRoute
+	existingHTTPRoute := &gwv1.HTTPRoute{}
+	err := r.Get(ctx, client.ObjectKey{Name: httpRouteName, Namespace: namespace}, existingHTTPRoute)
+	if err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			// HTTPRoute doesn't exist, create it
+			if err := r.Create(ctx, desiredHTTPRoute); err != nil {
+				return fmt.Errorf("error creating HTTPRoute: %w", err)
+			}
+			r.Log.Info("HTTPRoute created", "name", httpRouteName, "namespace", namespace)
+			return nil
+		}
+		// An error occurred while trying to get the HTTPRoute
+		return fmt.Errorf("error getting HTTPRoute: %w", err)
+	}
+
+	// HTTPRoute exists, update it if needed
+	updated := false
+
+	// Compare and update the HTTPRoute spec
+	if !routeSpecEqual(existingHTTPRoute.Spec, desiredHTTPRoute.Spec) {
+		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
+		updated = true
+	}
+
+	if updated {
+		if err := r.Update(ctx, existingHTTPRoute); err != nil {
+			return fmt.Errorf("error updating HTTPRoute: %w", err)
+		}
+		r.Log.Info("HTTPRoute updated", "name", httpRouteName, "namespace", namespace)
+	}
+
+	return nil
 }
 
 // `reconcileRayCluster` reconciles the active and pending Ray clusters. There are 4 possible cases:
@@ -930,82 +1061,6 @@ func (r *RayServiceReconciler) cacheServeConfig(rayServiceInstance *rayv1.RaySer
 		rayServiceServeConfigs = cacheValue.(cmap.ConcurrentMap[string, string])
 	}
 	rayServiceServeConfigs.Set(clusterName, serveConfig)
-}
-
-func (r *RayServiceReconciler) reconcileGateway(rs *rayv1.RayService) error {
-	gateway := &gatewayv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      rs.Name + "-gateway",
-			Namespace: rs.Namespace,
-		},
-		Spec: gatewayv1.GatewaySpec{
-			GatewayClassName: rs.Spec.UpgradeStrategy.IncrementalUpgradeOptions.GatewayClassName,
-			Listeners: gatewayv1.Listener{{
-				Name:     "http",
-				Protocol: gatewayv1.ProtocolType("HTTP"),
-				Port:     8000, // Or get this from RayService spec
-			}},
-		},
-	}
-
-	// Create or Update the Gateway (use client-go)
-	// ... (Example: client.Create(ctx, gateway) or client.Update(ctx, gateway))
-	return nil
-}
-
-func (r *RayServiceReconciler) reconcileHTTPRoute(rs *rayv1.RayService, oldClusterSvcName string, newClusterSvcName string, oldWeight int32, newWeight int32) error {
-	httpRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "httproute-" + rs.Name + "-gateway",
-			Namespace: rs.Namespace,
-		},
-		Spec: gatewayv1.HTTPRouteSpec{
-			ParentRefs: gatewayv1.ParentReference{{
-				Kind:      (*gatewayv1.Kind)("Gateway"),
-				Name:      rs.Name + "-gateway",
-				Namespace: &rs.Namespace,
-			}},
-			Hostnames: v1.Hostname{
-				"ray.example.com", // Or get this from RayService spec
-			},
-			Rules: gatewayv1.HTTPRouteRule{{
-				Matches: gatewayv1.HTTPRouteMatch{{
-					Path: &gatewayv1.HTTPPathMatch{
-						Type:  (*gatewayv1.PathMatchType)(v1.PathTypePrefix),
-						Value: ptr.To("/"),
-					},
-				}},
-				BackendRefs: gatewayv1.HTTPBackendRef{
-					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Kind:      (*gatewayv1.Kind)(gatewayv1.Kind("Service")),
-								Name:      oldClusterSvcName,
-								Namespace: &rs.Namespace,
-								Port:      ptr.To[int32](8000), // Or get this from RayService spec
-							},
-							Weight: ptr.To(oldWeight),
-						},
-					},
-					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Kind:      (*gatewayv1.Kind)(v1.Kind("Service")),
-								Name:      newClusterSvcName,
-								Namespace: &rs.Namespace,
-								Port:      ptr.To[int32](8000), // Or get this from RayService spec
-							},
-							Weight: ptr.To(newWeight),
-						},
-					},
-				},
-			}},
-		},
-	}
-
-	// Create or Update the HTTPRoute (use client-go)
-	// ... (Example: client.Create(ctx, httpRoute) or client.Update(ctx, httpRoute))
-	return nil
 }
 
 func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, serviceType utils.ServiceType) (*corev1.Service, error) {
