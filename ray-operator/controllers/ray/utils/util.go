@@ -262,9 +262,9 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
 	case RayServiceCRD:
-		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")), nil
+		return fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"), nil
 	case RayClusterCRD:
-		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"))
+		headSvcName := fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")
 		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
 			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
 		}
@@ -293,7 +293,7 @@ func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 
 // GenerateServeServiceName generates name for serve service.
 func GenerateServeServiceName(serviceName string) string {
-	return CheckName(fmt.Sprintf("%s-%s-%s", serviceName, ServeName, "svc"))
+	return fmt.Sprintf("%s-%s-%s", serviceName, ServeName, "svc")
 }
 
 // GenerateServeServiceLabel generates label value for serve service selector.
