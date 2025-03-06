@@ -270,6 +270,7 @@ const (
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
+	InvalidRayJobMetadata         K8sEventType = "InvalidRayJobMetadata"
 	InvalidRayJobStatus           K8sEventType = "InvalidRayJobStatus"
 	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
 	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
@@ -284,6 +285,7 @@ const (
 
 	// RayService event list
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"

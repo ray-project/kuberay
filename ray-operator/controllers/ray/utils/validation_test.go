@@ -764,23 +764,16 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, err, "headGroupSpec should have at least one container")
+}
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: strings.Repeat("j", MaxRayJobNameLength+1),
-		},
+func TestValidateRayJobMetadata(t *testing.T) {
+	err := ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength+1),
 	})
 	require.ErrorContains(t, err, fmt.Sprintf("RayJob name should be no more than %d characters", MaxRayJobNameLength))
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: strings.Repeat("j", MaxRayJobNameLength),
-		},
-		Spec: rayv1.RayJobSpec{
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
-		},
+	err = ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength),
 	})
 	require.NoError(t, err)
 }
@@ -806,20 +799,6 @@ func TestValidateRayServiceSpec(t *testing.T) {
 	})
 	require.NoError(t, err, "The RayService spec is valid.")
 
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: strings.Repeat("j", MaxRayServiceNameLength+1),
-		},
-	})
-	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
-
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: strings.Repeat("j", MaxRayServiceNameLength),
-		},
-	})
-	require.NoError(t, err)
-
 	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
 	err = ValidateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
@@ -829,4 +808,16 @@ func TestValidateRayServiceSpec(t *testing.T) {
 		},
 	})
 	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+}
+
+func TestValidateRayServiceMetadata(t *testing.T) {
+	err := ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength+1),
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength),
+	})
+	require.NoError(t, err)
 }

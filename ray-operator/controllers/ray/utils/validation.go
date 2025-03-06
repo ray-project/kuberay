@@ -105,11 +105,14 @@ func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
 	return nil
 }
 
-func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
-	if len(rayJob.Name) > MaxRayJobNameLength {
+func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayJobNameLength {
 		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
 	}
+	return nil
+}
 
+func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
 	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
 	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
@@ -169,11 +172,14 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	return nil
 }
 
-func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
-	if len(rayService.Name) > MaxRayServiceNameLength {
+func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayServiceNameLength {
 		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
 	}
+	return nil
+}
 
+func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
