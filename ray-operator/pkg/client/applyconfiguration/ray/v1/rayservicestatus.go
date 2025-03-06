@@ -2,7 +2,7 @@
 
 package v1
 
-// RayServiceStatusApplyConfiguration represents an declarative configuration of the RayServiceStatus type for use
+// RayServiceStatusApplyConfiguration represents a declarative configuration of the RayServiceStatus type for use
 // with apply.
 type RayServiceStatusApplyConfiguration struct {
 	Applications     map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
@@ -10,7 +10,7 @@ type RayServiceStatusApplyConfiguration struct {
 	RayClusterStatus *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
 }
 
-// RayServiceStatusApplyConfiguration constructs an declarative configuration of the RayServiceStatus type for use with
+// RayServiceStatusApplyConfiguration constructs a declarative configuration of the RayServiceStatus type for use with
 // apply.
 func RayServiceStatus() *RayServiceStatusApplyConfiguration {
 	return &RayServiceStatusApplyConfiguration{}

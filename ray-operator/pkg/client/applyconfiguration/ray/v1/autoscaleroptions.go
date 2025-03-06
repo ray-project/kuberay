@@ -4,24 +4,24 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
-// AutoscalerOptionsApplyConfiguration represents an declarative configuration of the AutoscalerOptions type for use
+// AutoscalerOptionsApplyConfiguration represents a declarative configuration of the AutoscalerOptions type for use
 // with apply.
 type AutoscalerOptionsApplyConfiguration struct {
-	Resources          *v1.ResourceRequirements `json:"resources,omitempty"`
-	Image              *string                  `json:"image,omitempty"`
-	ImagePullPolicy    *v1.PullPolicy           `json:"imagePullPolicy,omitempty"`
-	SecurityContext    *v1.SecurityContext      `json:"securityContext,omitempty"`
-	IdleTimeoutSeconds *int32                   `json:"idleTimeoutSeconds,omitempty"`
-	UpscalingMode      *rayv1.UpscalingMode     `json:"upscalingMode,omitempty"`
-	Env                []v1.EnvVar              `json:"env,omitempty"`
-	EnvFrom            []v1.EnvFromSource       `json:"envFrom,omitempty"`
-	VolumeMounts       []v1.VolumeMount         `json:"volumeMounts,omitempty"`
+	Resources          *corev1.ResourceRequirements `json:"resources,omitempty"`
+	Image              *string                      `json:"image,omitempty"`
+	ImagePullPolicy    *corev1.PullPolicy           `json:"imagePullPolicy,omitempty"`
+	SecurityContext    *corev1.SecurityContext      `json:"securityContext,omitempty"`
+	IdleTimeoutSeconds *int32                       `json:"idleTimeoutSeconds,omitempty"`
+	UpscalingMode      *rayv1.UpscalingMode         `json:"upscalingMode,omitempty"`
+	Env                []corev1.EnvVar              `json:"env,omitempty"`
+	EnvFrom            []corev1.EnvFromSource       `json:"envFrom,omitempty"`
+	VolumeMounts       []corev1.VolumeMount         `json:"volumeMounts,omitempty"`
 }
 
-// AutoscalerOptionsApplyConfiguration constructs an declarative configuration of the AutoscalerOptions type for use with
+// AutoscalerOptionsApplyConfiguration constructs a declarative configuration of the AutoscalerOptions type for use with
 // apply.
 func AutoscalerOptions() *AutoscalerOptionsApplyConfiguration {
 	return &AutoscalerOptionsApplyConfiguration{}
@@ -30,7 +30,7 @@ func AutoscalerOptions() *AutoscalerOptionsApplyConfiguration {
 // WithResources sets the Resources field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Resources field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithResources(value v1.ResourceRequirements) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithResources(value corev1.ResourceRequirements) *AutoscalerOptionsApplyConfiguration {
 	b.Resources = &value
 	return b
 }
@@ -46,7 +46,7 @@ func (b *AutoscalerOptionsApplyConfiguration) WithImage(value string) *Autoscale
 // WithImagePullPolicy sets the ImagePullPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ImagePullPolicy field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithImagePullPolicy(value v1.PullPolicy) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithImagePullPolicy(value corev1.PullPolicy) *AutoscalerOptionsApplyConfiguration {
 	b.ImagePullPolicy = &value
 	return b
 }
@@ -54,7 +54,7 @@ func (b *AutoscalerOptionsApplyConfiguration) WithImagePullPolicy(value v1.PullP
 // WithSecurityContext sets the SecurityContext field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the SecurityContext field is set to the value of the last call.
-func (b *AutoscalerOptionsApplyConfiguration) WithSecurityContext(value v1.SecurityContext) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithSecurityContext(value corev1.SecurityContext) *AutoscalerOptionsApplyConfiguration {
 	b.SecurityContext = &value
 	return b
 }
@@ -78,7 +78,7 @@ func (b *AutoscalerOptionsApplyConfiguration) WithUpscalingMode(value rayv1.Upsc
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
-func (b *AutoscalerOptionsApplyConfiguration) WithEnv(values ...v1.EnvVar) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithEnv(values ...corev1.EnvVar) *AutoscalerOptionsApplyConfiguration {
 	for i := range values {
 		b.Env = append(b.Env, values[i])
 	}
@@ -88,7 +88,7 @@ func (b *AutoscalerOptionsApplyConfiguration) WithEnv(values ...v1.EnvVar) *Auto
 // WithEnvFrom adds the given value to the EnvFrom field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the EnvFrom field.
-func (b *AutoscalerOptionsApplyConfiguration) WithEnvFrom(values ...v1.EnvFromSource) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithEnvFrom(values ...corev1.EnvFromSource) *AutoscalerOptionsApplyConfiguration {
 	for i := range values {
 		b.EnvFrom = append(b.EnvFrom, values[i])
 	}
@@ -98,7 +98,7 @@ func (b *AutoscalerOptionsApplyConfiguration) WithEnvFrom(values ...v1.EnvFromSo
 // WithVolumeMounts adds the given value to the VolumeMounts field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the VolumeMounts field.
-func (b *AutoscalerOptionsApplyConfiguration) WithVolumeMounts(values ...v1.VolumeMount) *AutoscalerOptionsApplyConfiguration {
+func (b *AutoscalerOptionsApplyConfiguration) WithVolumeMounts(values ...corev1.VolumeMount) *AutoscalerOptionsApplyConfiguration {
 	for i := range values {
 		b.VolumeMounts = append(b.VolumeMounts, values[i])
 	}

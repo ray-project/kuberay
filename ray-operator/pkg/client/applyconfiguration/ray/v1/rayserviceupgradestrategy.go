@@ -3,16 +3,16 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// RayServiceUpgradeStrategyApplyConfiguration represents an declarative configuration of the RayServiceUpgradeStrategy type for use
+// RayServiceUpgradeStrategyApplyConfiguration represents a declarative configuration of the RayServiceUpgradeStrategy type for use
 // with apply.
 type RayServiceUpgradeStrategyApplyConfiguration struct {
-	Type *v1.RayServiceUpgradeType `json:"type,omitempty"`
+	Type *rayv1.RayServiceUpgradeType `json:"type,omitempty"`
 }
 
-// RayServiceUpgradeStrategyApplyConfiguration constructs an declarative configuration of the RayServiceUpgradeStrategy type for use with
+// RayServiceUpgradeStrategyApplyConfiguration constructs a declarative configuration of the RayServiceUpgradeStrategy type for use with
 // apply.
 func RayServiceUpgradeStrategy() *RayServiceUpgradeStrategyApplyConfiguration {
 	return &RayServiceUpgradeStrategyApplyConfiguration{}
@@ -21,7 +21,7 @@ func RayServiceUpgradeStrategy() *RayServiceUpgradeStrategyApplyConfiguration {
 // WithType sets the Type field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Type field is set to the value of the last call.
-func (b *RayServiceUpgradeStrategyApplyConfiguration) WithType(value v1.RayServiceUpgradeType) *RayServiceUpgradeStrategyApplyConfiguration {
+func (b *RayServiceUpgradeStrategyApplyConfiguration) WithType(value rayv1.RayServiceUpgradeType) *RayServiceUpgradeStrategyApplyConfiguration {
 	b.Type = &value
 	return b
 }

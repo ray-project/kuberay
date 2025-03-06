@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // RayJobLister helps list RayJobs.
@@ -14,7 +14,7 @@ import (
 type RayJobLister interface {
 	// List lists all RayJobs in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayJob, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayJob, err error)
 	// RayJobs returns an object that can list and get RayJobs.
 	RayJobs(namespace string) RayJobNamespaceLister
 	RayJobListerExpansion
@@ -22,25 +22,17 @@ type RayJobLister interface {
 
 // rayJobLister implements the RayJobLister interface.
 type rayJobLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*rayv1.RayJob]
 }
 
 // NewRayJobLister returns a new RayJobLister.
 func NewRayJobLister(indexer cache.Indexer) RayJobLister {
-	return &rayJobLister{indexer: indexer}
-}
-
-// List lists all RayJobs in the indexer.
-func (s *rayJobLister) List(selector labels.Selector) (ret []*v1.RayJob, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayJob))
-	})
-	return ret, err
+	return &rayJobLister{listers.New[*rayv1.RayJob](indexer, rayv1.Resource("rayjob"))}
 }
 
 // RayJobs returns an object that can list and get RayJobs.
 func (s *rayJobLister) RayJobs(namespace string) RayJobNamespaceLister {
-	return rayJobNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return rayJobNamespaceLister{listers.NewNamespaced[*rayv1.RayJob](s.ResourceIndexer, namespace)}
 }
 
 // RayJobNamespaceLister helps list and get RayJobs.
@@ -48,36 +40,15 @@ func (s *rayJobLister) RayJobs(namespace string) RayJobNamespaceLister {
 type RayJobNamespaceLister interface {
 	// List lists all RayJobs in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.RayJob, err error)
+	List(selector labels.Selector) (ret []*rayv1.RayJob, err error)
 	// Get retrieves the RayJob from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.RayJob, error)
+	Get(name string) (*rayv1.RayJob, error)
 	RayJobNamespaceListerExpansion
 }
 
 // rayJobNamespaceLister implements the RayJobNamespaceLister
 // interface.
 type rayJobNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all RayJobs in the indexer for a given namespace.
-func (s rayJobNamespaceLister) List(selector labels.Selector) (ret []*v1.RayJob, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.RayJob))
-	})
-	return ret, err
-}
-
-// Get retrieves the RayJob from the indexer for a given namespace and name.
-func (s rayJobNamespaceLister) Get(name string) (*v1.RayJob, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("rayjob"), name)
-	}
-	return obj.(*v1.RayJob), nil
+	listers.ResourceIndexer[*rayv1.RayJob]
 }
