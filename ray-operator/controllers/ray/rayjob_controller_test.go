@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -310,6 +311,43 @@ var _ = Context("RayJob with different submission modes", func() {
 				job := &batchv1.Job{}
 				Consistently(
 					getResourceFunc(ctx, namespacedName, job),
+					time.Second*3, time.Millisecond*500).Should(BeNil())
+			})
+		})
+
+		Describe("Successful RayJob in K8sJobMode with a maximum name", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate(strings.Repeat("j", utils.MaxRayJobNameLength), namespace)
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+				Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+				Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+				Expect(rayJob.Status.StartTime).NotTo(BeNil())
+			})
+
+			It("In Initializing state, the RayCluster should eventually be created.", func() {
+				var svc corev1.Service
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+				// Also check its service name.
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName + "-head-svc", Namespace: namespace}, &svc),
 					time.Second*3, time.Millisecond*500).Should(BeNil())
 			})
 		})

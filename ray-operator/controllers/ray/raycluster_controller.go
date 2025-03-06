@@ -220,7 +220,14 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
-	if err := utils.ValidateRayClusterSpec(instance.Name, &instance.Spec, instance.Annotations); err != nil {
+	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
+		logger.Error(err, fmt.Sprintf("The RayCluster metadata is invalid %s/%s", instance.Namespace, instance.Name))
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster metadata is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{}, nil
+	}
+
+	if err := utils.ValidateRayClusterSpec(&instance.Spec, instance.Annotations); err != nil {
 		logger.Error(err, fmt.Sprintf("The RayCluster spec is invalid %s/%s", instance.Namespace, instance.Name))
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)

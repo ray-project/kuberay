@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -19,12 +20,15 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 	return nil
 }
 
-// Validation for invalid Ray Cluster configurations.
-func ValidateRayClusterSpec(name string, spec *rayv1.RayClusterSpec, annotations map[string]string) error {
-	if len(name) > MaxRayClusterNameLength {
+func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayClusterNameLength {
 		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
 	}
+	return nil
+}
 
+// Validation for invalid Ray Cluster configurations.
+func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
 	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
@@ -122,7 +126,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
-		if err := ValidateRayClusterSpec("", rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
+		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err
 		}
 	}

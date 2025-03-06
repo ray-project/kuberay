@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1328,6 +1329,37 @@ var _ = Context("Inside the default namespace", func() {
 					return meta.IsStatusConditionPresentAndEqual(rayCluster.Status.Conditions, string(rayv1.RayClusterReplicaFailure), metav1.ConditionTrue)
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())
+		})
+	})
+
+	Describe("RayCluster with a maximum name", func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate(strings.Repeat("r", utils.MaxRayClusterNameLength), namespace)
+		numOfHosts := int32(4)
+		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
+		rayCluster.Annotations = make(map[string]string)
+		rayCluster.Annotations[utils.EnableServeServiceKey] = "true"
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check RayCluster service names", func() {
+			var svc corev1.Service
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-head-svc", Namespace: namespace}, &svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-serve-svc", Namespace: namespace}, &svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-headless", Namespace: namespace}, &svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
 		})
 	})
 })
