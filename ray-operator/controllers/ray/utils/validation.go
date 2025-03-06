@@ -181,7 +181,7 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
-	if !reflect.DeepEqual(rayService.Spec.RayClusterSpec, rayv1.RayClusterSpec{}) {
+	if !reflect.ValueOf(rayService.Spec.RayClusterSpec).IsZero() {
 		if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
 			return err
 		}
