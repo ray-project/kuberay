@@ -91,6 +91,8 @@ type RayServiceSpec struct {
 	ServeService *corev1.Service `json:"serveService,omitempty"`
 	// Gateway is the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.
 	Gateway *gwv1.Gateway `json:"gateway,omitempty"`
+	// HTTPRoute is the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.
+	HTTPRoute *gwv1.HTTPRoute `json:"httpRoute,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
@@ -132,6 +134,12 @@ type RayServiceStatus struct {
 	Applications     map[string]AppStatus `json:"applicationStatuses,omitempty"`
 	RayClusterName   string               `json:"rayClusterName,omitempty"`
 	RayClusterStatus RayClusterStatus     `json:"rayClusterStatus,omitempty"`
+	// Defaults to 100%.
+	// +kubebuilder:default:=100
+	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
+	// Defaults to 100%.
+	// +kubebuilder:default:=100
+	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
 }
 
 type AppStatus struct {
