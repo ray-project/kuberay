@@ -28,10 +28,10 @@ spec:
               image: rayproject/ray:2.41.0
               resources:
                 limits:
-                  cpu: 0
+                  cpu: 1
                   memory: 2Gi
                 requests:
-                  cpu: 0
+                  cpu: 1
                   memory: 2Gi
               ports:
                 - containerPort: 6379
