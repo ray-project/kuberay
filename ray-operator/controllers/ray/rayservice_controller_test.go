@@ -147,7 +147,6 @@ func appendNewWorkerGroup(workerGroupSpecs []rayv1.WorkerGroupSpec, newGroupName
 
 var _ = Context("RayService env tests", func() {
 	Describe("RayService with a maximum name", Ordered, func() {
-		// If Autoscaler scales up the pending or active RayCluster, zero downtime upgrade should not be triggered.
 		ctx := context.Background()
 		namespace := "default"
 		serveAppName := "app1"
@@ -165,7 +164,7 @@ var _ = Context("RayService env tests", func() {
 		It("Should create a pending RayCluster", func() {
 			Eventually(
 				getPreparingRayClusterNameFunc(ctx, rayService),
-				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name: %v", rayService.Status.PendingServiceStatus.RayClusterName)
+				time.Second*3, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name: %v", rayService.Status.PendingServiceStatus.RayClusterName)
 		})
 
 		It("Promote the pending RayCluster to the active RayCluster", func() {
@@ -177,7 +176,7 @@ var _ = Context("RayService env tests", func() {
 			// Make sure the pending RayCluster becomes the active RayCluster.
 			Eventually(
 				getRayClusterNameFunc(ctx, rayService),
-				time.Second*15, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
+				time.Second*3, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
 
 			// Initialize RayCluster for the following tests.
 			Eventually(

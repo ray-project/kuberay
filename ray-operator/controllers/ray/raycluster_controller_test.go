@@ -1337,9 +1337,11 @@ var _ = Context("Inside the default namespace", func() {
 		namespace := "default"
 		rayCluster := rayClusterTemplate(strings.Repeat("r", utils.MaxRayClusterNameLength), namespace)
 		numOfHosts := int32(4)
-		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
+		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts // This creates the -headless service.
 		rayCluster.Annotations = make(map[string]string)
-		rayCluster.Annotations[utils.EnableServeServiceKey] = "true"
+		rayCluster.Annotations[utils.EnableServeServiceKey] = "true" // This creates the -serve-svc service, which is the longest svc suffix.
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
 		It("Create a RayCluster custom resource", func() {
 			err := k8sClient.Create(ctx, rayCluster)
@@ -1347,6 +1349,13 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3 * int(numOfHosts)
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
 		It("Check RayCluster service names", func() {
