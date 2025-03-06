@@ -2,7 +2,7 @@
 
 package v1
 
-// IncrementalUpgradeOptionsApplyConfiguration represents an declarative configuration of the IncrementalUpgradeOptions type for use
+// IncrementalUpgradeOptionsApplyConfiguration represents a declarative configuration of the IncrementalUpgradeOptions type for use
 // with apply.
 type IncrementalUpgradeOptionsApplyConfiguration struct {
 	MaxSurgePercent  *int32  `json:"maxSurgePercent,omitempty"`
@@ -11,7 +11,7 @@ type IncrementalUpgradeOptionsApplyConfiguration struct {
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
 }
 
-// IncrementalUpgradeOptionsApplyConfiguration constructs an declarative configuration of the IncrementalUpgradeOptions type for use with
+// IncrementalUpgradeOptionsApplyConfiguration constructs a declarative configuration of the IncrementalUpgradeOptions type for use with
 // apply.
 func IncrementalUpgradeOptions() *IncrementalUpgradeOptionsApplyConfiguration {
 	return &IncrementalUpgradeOptionsApplyConfiguration{}
