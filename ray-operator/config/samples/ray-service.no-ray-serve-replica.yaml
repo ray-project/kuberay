@@ -68,7 +68,7 @@ spec:
         template:
           spec:
             containers:
-              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+              - name: ray-worker
                 image: rayproject/ray:2.41.0
                 resources:
                   limits:
