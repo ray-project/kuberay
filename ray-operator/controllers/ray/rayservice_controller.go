@@ -820,17 +820,21 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 			return true
 		}
 	} else {
-		// Check whether the Pending Cluster should be updated.
-		pendingTargetCapacity := rayServiceInstance.Status.PendingServiceStatus.TargetCapacity
-		pendingTrafficRoutedPercent := rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent
+		if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+			if *rayServiceInstance.Spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade {
+				// Check whether the Pending Cluster should be updated.
+				pendingTargetCapacity := rayServiceInstance.Status.PendingServiceStatus.TargetCapacity
+				pendingTrafficRoutedPercent := rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent
 
-		// Check whether the reconciler is incrementally increasing traffic to the pending cluster with
-		// the HTTPRoute. Only the HTTPRoute is currently being updated, not the pending cluster.
-		if int(*pendingTrafficRoutedPercent) < int(*pendingTargetCapacity) {
-			return false
+				// Check whether the reconciler is incrementally increasing traffic to the pending cluster with
+				// the HTTPRoute. Only the HTTPRoute is currently being updated, not the pending cluster.
+				if int(*pendingTrafficRoutedPercent) < int(*pendingTargetCapacity) {
+					return false
+				}
+
+				return true
+			}
 		}
-
-		return true
 	}
 
 	if isClusterSpecHashEqual(rayServiceInstance, cluster, false) {
