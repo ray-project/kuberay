@@ -274,8 +274,10 @@ const (
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	UpdatedServeTargetCapacity      K8sEventType = "UpdatedServeTargetCapacity"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
 	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
+	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
