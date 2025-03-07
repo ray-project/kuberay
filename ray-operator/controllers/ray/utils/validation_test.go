@@ -372,43 +372,30 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 
 func TestValidateRayClusterSpecNames(t *testing.T) {
 	tests := []struct {
-		rayCluster   *rayv1.RayCluster
 		name         string
 		errorMessage string
+		metadata     metav1.ObjectMeta
 		expectError  bool
 	}{
 		{
 			name: "RayCluster name is too long (> MaxRayClusterNameLength characters)",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strings.Repeat("A", MaxRayClusterNameLength+1),
-				},
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("A", MaxRayClusterNameLength+1),
 			},
 			expectError:  true,
 			errorMessage: fmt.Sprintf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength),
 		},
 		{
-			name: "Both RayCluster name is ok (== MaxRayClusterNameLength)",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: strings.Repeat("A", MaxRayClusterNameLength),
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{{Name: "ray-head"}},
-							},
-						},
-					},
-				},
+			name: "RayCluster name is ok (== MaxRayClusterNameLength)",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("A", MaxRayClusterNameLength),
 			},
 			expectError: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterMetadata(tt.rayCluster.ObjectMeta)
+			err := ValidateRayClusterMetadata(tt.metadata)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
