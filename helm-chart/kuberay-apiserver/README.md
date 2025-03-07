@@ -4,7 +4,8 @@ This document provides instructions to install the KubeRay API Server with a Hel
 
 ## Helm
 
-Make sure the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+Make sure the version of Helm is v3+. Currently, [existing CI tests] are based on Helm v3.4.1 and
+v3.9.4.
 
 ```sh
 helm version
@@ -57,3 +58,5 @@ helm uninstall kuberay-apiserver
 kubectl get pods
 # No resources found in default namespace.
 ```
+
+[existing CI tests]: https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml

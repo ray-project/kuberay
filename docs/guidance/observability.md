@@ -30,7 +30,8 @@ curl --request GET '<baseUrl>/apis/v1alpha2/namespaces/<namespace>/clusters/<ray
 
 ### Endpoint
 
-If you use the nodeport as service to expose the raycluster endpoint, like dashboard or redis, there are `endpoints` field in the status to record the service endpoints.
+If you use the nodeport as service to expose the raycluster endpoint, like dashboard or redis, there
+are `endpoints` field in the status to record the service endpoints.
 
 you can directly use the ports in the `endpoints` to connect to the related service.
 

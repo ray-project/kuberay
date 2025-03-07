@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Default Ray Start Parameters for KubeRay
 
 This document outlines the default settings for `rayStartParams` in KubeRay.

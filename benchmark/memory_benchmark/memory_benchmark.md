@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # KubeRay memory benchmark
 
 ## Running benchmark experiments on a Google GKE Cluster
@@ -13,7 +14,8 @@ This architecture is not a good practice, but it can fulfill the current require
 We will create a GKE cluster with autoscaling enabled.
 The following command creates a Kubernetes cluster named `kuberay-benchmark-cluster` on Google GKE.
 The cluster can scale up to 16 nodes, and each node of type `e2-highcpu-16` has 16 CPUs and 16 GB of memory.
-The following experiments may create up to ~150 Pods in the Kubernetes cluster, and each Ray Pod requires 1 CPU and 1 GB of memory.
+The following experiments may create up to ~150 Pods in the Kubernetes cluster, and each Ray Pod
+requires 1 CPU and 1 GB of memory.
 
 ```sh
 gcloud container clusters create kuberay-benchmark-cluster \

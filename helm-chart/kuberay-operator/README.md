@@ -1,10 +1,11 @@
 # KubeRay Operator
 
-This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and KubeRay operator with a Helm chart.
+This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and
+KubeRay operator with a Helm chart.
 
 ## Helm
 
-Make sure the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+Make sure the version of Helm is v3+. Currently, [existing CI tests] are based on Helm v3.4.1 and v3.9.4.
 
 ```sh
 helm version
@@ -38,8 +39,11 @@ helm version
   ```
 
 * Install KubeRay operator without installing CRDs
-  * In some cases, the installation of the CRDs and the installation of the operator may require different levels of admin permissions, so these two installations could be handled as different steps by different roles.
-  * Use Helm's built-in `--skip-crds` flag to install the operator only. See [this document](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) for more details.
+  * In some cases, the installation of the CRDs and the installation of the operator may require
+    different levels of admin permissions, so these two installations could be handled as different
+    steps by different roles.
+  * Use Helm's built-in `--skip-crds` flag to install the operator only.
+    See [this document] for more details.
 
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
@@ -72,8 +76,9 @@ kubectl get pods
 
 ## Working with Argo CD
 
-If you are using [Argo CD](https://argoproj.github.io) to manage the operator, you will encounter the issue which complains the CRDs too long. Same with [this issue](https://github.com/prometheus-operator/prometheus-operator/issues/4439).
-The recommended solution is to split the operator into two Argo apps, such as:
+If you are using [Argo CD] to manage the operator, you will encounter the issue which complains the
+CRDs too long. Same with [this issue]. The recommended solution is to split the operator into two
+Argo apps, such as:
 
 * The first app just for installing the CRDs with `Replace=true` directly, snippet:
 
@@ -118,3 +123,8 @@ spec:
     - CreateNamespace=true
 ...
 ```
+
+[existing CI tests]: https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml
+[Argo CD]: https://argoproj.github.io
+[this issue]: https://github.com/prometheus-operator/prometheus-operator/issues/4439
+[this document]: https://helm.sh/docs/chart_best_practices/custom_resource_definitions/

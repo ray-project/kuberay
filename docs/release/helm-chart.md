@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Helm charts release
 
 We host all Helm charts on [kuberay-helm](https://github.com/ray-project/kuberay-helm).

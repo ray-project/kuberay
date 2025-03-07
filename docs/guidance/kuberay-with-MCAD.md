@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # KubeRay integration with MCAD (Multi-Cluster-App-Dispatcher)
 
 The multi-cluster-app-dispatcher is a Kubernetes controller providing mechanisms for applications to manage batch jobs in a single or multi-cluster environment. For more details please refer [here](https://github.com/project-codeflare/multi-cluster-app-dispatcher).

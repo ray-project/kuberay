@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Generate the changelog for a release
 
 ## Prerequisite

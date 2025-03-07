@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # RayService high availability
 
 RayService provides high availability (HA) to ensure services continue serving requests without failure during scaling up, scaling down, and upgrading the RayService configuration (zero-downtime upgrade).

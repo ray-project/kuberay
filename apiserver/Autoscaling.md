@@ -1,6 +1,7 @@
 # Creating Autoscaling clusters using API server
 
-One of the fundamental features of Ray is autoscaling. This [document](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html) describes how to set up autoscaling using Ray operator. Here we will describe how to set it up using API server.
+One of the fundamental features of Ray is autoscaling. This [document] describes how to set up
+autoscaling using Ray operator. Here we will describe how to set it up using API server.
 
 ## Deploy KubeRay operator and API server
 
@@ -10,13 +11,14 @@ Refer to [readme](README.md) for setting up KubRay operator and API server.
 make operator-image cluster load-operator-image deploy-operator
 ```
 
-Alternatively, you could build and deploy the Operator and API server from local repo for development purpose.
+Alternatively, you could build and deploy the Operator and API server from local repo for
+development purpose.
 
 ```shell
 make operator-image cluster load-operator-image deploy-operator docker-image load-image deploy
 ```
 
-Additionally install this [configmap](test/cluster/cluster/detachedactor.yaml) containing code that we will use for testing.
+Additionally install this [ConfigMap] containing code that we will use for testing.
 
 ## Deploy Ray cluster
 
@@ -174,3 +176,6 @@ And you should see only head node (worker node is deleted)
 ```shell
 test-cluster-head-pr25j             2/2     Running   0          27m
 ```
+
+[document]: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html
+[ConfigMap]: test/cluster/cluster/detachedactor.yaml

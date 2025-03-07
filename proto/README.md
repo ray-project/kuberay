@@ -31,11 +31,13 @@ We postpone the client generation until there is a need for external service com
 
 ### API Reference Documentation
 
-Use the tools [bootprint-openapi](https://github.com/bootprint/bootprint-monorepo/tree/master/packages/bootprint-openapi) and [html-inline](https://github.com/substack/html-inline) to generate API reference documentation from the Swagger files. For more information on the API and architecture, refer to the [design document](../docs/design/protobuf-grpc-service.md).
+Use the tools [bootprint-openapi] and [html-inline] to generate API reference documentation from the
+Swagger files. For more information on the API and architecture, refer to the [design document].
 
 ### Third-Party Protos
 
-Third-party proto dependencies are synchronized back to `proto/third_party` for easier development (IDE friendly). Ideally, the directory for searching imports should be specified instead.
+Third-party proto dependencies are synchronized back to `proto/third_party` for easier development
+(IDE friendly). Ideally, the directory for searching imports should be specified instead.
 
 ```bash
 protoc -I.
@@ -48,3 +50,7 @@ Sources:
 
 - [googleapis](https://github.com/googleapis/googleapis/tree/master/google/api)
 - [protoc-gen-openapiv2](https://github.com/grpc-ecosystem/grpc-gateway/tree/master/protoc-gen-openapiv2/options)
+
+[bootprint-openapi]: https://github.com/bootprint/bootprint-monorepo/tree/master/packages/bootprint-openapi
+[html-inline]: https://github.com/substack/html-inline
+[design document]: ../docs/design/protobuf-grpc-service.md
