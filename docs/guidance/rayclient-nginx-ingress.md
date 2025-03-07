@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Connect to Ray client with NGINX Ingress
 >
 > Warning: Ray client has some known [limitations](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/ray-client.html#things-to-know) and is not actively maintained.

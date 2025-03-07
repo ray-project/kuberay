@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Securing API server
 
 Currently the KubeRay API server deployed on a publicly accessible cluster is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.

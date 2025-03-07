@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Development
 
 This section walks through how to build and test the operator in a running Kubernetes cluster.

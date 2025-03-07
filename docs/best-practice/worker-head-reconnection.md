@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Explanation and Best Practice for workers-head Reconnection
 
 ## Problem

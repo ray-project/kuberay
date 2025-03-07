@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # KubeRay APIServer
 
 The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.

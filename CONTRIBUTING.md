@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Contributing
 
 Thank you for investing your time in contributing to KubeRay project!

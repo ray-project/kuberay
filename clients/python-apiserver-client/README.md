@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Python client for KubeRay API server
 
 This Python client is currently only supporting Ray cluster management through usage of the `API server` Ray API. It implements all of the current functionality of the API server (and the operator) and provide pythonic APIs to the capabilities.

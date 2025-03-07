@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Support proto Core API and RESTful backend services
 
 ## Motivation

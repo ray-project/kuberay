@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Kuberay API Server User Guide
 
 This guide covers the purpose, requirements, and deployment of the Kuberay API Server.
