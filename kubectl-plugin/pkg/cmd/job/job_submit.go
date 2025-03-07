@@ -3,7 +3,6 @@ package job
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/kubectl/pkg/cmd/portforward"
@@ -29,7 +27,6 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
-	"gomodules.xyz/jsonpatch/v2"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
@@ -285,10 +282,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			RayJobName:     options.rayjobName,
 			Namespace:      *options.configFlags.Namespace,
 			SubmissionMode: "InteractiveMode",
-			// The entry point is required, despite the RayJob being interactive
-			// mode (meaning we will submit a ray job with a real entry point
-			// later). See https://github.com/ray-project/kuberay/issues/3126.
-			Entrypoint: "",
 			RayClusterSpecObject: generation.RayClusterSpecObject{
 				RayVersion:     options.rayVersion,
 				Image:          options.image,
@@ -496,14 +489,15 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if rayJobID == "" {
 		rayJobID = <-rayJobIDChan
 	}
-
-	// Patch the ray job with the correct Ray job ID.
-	patch := []jsonpatch.Operation{jsonpatch.NewOperation("add", "/spec/jobId", rayJobID)}
-	raw, err := json.Marshal(patch)
+	// Add annotation to RayJob with the correct Ray job ID and update the CR
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Generate Ray Job ID patch: %w", err)
+		return fmt.Errorf("Failed to get latest version of Ray job")
 	}
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Patch(ctx, options.RayJob.Name, types.JSONPatchType, raw, v1.PatchOptions{})
+
+	options.RayJob.Spec.JobId = rayJobID
+
+	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
