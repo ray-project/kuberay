@@ -8209,6 +8209,8 @@ spec:
                   type:
                     type: string
                 type: object
+            required:
+            - rayClusterConfig
             type: object
           status:
             properties:
@@ -16571,6 +16573,8 @@ spec:
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
+            required:
+            - rayClusterConfig
             type: object
           status:
             properties:

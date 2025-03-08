@@ -782,7 +782,19 @@ func TestValidateRayServiceSpec(t *testing.T) {
 	require.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 
 	err = ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-head"},
+							},
+						},
+					},
+				},
+			},
+		},
 	})
 	require.NoError(t, err, "The RayService spec is valid.")
 
@@ -791,6 +803,17 @@ func TestValidateRayServiceSpec(t *testing.T) {
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 				Type: &upgradeStrat,
+			},
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-head"},
+							},
+						},
+					},
+				},
 			},
 		},
 	})

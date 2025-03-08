@@ -75,7 +75,7 @@ type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
-	RayClusterSpec RayClusterSpec `json:"rayClusterConfig,omitempty"`
+	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
 	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
 	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
