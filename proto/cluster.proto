@@ -286,6 +286,10 @@ message SecurityContext {
   Capabilities capabilities = 1;
   // Optional. Run container in privileged mode - essentially equivalent to root on the host. Default is false.
   optional bool privileged = 2;
+  // Optional. The UID to run the entrypoint of the container process.
+  int64 runAsUser = 3;
+  // Optional. The GID to run the entrypoint of the container process.
+  int64 runAsGroup = 4;
 }
 
 // Cluster HeadGroup specification
