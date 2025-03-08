@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -369,6 +370,42 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecNames(t *testing.T) {
+	tests := []struct {
+		name         string
+		errorMessage string
+		metadata     metav1.ObjectMeta
+		expectError  bool
+	}{
+		{
+			name: "RayCluster name is too long (> MaxRayClusterNameLength characters)",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("A", MaxRayClusterNameLength+1),
+			},
+			expectError:  true,
+			errorMessage: fmt.Sprintf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength),
+		},
+		{
+			name: "RayCluster name is ok (== MaxRayClusterNameLength)",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("A", MaxRayClusterNameLength),
+			},
+			expectError: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterMetadata(tt.metadata)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
 		Template: corev1.PodTemplateSpec{
@@ -716,6 +753,18 @@ func TestValidateRayJobSpec(t *testing.T) {
 	require.ErrorContains(t, err, "headGroupSpec should have at least one container")
 }
 
+func TestValidateRayJobMetadata(t *testing.T) {
+	err := ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength+1),
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayJob name should be no more than %d characters", MaxRayJobNameLength))
+
+	err = ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength),
+	})
+	require.NoError(t, err)
+}
+
 func TestValidateRayServiceSpec(t *testing.T) {
 	err := ValidateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
@@ -746,4 +795,16 @@ func TestValidateRayServiceSpec(t *testing.T) {
 		},
 	})
 	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+}
+
+func TestValidateRayServiceMetadata(t *testing.T) {
+	err := ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength+1),
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength),
+	})
+	require.NoError(t, err)
 }

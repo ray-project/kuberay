@@ -115,6 +115,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 
+	if err := utils.ValidateRayServiceMetadata(rayServiceInstance.ObjectMeta); err != nil {
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceMetadata),
+			"The RayService metadata is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
 	if err := utils.ValidateRayServiceSpec(rayServiceInstance); err != nil {
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceSpec),
 			"The RayService spec is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)

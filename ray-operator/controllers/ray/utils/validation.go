@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -15,6 +16,13 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 	suspended := meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterSuspended))
 	if suspending && suspended {
 		return errstd.New("invalid RayCluster State: rayv1.RayClusterSuspending and rayv1.RayClusterSuspended conditions should not be both true")
+	}
+	return nil
+}
+
+func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayClusterNameLength {
+		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
 	}
 	return nil
 }
@@ -97,6 +105,13 @@ func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
 	return nil
 }
 
+func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayJobNameLength {
+		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
+	}
+	return nil
+}
+
 func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
 	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
@@ -153,6 +168,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if rayJob.Spec.ShutdownAfterJobFinishes && policy == rayv1.DeleteNoneDeletionPolicy {
 			return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 		}
+	}
+	return nil
+}
+
+func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayServiceNameLength {
+		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
 	}
 	return nil
 }

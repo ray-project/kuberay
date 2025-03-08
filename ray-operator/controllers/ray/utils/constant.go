@@ -192,6 +192,17 @@ const (
 	KubeRayController = "ray.io/kuberay-operator"
 
 	ServeConfigLRUSize = 1000
+
+	// MaxRayClusterNameLength is the maximum RayCluster name to make sure we don't truncate
+	// their k8s service names. Currently, "-serve-svc" is the longest service suffix:
+	// 63 - len("-serve-svc") == 53, so the name should not be longer than 53 characters.
+	MaxRayClusterNameLength = 53
+	// MaxRayServiceNameLength is the maximum RayService name to make sure it pass the RayCluster validation.
+	// Minus 6 since we append 6 characters to the RayService name to create the cluster (GenerateRayClusterName).
+	MaxRayServiceNameLength = MaxRayClusterNameLength - 6
+	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
+	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
+	MaxRayJobNameLength = MaxRayClusterNameLength - 6
 )
 
 type ServiceType string
@@ -237,8 +248,9 @@ type K8sEventType string
 
 const (
 	// RayCluster event list
-	InvalidRayClusterStatus K8sEventType = "InvalidRayClusterStatus"
-	InvalidRayClusterSpec   K8sEventType = "InvalidRayClusterSpec"
+	InvalidRayClusterStatus   K8sEventType = "InvalidRayClusterStatus"
+	InvalidRayClusterSpec     K8sEventType = "InvalidRayClusterSpec"
+	InvalidRayClusterMetadata K8sEventType = "InvalidRayClusterMetadata"
 	// Head Pod event list
 	CreatedHeadPod        K8sEventType = "CreatedHeadPod"
 	FailedToCreateHeadPod K8sEventType = "FailedToCreateHeadPod"
@@ -258,6 +270,7 @@ const (
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
+	InvalidRayJobMetadata         K8sEventType = "InvalidRayJobMetadata"
 	InvalidRayJobStatus           K8sEventType = "InvalidRayJobStatus"
 	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
 	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
@@ -272,6 +285,7 @@ const (
 
 	// RayService event list
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"

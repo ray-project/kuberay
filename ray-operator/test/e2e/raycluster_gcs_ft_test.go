@@ -21,7 +21,7 @@ const (
 	redisAddress  = "redis:6379"
 )
 
-func TestRayClusterGCSFaultTolerence(t *testing.T) {
+func TestRayClusterGCSFaultTolerance(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 

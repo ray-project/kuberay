@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -145,6 +146,55 @@ func appendNewWorkerGroup(workerGroupSpecs []rayv1.WorkerGroupSpec, newGroupName
 }
 
 var _ = Context("RayService env tests", func() {
+	Describe("RayService with a maximum name", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		serveAppName := "app1"
+		rayService := rayServiceTemplate(strings.Repeat("s", utils.MaxRayServiceNameLength), namespace, serveAppName)
+		rayCluster := &rayv1.RayCluster{}
+
+		It("Create a RayService custom resource", func() {
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+		})
+
+		It("Should create a pending RayCluster", func() {
+			Eventually(
+				getPreparingRayClusterNameFunc(ctx, rayService),
+				time.Second*3, time.Millisecond*500).Should(Not(BeEmpty()), "Pending RayCluster name: %v", rayService.Status.PendingServiceStatus.RayClusterName)
+		})
+
+		It("Promote the pending RayCluster to the active RayCluster", func() {
+			// Update the status of the head Pod to Running. Note that the default fake dashboard client
+			// will return a healthy serve application status.
+			pendingRayClusterName := rayService.Status.PendingServiceStatus.RayClusterName
+			updateHeadPodToRunningAndReady(ctx, pendingRayClusterName, namespace)
+
+			// Make sure the pending RayCluster becomes the active RayCluster.
+			Eventually(
+				getRayClusterNameFunc(ctx, rayService),
+				time.Second*3, time.Millisecond*500).Should(Equal(pendingRayClusterName), "Active RayCluster name: %v", rayService.Status.ActiveServiceStatus.RayClusterName)
+
+			// Initialize RayCluster for the following tests.
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check RayService service names", func() {
+			var svc corev1.Service
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name + "-head-svc", Namespace: namespace}, &svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name + "-serve-svc", Namespace: namespace}, &svc),
+				time.Second*3, time.Millisecond*500).Should(BeNil())
+		})
+	})
+
 	Describe("Autoscaler updates RayCluster should not trigger zero downtime upgrade", Ordered, func() {
 		// If Autoscaler scales up the pending or active RayCluster, zero downtime upgrade should not be triggered.
 		ctx := context.Background()

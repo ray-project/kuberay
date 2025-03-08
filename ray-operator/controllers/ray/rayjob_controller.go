@@ -127,6 +127,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
+	if err := utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta); err != nil {
+		logger.Error(err, "The RayJob metadata is invalid")
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
+			"The RayJob metadata is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
 	if err := utils.ValidateRayJobSpec(rayJobInstance); err != nil {
 		logger.Error(err, "The RayJob spec is invalid")
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
