@@ -16573,8 +16573,6 @@ spec:
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
-            required:
-            - rayClusterConfig
             type: object
           status:
             properties:

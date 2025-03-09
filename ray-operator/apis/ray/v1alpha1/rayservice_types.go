@@ -54,7 +54,7 @@ type RayServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
-	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
+	RayClusterSpec RayClusterSpec `json:"rayClusterConfig,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
