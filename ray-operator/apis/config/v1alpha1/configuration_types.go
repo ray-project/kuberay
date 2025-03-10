@@ -70,6 +70,10 @@ type Configuration struct {
 
 	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
 	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
+
+	// DrainOnPreStop indicates that Ray nodes should be drained gracefully when the Kubernetes Pod
+	// PreStop hook is called.
+	DrainOnPreStop bool `json:"drainOnPreStop,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {

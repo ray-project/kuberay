@@ -126,6 +126,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		headSidecarContainers:      options.HeadSidecarContainers,
 		workerSidecarContainers:    options.WorkerSidecarContainers,
+		DrainOnPreStop:             options.DrainOnPreStop,
 	}
 }
 
@@ -139,6 +140,7 @@ type RayClusterReconciler struct {
 
 	headSidecarContainers   []corev1.Container
 	workerSidecarContainers []corev1.Container
+	DrainOnPreStop          bool
 
 	IsOpenShift bool
 }
@@ -146,6 +148,7 @@ type RayClusterReconciler struct {
 type RayClusterReconcilerOptions struct {
 	HeadSidecarContainers   []corev1.Container
 	WorkerSidecarContainers []corev1.Container
+	DrainOnPreStop          bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -1100,6 +1103,9 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	if len(r.headSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
 	}
+	if r.DrainOnPreStop {
+		podConf.Spec.Containers[utils.RayContainerIndex].Lifecycle = createDrainNodePreStopLifecycle()
+	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
@@ -1128,6 +1134,9 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
+	if r.DrainOnPreStop {
+		podTemplateSpec.Spec.Containers[utils.RayContainerIndex].Lifecycle = createDrainNodePreStopLifecycle()
+	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
@@ -1136,6 +1145,16 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	}
 
 	return pod
+}
+
+func createDrainNodePreStopLifecycle() *corev1.Lifecycle {
+	return &corev1.Lifecycle{
+		PreStop: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "ray drain-node --reason DRAIN_NODE_REASON_PREEMPTION --reason-message 'PreStop Hook Triggered'"},
+			},
+		},
+	}
 }
 
 func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instance rayv1.RayCluster) batchv1.Job {
