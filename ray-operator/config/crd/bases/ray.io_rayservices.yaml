@@ -8209,6 +8209,8 @@ spec:
                   type:
                     type: string
                 type: object
+            required:
+            - rayClusterConfig
             type: object
           status:
             properties:
