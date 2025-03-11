@@ -632,9 +632,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			Suspend:                  true,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec:           createBasicRayClusterSpec(),
 		},
 	})
 	require.NoError(t, err)
@@ -653,19 +651,15 @@ func TestValidateRayJobSpec(t *testing.T) {
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: "invalid_yaml_str",
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec: createBasicRayClusterSpec(),
 		},
 	})
 	require.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
 
 	err = ValidateRayJobSpec(&rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
-			BackoffLimit: ptr.To[int32](-1),
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			BackoffLimit:   ptr.To[int32](-1),
+			RayClusterSpec: createBasicRayClusterSpec(),
 		},
 	})
 	require.ErrorContains(t, err, "backoffLimit must be a positive integer")
@@ -674,9 +668,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec:           createBasicRayClusterSpec(),
 		},
 	})
 	require.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
@@ -714,9 +706,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec:           createBasicRayClusterSpec(),
 		},
 	})
 	require.NoError(t, err)
@@ -725,9 +715,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           nil,
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec:           createBasicRayClusterSpec(),
 		},
 	})
 	require.NoError(t, err)
@@ -736,9 +724,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 		Spec: rayv1.RayJobSpec{
 			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
 			ShutdownAfterJobFinishes: true,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: headGroupSpecWithOneContainer,
-			},
+			RayClusterSpec:           createBasicRayClusterSpec(),
 		},
 	})
 	require.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
@@ -783,17 +769,7 @@ func TestValidateRayServiceSpec(t *testing.T) {
 
 	err = ValidateRayServiceSpec(&rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
-			RayClusterSpec: rayv1.RayClusterSpec{
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "ray-head"},
-							},
-						},
-					},
-				},
-			},
+			RayClusterSpec: *createBasicRayClusterSpec(),
 		},
 	})
 	require.NoError(t, err, "The RayService spec is valid.")
@@ -804,17 +780,7 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 				Type: &upgradeStrat,
 			},
-			RayClusterSpec: rayv1.RayClusterSpec{
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{Name: "ray-head"},
-							},
-						},
-					},
-				},
-			},
+			RayClusterSpec: *createBasicRayClusterSpec(),
 		},
 	})
 	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
@@ -830,4 +796,18 @@ func TestValidateRayServiceMetadata(t *testing.T) {
 		Name: strings.Repeat("j", MaxRayServiceNameLength),
 	})
 	require.NoError(t, err)
+}
+
+func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
+	return &rayv1.RayClusterSpec{
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{Name: "ray-head"},
+					},
+				},
+			},
+		},
+	}
 }
