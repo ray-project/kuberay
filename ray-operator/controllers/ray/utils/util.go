@@ -663,6 +663,52 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 	return svc.Spec.Selector[RayClusterLabelKey]
 }
 
+func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
+	if gatewayInstance == nil {
+		return false
+	}
+	for _, condition := range gatewayInstance.Status.Conditions {
+		if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+
+	// If no accepted condition found then it is not ready yet
+	return false
+}
+
+// IsHTTPRouteReady returns whether the HTTPRoute associated with a given Gateway has a ready condition
+func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTTPRoute) bool {
+	if httpRouteInstance == nil {
+		return false
+	}
+	for _, parent := range httpRouteInstance.Status.RouteStatus.Parents {
+		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) || *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+			continue
+		}
+		for _, condition := range parent.Conditions {
+			if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
+				return true
+			}
+		}
+	}
+
+	// HTTPRoute should have at least one ready Parent ref
+	return false
+}
+
+func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
+	return spec != nil && spec.UpgradeStrategy != nil &&
+		*spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade
+}
+
+func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.IncrementalUpgradeOptions {
+	if spec != nil && spec.UpgradeStrategy != nil {
+		return spec.UpgradeStrategy.IncrementalUpgradeOptions
+	}
+	return nil
+}
+
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or Openshift
 func GetClusterType() bool {

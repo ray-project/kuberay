@@ -233,11 +233,17 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.IncrementalUpgrade {
 		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.IncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
+
+	// If type is IncrementalUpgrade, validate the IncrementalUpgradeOptions
+	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
+		return ValidateIncrementalUpgradeOptions(rayService)
+	}
+
 	return nil
 }
 
 func ValidateIncrementalUpgradeOptions(rayService *rayv1.RayService) error {
-	if IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
+	if !IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
 		return fmt.Errorf("Ray Autoscaler is required for IncrementalUpgrade")
 	}
 

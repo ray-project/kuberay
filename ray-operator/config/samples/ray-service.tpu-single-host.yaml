@@ -4,8 +4,9 @@ metadata:
   name: stable-diffusion-tpu
 spec:
   serveConfigV2: |
+    target_capacity: 0
     applications:
-      - name: stable_diffusion
+      - name: stable_diffusion_test
         import_path: stable_diffusion.stable_diffusion_tpu:deployment
         runtime_env:
           working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
@@ -20,8 +21,10 @@ spec:
             - jax[tpu]==0.4.11
             - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
             - fastapi
+            - torch
   rayClusterConfig:
     rayVersion: '2.41.0'
+    enableInTreeAutoscaling: True
     headGroupSpec:
       rayStartParams: {}
       template:
@@ -31,14 +34,14 @@ spec:
             image: rayproject/ray:2.41.0
             resources:
               limits:
-                cpu: "2"
+                cpu: "3"
                 memory: "8G"
               requests:
-                cpu: "2"
+                cpu: "3"
                 memory: "8G"
     workerGroupSpecs:
-    - replicas: 1
-      minReplicas: 1
+    - replicas: 0
+      minReplicas: 0
       maxReplicas: 10
       numOfHosts: 1
       groupName: tpu-group
