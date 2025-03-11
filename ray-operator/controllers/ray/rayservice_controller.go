@@ -517,23 +517,6 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 	return true
 }
 
-// addGatewayListenersForServeService is a helper function to returns Gateway Listeners for Serve ports
-func getGatewayListenersForServeService(serveService *corev1.Service) []gwv1.Listener {
-	servePorts := serveService.Spec.Ports
-	listeners := make([]gwv1.Listener, 0, 1)
-
-	// Add listener for Serve Ports
-	for _, servicePort := range servePorts {
-		listener := gwv1.Listener{
-			Name:     gwv1.SectionName(fmt.Sprintf("%s-%s", serveService.Name, "listener")),
-			Protocol: gwv1.HTTPProtocolType, // only support HTTP
-			Port:     gwv1.PortNumber(servicePort.Port),
-		}
-		listeners = append(listeners, listener)
-	}
-	return listeners
-}
-
 func (r *RayServiceReconciler) createGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
 	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 	if options == nil {
@@ -554,7 +537,7 @@ func (r *RayServiceReconciler) createGateway(ctx context.Context, rayServiceInst
 
 	// Add listeners for Serve service
 	serveService := rayServiceInstance.Spec.ServeService
-	rayServiceGateway.Spec.Listeners = getGatewayListenersForServeService(serveService)
+	rayServiceGateway.Spec.Listeners = utils.GetGatewayListenersForServeService(serveService)
 
 	return rayServiceGateway, nil
 }
