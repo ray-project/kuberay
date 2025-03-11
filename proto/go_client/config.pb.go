@@ -472,6 +472,7 @@ type ComputeTemplate struct {
 	Tolerations []*PodToleration `protobuf:"bytes,7,rep,name=tolerations,proto3" json:"tolerations,omitempty"`
 	// Optional. Name and number of the extended resources
 	ExtendedResources map[string]uint32 `protobuf:"bytes,8,rep,name=extended_resources,json=extendedResources,proto3" json:"extended_resources,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	NodeSelector      map[string]string `protobuf:"bytes,9,rep,name=node_selector,json=nodeSelector,proto3" json:"node_selector,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (x *ComputeTemplate) Reset() {
@@ -558,6 +559,13 @@ func (x *ComputeTemplate) GetTolerations() []*PodToleration {
 func (x *ComputeTemplate) GetExtendedResources() map[string]uint32 {
 	if x != nil {
 		return x.ExtendedResources
+	}
+	return nil
+}
+
+func (x *ComputeTemplate) GetNodeSelector() map[string]string {
+	if x != nil {
+		return x.NodeSelector
 	}
 	return nil
 }
@@ -1097,7 +1105,7 @@ var file_config_proto_rawDesc = []byte{
 	0x65, 0x72, 0x61, 0x74, 0x6f, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
 	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x1b, 0x0a, 0x06,
 	0x65, 0x66, 0x66, 0x65, 0x63, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x42, 0x03, 0xe0, 0x41,
-	0x02, 0x52, 0x06, 0x65, 0x66, 0x66, 0x65, 0x63, 0x74, 0x22, 0x98, 0x03, 0x0a, 0x0f, 0x43, 0x6f,
+	0x02, 0x52, 0x06, 0x65, 0x66, 0x66, 0x65, 0x63, 0x74, 0x22, 0xa8, 0x04, 0x0a, 0x0f, 0x43, 0x6f,
 	0x6d, 0x70, 0x75, 0x74, 0x65, 0x54, 0x65, 0x6d, 0x70, 0x6c, 0x61, 0x74, 0x65, 0x12, 0x17, 0x0a,
 	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x42, 0x03, 0xe0, 0x41, 0x02,
 	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x21, 0x0a, 0x09, 0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70,
@@ -1118,11 +1126,20 @@ var file_config_proto_rawDesc = []byte{
 	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x6f, 0x6d, 0x70, 0x75, 0x74, 0x65, 0x54, 0x65, 0x6d, 0x70,
 	0x6c, 0x61, 0x74, 0x65, 0x2e, 0x45, 0x78, 0x74, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x52, 0x65, 0x73,
 	0x6f, 0x75, 0x72, 0x63, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x11, 0x65, 0x78, 0x74,
-	0x65, 0x6e, 0x64, 0x65, 0x64, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73, 0x1a, 0x44,
-	0x0a, 0x16, 0x45, 0x78, 0x74, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72,
-	0x63, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18,
+	0x65, 0x6e, 0x64, 0x65, 0x64, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73, 0x12, 0x4d,
+	0x0a, 0x0d, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x6f, 0x72, 0x18,
+	0x09, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x28, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x43, 0x6f,
+	0x6d, 0x70, 0x75, 0x74, 0x65, 0x54, 0x65, 0x6d, 0x70, 0x6c, 0x61, 0x74, 0x65, 0x2e, 0x4e, 0x6f,
+	0x64, 0x65, 0x53, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x6f, 0x72, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52,
+	0x0c, 0x6e, 0x6f, 0x64, 0x65, 0x53, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x6f, 0x72, 0x1a, 0x44, 0x0a,
+	0x16, 0x45, 0x78, 0x74, 0x65, 0x6e, 0x64, 0x65, 0x64, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c,
+	0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
+	0x02, 0x38, 0x01, 0x1a, 0x3f, 0x0a, 0x11, 0x4e, 0x6f, 0x64, 0x65, 0x53, 0x65, 0x6c, 0x65, 0x63,
+	0x74, 0x6f, 0x72, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18,
 	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61,
-	0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
 	0x3a, 0x02, 0x38, 0x01, 0x22, 0x77, 0x0a, 0x1a, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x49, 0x6d,
 	0x61, 0x67, 0x65, 0x54, 0x65, 0x6d, 0x70, 0x6c, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x12, 0x3b, 0x0a, 0x0e, 0x69, 0x6d, 0x61, 0x67, 0x65, 0x5f, 0x74, 0x65, 0x6d, 0x70,
@@ -1293,7 +1310,7 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_config_proto_goTypes = []interface{}{
 	(*CreateComputeTemplateRequest)(nil),    // 0: proto.CreateComputeTemplateRequest
 	(*GetComputeTemplateRequest)(nil),       // 1: proto.GetComputeTemplateRequest
@@ -1313,8 +1330,9 @@ var file_config_proto_goTypes = []interface{}{
 	(*DeleteImageTemplateRequest)(nil),      // 15: proto.DeleteImageTemplateRequest
 	(*ImageTemplate)(nil),                   // 16: proto.ImageTemplate
 	nil,                                     // 17: proto.ComputeTemplate.ExtendedResourcesEntry
-	nil,                                     // 18: proto.ImageTemplate.EnvironmentVariablesEntry
-	(*emptypb.Empty)(nil),                   // 19: google.protobuf.Empty
+	nil,                                     // 18: proto.ComputeTemplate.NodeSelectorEntry
+	nil,                                     // 19: proto.ImageTemplate.EnvironmentVariablesEntry
+	(*emptypb.Empty)(nil),                   // 20: google.protobuf.Empty
 }
 var file_config_proto_depIdxs = []int32{
 	8,  // 0: proto.CreateComputeTemplateRequest.compute_template:type_name -> proto.ComputeTemplate
@@ -1322,33 +1340,34 @@ var file_config_proto_depIdxs = []int32{
 	8,  // 2: proto.ListAllComputeTemplatesResponse.compute_templates:type_name -> proto.ComputeTemplate
 	7,  // 3: proto.ComputeTemplate.tolerations:type_name -> proto.PodToleration
 	17, // 4: proto.ComputeTemplate.extended_resources:type_name -> proto.ComputeTemplate.ExtendedResourcesEntry
-	16, // 5: proto.CreateImageTemplateRequest.image_template:type_name -> proto.ImageTemplate
-	16, // 6: proto.ListImageTemplatesResponse.image_templates:type_name -> proto.ImageTemplate
-	16, // 7: proto.ListAllImageTemplatesResponse.image_templates:type_name -> proto.ImageTemplate
-	18, // 8: proto.ImageTemplate.environment_variables:type_name -> proto.ImageTemplate.EnvironmentVariablesEntry
-	0,  // 9: proto.ComputeTemplateService.CreateComputeTemplate:input_type -> proto.CreateComputeTemplateRequest
-	1,  // 10: proto.ComputeTemplateService.GetComputeTemplate:input_type -> proto.GetComputeTemplateRequest
-	2,  // 11: proto.ComputeTemplateService.ListComputeTemplates:input_type -> proto.ListComputeTemplatesRequest
-	4,  // 12: proto.ComputeTemplateService.ListAllComputeTemplates:input_type -> proto.ListAllComputeTemplatesRequest
-	6,  // 13: proto.ComputeTemplateService.DeleteComputeTemplate:input_type -> proto.DeleteComputeTemplateRequest
-	9,  // 14: proto.ImageTemplateService.CreateImageTemplate:input_type -> proto.CreateImageTemplateRequest
-	10, // 15: proto.ImageTemplateService.GetImageTemplate:input_type -> proto.GetImageTemplateRequest
-	11, // 16: proto.ImageTemplateService.ListImageTemplates:input_type -> proto.ListImageTemplatesRequest
-	15, // 17: proto.ImageTemplateService.DeleteImageTemplate:input_type -> proto.DeleteImageTemplateRequest
-	8,  // 18: proto.ComputeTemplateService.CreateComputeTemplate:output_type -> proto.ComputeTemplate
-	8,  // 19: proto.ComputeTemplateService.GetComputeTemplate:output_type -> proto.ComputeTemplate
-	3,  // 20: proto.ComputeTemplateService.ListComputeTemplates:output_type -> proto.ListComputeTemplatesResponse
-	5,  // 21: proto.ComputeTemplateService.ListAllComputeTemplates:output_type -> proto.ListAllComputeTemplatesResponse
-	19, // 22: proto.ComputeTemplateService.DeleteComputeTemplate:output_type -> google.protobuf.Empty
-	16, // 23: proto.ImageTemplateService.CreateImageTemplate:output_type -> proto.ImageTemplate
-	16, // 24: proto.ImageTemplateService.GetImageTemplate:output_type -> proto.ImageTemplate
-	12, // 25: proto.ImageTemplateService.ListImageTemplates:output_type -> proto.ListImageTemplatesResponse
-	19, // 26: proto.ImageTemplateService.DeleteImageTemplate:output_type -> google.protobuf.Empty
-	18, // [18:27] is the sub-list for method output_type
-	9,  // [9:18] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	18, // 5: proto.ComputeTemplate.node_selector:type_name -> proto.ComputeTemplate.NodeSelectorEntry
+	16, // 6: proto.CreateImageTemplateRequest.image_template:type_name -> proto.ImageTemplate
+	16, // 7: proto.ListImageTemplatesResponse.image_templates:type_name -> proto.ImageTemplate
+	16, // 8: proto.ListAllImageTemplatesResponse.image_templates:type_name -> proto.ImageTemplate
+	19, // 9: proto.ImageTemplate.environment_variables:type_name -> proto.ImageTemplate.EnvironmentVariablesEntry
+	0,  // 10: proto.ComputeTemplateService.CreateComputeTemplate:input_type -> proto.CreateComputeTemplateRequest
+	1,  // 11: proto.ComputeTemplateService.GetComputeTemplate:input_type -> proto.GetComputeTemplateRequest
+	2,  // 12: proto.ComputeTemplateService.ListComputeTemplates:input_type -> proto.ListComputeTemplatesRequest
+	4,  // 13: proto.ComputeTemplateService.ListAllComputeTemplates:input_type -> proto.ListAllComputeTemplatesRequest
+	6,  // 14: proto.ComputeTemplateService.DeleteComputeTemplate:input_type -> proto.DeleteComputeTemplateRequest
+	9,  // 15: proto.ImageTemplateService.CreateImageTemplate:input_type -> proto.CreateImageTemplateRequest
+	10, // 16: proto.ImageTemplateService.GetImageTemplate:input_type -> proto.GetImageTemplateRequest
+	11, // 17: proto.ImageTemplateService.ListImageTemplates:input_type -> proto.ListImageTemplatesRequest
+	15, // 18: proto.ImageTemplateService.DeleteImageTemplate:input_type -> proto.DeleteImageTemplateRequest
+	8,  // 19: proto.ComputeTemplateService.CreateComputeTemplate:output_type -> proto.ComputeTemplate
+	8,  // 20: proto.ComputeTemplateService.GetComputeTemplate:output_type -> proto.ComputeTemplate
+	3,  // 21: proto.ComputeTemplateService.ListComputeTemplates:output_type -> proto.ListComputeTemplatesResponse
+	5,  // 22: proto.ComputeTemplateService.ListAllComputeTemplates:output_type -> proto.ListAllComputeTemplatesResponse
+	20, // 23: proto.ComputeTemplateService.DeleteComputeTemplate:output_type -> google.protobuf.Empty
+	16, // 24: proto.ImageTemplateService.CreateImageTemplate:output_type -> proto.ImageTemplate
+	16, // 25: proto.ImageTemplateService.GetImageTemplate:output_type -> proto.ImageTemplate
+	12, // 26: proto.ImageTemplateService.ListImageTemplates:output_type -> proto.ListImageTemplatesResponse
+	20, // 27: proto.ImageTemplateService.DeleteImageTemplate:output_type -> google.protobuf.Empty
+	19, // [19:28] is the sub-list for method output_type
+	10, // [10:19] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -1568,7 +1587,7 @@ func file_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_config_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -1,6 +1,7 @@
 package util
 
 import (
+    "encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -253,6 +254,24 @@ var template = api.ComputeTemplate{
 	},
 }
 
+var templateWithNS = api.ComputeTemplate{
+	Name:      "nodeselector",
+	Namespace: "default",
+	Cpu:       2,
+	Memory:    8,
+	NodeSelector: map[string]string{
+		"nvidia.com/gpu.product": "Tesla-V100-PCIE-16GB",
+		"kubernetes.io/hostname": "cpu15",
+	},
+	Tolerations: []*api.PodToleration{
+		{
+			Key:      "blah1",
+			Operator: "Exists",
+			Effect:   "NoExecute",
+		},
+	},
+}
+
 var templateWorker = api.ComputeTemplate{
 	Name:              "",
 	Namespace:         "",
@@ -339,6 +358,22 @@ var expectedSecurityContext = corev1.SecurityContext{
 			"SYS_PTRACE",
 		},
 	},
+}
+
+func TestBuildComputeTemplate(t *testing.T) {
+	cmap, _ := NewComputeTemplate(&templateWithNS)
+	selector := cmap.Data["node_selector"]
+	var jsonMap map[string]interface{}
+	err := json.Unmarshal([]byte(selector), &jsonMap)
+	if err != nil {
+		t.Errorf("failed to unmarshall config map node selector %s, error %v", selector, err)
+	}
+	if jsonMap["nvidia.com/gpu.product"].(string) != "Tesla-V100-PCIE-16GB" {
+		t.Errorf("failed to convert config map, expected node selector Tesla-V100-PCIE-16GB, got %s", jsonMap["nvidia.com/gpu.product"].(string))
+	}
+	if jsonMap["kubernetes.io/hostname"].(string) != "cpu15" {
+		t.Errorf("failed to convert config map, expected node selector Tesla-V100-PCIE-16GB, got %s", jsonMap["nvidia.com/gpu.product"].(string))
+	}
 }
 
 func TestBuildVolumes(t *testing.T) {
@@ -596,6 +631,15 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	assert.Nil(t, err)
 	if len(podSpec.Spec.Containers[0].Ports) != 6 {
 		t.Errorf("failed build ports")
+	}
+	if len(podSpec.Spec.NodeSelector) != 0 {
+		t.Errorf("failed build Node selector")
+	}
+
+	podSpec, err = buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &templateWithNS, false)
+	assert.Nil(t, err)
+	if len(podSpec.Spec.NodeSelector) != 2 {
+		t.Errorf("failed build Node selector")
 	}
 }
 

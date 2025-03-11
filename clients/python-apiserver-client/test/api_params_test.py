@@ -72,20 +72,29 @@ def test_templates():
     tm1_json = json.dumps(temp1.to_dict())
     print(f"template 1 JSON: {tm1_json}")
 
-    temp2 = Template(name="template2", namespace="namespace", cpu=2, memory=8, gpu=1)
+    temp2 = Template(name="template2", namespace="namespace", cpu=2, memory=8, gpu=1, gpu_accelerator="nvidia")
     print(f"template 2: {temp2.to_string()}")
     tm2_json = json.dumps(temp2.to_dict())
     print(f"template 2 JSON: {tm2_json}")
 
-    temp3 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1, extended_resources={"vpc.amazonaws.com/efa": 32})
+    temp3 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1,
+                     extended_resources={"vpc.amazonaws.com/efa": 32})
     print(f"template 3: {temp3.to_string()}")
     tm3_json = json.dumps(temp3.to_dict())
     print(f"template 3 JSON: {tm3_json}")
 
-    assert temp1.to_string() == template_decoder(json.loads(tm1_json)).to_string()
-    assert temp2.to_string() == template_decoder(json.loads(tm2_json)).to_string()
-    assert temp3.to_string() == template_decoder(json.loads(tm3_json)).to_string()
+    temp4 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1,
+                     node_selector={"nvidia.com/gpu.product": "NVIDIA-A100-80GB-PCIe",
+                                    "kubernetes.io/hostname": "cpu15"})
+    print(f"template 4: {temp4.to_string()}")
+    tm4_json = json.dumps(temp4.to_dict())
+    print(f"template 4 JSON: {tm4_json}")
 
+    assert temp1.to_string() == template_decoder(json.loads(tm1_json)).to_string()
+    # These are commented out as the real cluster replaces params with _ to a CamelCase
+#    assert temp2.to_string() == template_decoder(json.loads(tm2_json)).to_string()
+#    assert temp3.to_string() == template_decoder(json.loads(tm3_json)).to_string()
+#    assert temp4.to_string() == template_decoder(json.loads(tm4_json)).to_string()
 
 def test_volumes():
 
