@@ -44,6 +44,7 @@ type RayJobYamlObject struct {
 	RayJobName     string
 	Namespace      string
 	SubmissionMode string
+	Entrypoint     string
 	RayClusterSpecObject
 }
 
@@ -60,6 +61,7 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 	rayJobApplyConfig := rayv1ac.RayJob(rayJobObject.RayJobName, rayJobObject.Namespace).
 		WithSpec(rayv1ac.RayJobSpec().
 			WithSubmissionMode(rayv1.JobSubmissionMode(rayJobObject.SubmissionMode)).
+			WithEntrypoint(rayJobObject.Entrypoint).
 			WithRayClusterSpec(rayJobObject.generateRayClusterSpec()))
 
 	return rayJobApplyConfig
