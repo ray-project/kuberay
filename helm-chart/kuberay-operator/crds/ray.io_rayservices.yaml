@@ -10149,7 +10149,6 @@ spec:
                     format: int32
                     type: integer
                   trafficRoutedPercent:
-                    default: 100
                     format: int32
                     type: integer
                 type: object
@@ -10343,7 +10342,6 @@ spec:
                     format: int32
                     type: integer
                   trafficRoutedPercent:
-                    default: 100
                     format: int32
                     type: integer
                 type: object

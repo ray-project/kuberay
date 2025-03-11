@@ -154,8 +154,7 @@ type RayServiceStatus struct {
 	// Defaults to 100%.
 	// +kubebuilder:default:=100
 	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
-	// Defaults to 100%.
-	// +kubebuilder:default:=100
+	// Represents the percentage weight of traffic routed to the RayCluster associated with this RayServiceStatus.
 	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
 	// Represents the last time the RayService controller migrated traffic during an IncrementalUpgrade.
 	LastTrafficMigratedTime *metav1.Time `json:"lastTrafficMigratedTime,omitempty"`
