@@ -1,3 +1,13 @@
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: kuberay-test-queue
+spec:
+  weight: 1
+  capability:
+    cpu: 4
+    memory: 6Gi
+---
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
