@@ -70,7 +70,6 @@ func main() {
 	var featureGates string
 	var enableBatchScheduler bool
 	var batchScheduler string
-	var drainOnPreStop bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -101,7 +100,6 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
-	flag.BoolVar(&drainOnPreStop, "drain-on-pre-stop", false, "Drain Ray nodes gracefully when the Kubernetes Pod PreStop hook is called.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -131,7 +129,7 @@ func main() {
 		config.BatchScheduler = batchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
-		config.DrainOnPreStop = drainOnPreStop
+		config.PreStopCommand = os.Getenv(utils.PRE_STOP_COMMAND)
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -235,7 +233,7 @@ func main() {
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
-		DrainOnPreStop:          config.DrainOnPreStop,
+		PreStopCommand:          config.PreStopCommand,
 	}
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
