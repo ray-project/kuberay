@@ -140,6 +140,8 @@ type RayServiceStatus struct {
 	// Defaults to 100%.
 	// +kubebuilder:default:=100
 	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
+	// Represents the last time the RayService controller migrated traffic during an IncrementalUpgrade.
+	LastTrafficMigratedTime *metav1.Time `json:"lastTrafficMigratedTime,omitempty"`
 }
 
 type AppStatus struct {

@@ -10010,6 +10010,9 @@ spec:
                           type: string
                       type: object
                     type: object
+                  lastTrafficMigratedTime:
+                    format: date-time
+                    type: string
                   rayClusterName:
                     type: string
                   rayClusterStatus:
@@ -10201,6 +10204,9 @@ spec:
                           type: string
                       type: object
                     type: object
+                  lastTrafficMigratedTime:
+                    format: date-time
+                    type: string
                   rayClusterName:
                     type: string
                   rayClusterStatus:
