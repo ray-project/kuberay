@@ -2,7 +2,7 @@
 
 package v1
 
-// HeadInfoApplyConfiguration represents an declarative configuration of the HeadInfo type for use
+// HeadInfoApplyConfiguration represents a declarative configuration of the HeadInfo type for use
 // with apply.
 type HeadInfoApplyConfiguration struct {
 	PodIP       *string `json:"podIP,omitempty"`
@@ -11,7 +11,7 @@ type HeadInfoApplyConfiguration struct {
 	ServiceName *string `json:"serviceName,omitempty"`
 }
 
-// HeadInfoApplyConfiguration constructs an declarative configuration of the HeadInfo type for use with
+// HeadInfoApplyConfiguration constructs a declarative configuration of the HeadInfo type for use with
 // apply.
 func HeadInfo() *HeadInfoApplyConfiguration {
 	return &HeadInfoApplyConfiguration{}

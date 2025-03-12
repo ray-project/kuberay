@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
-// RayJobSpecApplyConfiguration represents an declarative configuration of the RayJobSpec type for use
+// RayJobSpecApplyConfiguration represents a declarative configuration of the RayJobSpec type for use
 // with apply.
 type RayJobSpecApplyConfiguration struct {
 	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
@@ -31,7 +31,7 @@ type RayJobSpecApplyConfiguration struct {
 	Suspend                  *bool                                     `json:"suspend,omitempty"`
 }
 
-// RayJobSpecApplyConfiguration constructs an declarative configuration of the RayJobSpec type for use with
+// RayJobSpecApplyConfiguration constructs a declarative configuration of the RayJobSpec type for use with
 // apply.
 func RayJobSpec() *RayJobSpecApplyConfiguration {
 	return &RayJobSpecApplyConfiguration{}
