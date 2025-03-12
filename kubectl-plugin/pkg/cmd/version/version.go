@@ -104,5 +104,8 @@ func buildInfo() (commit, buildtime string, err error) {
 			buildtime = setting.Value
 		}
 	}
+	if commit == "" || buildtime == "" {
+		return "", "", fmt.Errorf("missing revision or build time from build info")
+	}
 	return
 }
