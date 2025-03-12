@@ -138,5 +138,7 @@ model = build_app(
         "pipeline-parallel-size": os.environ['PIPELINE_PARALLELISM'],
         "max-model-len": os.environ['MAX_MODEL_LEN'],
         "gpu-memory-utilization": os.environ['GPU_MEMORY_UTILIZATION'],
+        "enable-auto-tool-choice": "",
+        "tool-call-parser": "",
      }
     )
