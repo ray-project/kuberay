@@ -3,7 +3,6 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
-	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -181,10 +180,8 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
-	if !reflect.ValueOf(rayService.Spec.RayClusterSpec).IsZero() {
-		if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
-			return err
-		}
+	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
+		return err
 	}
 
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {

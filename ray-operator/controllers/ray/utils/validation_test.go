@@ -753,7 +753,6 @@ func TestValidateRayJobMetadata(t *testing.T) {
 
 func TestValidateRayServiceSpec(t *testing.T) {
 	upgradeStrat := rayv1.RayServiceUpgradeType("invalidStrategy")
-	newClusterStrat := rayv1.NewCluster
 
 	tests := []struct {
 		name              string
@@ -777,8 +776,10 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "The RayService spec is valid.",
-			spec:        rayv1.RayServiceSpec{},
+			name: "The RayService spec is valid.",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: *createBasicRayClusterSpec(),
+			},
 			expectError: false,
 		},
 		{
@@ -787,6 +788,7 @@ func TestValidateRayServiceSpec(t *testing.T) {
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 					Type: &upgradeStrat,
 				},
+				RayClusterSpec: *createBasicRayClusterSpec(),
 			},
 			expectError: true,
 		},
@@ -801,16 +803,6 @@ func TestValidateRayServiceSpec(t *testing.T) {
 				},
 			},
 			expectError: true,
-		},
-		{
-			name: "It is okay that RayClusterSpec is empty.",
-			spec: rayv1.RayServiceSpec{
-				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					Type: &newClusterStrat,
-				},
-				RayClusterSpec: rayv1.RayClusterSpec{},
-			},
-			expectError: false,
 		},
 	}
 
