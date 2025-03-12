@@ -133,8 +133,8 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
 
 model = build_app(
     {
-        "model": os.environ['MODEL_ID'], 
-        "tensor-parallel-size": os.environ['TENSOR_PARALLELISM'], 
+        "model": os.environ['MODEL_ID'],
+        "tensor-parallel-size": os.environ['TENSOR_PARALLELISM'],
         "pipeline-parallel-size": os.environ['PIPELINE_PARALLELISM'],
         "max-model-len": os.environ['MAX_MODEL_LEN'],
         "gpu-memory-utilization": os.environ['GPU_MEMORY_UTILIZATION'],
