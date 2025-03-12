@@ -101,7 +101,7 @@ def parse_vllm_args(cli_args: Dict[str, str]):
     )
 
     parser = make_arg_parser(arg_parser)
-    arg_strings = ["--enable-auto-tool-choice", "--tool-call-parser"]
+    arg_strings = ["--enable-auto-tool-choice"]
     for key, value in cli_args.items():
         arg_strings.extend([f"--{key}", str(value)])
     logger.info(arg_strings)
@@ -138,5 +138,6 @@ model = build_app(
         "pipeline-parallel-size": os.environ['PIPELINE_PARALLELISM'],
         "max-model-len": os.environ['MAX_MODEL_LEN'],
         "gpu-memory-utilization": os.environ['GPU_MEMORY_UTILIZATION'],
+        "tool-call-parser": "llama3_json",
      }
     )
