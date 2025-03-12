@@ -2,17 +2,17 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rayjob-editor-role
+  name: raycluster-editor-role
   labels:
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:
 - apiGroups:
   - ray.io
   resources:
-  - rayjobs
+  - rayclusters
   verbs:
   - create
+  - update
   - delete
   - patch
-  - update
   - deletecollection

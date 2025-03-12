@@ -6,19 +6,15 @@ metadata:
   name: rayjob-viewer-role
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
 - apiGroups:
   - ray.io
   resources:
   - rayjobs
+  - rayjobs/status
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - ray.io
-  resources:
-  - rayjobs/status
-  verbs:
-  - get
 {{- end }}
