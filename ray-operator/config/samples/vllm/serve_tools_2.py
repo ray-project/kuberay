@@ -123,6 +123,8 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
 
     engine_args = AsyncEngineArgs.from_cli_args(parsed_args)
     engine_args.worker_use_ray = True
+    engine_args.enable_auto_tool_choice = True
+    engine_args.tool_call_parser = "llama3_json"
 
     logger.info(f"engine_args: {engine_args}")
 
