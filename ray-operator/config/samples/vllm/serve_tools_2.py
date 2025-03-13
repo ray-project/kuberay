@@ -102,7 +102,9 @@ def parse_vllm_args(cli_args: Dict[str, str]):
     arg_strings = ["--enable-auto-tool-choice"]
     for key, value in cli_args.items():
         arg_strings.extend([f"--{key}", str(value)])
-    logger.info(arg_strings)
+    
+    logger.info(f"arg_strings: {arg_strings}")
+
     parsed_args = parser.parse_args(args=arg_strings)
     return parsed_args
 
@@ -117,9 +119,12 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
     Supported engine arguments: https://docs.vllm.ai/en/latest/models/engine_args.html.
     """  # noqa: E501
     parsed_args = parse_vllm_args(cli_args)
+    logger.info(f"parsed_args: {parsed_args}")
 
     engine_args = AsyncEngineArgs.from_cli_args(parsed_args)
     engine_args.worker_use_ray = True
+
+    logger.info(f"engine_args: {engine_args}")
 
     return VLLMDeployment.bind(
         engine_args,
@@ -141,3 +146,5 @@ model = build_app(
         "tool-call-parser": "llama3_json",
      }
     )
+
+logger.info(f"model: {model}")
