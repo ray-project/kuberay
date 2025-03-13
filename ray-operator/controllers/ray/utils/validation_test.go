@@ -752,38 +752,65 @@ func TestValidateRayJobMetadata(t *testing.T) {
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {
-	err := ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			RayClusterSpec: rayv1.RayClusterSpec{
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					HeadService: &corev1.Service{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "my-head-service",
+	upgradeStrat := rayv1.RayServiceUpgradeType("invalidStrategy")
+
+	tests := []struct {
+		name              string
+		unexpectedMessage string
+		spec              rayv1.RayServiceSpec
+		expectError       bool
+	}{
+		{
+			name: "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						HeadService: &corev1.Service{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "my-head-service",
+							},
 						},
 					},
 				},
 			},
+			expectError: true,
 		},
-	})
-	require.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
-
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			RayClusterSpec: *createBasicRayClusterSpec(),
-		},
-	})
-	require.NoError(t, err, "The RayService spec is valid.")
-
-	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: &upgradeStrat,
+		{
+			name: "The RayService spec is valid.",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: *createBasicRayClusterSpec(),
 			},
-			RayClusterSpec: *createBasicRayClusterSpec(),
+			expectError: false,
 		},
-	})
-	require.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+		{
+			name: "spec.UpgradeSpec.Type is invalid",
+			spec: rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					Type: &upgradeStrat,
+				},
+				RayClusterSpec: *createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name:        "headGroupSpec should have at least one container",
+			spec:        rayv1.RayServiceSpec{},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayServiceSpec(&rayv1.RayService{
+				Spec: tt.spec,
+			})
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
 }
 
 func TestValidateRayServiceMetadata(t *testing.T) {

@@ -180,6 +180,10 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
+		return err
+	}
+
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
