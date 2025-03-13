@@ -793,15 +793,8 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "headGroupSpec should have at least one container",
-			spec: rayv1.RayServiceSpec{
-				RayClusterSpec: rayv1.RayClusterSpec{
-					HeadServiceAnnotations: map[string]string{
-						"foo": "bar",
-					},
-					HeadGroupSpec: rayv1.HeadGroupSpec{},
-				},
-			},
+			name:        "headGroupSpec should have at least one container",
+			spec:        rayv1.RayServiceSpec{},
 			expectError: true,
 		},
 	}
