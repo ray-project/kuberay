@@ -36,7 +36,6 @@ const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
 	portforwardtimeout = 60.0
-	fieldManager       = "ray-kubectl-plugin"
 )
 
 type SubmitJobOptions struct {
@@ -309,14 +308,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 
 		// Apply the generated yaml
-		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: fieldManager})
+		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Failed to apply generated YAML: %w", err)
 		}
 		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: fieldManager})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -495,10 +494,9 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("Failed to get latest version of Ray job: %w", err)
 	}
-
 	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: fieldManager})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
