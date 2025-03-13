@@ -3,6 +3,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -22,6 +23,9 @@ const (
 type RayServiceUpgradeType string
 
 const (
+	// During upgrade, IncrementalUpgrade strategy will create an upgraded cluster to gradually scale
+	// and migrate traffic to using Gateway API.
+	IncrementalUpgrade RayServiceUpgradeType = "IncrementalUpgrade"
 	// During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready
 	NewCluster RayServiceUpgradeType = "NewCluster"
 	// No new cluster will be created while the strategy is set to None
@@ -57,9 +61,24 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
+type IncrementalUpgradeOptions struct {
+	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
+	// Defaults to 100%.
+	// +kubebuilder:default:=100
+	MaxSurgePercent *int32 `json:"maxSurgePercent,omitempty"`
+	// The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.
+	StepSizePercent *int32 `json:"stepSizePercent"`
+	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
+	IntervalSeconds *int32 `json:"intervalSeconds"`
+	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
+	GatewayClassName string `json:"gatewayClassName"`
+}
+
 type RayServiceUpgradeStrategy struct {
 	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
+	// IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.
+	IncrementalUpgradeOptions *IncrementalUpgradeOptions `json:"incrementalUpgradeOptions,omitempty"`
 }
 
 // RayServiceSpec defines the desired state of RayService
@@ -70,6 +89,10 @@ type RayServiceSpec struct {
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	ServeService *corev1.Service `json:"serveService,omitempty"`
+	// Gateway is the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.
+	Gateway *gwv1.Gateway `json:"gateway,omitempty"`
+	// HTTPRoute is the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.
+	HTTPRoute *gwv1.HTTPRoute `json:"httpRoute,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
@@ -111,6 +134,13 @@ type RayServiceStatus struct {
 	Applications     map[string]AppStatus `json:"applicationStatuses,omitempty"`
 	RayClusterName   string               `json:"rayClusterName,omitempty"`
 	RayClusterStatus RayClusterStatus     `json:"rayClusterStatus,omitempty"`
+	// Defaults to 100%.
+	// +kubebuilder:default:=100
+	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
+	// Represents the percentage weight of traffic routed to the RayCluster associated with this RayServiceStatus.
+	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
+	// Represents the last time the RayService controller migrated traffic during an IncrementalUpgrade.
+	LastTrafficMigratedTime *metav1.Time `json:"lastTrafficMigratedTime,omitempty"`
 }
 
 type AppStatus struct {
