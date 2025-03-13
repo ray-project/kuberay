@@ -82,8 +82,8 @@ func TestRayVersionRun(t *testing.T) {
 		getKubeRayOperatorVersionError error
 		pluginCommit                   string
 		pluginBuildTime                string
-		buildInfoErr                   bool
 		expected                       string
+		buildInfoErr                   bool
 	}{
 		{
 			name:                           "Test when we can successfully get the KubeRay operator image version",
