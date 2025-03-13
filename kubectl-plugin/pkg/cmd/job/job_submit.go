@@ -313,14 +313,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 
 		// Apply the generated yaml
-		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: "ray-kubectl-plugin"})
+		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Failed to apply generated YAML: %w", err)
 		}
 		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -497,12 +497,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	// Add annotation to RayJob with the correct Ray job ID and update the CR
 	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to get latest version of Ray job")
+		return fmt.Errorf("Failed to get latest version of Ray job: %w", err)
 	}
-
 	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}

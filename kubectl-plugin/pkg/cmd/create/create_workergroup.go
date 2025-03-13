@@ -143,7 +143,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	newRayCluster.Spec.WorkerGroupSpecs = append(newRayCluster.Spec.WorkerGroupSpecs, createWorkerGroupSpec(options))
 
-	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{})
+	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
 	}
