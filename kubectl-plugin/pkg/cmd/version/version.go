@@ -45,7 +45,7 @@ func NewVersionCommand(streams genericclioptions.IOStreams) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
 			}
-			return options.Run(cmd.Context(), k8sClient, os.Stdout)
+			return options.Run(cmd.Context(), k8sClient, debug.ReadBuildInfo, os.Stdout)
 		},
 	}
 
@@ -53,9 +53,9 @@ func NewVersionCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	return cmd
 }
 
-func (options *VersionOptions) Run(ctx context.Context, k8sClient client.Client, writer io.Writer) error {
+func (options *VersionOptions) Run(ctx context.Context, k8sClient client.Client, readBuildInfo func() (*debug.BuildInfo, bool), writer io.Writer) error {
 	if Version == "development" {
-		commit, buildTime, err := buildInfo()
+		commit, buildTime, err := commitAndBuildTime(readBuildInfo)
 		if err == nil {
 			Version = fmt.Sprintf("development (%s, built %s)", commit[:7], buildTime)
 		}
@@ -91,9 +91,9 @@ func (options *VersionOptions) checkContext() error {
 	return nil
 }
 
-func buildInfo() (commit, buildtime string, err error) {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
+func commitAndBuildTime(readBuildInfo func() (*debug.BuildInfo, bool)) (commit, buildtime string, err error) {
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
 		return "", "", fmt.Errorf("no debug build info")
 	}
 	for _, setting := range info.Settings {
