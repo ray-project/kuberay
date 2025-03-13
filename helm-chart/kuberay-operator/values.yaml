@@ -49,11 +49,13 @@ logging:
 
 livenessProbe:
   initialDelaySeconds: 10
+  timeoutSeconds: 5
   periodSeconds: 5
   failureThreshold: 5
 
 readinessProbe:
   initialDelaySeconds: 10
+  timeoutSeconds: 5
   periodSeconds: 5
   failureThreshold: 5
 
