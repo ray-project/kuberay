@@ -3,17 +3,20 @@ package create
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/utils/ptr"
 
 	kubefake "k8s.io/client-go/kubernetes/fake"
 
@@ -23,28 +26,67 @@ import (
 
 func TestRayCreateClusterComplete(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
-	fakeCreateClusterOptions := NewCreateClusterOptions(cmdFactory, testStreams)
-	fakeArgs := []string{"testRayClusterName"}
-	cmd := &cobra.Command{Use: "cluster"}
-	cmd.Flags().StringVarP(&fakeCreateClusterOptions.namespace, "namespace", "n", "", "")
 
-	err := fakeCreateClusterOptions.Complete(cmd, fakeArgs)
-	require.NoError(t, err)
-	assert.Equal(t, "default", fakeCreateClusterOptions.namespace)
-	assert.Equal(t, "testRayClusterName", fakeCreateClusterOptions.clusterName)
+	tests := map[string]struct {
+		image         string
+		rayVersion    string
+		expectedError string
+		expectedImage string
+		args          []string
+	}{
+		"should error when there are no args": {
+			args:          []string{},
+			expectedError: "See 'cluster -h' for help and examples",
+		},
+		"should error when too many args": {
+			args:          []string{"testRayClusterName", "extra-arg"},
+			expectedError: "See 'cluster -h' for help and examples",
+		},
+		"should succeed with default image when no image is specified": {
+			args:          []string{"testRayClusterName"},
+			rayVersion:    util.RayVersion,
+			expectedImage: fmt.Sprintf("rayproject/ray:%s", util.RayVersion),
+		},
+		"should succeed with provided image when provided": {
+			args:          []string{"testRayClusterName"},
+			image:         "DEADBEEF",
+			expectedImage: "DEADBEEF",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+			fakeCreateClusterOptions := NewCreateClusterOptions(cmdFactory, testStreams)
+			cmd := &cobra.Command{Use: "cluster"}
+			cmd.Flags().StringVarP(&fakeCreateClusterOptions.namespace, "namespace", "n", "", "")
+			fakeCreateClusterOptions.rayVersion = tc.rayVersion
+
+			if tc.image != "" {
+				fakeCreateClusterOptions.image = tc.image
+			}
+
+			err := fakeCreateClusterOptions.Complete(cmd, tc.args)
+
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedImage, fakeCreateClusterOptions.image)
+			}
+		})
+	}
 }
 
 func TestRayCreateClusterValidate(t *testing.T) {
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	tests := []struct {
-		name        string
-		opts        *CreateClusterOptions
-		expectError string
+	tests := map[string]struct {
+		opts               *CreateClusterOptions
+		configFileContents string
+		expectError        string
 	}{
-		{
-			name: "should error when a resource quantity is invalid",
+		"should error when a resource quantity is invalid": {
 			opts: &CreateClusterOptions{
 				cmdFactory: cmdFactory,
 				headCPU:    "1",
@@ -52,11 +94,96 @@ func TestRayCreateClusterValidate(t *testing.T) {
 			},
 			expectError: "head-memory is not a valid resource quantity: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
 		},
+		"should error when an invalid cluster config file is used": {
+			opts: &CreateClusterOptions{
+				cmdFactory: cmdFactory,
+			},
+			configFileContents: `foo: bar`,
+			expectError:        "field foo not found",
+		},
+		"should not error when a valid config file is used": {
+			opts: &CreateClusterOptions{
+				cmdFactory: cmdFactory,
+			},
+			configFileContents: `image: foo`,
+		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if tc.configFileContents != "" {
+				tmpFile, err := os.CreateTemp("", "config.yaml")
+				require.NoError(t, err)
+				_, err = tmpFile.WriteString(tc.configFileContents)
+				require.NoError(t, err)
+				tc.opts.configFile = tmpFile.Name()
+				defer os.Remove(tc.opts.configFile)
+			}
+
+			err := tc.opts.Validate(&cobra.Command{})
+
+			if tc.expectError != "" {
+				require.Contains(t, err.Error(), tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	cmd := NewCreateClusterCommand(cmdFactory, testStreams)
+
+	tests := map[string]struct {
+		expectError string
+		args        []string
+	}{
+		"should not error when no incompatible flags are used": {
+			args: []string{
+				"sample-cluster",
+				"--file", "config.yaml",
+				"--dry-run",
+				"--wait",
+				"--timeout", "10s",
+			},
+		},
+		"should error when incompatible flags are used": {
+			args: []string{
+				"sample-cluster",
+				"--ray-version", "2.44.0",
+				"--image", "rayproject/ray:2.44.0",
+				"--head-cpu", "1",
+				"--head-memory", "5Gi",
+				"--head-gpu", "1",
+				"--head-ephemeral-storage", "10Gi",
+				"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
+				"--worker-replicas", "3",
+				"--worker-cpu", "1",
+				"--worker-memory", "5Gi",
+				"--worker-gpu", "1",
+				"--worker-ephemeral-storage", "10Gi",
+				"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
+				// TODO (dxia): Add labels and annotations back in once https://github.com/ray-project/kuberay/pull/3237 is merged
+				// "--labels", "app=ray,env=dev",
+				// "--annotations", "ttl-hours=24,owner=chthulu",
+				"--dry-run",
+				"--wait",
+				"--timeout", "10s",
+			},
+			expectError: "the following flags are incompatible with --file: [head-cpu head-ephemeral-storage head-gpu head-memory head-ray-start-params image ray-version worker-cpu worker-ephemeral-storage worker-gpu worker-memory worker-ray-start-params worker-replicas]",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cmd.SetArgs(tc.args)
+			// Parse the flags before checking for incompatible flags
+			if err := cmd.Flags().Parse(tc.args); err != nil {
+				t.Fatalf("failed to parse flags: %v", err)
+			}
+			err := flagsIncompatibleWithConfigFilePresent(cmd)
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {
@@ -106,39 +233,185 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 
 func TestNewCreateClusterCommand(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	cmd := NewCreateClusterCommand(cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)), testStreams)
-	cmd.Flags().StringP("namespace", "n", "", "")
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "config.yaml")
+	file, err := os.Create(filePath)
+	require.NoError(t, err)
+	defer file.Close()
 
-	workerNodeSelectors := fmt.Sprintf(
-		"app=ray,env=dev,%s=tpu-v5,%s=2x4",
-		util.NodeSelectorGKETPUAccelerator,
-		util.NodeSelectorGKETPUTopology,
-	)
+	tests := map[string]struct {
+		expectError string
+		args        []string
+	}{
+		"should succeed when all flags are provided": {
+			args: []string{
+				"sample-cluster",
+				"--ray-version", "2.44.0",
+				"--image", "rayproject/ray:2.44.0",
+				"--head-cpu", "1",
+				"--head-memory", "5Gi",
+				"--head-gpu", "1",
+				"--head-ephemeral-storage", "10Gi",
+				"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
+				"--head-node-selectors", "app=ray,env=dev",
+				"--worker-replicas", "3",
+				"--num-of-hosts", "2",
+				"--worker-cpu", "1",
+				"--worker-memory", "5Gi",
+				"--worker-gpu", "1",
+				"--worker-ephemeral-storage", "10Gi",
+				"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
+				"--worker-node-selectors", fmt.Sprintf("app=ray,env=dev,%s=tpu-v5,%s=2x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
+				"--labels", "app=ray,env=dev",
+				"--annotations", "ttl-hours=24,owner=chthulu",
+				"--dry-run",
+				"--wait",
+				"--timeout", "10s",
+			},
+		},
+		"should succeed when --file is provided": {
+			args: []string{
+				"sample-cluster",
+				"--file", filePath,
+				"--dry-run",
+			},
+		},
+		"should error when --file is provided with incompatible flags": {
+			args: []string{
+				"sample-cluster",
+				"--file", "config.yaml",
+				"--ray-version", "2.44.0",
+				"--dry-run",
+			},
+			expectError: "the following flags are incompatible with --file: [ray-version]",
+		},
+	}
 
-	cmd.SetArgs([]string{
-		"sample-cluster",
-		"--ray-version", "2.44.0",
-		"--image", "rayproject/ray:2.44.0",
-		"--head-cpu", "1",
-		"--head-memory", "5Gi",
-		"--head-gpu", "1",
-		"--head-ephemeral-storage", "10Gi",
-		"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
-		"--head-node-selectors", "app=ray,env=dev",
-		"--worker-replicas", "3",
-		"--num-of-hosts", "2",
-		"--worker-cpu", "1",
-		"--worker-memory", "5Gi",
-		"--worker-gpu", "1",
-		"--worker-tpu", "1",
-		"--worker-ephemeral-storage", "10Gi",
-		"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
-		"--worker-node-selectors", workerNodeSelectors,
-		"--labels", "app=ray,env=dev",
-		"--annotations", "ttl-hours=24,owner=chthulu",
-		"--dry-run",
-		"--wait",
-		"--timeout", "10s",
-	})
-	require.NoError(t, cmd.Execute())
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			cmd := NewCreateClusterCommand(cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)), testStreams)
+			cmd.Flags().StringP("namespace", "n", "", "")
+			cmd.SetArgs(tc.args)
+
+			if tc.expectError != "" {
+				require.EqualError(t, cmd.Execute(), tc.expectError)
+			} else {
+				require.NoError(t, cmd.Execute())
+			}
+		})
+	}
+}
+
+func TestResolveNamespace(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	tests := map[string]struct {
+		cliNamespace      string  // namespace from the CLI flag
+		configNamespace   *string // namespace from the config file
+		expectedNamespace string  // expected namespace to be used
+		expectedError     string
+	}{
+		"should use 'default' namespace when no namespace is provided": {
+			cliNamespace:      "",
+			configNamespace:   nil,
+			expectedNamespace: "default",
+		},
+		"should use the config namespace when no CLI namespace is provided": {
+			cliNamespace:      "",
+			configNamespace:   ptr.To("config-namespace"),
+			expectedNamespace: "config-namespace",
+		},
+		"should use the CLI namespace when no config namespace is provided": {
+			cliNamespace:      "cli-namespace",
+			configNamespace:   nil,
+			expectedNamespace: "cli-namespace",
+		},
+		"should error when the config namespace doesn't match the CLI namespace": {
+			cliNamespace:    "cli-namespace",
+			configNamespace: ptr.To("config-namespace"),
+			expectedError:   "the namespace in the config file \"config-namespace\" does not match the namespace \"cli-namespace\". You must pass --namespace=config-namespace to perform this operation",
+		},
+		"should use the specified namespace when it's provided in both the CLI and the config file and is the same": {
+			cliNamespace:      "my-namespace",
+			configNamespace:   ptr.To("my-namespace"),
+			expectedNamespace: "my-namespace",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			options := NewCreateClusterOptions(cmdFactory, testStreams)
+			options.namespace = tc.cliNamespace
+			options.rayClusterConfig = &generation.RayClusterConfig{
+				Namespace: tc.configNamespace,
+			}
+
+			namespace, err := options.resolveNamespace()
+
+			if tc.expectedError != "" {
+				require.EqualError(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedNamespace, namespace)
+			}
+		})
+	}
+}
+
+func TestResolveClusterName(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	tests := map[string]struct {
+		cliClusterName      string  // cluster name from the CLI flag
+		configClusterName   *string // cluster name from the config file
+		expectedClusterName string  // expected cluster name to be used
+		expectedError       string
+	}{
+		"should error when no cluster name is provided": {
+			cliClusterName:    "",
+			configClusterName: nil,
+			expectedError:     "the cluster name is required",
+		},
+		"should use the config cluster name when no CLI cluster name is provided": {
+			cliClusterName:      "",
+			configClusterName:   ptr.To("config-cluster-name"),
+			expectedClusterName: "config-cluster-name",
+		},
+		"should use the CLI cluster name when no config cluster name is provided": {
+			cliClusterName:      "cli-cluster-name",
+			configClusterName:   nil,
+			expectedClusterName: "cli-cluster-name",
+		},
+		"should error when the config cluster name doesn't match the CLI cluster name": {
+			cliClusterName:    "cli-cluster-name",
+			configClusterName: ptr.To("config-cluster-name"),
+			expectedError:     "the cluster name in the config file \"config-cluster-name\" does not match the cluster name \"cli-cluster-name\". You must use the same name to perform this operation",
+		},
+		"should use the specified cluster name when it's provided in both the CLI and the config file and is the same": {
+			cliClusterName:      "my-cluster-name",
+			configClusterName:   ptr.To("my-cluster-name"),
+			expectedClusterName: "my-cluster-name",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			options := NewCreateClusterOptions(cmdFactory, testStreams)
+			options.clusterName = tc.cliClusterName
+			options.rayClusterConfig = &generation.RayClusterConfig{
+				Name: tc.configClusterName,
+			}
+
+			name, err := options.resolveClusterName()
+
+			if tc.expectedError != "" {
+				require.EqualError(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedClusterName, name)
+			}
+		})
+	}
 }
