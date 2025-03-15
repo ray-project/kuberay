@@ -29,7 +29,7 @@ jobs:
 
     - name: Extract tag
       id: tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
     - name: Install kubebuilder
       run: |
@@ -99,7 +99,7 @@ jobs:
 
     - name: Extract tag
       id: tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
     - name: Install kubebuilder
       run: |
