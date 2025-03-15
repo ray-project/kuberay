@@ -47,6 +47,9 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"foo": "bar",
+			},
 		},
 		Spec: rayv1.RayJobSpec{
 			Entrypoint:               "sleep 999",
@@ -236,9 +239,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -459,9 +464,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -621,9 +628,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -714,9 +723,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready (attempt 2)", func() {
@@ -834,9 +845,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -921,9 +934,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -1041,9 +1056,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -1174,9 +1191,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -1282,9 +1301,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
 				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
 
-				// TODO (kevin85421): Check the RayCluster labels and annotations.
+				// TODO (kevin85421): Check the RayCluster labels.
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
 				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
