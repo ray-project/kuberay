@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -44,7 +45,7 @@ func NewVersionCommand(streams genericclioptions.IOStreams) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
 			}
-			return options.Run(cmd.Context(), k8sClient, os.Stdout)
+			return options.Run(cmd.Context(), k8sClient, debug.ReadBuildInfo, os.Stdout)
 		},
 	}
 
@@ -52,7 +53,14 @@ func NewVersionCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	return cmd
 }
 
-func (options *VersionOptions) Run(ctx context.Context, k8sClient client.Client, writer io.Writer) error {
+func (options *VersionOptions) Run(ctx context.Context, k8sClient client.Client, readBuildInfo func() (*debug.BuildInfo, bool), writer io.Writer) error {
+	if Version == "development" {
+		commit, buildTime, err := commitAndBuildTime(readBuildInfo)
+		if err == nil {
+			Version = fmt.Sprintf("development (%s, built %s)", commit[:7], buildTime)
+		}
+
+	}
 	fmt.Fprintln(writer, "kubectl ray plugin version:", Version)
 
 	if err := options.checkContext(); err != nil {
@@ -81,4 +89,23 @@ func (options *VersionOptions) checkContext() error {
 		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
 	}
 	return nil
+}
+
+func commitAndBuildTime(readBuildInfo func() (*debug.BuildInfo, bool)) (commit, buildtime string, err error) {
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return "", "", fmt.Errorf("no debug build info")
+	}
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			commit = setting.Value
+		case "vcs.time":
+			buildtime = setting.Value
+		}
+	}
+	if commit == "" || buildtime == "" {
+		return "", "", fmt.Errorf("missing revision or build time from build info")
+	}
+	return
 }
