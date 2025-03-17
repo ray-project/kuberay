@@ -54,7 +54,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 
 	headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
 	if spec.GcsFaultToleranceOptions != nil {
-		if redisPassword := spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
+		if spec.HeadGroupSpec.RayStartParams != nil && (*spec.HeadGroupSpec.RayStartParams)["redis-password"] != "" {
 			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
 		}
@@ -74,7 +74,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
 		}
 	}
-	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
+	if spec.HeadGroupSpec.RayStartParams != nil && (*spec.HeadGroupSpec.RayStartParams)["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
 		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
 			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}

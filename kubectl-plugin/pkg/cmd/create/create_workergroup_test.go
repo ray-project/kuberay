@@ -14,7 +14,6 @@ import (
 )
 
 func TestCreateWorkerGroupSpec(t *testing.T) {
-	rayStartParams := map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"}
 	options := &CreateWorkerGroupOptions{
 		groupName:         "example-group",
 		image:             "DEADBEEF",
@@ -24,11 +23,11 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 		workerCPU:         "2",
 		workerMemory:      "5Gi",
 		workerGPU:         "1",
-		rayStartParams:    rayStartParams,
+		rayStartParams:    &map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"},
 	}
 
 	expected := rayv1.WorkerGroupSpec{
-		RayStartParams: rayStartParams,
+		RayStartParams: &map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"},
 		GroupName:      "example-group",
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{

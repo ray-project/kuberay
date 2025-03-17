@@ -258,7 +258,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
 		RayVersion: ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-			RayStartParams: map[string]string{"softmax": "GELU"},
+			RayStartParams: &map[string]string{"softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 				Spec: &corev1ac.PodSpecApplyConfiguration{
 					Containers: []corev1ac.ContainerApplyConfiguration{

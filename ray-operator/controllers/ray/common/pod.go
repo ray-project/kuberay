@@ -48,9 +48,11 @@ var customAcceleratorToRayResourceMap = map[string]string{
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
 // For Ray >= 1.11.0 this is the GCS server port. For Ray < 1.11.0 it is the Redis port.
-func GetHeadPort(headStartParams map[string]string) string {
-	if value, ok := headStartParams["port"]; ok {
-		return value
+func GetHeadPort(headStartParams *map[string]string) string {
+	if headStartParams != nil {
+		if value, ok := (*headStartParams)["port"]; ok {
+			return value
+		}
 	}
 	return strconv.Itoa(utils.DefaultGcsServerPort)
 }
@@ -124,7 +126,10 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
 					// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
 					// rayStartParams to refer to the environment variable.
-					instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] = "$REDIS_USERNAME"
+					if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+						instance.Spec.HeadGroupSpec.RayStartParams = &map[string]string{}
+					}
+					(*instance.Spec.HeadGroupSpec.RayStartParams)["redis-username"] = "$REDIS_USERNAME"
 					container.Env = append(container.Env, corev1.EnvVar{
 						Name:      utils.REDIS_USERNAME,
 						Value:     options.RedisUsername.Value,
@@ -135,7 +140,10 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 					// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the
 					// `REDIS_PASSWORD` environment variable later. Here, we use `$REDIS_PASSWORD` in
 					// rayStartParams to refer to the environment variable.
-					instance.Spec.HeadGroupSpec.RayStartParams["redis-password"] = "$REDIS_PASSWORD"
+					if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+						instance.Spec.HeadGroupSpec.RayStartParams = &map[string]string{}
+					}
+					(*instance.Spec.HeadGroupSpec.RayStartParams)["redis-password"] = "$REDIS_PASSWORD"
 					container.Env = append(container.Env, corev1.EnvVar{
 						Name:      utils.REDIS_PASSWORD,
 						Value:     options.RedisPassword.Value,
@@ -149,9 +157,11 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 				if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
 					// setting the REDIS_PASSWORD env var from the params
 					redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
-					if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; ok {
-						redisPasswordEnv.Value = value
-						container.Env = append(container.Env, redisPasswordEnv)
+					if rayStartParams := instance.Spec.HeadGroupSpec.RayStartParams; rayStartParams != nil {
+						if value, ok := (*rayStartParams)["redis-password"]; ok {
+							redisPasswordEnv.Value = value
+							container.Env = append(container.Env, redisPasswordEnv)
+						}
 					}
 				}
 			}
@@ -174,6 +184,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Labels = make(map[string]string)
 	}
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+
+	if headSpec.RayStartParams == nil {
+		headSpec.RayStartParams = &map[string]string{}
+	}
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -182,7 +196,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if utils.IsAutoscalingEnabled(&instance.Spec) {
 		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
 		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
-		headSpec.RayStartParams["no-monitor"] = "true"
+		if headSpec.RayStartParams == nil {
+			headSpec.RayStartParams = &map[string]string{}
+		}
+		(*headSpec.RayStartParams)["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
 		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
@@ -386,7 +403,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams *map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -725,27 +742,27 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 	}
 }
 
-func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
+func setMissingRayStartParams(ctx context.Context, rayStartParams *map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams *map[string]string) {
 	log := ctrl.LoggerFrom(ctx)
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
-		if _, ok := rayStartParams["address"]; !ok {
+		if _, ok := (*rayStartParams)["address"]; !ok {
 			address := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
-			rayStartParams["address"] = address
+			(*rayStartParams)["address"] = address
 		}
 	}
 
 	if nodeType == rayv1.HeadNode {
 		// Allow incoming connections from all network interfaces for the dashboard by default.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
-		if _, ok := rayStartParams["dashboard-host"]; !ok {
-			rayStartParams["dashboard-host"] = "0.0.0.0"
+		if _, ok := (*rayStartParams)["dashboard-host"]; !ok {
+			(*rayStartParams)["dashboard-host"] = "0.0.0.0"
 		}
 
 		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
 		// will be used to initialize the monitor with a READONLY autoscaler which only mirrors what the GCS tells it.
 		// See `monitor.py` in Ray repository for more details.
-		if _, ok := rayStartParams["autoscaling-config"]; ok {
+		if _, ok := (*rayStartParams)["autoscaling-config"]; ok {
 			log.Info("Detect autoscaling-config in head Pod's rayStartParams. " +
 				"The monitor process will initialize the monitor with the provided config. " +
 				"Please ensure the autoscaler is set to READONLY mode.")
@@ -753,44 +770,44 @@ func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]str
 	}
 
 	// Add a metrics port to expose the metrics to Prometheus.
-	if _, ok := rayStartParams["metrics-export-port"]; !ok {
-		rayStartParams["metrics-export-port"] = fmt.Sprint(utils.DefaultMetricsPort)
+	if _, ok := (*rayStartParams)["metrics-export-port"]; !ok {
+		(*rayStartParams)["metrics-export-port"] = fmt.Sprint(utils.DefaultMetricsPort)
 	}
 
 	// Add --block option. See https://github.com/ray-project/kuberay/pull/675
-	rayStartParams["block"] = "true"
+	(*rayStartParams)["block"] = "true"
 
 	// Hardcode the dashboard-agent-listen-port to the default value if it is not provided. This is purely a
 	// defensive measure; Ray will already use this default value if the flag is not provided.
 	// The default value is used by the RayCluster health probe; see https://github.com/ray-project/kuberay/issues/1760
-	if _, ok := rayStartParams["dashboard-agent-listen-port"]; !ok {
-		rayStartParams["dashboard-agent-listen-port"] = strconv.Itoa(utils.DefaultDashboardAgentListenPort)
+	if _, ok := (*rayStartParams)["dashboard-agent-listen-port"]; !ok {
+		(*rayStartParams)["dashboard-agent-listen-port"] = strconv.Itoa(utils.DefaultDashboardAgentListenPort)
 	}
 
 	return rayStartParams
 }
 
-func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, rayStartParams map[string]string, resource corev1.ResourceRequirements) string {
+func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, rayStartParams *map[string]string, resource corev1.ResourceRequirements) string {
 	log := ctrl.LoggerFrom(ctx)
 
 	log.Info("generateRayStartCommand", "nodeType", nodeType, "rayStartParams", rayStartParams, "Ray container resource", resource)
-	if _, ok := rayStartParams["num-cpus"]; !ok {
+	if _, ok := (*rayStartParams)["num-cpus"]; !ok {
 		cpu := resource.Limits[corev1.ResourceCPU]
 		if !cpu.IsZero() {
-			rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+			(*rayStartParams)["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
 		} else {
 			// Fall back to CPU request if limit is not specified
 			cpu := resource.Requests[corev1.ResourceCPU]
 			if !cpu.IsZero() {
-				rayStartParams["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
+				(*rayStartParams)["num-cpus"] = strconv.FormatInt(cpu.Value(), 10)
 			}
 		}
 	}
 
-	if _, ok := rayStartParams["memory"]; !ok {
+	if _, ok := (*rayStartParams)["memory"]; !ok {
 		memory := resource.Limits[corev1.ResourceMemory]
 		if !memory.IsZero() {
-			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
+			(*rayStartParams)["memory"] = strconv.FormatInt(memory.Value(), 10)
 		}
 	}
 
@@ -802,9 +819,9 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	rayStartCmd := ""
 	switch nodeType {
 	case rayv1.HeadNode:
-		rayStartCmd = fmt.Sprintf("ray start --head %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ray start --head %s", convertParamMap(*rayStartParams))
 	case rayv1.WorkerNode:
-		rayStartCmd = fmt.Sprintf("ray start %s", convertParamMap(rayStartParams))
+		rayStartCmd = fmt.Sprintf("ray start %s", convertParamMap(*rayStartParams))
 	default:
 		log.Error(fmt.Errorf("missing node type"), "a node must be either head or worker")
 	}
@@ -812,12 +829,12 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 	return rayStartCmd
 }
 
-func addWellKnownAcceleratorResources(rayStartParams map[string]string, resourceLimits corev1.ResourceList) error {
+func addWellKnownAcceleratorResources(rayStartParams *map[string]string, resourceLimits corev1.ResourceList) error {
 	if len(resourceLimits) == 0 {
 		return nil
 	}
 
-	resourcesMap, err := getResourcesMap(rayStartParams)
+	resourcesMap, err := getResourcesMap(*rayStartParams)
 	if err != nil {
 		return fmt.Errorf("failed to get resources map from rayStartParams: %w", err)
 	}
@@ -833,9 +850,9 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
 		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
-		if _, ok := rayStartParams["num-gpus"]; !ok {
+		if _, ok := (*rayStartParams)["num-gpus"]; !ok {
 			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+				(*rayStartParams)["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
 
@@ -851,7 +868,7 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 						return fmt.Errorf("failed to marshal resources map to string: %w", err)
 					}
 
-					rayStartParams["resources"] = fmt.Sprintf("'%s'", updatedResourcesStr)
+					(*rayStartParams)["resources"] = fmt.Sprintf("'%s'", updatedResourcesStr)
 				}
 				isCustomAcceleratorResourceAdded = true
 			}

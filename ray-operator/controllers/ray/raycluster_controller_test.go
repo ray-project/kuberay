@@ -55,7 +55,6 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
@@ -69,11 +68,10 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:       ptr.To[int32](3),
-					MinReplicas:    ptr.To[int32](0),
-					MaxReplicas:    ptr.To[int32](4),
-					GroupName:      "small-group",
-					RayStartParams: map[string]string{},
+					Replicas:    ptr.To[int32](3),
+					MinReplicas: ptr.To[int32](0),
+					MaxReplicas: ptr.To[int32](4),
+					GroupName:   "small-group",
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
