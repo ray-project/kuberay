@@ -11,4 +11,6 @@ const (
 
 	ResourceNvidiaGPU = "nvidia.com/gpu"
 	ResourceGoogleTPU = "google.com/tpu"
+
+	FieldManager = "ray-kubectl-plugin"
 )

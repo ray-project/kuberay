@@ -199,7 +199,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 
 	// TODO: Decide whether to save YAML to file or not.
 
-	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
+	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("failed to create Ray cluster: %w", err)
 	}
