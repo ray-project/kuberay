@@ -40,9 +40,9 @@ const (
 
 type SubmitJobOptions struct {
 	ioStreams          *genericiooptions.IOStreams
-	configFlags        *genericclioptions.ConfigFlags
-	kubeContexter      util.KubeContexter
+	cmdFactory         cmdutil.Factory
 	RayJob             *rayv1.RayJob
+	namespace          string
 	submissionID       string
 	entryPoint         string
 	fileName           string
@@ -104,17 +104,15 @@ var (
 	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))
 )
 
-func NewJobSubmitOptions(streams genericiooptions.IOStreams) *SubmitJobOptions {
+func NewJobSubmitOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SubmitJobOptions {
 	return &SubmitJobOptions{
-		ioStreams:     &streams,
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewJobSubmitOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewJobSubmitOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:     "submit [OPTIONS] -f/--filename RAYJOB_YAML -- ENTRYPOINT",
@@ -127,7 +125,7 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 			}
 			options.entryPoint = strings.Join(args[entryPointStart:], " ")
-			if err := options.Complete(); err != nil {
+			if err := options.Complete(cmd); err != nil {
 				return err
 			}
 			if err := options.Validate(); err != nil {
@@ -164,13 +162,17 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *SubmitJobOptions) Complete() error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	if len(options.runtimeEnv) > 0 {
@@ -184,15 +186,6 @@ func (options *SubmitJobOptions) Complete() error {
 }
 
 func (options *SubmitJobOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-
 	if len(options.runtimeEnv) > 0 {
 		info, err := os.Stat(options.runtimeEnv)
 		if os.IsNotExist(err) {
@@ -280,7 +273,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
 			RayJobName:     options.rayjobName,
-			Namespace:      *options.configFlags.Namespace,
+			Namespace:      options.namespace,
 			SubmissionMode: "InteractiveMode",
 			// Prior to kuberay 1.2.2, the entry point is required. To maintain
 			// backwards compatibility with 1.2.x, we submit the entry point
@@ -313,14 +306,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 
 		// Apply the generated yaml
-		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
+		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(options.namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Failed to apply generated YAML: %w", err)
 		}
 		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -330,7 +323,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?
 		for len(options.RayJob.Status.RayClusterName) == 0 {
-			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("Failed to get Ray Job status")
 			}
@@ -349,7 +342,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	fmt.Printf("Checking Cluster Status for cluster %s...\n", options.cluster)
 	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= clusterTimeout {
 		time.Sleep(2 * time.Second)
-		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.cluster, v1.GetOptions{})
+		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to get cluster information with error: %w", err)
 		}
@@ -362,7 +355,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 
 	if !clusterReady {
 		fmt.Printf("Deleting RayJob...\n")
-		err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+		err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to clean up Ray job after time out.: %w", err)
 		}
@@ -371,7 +364,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Timed out waiting for cluster")
 	}
 
-	svcName, err := k8sClients.GetRayHeadSvcName(ctx, *options.configFlags.Namespace, util.RayCluster, options.cluster)
+	svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
 	if err != nil {
 		return fmt.Errorf("Failed to find service name: %w", err)
 	}
@@ -495,13 +488,13 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		rayJobID = <-rayJobIDChan
 	}
 	// Add annotation to RayJob with the correct Ray job ID and update the CR
-	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to get latest version of Ray job: %w", err)
 	}
 	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}

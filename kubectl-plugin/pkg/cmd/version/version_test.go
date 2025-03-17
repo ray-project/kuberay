@@ -7,48 +7,12 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	clientfake "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
-
-func TestRayVersionCheckContext(t *testing.T) {
-	tests := []struct {
-		name        string
-		opts        *VersionOptions
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &VersionOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &VersionOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.checkContext()
-			fmt.Printf("err: %v\n", err)
-			if tc.expectError != "" {
-				require.EqualError(t, err, tc.expectError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
 
 func createBuildInfo(revision, time string) *debug.BuildInfo {
 	return &debug.BuildInfo{
@@ -72,8 +36,7 @@ func createBuildInfo(revision, time string) *debug.BuildInfo {
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
 	fakeVersionOptions := &VersionOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		kubeContexter: util.NewMockKubeContexter(true),
+		cmdFactory: cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)),
 	}
 
 	tests := []struct {

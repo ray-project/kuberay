@@ -6,9 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func NewScaleCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewScaleCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "scale",
 		Short:        "Scale a Ray resource",
@@ -21,6 +22,6 @@ func NewScaleCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewScaleClusterCommand(streams))
+	cmd.AddCommand(NewScaleClusterCommand(cmdFactory, streams))
 	return cmd
 }
