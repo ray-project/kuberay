@@ -22,9 +22,8 @@ import (
 )
 
 type GetNodesOptions struct {
-	configFlags   *genericclioptions.ConfigFlags
+	cmdFactory    cmdutil.Factory
 	ioStreams     *genericclioptions.IOStreams
-	kubeContexter util.KubeContexter
 	namespace     string
 	cluster       string
 	node          string
@@ -64,17 +63,15 @@ var getNodesExample = templates.Examples(`
 		kubectl ray get node my-node --namespace my-namespace --ray-cluster my-raycluster
 	`)
 
-func NewGetNodesOptions(streams genericclioptions.IOStreams) *GetNodesOptions {
+func NewGetNodesOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *GetNodesOptions {
 	return &GetNodesOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewGetNodesCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewGetNodesOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewGetNodesCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewGetNodesOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:          "node [NODE] [(-c|--ray-cluster) RAYCLUSTER]",
@@ -84,10 +81,7 @@ func NewGetNodesCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		SilenceUsage: true,
 		Args:         cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args); err != nil {
-				return err
-			}
-			if err := options.Validate(); err != nil {
+			if err := options.Complete(args, cmd); err != nil {
 				return err
 			}
 			k8sClient, err := client.NewClient(cmdFactory)
@@ -106,18 +100,21 @@ func NewGetNodesCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		fmt.Fprintf(streams.ErrOut, "Error registering completion function for --ray-cluster: %v\n", err)
 	}
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *GetNodesOptions) Complete(args []string) error {
+func (options *GetNodesOptions) Complete(args []string, cmd *cobra.Command) error {
 	if options.allNamespaces {
 		options.namespace = ""
 	} else {
-		if options.configFlags.Namespace == nil || *options.configFlags.Namespace == "" {
+		namespace, err := cmd.Flags().GetString("namespace")
+		if err != nil {
+			return fmt.Errorf("failed to get namespace: %w", err)
+		}
+		options.namespace = namespace
+
+		if options.namespace == "" {
 			options.namespace = "default"
-		} else {
-			options.namespace = *options.configFlags.Namespace
 		}
 	}
 
@@ -125,18 +122,6 @@ func (options *GetNodesOptions) Complete(args []string) error {
 		options.node = args[0]
 	}
 
-	return nil
-}
-
-func (options *GetNodesOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
 	return nil
 }
 

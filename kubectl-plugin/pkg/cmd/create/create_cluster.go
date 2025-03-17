@@ -19,11 +19,11 @@ import (
 )
 
 type CreateClusterOptions struct {
-	configFlags            *genericclioptions.ConfigFlags
+	cmdFactory             cmdutil.Factory
 	ioStreams              *genericclioptions.IOStreams
 	workerRayStartParams   map[string]string
 	headRayStartParams     map[string]string
-	kubeContexter          util.KubeContexter
+	namespace              string
 	clusterName            string
 	rayVersion             string
 	image                  string
@@ -56,17 +56,15 @@ var (
 	`, util.RayVersion, util.RayImage))
 )
 
-func NewCreateClusterOptions(streams genericclioptions.IOStreams) *CreateClusterOptions {
+func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
 	return &CreateClusterOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewCreateClusterOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewCreateClusterOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:          "cluster [CLUSTERNAME]",
@@ -107,13 +105,18 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string) error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	if len(args) != 1 {
@@ -129,14 +132,6 @@ func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string)
 }
 
 func (options *CreateClusterOptions) Validate() error {
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-
 	resourceFields := map[string]string{
 		"head-cpu":                 options.headCPU,
 		"head-gpu":                 options.headGPU,
@@ -161,12 +156,12 @@ func (options *CreateClusterOptions) Validate() error {
 }
 
 func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
-	if clusterExists(k8sClient.RayClient(), *options.configFlags.Namespace, options.clusterName) {
-		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, *options.configFlags.Namespace)
+	if clusterExists(k8sClient.RayClient(), options.namespace, options.clusterName) {
+		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, options.namespace)
 	}
 
 	rayClusterObject := generation.RayClusterYamlObject{
-		Namespace:   *options.configFlags.Namespace,
+		Namespace:   options.namespace,
 		ClusterName: options.clusterName,
 		RayClusterSpecObject: generation.RayClusterSpecObject{
 			RayVersion:             options.rayVersion,
@@ -199,14 +194,14 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 
 	// TODO: Decide whether to save YAML to file or not.
 
-	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
+	result, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
 	if err != nil {
 		return fmt.Errorf("failed to create Ray cluster: %w", err)
 	}
 	fmt.Printf("Created Ray cluster: %s\n", result.GetName())
 
 	if options.wait {
-		err = k8sClient.WaitRayClusterProvisioned(ctx, *options.configFlags.Namespace, result.GetName(), options.timeout)
+		err = k8sClient.WaitRayClusterProvisioned(ctx, options.namespace, result.GetName(), options.timeout)
 		if err != nil {
 			return err
 		}

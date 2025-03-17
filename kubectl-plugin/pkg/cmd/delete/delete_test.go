@@ -8,10 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 func TestComplete(t *testing.T) {
-	cmd := &cobra.Command{Use: "deleete"}
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	tests := []struct {
 		name                 string
@@ -99,51 +101,19 @@ func TestComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-			fakeDeleteOptions := NewDeleteOptions(testStreams)
-			fakeDeleteOptions.configFlags.Namespace = &tc.namespace
+			fakeDeleteOptions := NewDeleteOptions(cmdFactory, testStreams)
+
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVarP(&fakeDeleteOptions.namespace, "namespace", "n", tc.namespace, "")
+
 			err := fakeDeleteOptions.Complete(cmd, tc.args)
+
 			if tc.hasErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedResources, fakeDeleteOptions.resources)
 				assert.Equal(t, tc.expectedNamespace, fakeDeleteOptions.namespace)
-			}
-		})
-	}
-}
-
-func TestRayDeleteValidate(t *testing.T) {
-	tests := []struct {
-		name        string
-		opts        *DeleteOptions
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &DeleteOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &DeleteOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
-			if tc.expectError != "" {
-				assert.EqualError(t, err, tc.expectError)
-			} else {
-				require.NoError(t, err)
 			}
 		})
 	}
