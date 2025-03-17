@@ -78,8 +78,10 @@ class VLLMDeployment:
                 request_logger=self.request_logger,
                 chat_template=self.chat_template,
                 chat_template_content_format="auto",
-                enable_auto_tools=True,
-                tool_parser="llama3_json",
+                enable_reasoning=os.getenv("ENABLE_REASONING", 'False').lower() not in ('true', '1', 't', 'yes'),
+                reasoning_parser=os.getenv("REASONING_PARSER", None),
+                enable_auto_tools=os.getenv("ENABLE_AUTO_TOOL_CHOICE", 'False').lower() not in ('true', '1', 't', 'yes'),
+                tool_parser=os.getenv("TOOL_CALL_PARSER", None),
             )
         logger.info(f"Request: {request}")
         generator = await self.openai_serving_chat.create_chat_completion(
@@ -101,7 +103,8 @@ def parse_vllm_args(cli_args: Dict[str, str]):
         description="vLLM OpenAI-Compatible RESTful API server."
     )
     parser = make_arg_parser(arg_parser)
-    arg_strings = ["--enable-auto-tool-choice"]
+    # arg_strings = ["--enable-auto-tool-choice"]
+    arg_strings = []
     for key, value in cli_args.items():
         arg_strings.extend([f"--{key}", str(value)])
     
@@ -125,8 +128,8 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
 
     engine_args = AsyncEngineArgs.from_cli_args(parsed_args)
     engine_args.worker_use_ray = True
-    engine_args.enable_auto_tool_choice = True
-    engine_args.tool_call_parser = "llama3_json"
+    # engine_args.enable_auto_tool_choice = True
+    # engine_args.tool_call_parser = "llama3_json"
 
     logger.info(f"engine_args: {engine_args}")
 
@@ -147,7 +150,7 @@ model = build_app(
         "pipeline-parallel-size": os.environ['PIPELINE_PARALLELISM'],
         "max-model-len": os.environ['MAX_MODEL_LEN'],
         "gpu-memory-utilization": os.environ['GPU_MEMORY_UTILIZATION'],
-        "tool-call-parser": "llama3_json",
+        # "tool-call-parser": "llama3_json",
      }
     )
 
