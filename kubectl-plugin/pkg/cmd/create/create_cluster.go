@@ -23,6 +23,7 @@ type CreateClusterOptions struct {
 	ioStreams              *genericclioptions.IOStreams
 	workerRayStartParams   map[string]string
 	headRayStartParams     map[string]string
+	nodeSelectors          map[string]string
 	kubeContexter          util.KubeContexter
 	clusterName            string
 	rayVersion             string
@@ -106,6 +107,7 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
+	cmd.Flags().StringToStringVar(&options.nodeSelectors, "node-selector", nil, "Node selectors to apply to all pods in the cluster (e.g. --node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -182,6 +184,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 			WorkerEphemeralStorage: options.workerEphemeralStorage,
 			WorkerGPU:              options.workerGPU,
 			WorkerRayStartParams:   options.workerRayStartParams,
+			NodeSelectors:          options.nodeSelectors,
 		},
 	}
 
