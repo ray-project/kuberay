@@ -1,8 +1,6 @@
 package generation
 
 import (
-	"maps"
-
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -138,18 +136,6 @@ func generateLimitResources(memory, ephemeralStorage, gpu *string) corev1.Resour
 }
 
 func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
-	// TODO: Look for better workaround/fixes for RayStartParams. Currently using `WithRayStartParams()` requires
-	// a non-empty map with valid key value pairs and will not populate the field with empty/nil values. This
-	// isn't ideal as it forces the generated RayCluster yamls to use those parameters.
-	headRayStartParams := map[string]string{
-		"dashboard-host": "0.0.0.0",
-	}
-	workerRayStartParams := map[string]string{
-		"metrics-export-port": "8080",
-	}
-	maps.Copy(headRayStartParams, rayClusterSpecObject.HeadRayStartParams)
-	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerGroups[0].WorkerRayStartParams)
-
 	headRequestResources := generateRequestResources(rayClusterSpecObject.HeadCPU, rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
 	headLimitResources := generateLimitResources(rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
 	workerRequestResources := generateRequestResources(rayClusterSpecObject.WorkerGroups[0].WorkerCPU, rayClusterSpecObject.WorkerGroups[0].WorkerMemory, rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage, rayClusterSpecObject.WorkerGroups[0].WorkerGPU)
@@ -163,7 +149,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 	rayClusterSpec := rayv1ac.RayClusterSpec().
 		WithRayVersion(*rayClusterSpecObject.RayVersion).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(headRayStartParams).
+			WithRayStartParams(rayClusterSpecObject.HeadRayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithNodeSelector(rayClusterSpecObject.HeadNodeSelectors).
@@ -177,8 +163,8 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 							corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard"),
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
 		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-			WithRayStartParams(workerRayStartParams).
 			WithGroupName(workerGroupName).
+			WithRayStartParams(rayClusterSpecObject.WorkerGroups[0].WorkerRayStartParams).
 			WithReplicas(*rayClusterSpecObject.WorkerGroups[0].WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
