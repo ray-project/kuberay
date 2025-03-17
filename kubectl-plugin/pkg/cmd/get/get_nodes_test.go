@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -15,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	kubefake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/ptr"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
@@ -24,9 +25,15 @@ import (
 )
 
 func TestRayNodesGetComplete(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	cmd := &cobra.Command{}
+	flags := cmd.Flags()
+	flags.String("namespace", "", "namespace flag")
+
 	tests := []struct {
 		opts              *GetNodesOptions
 		name              string
+		namespace         string
 		expectedNamespace string
 		expectedNode      string
 		args              []string
@@ -34,7 +41,7 @@ func TestRayNodesGetComplete(t *testing.T) {
 		{
 			name: "specifying all namespaces should set namespace to empty string",
 			opts: &GetNodesOptions{
-				configFlags:   &genericclioptions.ConfigFlags{},
+				cmdFactory:    cmdFactory,
 				allNamespaces: true,
 			},
 			expectedNamespace: "",
@@ -42,9 +49,7 @@ func TestRayNodesGetComplete(t *testing.T) {
 		{
 			name: "not specifying a namespace should set namespace to 'default'",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace: ptr.To(""),
-				},
+				cmdFactory:    cmdFactory,
 				allNamespaces: false,
 			},
 			expectedNamespace: "default",
@@ -52,19 +57,16 @@ func TestRayNodesGetComplete(t *testing.T) {
 		{
 			name: "specifying a namespace should set that namespace",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace: ptr.To("some-namespace"),
-				},
+				cmdFactory:    cmdFactory,
 				allNamespaces: false,
 			},
+			namespace:         "some-namespace",
 			expectedNamespace: "some-namespace",
 		},
 		{
 			name: "specifying all namespaces takes precedence over specifying a namespace",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace: ptr.To("some-namespace"),
-				},
+				cmdFactory:    cmdFactory,
 				allNamespaces: true,
 			},
 			expectedNamespace: "",
@@ -72,7 +74,7 @@ func TestRayNodesGetComplete(t *testing.T) {
 		{
 			name: "first positional argument should be set as the node name",
 			opts: &GetNodesOptions{
-				configFlags: &genericclioptions.ConfigFlags{},
+				cmdFactory: cmdFactory,
 			},
 			args:              []string{"my-node", "other-arg"},
 			expectedNamespace: "default",
@@ -82,7 +84,9 @@ func TestRayNodesGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Complete(tc.args)
+			err := flags.Set("namespace", tc.namespace)
+			require.NoError(t, err)
+			err = tc.opts.Complete(tc.args, cmd)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, tc.opts.namespace)
 			assert.Equal(t, tc.expectedNode, tc.opts.node)
@@ -90,43 +94,9 @@ func TestRayNodesGetComplete(t *testing.T) {
 	}
 }
 
-func TestRayNodesGetValidate(t *testing.T) {
-	tests := []struct {
-		name        string
-		opts        *GetNodesOptions
-		expect      string
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &GetNodesOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &GetNodesOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
-			if tc.expectError != "" {
-				require.EqualError(t, err, tc.expectError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestRayNodesGetRun(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
 	resources := corev1.ResourceList{
 		corev1.ResourceCPU:     resource.MustParse("1"),
 		corev1.ResourceMemory:  resource.MustParse("1Gi"),
@@ -300,7 +270,7 @@ pod-2   1      1      1      1Gi      cluster-1   worker   group-2        120m
 			testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
 
 			fakeGetNodesOptions := GetNodesOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
+				cmdFactory:    cmdFactory,
 				ioStreams:     &testStreams,
 				cluster:       tc.cluster,
 				namespace:     tc.namespace,
