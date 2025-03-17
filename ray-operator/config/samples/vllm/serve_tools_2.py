@@ -150,7 +150,7 @@ model = build_app(
         "pipeline-parallel-size": os.environ['PIPELINE_PARALLELISM'],
         "max-model-len": os.environ['MAX_MODEL_LEN'],
         "gpu-memory-utilization": os.environ['GPU_MEMORY_UTILIZATION'],
-        # "tool-call-parser": "llama3_json",
+        "chat-template": os.getenv("CHAT_TEMPLATE", None),
      }
     )
 
