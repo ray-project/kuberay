@@ -240,6 +240,7 @@ func main() {
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
+		EnableMetrics:           config.EnableMetrics,
 	}
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
