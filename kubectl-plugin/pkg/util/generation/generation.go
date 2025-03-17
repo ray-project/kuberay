@@ -189,14 +189,6 @@ func generateLimitResources(memory, ephemeralStorage, gpu, tpu *string) corev1.R
 }
 
 func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
-	// TODO: Look for better workaround/fixes for RayStartParams. Currently using `WithRayStartParams()` requires
-	// a non-empty map with valid key value pairs and will not populate the field with empty/nil values. This
-	// isn't ideal as it forces the generated RayCluster yamls to use those parameters.
-	headRayStartParams := map[string]string{
-		"dashboard-host": "0.0.0.0",
-	}
-	maps.Copy(headRayStartParams, rayClusterConfig.Head.RayStartParams)
-
 	headRequestResources := generateRequestResources(rayClusterConfig.Head.CPU, rayClusterConfig.Head.Memory, rayClusterConfig.Head.EphemeralStorage, rayClusterConfig.Head.GPU,
 		// TPU is not used for head request resources
 		nil)
@@ -215,16 +207,11 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 			workerGroup.Name = ptr.To(name)
 		}
 
-		workerRayStartParams := map[string]string{
-			"metrics-export-port": "8080",
-		}
-		maps.Copy(workerRayStartParams, workerGroup.RayStartParams)
-
 		workerRequestResources := generateRequestResources(workerGroup.CPU, workerGroup.Memory, workerGroup.EphemeralStorage, workerGroup.GPU, workerGroup.TPU)
 		workerLimitResources := generateLimitResources(workerGroup.Memory, workerGroup.EphemeralStorage, workerGroup.GPU, workerGroup.TPU)
 
 		workerGroupSpecs[i] = rayv1ac.WorkerGroupSpec().
-			WithRayStartParams(workerRayStartParams).
+			WithRayStartParams(workerGroup.RayStartParams).
 			WithGroupName(*workerGroup.Name).
 			WithReplicas(workerGroup.Replicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
@@ -249,7 +236,7 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 	rayClusterSpec := rayv1ac.RayClusterSpec().
 		WithRayVersion(*rayClusterConfig.RayVersion).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(headRayStartParams).
+			WithRayStartParams(rayClusterConfig.Head.RayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithNodeSelector(rayClusterConfig.Head.NodeSelectors).
