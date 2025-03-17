@@ -15,6 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -138,12 +140,14 @@ type RayClusterReconciler struct {
 
 	options RayClusterReconcilerOptions
 
-	IsOpenShift bool
+	IsOpenShift   bool
+	EnableMetrics bool
 }
 
 type RayClusterReconcilerOptions struct {
 	HeadSidecarContainers   []corev1.Container
 	WorkerSidecarContainers []corev1.Container
+	EnableMetrics           bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -732,6 +736,19 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
+
+		if r.EnableMetrics {
+			creatorCRDType := getCreatorCRDType(*instance)
+			// Increment the counter for ray_clusters_created_total metric based on the creator CRD type.
+			if creatorCRDType == utils.RayClusterCRD {
+				metrics.CreatedRayClustersCounterInc(instance.Namespace, false, false)
+			} else if creatorCRDType == utils.RayJobCRD {
+				metrics.CreatedRayClustersCounterInc(instance.Namespace, true, false)
+			} else if creatorCRDType == utils.RayServiceCRD {
+				metrics.CreatedRayClustersCounterInc(instance.Namespace, false, true)
+			}
+		}
+
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
