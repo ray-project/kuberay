@@ -23,6 +23,14 @@ common:
   containerEnv: []
   #  - name: BLAH
   #    value: VAL
+  # Optional: The following volumes/volumeMounts configurations are optional but recommended because
+  # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+  volumeMounts:
+    - mountPath: /tmp/ray
+      name: log-volume
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
@@ -93,14 +101,12 @@ head:
   podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
-  # Optional: The following volumes/volumeMounts configurations are optional but recommended because
-  # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+  volumes: {}
+  #  - name: log-volume
+  #    emptyDir: {}
+  volumeMounts: {}
+  #  - mountPath: /tmp/ray
+  #    name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -175,14 +181,12 @@ worker:
   podSecurityContext: {}
   # Ray container security context.
   securityContext: {}
-  # Optional: The following volumes/volumeMounts configurations are optional but recommended because
-  # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
-  volumes:
-    - name: log-volume
-      emptyDir: {}
-  volumeMounts:
-    - mountPath: /tmp/ray
-      name: log-volume
+  volumes: {}
+  #  - name: log-volume
+  #    emptyDir: {}
+  volumeMounts: {}
+  #  - mountPath: /tmp/ray
+  #    name: log-volume
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
@@ -253,14 +257,12 @@ additionalWorkerGroups:
     podSecurityContext: {}
     # Ray container security context.
     securityContext: {}
-    # Optional: The following volumes/volumeMounts configurations are optional but recommended because
-    # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
-    volumes:
-      - name: log-volume
-        emptyDir: {}
-    volumeMounts:
-      - mountPath: /tmp/ray
-        name: log-volume
+    volumes: {}
+    #  - name: log-volume
+    #    emptyDir: {}
+    volumeMounts: {}
+    #  - mountPath: /tmp/ray
+    #    name: log-volume
     sidecarContainers: []
     # See docs/guidance/pod-command.md for more details about how to specify
     # container command for worker Pod.
