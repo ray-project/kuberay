@@ -9,6 +9,7 @@ image:
 
 nameOverride: "kuberay-operator"
 fullnameOverride: "kuberay-operator"
+componentOverride: "kuberay-operator"
 
 serviceAccount:
   # Specifies whether a service account should be created
