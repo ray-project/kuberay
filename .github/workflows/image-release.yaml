@@ -71,8 +71,8 @@ jobs:
       run: |
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ env.tag }};
-        docker push quay.io/kuberay/apiserver:${{ env.tag }}
+        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:"${tag}";
+        docker push quay.io/kuberay/apiserver:"${tag}"
 
   release_operator_image:
     env:
@@ -173,7 +173,7 @@ jobs:
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:"${tag}"
 
     - name: Create tag
       uses: actions/github-script@v6
@@ -182,6 +182,6 @@ jobs:
           await github.rest.git.createRef({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            ref: 'refs/tags/ray-operator/${{ env.tag }}',
+            ref: 'refs/tags/ray-operator/${tag}',
             sha: '${{ github.sha }}'
           })
