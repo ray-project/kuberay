@@ -10,11 +10,11 @@ import (
 // with apply.
 type RayServiceStatusApplyConfiguration struct {
 	Applications            map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
-	RayClusterName          *string                                `json:"rayClusterName,omitempty"`
 	RayClusterStatus        *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
+	LastTrafficMigratedTime *metav1.Time                           `json:"lastTrafficMigratedTime,omitempty"`
 	TargetCapacity          *int32                                 `json:"targetCapacity,omitempty"`
 	TrafficRoutedPercent    *int32                                 `json:"trafficRoutedPercent,omitempty"`
-	LastTrafficMigratedTime *metav1.Time                           `json:"lastTrafficMigratedTime,omitempty"`
+	RayClusterName          *string                                `json:"rayClusterName,omitempty"`
 }
 
 // RayServiceStatusApplyConfiguration constructs a declarative configuration of the RayServiceStatus type for use with
@@ -37,19 +37,19 @@ func (b *RayServiceStatusApplyConfiguration) WithApplications(entries map[string
 	return b
 }
 
-// WithRayClusterName sets the RayClusterName field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the RayClusterName field is set to the value of the last call.
-func (b *RayServiceStatusApplyConfiguration) WithRayClusterName(value string) *RayServiceStatusApplyConfiguration {
-	b.RayClusterName = &value
-	return b
-}
-
 // WithRayClusterStatus sets the RayClusterStatus field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the RayClusterStatus field is set to the value of the last call.
 func (b *RayServiceStatusApplyConfiguration) WithRayClusterStatus(value *RayClusterStatusApplyConfiguration) *RayServiceStatusApplyConfiguration {
 	b.RayClusterStatus = value
+	return b
+}
+
+// WithLastTrafficMigratedTime sets the LastTrafficMigratedTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LastTrafficMigratedTime field is set to the value of the last call.
+func (b *RayServiceStatusApplyConfiguration) WithLastTrafficMigratedTime(value metav1.Time) *RayServiceStatusApplyConfiguration {
+	b.LastTrafficMigratedTime = &value
 	return b
 }
 
@@ -69,10 +69,10 @@ func (b *RayServiceStatusApplyConfiguration) WithTrafficRoutedPercent(value int3
 	return b
 }
 
-// WithLastTrafficMigratedTime sets the LastTrafficMigratedTime field in the declarative configuration to the given value
+// WithRayClusterName sets the RayClusterName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the LastTrafficMigratedTime field is set to the value of the last call.
-func (b *RayServiceStatusApplyConfiguration) WithLastTrafficMigratedTime(value metav1.Time) *RayServiceStatusApplyConfiguration {
-	b.LastTrafficMigratedTime = &value
+// If called multiple times, the RayClusterName field is set to the value of the last call.
+func (b *RayServiceStatusApplyConfiguration) WithRayClusterName(value string) *RayServiceStatusApplyConfiguration {
+	b.RayClusterName = &value
 	return b
 }
