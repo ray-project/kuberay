@@ -383,6 +383,16 @@ def volume_decoder(dst: dict[str, Any]) -> BaseVolume:
             return AccessMode(int(dst.get("accessMode", "0")))
         return None
 
+    if "volumeType" not in dst:  # TODO
+        # PVC
+        return PVCVolume(
+            name=dst.get("name", ""),
+            mount_path=dst.get("mountPath", ""),
+            source=dst.get("source", ""),
+            read_only=dst.get("readOnly", False),
+            mount_propagation=_get_mount_propagation(),
+        )
+
     match dst["volumeType"]:
         case 0:
             # PVC

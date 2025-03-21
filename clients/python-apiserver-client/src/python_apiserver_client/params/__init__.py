@@ -27,6 +27,10 @@ from python_apiserver_client.params.environmentvariables import (
     env_var_from_decoder,
     environment_variables_decoder,
 )
+from python_apiserver_client.params.securitycontext import (
+    SecurityContext,
+    security_context_decoder,
+)
 from python_apiserver_client.params.headnode import (
     ServiceType,
     HeadNodeSpec,
