@@ -103,7 +103,7 @@ def parse_vllm_args(cli_args: Dict[str, str]):
         description="vLLM OpenAI-Compatible RESTful API server."
     )
     parser = make_arg_parser(arg_parser)
-    # arg_strings = ["--enable-auto-tool-choice"]
+
     arg_strings = []
     for key, value in cli_args.items():
         arg_strings.extend([f"--{key}", str(value)])
@@ -128,8 +128,6 @@ def build_app(cli_args: Dict[str, str]) -> serve.Application:
 
     engine_args = AsyncEngineArgs.from_cli_args(parsed_args)
     engine_args.worker_use_ray = True
-    # engine_args.enable_auto_tool_choice = True
-    # engine_args.tool_call_parser = "llama3_json"
 
     logger.info(f"engine_args: {engine_args}")
 
