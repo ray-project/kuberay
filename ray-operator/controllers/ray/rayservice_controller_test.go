@@ -76,6 +76,9 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"foo": "bar",
+			},
 		},
 		Spec: rayv1.RayServiceSpec{
 			ServeConfigV2: serveConfigV2,
@@ -330,6 +333,16 @@ var _ = Context("RayService env tests", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
 				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+
+			// Make sure the annotations are populated to the RayCluster.
+			Expect(rayCluster.Annotations).Should(Satisfy(func(annotations map[string]string) bool {
+				for key, value := range rayService.Annotations {
+					if val, ok := annotations[key]; !ok || val != value {
+						return false
+					}
+				}
+				return true
+			}))
 
 			By("Check the serve application status in the RayService status")
 			// Check the serve application status in the RayService status.
