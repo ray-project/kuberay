@@ -173,7 +173,7 @@ jobs:
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:"${tag}"
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:"${{ env.tag }}"
 
     - name: Create tag
       uses: actions/github-script@v6
@@ -182,6 +182,6 @@ jobs:
           await github.rest.git.createRef({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            ref: 'refs/tags/ray-operator/${tag}',
+            ref: 'refs/tags/ray-operator/${{ env.tag }}',
             sha: '${{ github.sha }}'
           })
