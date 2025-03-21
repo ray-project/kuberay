@@ -517,7 +517,7 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 	return true
 }
 
-func (r *RayServiceReconciler) createGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
+func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
 	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 	if options == nil {
 		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
@@ -550,7 +550,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 
 	// Check for existing RayService Gateway
 	existingGateway := rayServiceInstance.Spec.Gateway
-	desiredGateway, err := r.createGateway(ctx, rayServiceInstance)
+	desiredGateway, err := r.createGateway(rayServiceInstance)
 	if err != nil {
 		logger.Error(err, "Failed to build Gateway object for Rayservice")
 		return nil, err
@@ -629,7 +629,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	}
 	newClusterWeight := pendingServiceStatus.TrafficRoutedPercent
 	if newClusterWeight == nil {
-		newClusterWeight = ptr.To(int32(max(100-int(*oldClusterWeight), 0)))
+		newClusterWeight = ptr.To(max(int32(100)-*oldClusterWeight, 0))
 	}
 
 	// Wait IntervalSeconds in between migrating StepSizePercent traffic
@@ -1130,15 +1130,6 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 		return err
 	}
 
-	currentTargetCapacity := serveConfig["target_capacity"]
-	if currentTargetCapacity == nil {
-		return nil
-	}
-	goalTargetCapacity, ok := currentTargetCapacity.(int)
-	if !ok {
-		logger.Info("Target capacity has unexpected type %d", currentTargetCapacity)
-		return nil
-	}
 	activeRayServiceStatus := rayServiceInstance.Status.ActiveServiceStatus
 	pendingRayServiceStatus := rayServiceInstance.Status.PendingServiceStatus
 
@@ -1168,6 +1159,7 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	// 2. The total target_capacity is equal to 100. This means the pending RayCluster can
 	// increase its target_capacity by MaxSurgePercent.
 	var clusterName string
+	var goalTargetCapacity int
 	if activeTargetCapacity+pendingTargetCapacity > 100 {
 		goalTargetCapacity = min(100, activeTargetCapacity-maxSurgePercent)
 		clusterName = activeRayServiceStatus.RayClusterName
@@ -1184,7 +1176,7 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	logger.Info("reconcileServeTargetCapacity", "MULTI_APP json config", string(configJson))
 	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
 		err = fmt.Errorf(
-			"fail to create / update target_capacity for Serve applications. err: %v", err)
+			"fail to create / update target_capacity for Serve applications. err: %w", err)
 		return err
 	}
 
