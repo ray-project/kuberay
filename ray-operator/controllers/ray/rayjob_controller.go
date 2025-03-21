@@ -511,7 +511,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-c", strings.Join(k8sJobCommand, " ")}
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-ce", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
 		logger.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
