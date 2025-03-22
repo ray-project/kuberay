@@ -139,9 +139,13 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
+		*out = new(map[string]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[string]string, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val
+			}
 		}
 	}
 }
@@ -758,9 +762,13 @@ func (in *WorkerGroupSpec) DeepCopyInto(out *WorkerGroupSpec) {
 	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
+		*out = new(map[string]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[string]string, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val
+			}
 		}
 	}
 	in.Template.DeepCopyInto(&out.Template)

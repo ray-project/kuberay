@@ -2,7 +2,6 @@ package generation
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 	"testing"
 
@@ -54,10 +53,6 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 			},
 		},
 	}
-	expectedWorkerRayStartParams := map[string]string{
-		"metrics-export-port": "8080",
-	}
-	maps.Copy(expectedWorkerRayStartParams, testRayClusterYamlObject.WorkerRayStartParams)
 
 	result := testRayClusterYamlObject.GenerateRayClusterApplyConfig()
 
@@ -76,7 +71,7 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerCPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerGPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerMemory), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
-	assert.Equal(t, expectedWorkerRayStartParams, result.Spec.WorkerGroupSpecs[0].RayStartParams)
+	assert.Equal(t, testRayClusterYamlObject.WorkerRayStartParams, result.Spec.WorkerGroupSpecs[0].RayStartParams)
 }
 
 func TestGenerateRayJobApplyConfig(t *testing.T) {
@@ -126,11 +121,14 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			"piping":   "plover",
 		},
 		RayClusterSpecObject: RayClusterSpecObject{
-			RayVersion:     util.RayVersion,
-			Image:          util.RayImage,
-			HeadCPU:        "1",
-			HeadMemory:     "5Gi",
-			HeadGPU:        "1",
+			RayVersion: util.RayVersion,
+			Image:      util.RayImage,
+			HeadCPU:    "1",
+			HeadMemory: "5Gi",
+			HeadGPU:    "1",
+			HeadRayStartParams: map[string]string{
+				"num-cpus": "0",
+			},
 			WorkerReplicas: 3,
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
@@ -156,7 +154,7 @@ metadata:
 spec:
   headGroupSpec:
     rayStartParams:
-      dashboard-host: 0.0.0.0
+      num-cpus: "0"
     template:
       spec:
         containers:
@@ -181,8 +179,6 @@ spec:
   rayVersion: %s
   workerGroupSpecs:
   - groupName: default-group
-    rayStartParams:
-      metrics-export-port: "8080"
     replicas: 3
     template:
       spec:
@@ -262,7 +258,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
 		RayVersion: ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
+			RayStartParams: &map[string]string{"softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 				Spec: &corev1ac.PodSpecApplyConfiguration{
 					Containers: []corev1ac.ContainerApplyConfiguration{
@@ -304,9 +300,8 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 		},
 		WorkerGroupSpecs: []rayv1ac.WorkerGroupSpecApplyConfiguration{
 			{
-				GroupName:      ptr.To("default-group"),
-				Replicas:       ptr.To(int32(3)),
-				RayStartParams: map[string]string{"metrics-export-port": "8080"},
+				GroupName: ptr.To("default-group"),
+				Replicas:  ptr.To(int32(3)),
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
 						Containers: []corev1ac.ContainerApplyConfiguration{

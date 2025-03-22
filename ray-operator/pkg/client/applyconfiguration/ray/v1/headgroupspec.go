@@ -13,7 +13,7 @@ type HeadGroupSpecApplyConfiguration struct {
 	Template       *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 	HeadService    *apicorev1.Service                        `json:"headService,omitempty"`
 	EnableIngress  *bool                                     `json:"enableIngress,omitempty"`
-	RayStartParams map[string]string                         `json:"rayStartParams,omitempty"`
+	RayStartParams *map[string]string                        `json:"rayStartParams,omitempty"`
 	ServiceType    *apicorev1.ServiceType                    `json:"serviceType,omitempty"`
 }
 
@@ -47,17 +47,11 @@ func (b *HeadGroupSpecApplyConfiguration) WithEnableIngress(value bool) *HeadGro
 	return b
 }
 
-// WithRayStartParams puts the entries into the RayStartParams field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, the entries provided by each call will be put on the RayStartParams field,
-// overwriting an existing map entries in RayStartParams field with the same key.
-func (b *HeadGroupSpecApplyConfiguration) WithRayStartParams(entries map[string]string) *HeadGroupSpecApplyConfiguration {
-	if b.RayStartParams == nil && len(entries) > 0 {
-		b.RayStartParams = make(map[string]string, len(entries))
-	}
-	for k, v := range entries {
-		b.RayStartParams[k] = v
-	}
+// WithRayStartParams sets the RayStartParams field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayStartParams field is set to the value of the last call.
+func (b *HeadGroupSpecApplyConfiguration) WithRayStartParams(value map[string]string) *HeadGroupSpecApplyConfiguration {
+	b.RayStartParams = &value
 	return b
 }
 

@@ -1093,6 +1093,11 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
+
+	if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+		instance.Spec.HeadGroupSpec.RayStartParams = &map[string]string{}
+	}
+
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
@@ -1120,6 +1125,10 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
+
+	if worker.RayStartParams == nil {
+		worker.RayStartParams = &map[string]string{}
+	}
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)

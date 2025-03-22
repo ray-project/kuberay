@@ -15,7 +15,7 @@ type WorkerGroupSpecApplyConfiguration struct {
 	MinReplicas        *int32                                    `json:"minReplicas,omitempty"`
 	MaxReplicas        *int32                                    `json:"maxReplicas,omitempty"`
 	IdleTimeoutSeconds *int32                                    `json:"idleTimeoutSeconds,omitempty"`
-	RayStartParams     map[string]string                         `json:"rayStartParams,omitempty"`
+	RayStartParams     *map[string]string                        `json:"rayStartParams,omitempty"`
 	Template           *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 	ScaleStrategy      *ScaleStrategyApplyConfiguration          `json:"scaleStrategy,omitempty"`
 	NumOfHosts         *int32                                    `json:"numOfHosts,omitempty"`
@@ -75,17 +75,11 @@ func (b *WorkerGroupSpecApplyConfiguration) WithIdleTimeoutSeconds(value int32) 
 	return b
 }
 
-// WithRayStartParams puts the entries into the RayStartParams field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, the entries provided by each call will be put on the RayStartParams field,
-// overwriting an existing map entries in RayStartParams field with the same key.
-func (b *WorkerGroupSpecApplyConfiguration) WithRayStartParams(entries map[string]string) *WorkerGroupSpecApplyConfiguration {
-	if b.RayStartParams == nil && len(entries) > 0 {
-		b.RayStartParams = make(map[string]string, len(entries))
-	}
-	for k, v := range entries {
-		b.RayStartParams[k] = v
-	}
+// WithRayStartParams sets the RayStartParams field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayStartParams field is set to the value of the last call.
+func (b *WorkerGroupSpecApplyConfiguration) WithRayStartParams(value map[string]string) *WorkerGroupSpecApplyConfiguration {
+	b.RayStartParams = &value
 	return b
 }
 

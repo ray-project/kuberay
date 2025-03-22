@@ -47,7 +47,7 @@ var (
 				headServiceAnnotationKey2: headServiceAnnotationValue2,
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{
+				RayStartParams: &map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
 					"node-manager-port":   "12346",

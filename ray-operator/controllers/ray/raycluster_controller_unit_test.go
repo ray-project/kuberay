@@ -306,7 +306,7 @@ func setupTest(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: &enableInTreeAutoscaling,
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{
+				RayStartParams: &map[string]string{
 					"port":                "6379",
 					"object-manager-port": "12345",
 					"node-manager-port":   "12346",
@@ -343,7 +343,7 @@ func setupTest(t *testing.T) {
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
 					GroupName:   groupNameStr,
-					RayStartParams: map[string]string{
+					RayStartParams: &map[string]string{
 						"port":     "6379",
 						"num-cpus": "1",
 					},

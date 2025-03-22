@@ -106,7 +106,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", RayExternalStorageNSAnnotationKey)
 
 	tests := []struct {
-		rayStartParams           map[string]string
+		rayStartParams           *map[string]string
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
 		name                     string
@@ -276,7 +276,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 				Spec: rayv1.RayClusterSpec{
 					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: tt.rayStartParams,
+						RayStartParams: &tt.rayStartParams,
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
@@ -346,7 +346,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 				Spec: rayv1.RayClusterSpec{
 					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: tt.rayStartParams,
+						RayStartParams: &tt.rayStartParams,
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
