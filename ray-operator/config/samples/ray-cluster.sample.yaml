@@ -1,4 +1,3 @@
-# This example config does not specify resource requests or limits.
 # For examples with more realistic resource configuration, see
 # ray-cluster.complete.large.yaml and
 # ray-cluster.autoscaler.large.yaml.
