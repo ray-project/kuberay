@@ -153,4 +153,3 @@ model = build_app(
     )
 
 logger.info(f"model: {model}")
-
