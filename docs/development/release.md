@@ -104,7 +104,7 @@ You will be prompted for a commit reference and an image tag. The commit referen
 
 * Open a PR into the Ray repo updating the operator version used in the autoscaler integration test. Make any adjustments necessary for the test to pass ([example](https://github.com/ray-project/ray/pull/40918)). Make sure the test labelled [kubernetes-operator](https://buildkite.com/ray-project/oss-ci-build-pr/builds/17146#01873a69-5ccf-4c71-b06c-ae3a4dd9aecb) passes before merging.
 
-* Open another PR in the Ray repo to update the branch used to kick off tests from the Ray release automation pipeline to test with the nightly (context and step location: <https://github.com/ray-project/ray/pull/51539>). Also make a pr in Kuberay to update the version installed by helm when CI is kicked off by Ray release automation. This should be updated in .buildkite/build-start-operator.sh. This commit should also be cherry-picked into the release branch.
+* Open another PR in the Ray repo to update the branch used to kick off tests from the Ray release automation pipeline to test with the nightly (context and step location: <https://github.com/ray-project/ray/pull/51539>).
 
 * Announce the `rc0` release on the KubeRay slack, with deployment instructions ([example](https://ray-distributed.slack.com/archives/C02GFQ82JPM/p1680555251566609)).
 
