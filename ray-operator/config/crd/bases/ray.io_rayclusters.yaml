@@ -4301,7 +4301,6 @@ spec:
                         type: object
                     type: object
                 required:
-                - rayStartParams
                 - template
                 type: object
               headServiceAnnotations:
@@ -8029,7 +8028,6 @@ spec:
                   - groupName
                   - maxReplicas
                   - minReplicas
-                  - rayStartParams
                   - template
                   type: object
                 type: array

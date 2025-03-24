@@ -76,7 +76,8 @@ type HeadGroupSpec struct {
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
-	RayStartParams map[string]string `json:"rayStartParams"`
+	// +optional
+	RayStartParams map[string]string `json:"rayStartParams,omitempty"`
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
@@ -106,7 +107,8 @@ type WorkerGroupSpec struct {
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
-	RayStartParams map[string]string `json:"rayStartParams"`
+	// +optional
+	RayStartParams map[string]string `json:"rayStartParams,omitempty"`
 	// Template is a pod template for the worker
 	Template corev1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
