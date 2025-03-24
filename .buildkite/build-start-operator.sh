@@ -1,11 +1,15 @@
 #!/bin/bash
 
-if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
-    helm install kuberay/kuberay-operator --version 1.3.0;
-fi
+# This script is used to start the operator in the buildkite test-e2e steps.
 
-if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" != 1 ];
-    then IMG=kuberay/operator:nightly make docker-image &&
+# When starting from the ray ci release automation, we want to install the latest
+# released version from helm as actual users might. Ray ci is also always expected
+# to kick off from the release branch so tests should match up accordingly.
+
+if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
+    helm install kuberay/kuberay-operator --version 1.3.0
+else
+    IMG=kuberay/operator:nightly make docker-image &&
     kind load docker-image kuberay/operator:nightly &&
-    IMG=kuberay/operator:nightly make deploy;
+    IMG=kuberay/operator:nightly make deploy
 fi
