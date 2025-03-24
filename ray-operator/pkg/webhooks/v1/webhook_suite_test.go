@@ -135,7 +135,6 @@ var _ = Describe("RayCluster validating webhook", func() {
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{},
@@ -170,7 +169,6 @@ var _ = Describe("RayCluster validating webhook", func() {
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{},
@@ -179,8 +177,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 					},
 					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 						{
-							GroupName:      "group1",
-							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
+							GroupName: "group1",
 							Template: corev1.PodTemplateSpec{
 								Spec: corev1.PodSpec{
 									Containers: []corev1.Container{},
@@ -188,8 +185,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 							},
 						},
 						{
-							GroupName:      "group1",
-							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
+							GroupName: "group1",
 							Template: corev1.PodTemplateSpec{
 								Spec: corev1.PodSpec{
 									Containers: []corev1.Container{},
