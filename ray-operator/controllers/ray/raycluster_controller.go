@@ -92,10 +92,10 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricCollector *metrics.RayClusterMetricCollector
-	HeadSidecarContainers     []corev1.Container
-	WorkerSidecarContainers   []corev1.Container
-	IsOpenShift               bool
+	RayClusterMetricManager *metrics.RayClusterMetricsManager
+	HeadSidecarContainers   []corev1.Container
+	WorkerSidecarContainers []corev1.Container
+	IsOpenShift             bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -328,6 +328,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	} else {
 		inconsistent, updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
+
+	emitRayClusterMetrics(r.options.RayClusterMetricManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 
 	// Return error based on order.
 	var err error
@@ -1608,21 +1610,22 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	}
-	collectRayClusterMetrics(r.options.RayClusterMetricCollector, newInstance.Name, newInstance.Namespace, newInstance.Status, originalRayClusterInstance.Status, originalRayClusterInstance.CreationTimestamp.Time)
 
 	return inconsistent, err
 }
 
-// collectRayClusterMetrics records metrics related to the RayCluster.
-func collectRayClusterMetrics(collector *metrics.RayClusterMetricCollector, name, namespace string, newClusterStatus, oldClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
-	if collector == nil {
+func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	if rayClusterMetricsManager == nil {
 		return
 	}
+	emitRayClusterProvisionedDuration(rayClusterMetricsManager, rayClusterName, rayClusterNamespace, originRayClusterStatus, rayClusterStatus, creationTimestamp)
+}
 
-	// Record `kuberay_cluster_provisioned_duration_seconds` metric if just provisioned
-	if meta.IsStatusConditionTrue(newClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
-		!meta.IsStatusConditionTrue(oldClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		collector.ObserveRayClusterProvisionedDuration(name, namespace, time.Since(creationTimestamp).Seconds())
+func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
+	if !meta.IsStatusConditionTrue(originRayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		meta.IsStatusConditionTrue(rayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(rayClusterName, rayClusterNamespace, time.Since(creationTimestamp).Seconds())
 	}
 }
 

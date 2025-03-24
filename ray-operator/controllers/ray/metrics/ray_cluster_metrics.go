@@ -4,14 +4,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type RayClusterMetricCollector struct {
-	// Metrics
-	rayClusterProvisionedDuration *prometheus.GaugeVec
+//go:generate mockgen -destination=mocks/ray_cluster_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayClusterMetricsObserver
+type RayClusterMetricsObserver interface {
+	ObserveRayClusterProvisionedDuration(name, namespace string, duration float64)
 }
 
-func NewRayClusterMetricCollector() *RayClusterMetricCollector {
-	collector := &RayClusterMetricCollector{
-		rayClusterProvisionedDuration: prometheus.NewGaugeVec(
+// RayClusterMetricsManager implements the prometheus.Collector and RayClusterMetricsObserver interface to collect ray cluster metrics.
+type RayClusterMetricsManager struct {
+	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
+}
+
+// RayClusterMetricsManager creates a new RayClusterManager instance.
+func NewRayClusterMetricsManager() *RayClusterMetricsManager {
+	collector := &RayClusterMetricsManager{
+		rayClusterProvisionedDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_cluster_provisioned_duration_seconds",
 				Help: "The time, in seconds, when a RayCluster's `RayClusterProvisioned` status transitions from false (or unset) to true",
@@ -23,16 +29,15 @@ func NewRayClusterMetricCollector() *RayClusterMetricCollector {
 }
 
 // Describe implements prometheus.Collector interface Describe method.
-func (c *RayClusterMetricCollector) Describe(ch chan<- *prometheus.Desc) {
-	c.rayClusterProvisionedDuration.Describe(ch)
+func (c *RayClusterMetricsManager) Describe(ch chan<- *prometheus.Desc) {
+	c.rayClusterProvisionedDurationSeconds.Describe(ch)
 }
 
 // Collect implements prometheus.Collector interface Collect method.
-func (c *RayClusterMetricCollector) Collect(ch chan<- prometheus.Metric) {
-	c.rayClusterProvisionedDuration.Collect(ch)
+func (c *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
+	c.rayClusterProvisionedDurationSeconds.Collect(ch)
 }
 
-// ObserveRayClusterProvisionedDuration observes the duration of RayCluster from creation to provisioned
-func (c *RayClusterMetricCollector) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
-	c.rayClusterProvisionedDuration.WithLabelValues(name, namespace).Set(duration)
+func (c *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
+	c.rayClusterProvisionedDurationSeconds.WithLabelValues(name, namespace).Set(duration)
 }
