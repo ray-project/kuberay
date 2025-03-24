@@ -7,7 +7,7 @@
 # to kick off from the release branch so tests should match up accordingly.
 
 if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
-    helm install kuberay/kuberay-operator --version 1.3.0
+    helm repo update && helm install kuberay/kuberay-operator
 else
     IMG=kuberay/operator:nightly make docker-image &&
     kind load docker-image kuberay/operator:nightly &&
