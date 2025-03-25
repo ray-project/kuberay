@@ -156,7 +156,10 @@ type RayServiceStatus struct {
 	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
 	// Represents the percentage weight of traffic routed to the RayCluster associated with this RayServiceStatus.
 	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
-	RayClusterName       string `json:"rayClusterName,omitempty"`
+	// Represents the last time the RayService controller migrated traffic during an IncrementalUpgrade.
+	LastTrafficMigratedTime *metav1.Time     `json:"lastTrafficMigratedTime,omitempty"`
+	RayClusterName          string           `json:"rayClusterName,omitempty"`
+	RayClusterStatus        RayClusterStatus `json:"rayClusterStatus,omitempty"`
 }
 
 type AppStatus struct {
