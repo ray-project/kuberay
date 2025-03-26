@@ -21,9 +21,9 @@ import (
 )
 
 type CreateWorkerGroupOptions struct {
-	configFlags       *genericclioptions.ConfigFlags
+	cmdFactory        cmdutil.Factory
 	ioStreams         *genericclioptions.IOStreams
-	kubeContexter     util.KubeContexter
+	namespace         string
 	clusterName       string
 	groupName         string
 	rayStartParams    map[string]string
@@ -51,17 +51,15 @@ var (
 	`, util.RayImage))
 )
 
-func NewCreateWorkerGroupOptions(streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
+func NewCreateWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
 	return &CreateWorkerGroupOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewCreateWorkerGroupOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewCreateWorkerGroupOptions(cmdFactory, streams)
 	// Silence warnings to avoid messages like 'unknown field "spec.headGroupSpec.template.metadata.creationTimestamp"'
 	// See https://github.com/kubernetes/kubernetes/issues/67610 for more details.
 	rest.SetDefaultWarningHandler(rest.NoWarnings{})
@@ -74,9 +72,6 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
-				return err
-			}
-			if err := options.Validate(); err != nil {
 				return err
 			}
 			return options.Run(cmd.Context(), cmdFactory)
@@ -95,13 +90,18 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
 	cmd.Flags().StringToStringVar(&options.rayStartParams, "worker-ray-start-params", options.rayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []string) error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	if len(args) != 1 {
@@ -116,25 +116,13 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 	return nil
 }
 
-func (options *CreateWorkerGroupOptions) Validate() error {
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-
-	return nil
-}
-
 func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
 	k8sClient, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	rayCluster, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.clusterName, metav1.GetOptions{})
+	rayCluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.clusterName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting Ray cluster: %w", err)
 	}
@@ -143,7 +131,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	newRayCluster.Spec.WorkerGroupSpecs = append(newRayCluster.Spec.WorkerGroupSpecs, createWorkerGroupSpec(options))
 
-	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{FieldManager: util.FieldManager})
+	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(options.namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
 	}

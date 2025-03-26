@@ -20,12 +20,11 @@ import (
 )
 
 type DeleteOptions struct {
-	configFlags   *genericclioptions.ConfigFlags
-	ioStreams     *genericiooptions.IOStreams
-	kubeContexter util.KubeContexter
-	resources     map[util.ResourceType][]string
-	namespace     string
-	yes           bool
+	cmdFactory cmdutil.Factory
+	ioStreams  *genericiooptions.IOStreams
+	resources  map[util.ResourceType][]string
+	namespace  string
+	yes        bool
 }
 
 var deleteExample = templates.Examples(`
@@ -42,19 +41,16 @@ var deleteExample = templates.Examples(`
 		kubectl ray delete rayservice/sample-rayservice
 	`)
 
-func NewDeleteOptions(streams genericiooptions.IOStreams) *DeleteOptions {
-	configFlags := genericclioptions.NewConfigFlags(true)
+func NewDeleteOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *DeleteOptions {
 	return &DeleteOptions{
-		ioStreams:     &streams,
-		configFlags:   configFlags,
-		kubeContexter: &util.DefaultKubeContexter{},
-		resources:     map[util.ResourceType][]string{},
+		ioStreams:  &streams,
+		cmdFactory: cmdFactory,
+		resources:  map[util.ResourceType][]string{},
 	}
 }
 
-func NewDeleteCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewDeleteOptions(streams)
-	factory := cmdutil.NewFactory(options.configFlags)
+func NewDeleteCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewDeleteOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:     "delete (RAYCLUSTER | TYPE/NAME)",
@@ -67,29 +63,28 @@ func NewDeleteCommand(streams genericclioptions.IOStreams) *cobra.Command {
 			}
 			return nil
 		},
-		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
+		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		SilenceUsage:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
 			}
-			if err := options.Validate(); err != nil {
-				return err
-			}
-			return options.Run(cmd.Context(), factory)
+			return options.Run(cmd.Context(), cmdFactory)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&options.yes, "yes", "y", false, "answer 'yes' to all prompts and run non-interactively")
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *DeleteOptions) Complete(cmd *cobra.Command, args []string) error {
-	if *options.configFlags.Namespace == "" {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
 		options.namespace = "default"
-	} else {
-		options.namespace = *options.configFlags.Namespace
 	}
 
 	if options.resources == nil {
@@ -130,18 +125,6 @@ func (options *DeleteOptions) Complete(cmd *cobra.Command, args []string) error 
 		}
 	}
 
-	return nil
-}
-
-func (options *DeleteOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
 	return nil
 }
 
