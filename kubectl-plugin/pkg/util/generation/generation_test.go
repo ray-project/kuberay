@@ -29,6 +29,12 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 			WorkerCPU:      "2",
 			WorkerMemory:   "10Gi",
 			WorkerGPU:      "1",
+			HeadNodeSelectors: map[string]string{
+				"head-selector1": "foo",
+			},
+			WorkerNodeSelectors: map[string]string{
+				"worker-selector1": "baz",
+			},
 		},
 	}
 
@@ -46,6 +52,8 @@ func TestGenerateRayCluterApplyConfig(t *testing.T) {
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerCPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerGPU), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Name(corev1.ResourceName("nvidia.com/gpu"), resource.DecimalSI))
 	assert.Equal(t, resource.MustParse(testRayClusterYamlObject.WorkerMemory), *result.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+	assert.Equal(t, testRayClusterYamlObject.HeadNodeSelectors, result.Spec.HeadGroupSpec.Template.Spec.NodeSelector)
+	assert.Equal(t, testRayClusterYamlObject.WorkerNodeSelectors, result.Spec.WorkerGroupSpecs[0].Template.Spec.NodeSelector)
 }
 
 func TestGenerateRayJobApplyConfig(t *testing.T) {

@@ -17,15 +17,17 @@ const (
 )
 
 type RayClusterSpecObject struct {
-	RayVersion     string
-	Image          string
-	HeadCPU        string
-	HeadGPU        string
-	HeadMemory     string
-	WorkerCPU      string
-	WorkerGPU      string
-	WorkerMemory   string
-	WorkerReplicas int32
+	HeadNodeSelectors   map[string]string
+	WorkerNodeSelectors map[string]string
+	RayVersion          string
+	Image               string
+	HeadCPU             string
+	HeadGPU             string
+	HeadMemory          string
+	WorkerCPU           string
+	WorkerGPU           string
+	WorkerMemory        string
+	WorkerReplicas      int32
 }
 
 type RayClusterYamlObject struct {
@@ -69,6 +71,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.HeadNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-head").
 						WithImage(rayClusterSpecObject.Image).
@@ -90,6 +93,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithReplicas(rayClusterSpecObject.WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.WorkerNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-worker").
 						WithImage(rayClusterSpecObject.Image).
