@@ -257,6 +257,14 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 		WorkerCPU:      "2",
 		WorkerMemory:   "10Gi",
 		WorkerGPU:      "0",
+		HeadNodeSelectors: map[string]string{
+			"head-selector1": "foo",
+			"head-selector2": "bar",
+		},
+		WorkerNodeSelectors: map[string]string{
+			"worker-selector1": "baz",
+			"worker-selector2": "qux",
+		},
 	}
 
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
@@ -299,6 +307,10 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 							},
 						},
 					},
+					NodeSelector: map[string]string{
+						"head-selector1": "foo",
+						"head-selector2": "bar",
+					},
 				},
 			},
 		},
@@ -324,6 +336,10 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 									},
 								},
 							},
+						},
+						NodeSelector: map[string]string{
+							"worker-selector1": "baz",
+							"worker-selector2": "qux",
 						},
 					},
 				},
