@@ -309,12 +309,10 @@ const (
 // +genclient
 type RayCluster struct {
 	// Standard object metadata.
-	metav1.TypeMeta `json:",inline"`
-	// +optional
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Specification of the desired behavior of the RayCluster.
-	// +optional
 	Spec RayClusterSpec `json:"spec,omitempty"`
 	// +optional
 	Status RayClusterStatus `json:"status,omitempty"`
@@ -325,7 +323,6 @@ type RayCluster struct {
 // RayClusterList contains a list of RayCluster
 type RayClusterList struct {
 	metav1.TypeMeta `json:",inline"`
-	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayCluster `json:"items"`
 }
