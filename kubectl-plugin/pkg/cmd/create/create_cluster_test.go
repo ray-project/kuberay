@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -12,7 +11,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/utils/ptr"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	kubefake "k8s.io/client-go/kubernetes/fake"
 
@@ -22,44 +21,32 @@ import (
 
 func TestRayCreateClusterComplete(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeCreateClusterOptions := NewCreateClusterOptions(testStreams)
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	fakeCreateClusterOptions := NewCreateClusterOptions(cmdFactory, testStreams)
 	fakeArgs := []string{"testRayClusterName"}
 	cmd := &cobra.Command{Use: "cluster"}
+	cmd.Flags().StringVarP(&fakeCreateClusterOptions.namespace, "namespace", "n", "", "")
 
 	err := fakeCreateClusterOptions.Complete(cmd, fakeArgs)
 	require.NoError(t, err)
-	assert.Equal(t, "default", *fakeCreateClusterOptions.configFlags.Namespace)
+	assert.Equal(t, "default", fakeCreateClusterOptions.namespace)
 	assert.Equal(t, "testRayClusterName", fakeCreateClusterOptions.clusterName)
 }
 
 func TestRayCreateClusterValidate(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
 	tests := []struct {
 		name        string
 		opts        *CreateClusterOptions
 		expectError string
 	}{
 		{
-			name: "should error when no K8s context is set",
-			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-			},
-		},
-		{
 			name: "should error when a resource quantity is invalid",
 			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				headCPU:       "1",
-				headMemory:    "softmax",
+				cmdFactory: cmdFactory,
+				headCPU:    "1",
+				headMemory: "softmax",
 			},
 			expectError: "head-memory is not a valid resource quantity: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
 		},
@@ -80,13 +67,17 @@ func TestRayCreateClusterValidate(t *testing.T) {
 func TestRayClusterCreateClusterRun(t *testing.T) {
 	namespace := "namespace-1"
 	clusterName := "cluster-1"
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	options := CreateClusterOptions{
-		configFlags: &genericclioptions.ConfigFlags{
-			Namespace: ptr.To(namespace),
-		},
-		kubeContexter: util.NewMockKubeContexter(true),
-		clusterName:   clusterName,
+		cmdFactory:   cmdFactory,
+		clusterName:  clusterName,
+		headCPU:      "1",
+		headMemory:   "1Gi",
+		headGPU:      "0",
+		workerCPU:    "1",
+		workerMemory: "1Gi",
+		workerGPU:    "1",
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
