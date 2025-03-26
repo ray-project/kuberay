@@ -19,6 +19,8 @@ import (
 type RayClusterSpecObject struct {
 	HeadRayStartParams     map[string]string
 	WorkerRayStartParams   map[string]string
+	HeadNodeSelectors      map[string]string
+	WorkerNodeSelectors    map[string]string
 	RayVersion             string
 	Image                  string
 	HeadCPU                string
@@ -107,6 +109,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithRayStartParams(headRayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.HeadNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-head").
 						WithImage(rayClusterSpecObject.Image).
@@ -122,6 +125,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithReplicas(rayClusterSpecObject.WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.WorkerNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-worker").
 						WithImage(rayClusterSpecObject.Image).
