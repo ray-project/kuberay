@@ -233,6 +233,10 @@ func (options *SubmitJobOptions) Validate() error {
 			return fmt.Errorf("Submission mode of the Ray Job must be set to 'InteractiveMode'")
 		}
 
+		if options.RayJob.Spec.Entrypoint != "" {
+			log.Printf("entrypoint in Ray job is set to '%s', but it will be overwritten by the command's entrypoint '%s'", options.RayJob.Spec.Entrypoint, options.entryPoint)
+		}
+
 		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
 		if options.runtimeEnv == "" && options.runtimeEnvJson == "" && runtimeEnvYaml != "" {
 			runtimeJson, err := yaml.YAMLToJSON([]byte(runtimeEnvYaml))
