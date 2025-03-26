@@ -609,14 +609,6 @@ func TestValidateRayJobStatus(t *testing.T) {
 }
 
 func TestValidateRayJobSpec(t *testing.T) {
-	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
-		Template: corev1.PodTemplateSpec{
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{Name: "ray-head"}},
-			},
-		},
-	}
-
 	tests := []struct {
 		name        string
 		beforeHook  func()
@@ -681,12 +673,41 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.beforeHook != nil {
+				tt.beforeHook()
+			}
+			err := ValidateRayJobSpec(&rayv1.RayJob{
+				Spec: tt.spec,
+			})
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		spec        rayv1.RayJobSpec
+		expectError bool
+	}{
 		{
 			name: "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster",
-			beforeHook: func() {
-				// this feature gate is applied to the all following tests
-				features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
-			},
 			spec: rayv1.RayJobSpec{
 				DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
 				ClusterSelector: map[string]string{"key": "value"},
@@ -750,11 +771,12 @@ func TestValidateRayJobSpec(t *testing.T) {
 		},
 	}
 
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	defer func() {
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
+	}()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.beforeHook != nil {
-				tt.beforeHook()
-			}
 			err := ValidateRayJobSpec(&rayv1.RayJob{
 				Spec: tt.spec,
 			})
