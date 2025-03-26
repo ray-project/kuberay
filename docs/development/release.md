@@ -11,15 +11,15 @@ Each KubeRay minor release series (e.g., `v1.3.X`) is maintained on its own rele
 
 The high-level steps for a new minor or patch release are:
 
-1.  For new minor relases, create a release branch (e.g., `release-1.4`) from `master` if it doesn't exist.
-2.  Update KubeRay version references in the release branch.
-3.  Create and push a new git tag based on the target release version (e.g., `v1.4.0`).
-4.  Publish container images by running the `release-image-build` GitHub Actions workflow.
-5.  Publish kubectl plugin binaries by running the `release-kubectl-plugin` GitHub Actions workflow.
-6.  Update the `kuberay-helm` repository to publish the new Helm chart versions.
-7.  Validate the release artifacts (images, charts).
-8.  Generate the CHANGELOG for the release.
-9.  Publish the release notes on GitHub Releases.
+1. For new minor releases, create a release branch (e.g., `release-1.4`) from `master` if it doesn't exist.
+2. Update KubeRay version references in the release branch.
+3. Create and push a new git tag based on the target release version (e.g., `v1.4.0`).
+4. Publish container images by running the `release-image-build` GitHub Actions workflow.
+5. Publish kubectl plugin binaries by running the `release-kubectl-plugin` GitHub Actions workflow.
+6. Update the `kuberay-helm` repository to publish the new Helm chart versions.
+7. Validate the release artifacts (images, charts).
+8. Generate the CHANGELOG for the release.
+9. Publish the release notes on GitHub Releases.
 10. Update Ray documentation to refer to the new KubeRay version.
 
 See the next section for more details on each step.
@@ -34,7 +34,8 @@ See the next section for more details on each step.
 
 **For a new minor release (e.g., `v1.4.0` from `master`):**
 
-1.  Ensure your local `master` branch is up-to-date:
+1. Ensure your local `master` branch is up-to-date:
+
     ```bash
     # Ensure you are on the master branch
     git checkout master
@@ -46,25 +47,28 @@ See the next section for more details on each step.
     # git pull --rebase upstream master
     ```
 
-2.  Create the release branch (e.g., `release-1.4`) from `upstream/master`:
+2. Create the release branch (e.g., `release-1.4`) from `upstream/master`:
+
     ```bash
     # Create the branch locally from the latest upstream master
     git checkout -b release-1.4 upstream/master
     ```
 
-3.  Push the new release branch to the `upstream` repository:
+3. Push the new release branch to the `upstream` repository:
+
     ```bash
     git push upstream release-1.4
     ```
 
-4.  Set the upstream tracking branch locally to avoid accidentally merging `master` later:
+4. Set the upstream tracking branch locally to avoid accidentally merging `master` later:
+
     ```bash
     git branch --set-upstream-to upstream/release-1.4
     ```
 
-5.  **Verify CI:** GitHub Actions workflows run on `master` and all `release-*` branches. Check the [Actions tab](https://github.com/ray-project/kuberay/actions) for the `kuberay` repository and ensure all workflows are passing on the newly created `release-1.4` branch.
+5. **Verify CI:** GitHub Actions workflows run on `master` and all `release-*` branches. Check the [Actions tab](https://github.com/ray-project/kuberay/actions) for the `kuberay` repository and ensure all workflows are passing on the newly created `release-1.4` branch.
 
-6.  Update Ray CI to trigger nightly tests against the new kuberay release branch. See [example PR #51539](https://github.com/ray-project/ray/pull/51539).
+6. Update Ray CI to trigger nightly tests against the new kuberay release branch. See [example PR #51539](https://github.com/ray-project/ray/pull/51539).
 
 ---
 
@@ -74,13 +78,13 @@ On the release branch (`release-1.4` in this example), update all references to 
 
 Update the version in the following files:
 
-*   `helm-chart/kuberay-apiserver/Chart.yaml` (chart version)
-*   `helm-chart/kuberay-apiserver/values.yaml` (image tag)
-*   `helm-chart/kuberay-operator/Chart.yaml` (chart version)
-*   `helm-chart/kuberay-operator/values.yaml` (image tag)
-*   `helm-chart/ray-cluster/Chart.yaml` (chart version)
-*   `ray-operator/config/default/kustomization.yaml` (image tag)
-*   `ray-operator/controllers/ray/utils/constant.go` (`KUBERAY_VERSION` constant)
+* `helm-chart/kuberay-apiserver/Chart.yaml` (chart version)
+* `helm-chart/kuberay-apiserver/values.yaml` (image tag)
+* `helm-chart/kuberay-operator/Chart.yaml` (chart version)
+* `helm-chart/kuberay-operator/values.yaml` (image tag)
+* `helm-chart/ray-cluster/Chart.yaml` (chart version)
+* `ray-operator/config/default/kustomization.yaml` (image tag)
+* `ray-operator/controllers/ray/utils/constant.go` (`KUBERAY_VERSION` constant)
 
 Open a PR to the release branch with these changes.
 Refer to a previous version bump PR for guidance, like [PR #3071](https://github.com/ray-project/kuberay/pull/3071/files).
@@ -89,26 +93,30 @@ Refer to a previous version bump PR for guidance, like [PR #3071](https://github
 
 ### Step 3: Create and Push the Git Tag
 
-1.  Ensure you are on the correct release branch and it includes the version bump commit:
+1. Ensure you are on the correct release branch and it includes the version bump commit:
+
     ```bash
     git checkout release-1.4
     git pull --rebase upstream release-1.4
     ```
 
-2.  Verify the latest commit is the version bump commit:
+2. Verify the latest commit is the version bump commit:
+
     ```bash
     git log -1
     # Check the commit message and changes:
     # git show
     ```
 
-3.  Create the git tag (using the `vX.Y.Z` format, e.g., `v1.4.0`):
+3. Create the git tag (using the `vX.Y.Z` format, e.g., `v1.4.0`):
+
     ```bash
     # Create a tag
     git tag v1.4.0
     ```
 
-4.  Push the tag to the `upstream` repository:
+4. Push the tag to the `upstream` repository:
+
     ```bash
     git push upstream v1.4.0
     ```
@@ -119,13 +127,13 @@ Refer to a previous version bump PR for guidance, like [PR #3071](https://github
 
 Trigger the [`release-image-build`](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml) workflow to build and publish the KubeRay container images.
 
-1.  Navigate to the workflow page: [https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml)
-2.  Click the **"Run workflow"** dropdown button.
-3.  Set the parameters:
-    *   **Use workflow from:** Select **`Tags`** and choose the tag you just pushed (e.g., **`v1.4.0`**).
-    *   **Commit reference:** Leave this blank or ensure it points to the commit associated with the tag `v1.4.0`. *Usually derived from the tag.*
-    *   **Desired release version:** Enter the tag name (e.g., **`v1.4.0`**). This determines the image tag.
-4.  Click **"Run workflow"**.
+1. Navigate to the workflow page: [https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml](https://github.com/ray-project/kuberay/actions/workflows/image-release.yaml)
+2. Click the **"Run workflow"** dropdown button.
+3. Set the parameters:
+    * **Use workflow from:** Select **`Tags`** and choose the tag you just pushed (e.g., **`v1.4.0`**).
+    * **Commit reference:** Leave this blank or ensure it points to the commit associated with the tag `v1.4.0`. *Usually derived from the tag.*
+    * **Desired release version:** Enter the tag name (e.g., **`v1.4.0`**). This determines the image tag.
+4. Click **"Run workflow"**.
 
 **Verification:** Monitor the workflow run. Once completed successfully, check that the corresponding image tags are available on quay.io.
 
@@ -135,16 +143,17 @@ Trigger the [`release-image-build`](https://github.com/ray-project/kuberay/actio
 
 Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/actions/workflows/kubectl-plugin-release.yaml) workflow to build and publish the `kubectl-ray` binary.
 
-1.  Navigate to the workflow page: [https://github.com/ray-project/kuberay/actions/workflows/kubectl-plugin-release.yaml](https://github.com/ray-project/kuberay/actions/workflows/kubectl-plugin-release.yaml)
-2.  Click the **"Run workflow"** dropdown button.
-3.  Set the parameters:
-    *   **Use workflow from:** Select **`Tags`** and choose the tag for the release (e.g., **`v1.4.0`**).
-4.  Click **"Run workflow"**.
+1. Navigate to the workflow page: [https://github.com/ray-project/kuberay/actions/workflows/kubectl-plugin-release.yaml](https://github.com/ray-project/kuberay/actions/workflows/kubectl-plugin-release.yaml)
+2. Click the **"Run workflow"** dropdown button.
+3. Set the parameters:
+    * **Use workflow from:** Select **`Tags`** and choose the tag for the release (e.g., **`v1.4.0`**).
+4. Click **"Run workflow"**.
 
 **Verification:**
-*   Monitor the workflow run for success.
-*   Check the [KubeRay Releases page](https://github.com/ray-project/kuberay/releases). A draft release corresponding to the tag `v1.4.0` should have been created (or updated if it existed) with the plugin binaries attached as assets.
-*   The workflow should automatically open a Pull Request in the [krew-index repository](https://github.com/kubernetes-sigs/krew-index) to update the plugin version for `kubectl krew`. Check for this PR and ensure it looks correct. It might require manual approval/merge by krew maintainers.
+
+* Monitor the workflow run for success.
+* Check the [KubeRay Releases page](https://github.com/ray-project/kuberay/releases). A draft release corresponding to the tag `v1.4.0` should have been created (or updated if it existed) with the plugin binaries attached as assets.
+* The workflow should automatically open a Pull Request in the [krew-index repository](https://github.com/kubernetes-sigs/krew-index) to update the plugin version for `kubectl krew`. Check for this PR and ensure it looks correct. It might require manual approval/merge by krew maintainers.
 
 ---
 
@@ -152,10 +161,11 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 
 Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
 
-1.  **Create Release Branch (if it doesn't exist):**
-    *   Clone the `kuberay-helm` repository if you haven't already.
-    *   Set up an `upstream` remote: `git remote add upstream git@github.com:ray-project/kuberay-helm.git`
-    *   If the branch `release-1.4` does *not* exist in `kuberay-helm`:
+1. **Create Release Branch (if it doesn't exist):**
+    * Clone the `kuberay-helm` repository if you haven't already.
+    * Set up an `upstream` remote: `git remote add upstream git@github.com:ray-project/kuberay-helm.git`
+    * If the branch `release-1.4` does *not* exist in `kuberay-helm`:
+
         ```bash
         cd kuberay-helm
         git fetch upstream
@@ -166,17 +176,21 @@ Helm charts are published via the [ray-project/kuberay-helm](https://github.com/
         git branch --set-upstream-to upstream/release-1.4
         cd ..
         ```
-    *   *Note:* Creating a new release branch might trigger CI in `kuberay-helm`, but it shouldn't publish new chart versions yet as the chart files haven't changed.
 
-2.  **Sync Helm Charts:**
-    *   Ensure your local `kuberay` repository is on the release branch (`release-1.4`) and up-to-date (including the version bump from Step 2).
+    * *Note:* Creating a new release branch might trigger CI in `kuberay-helm`, but it shouldn't publish new chart versions yet as the chart files haven't changed.
+
+2. **Sync Helm Charts:**
+    * Ensure your local `kuberay` repository is on the release branch (`release-1.4`) and up-to-date (including the version bump from Step 2).
+
         ```bash
         cd kuberay
         git checkout release-1.4
         git pull --rebase upstream release-1.4
         cd ..
         ```
-    *   Copy the updated Helm charts from the `kuberay` repo to the `kuberay-helm` repo. *This assumes `kuberay` and `kuberay-helm` are in the same parent directory.*
+
+    * Copy the updated Helm charts from the `kuberay` repo to the `kuberay-helm` repo. *This assumes `kuberay` and `kuberay-helm` are in the same parent directory.*
+
         ```bash
         cd kuberay-helm
         # Ensure you are on the correct release branch
@@ -192,25 +206,29 @@ Helm charts are published via the [ray-project/kuberay-helm](https://github.com/
         rm -f helm-chart/script/rbac_test.py
         ```
 
-3.  **Commit and Create Pull Request:**
-    *   Stage the changes in the `kuberay-helm` repository:
+3. **Commit and Create Pull Request:**
+    * Stage the changes in the `kuberay-helm` repository:
+
         ```bash
         git status # Verify changes
         git add helm-chart/
         git commit -m "Update Helm charts to KubeRay v1.4.0"
         ```
-    *   Push the changes to your fork of `kuberay-helm` (or directly if you have permissions, though PR is safer):
+
+    * Push the changes to your fork of `kuberay-helm` (or directly if you have permissions, though PR is safer):
+
         ```bash
         # Example assuming 'origin' remote points to your fork
         git push origin release-1.4
         ```
-    *   Open a Pull Request from your fork. See [example PR #54](https://github.com/ray-project/kuberay-helm/pull/54).
 
-4.  **Merge and Verify:**
-    *   Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
-        *   [`chart-release`](https://github.com/ray-project/kuberay-helm/actions/workflows/chart-release.yaml)
-        *   [`pages-build-deployment`](https://github.com/ray-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
-    *   Verify that both workflows succeed. This indicates the charts have been packaged and added to the Helm repository index hosted via GitHub Pages.
+    * Open a Pull Request from your fork. See [example PR #54](https://github.com/ray-project/kuberay-helm/pull/54).
+
+4. **Merge and Verify:**
+    * Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
+        * [`chart-release`](https://github.com/ray-project/kuberay-helm/actions/workflows/chart-release.yaml)
+        * [`pages-build-deployment`](https://github.com/ray-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
+    * Verify that both workflows succeed. This indicates the charts have been packaged and added to the Helm repository index hosted via GitHub Pages.
 
 ---
 
@@ -218,20 +236,23 @@ Helm charts are published via the [ray-project/kuberay-helm](https://github.com/
 
 Perform basic validation to ensure the released artifacts work together.
 
-1.  Update your local Helm repository:
+1. Update your local Helm repository:
+
     ```bash
     helm repo add kuberay https://ray-project.github.io/kuberay-helm/
     helm repo update kuberay
     ```
 
-2.  Search for the new chart versions:
+2. Search for the new chart versions:
+
     ```bash
     helm search repo kuberay/kuberay-operator --versions
     helm search repo kuberay/ray-cluster --versions
     # Verify that version 1.4.0 (or your target version) appears
     ```
 
-3.  Install KubeRay using the new chart versions on a test cluster (e.g., Kind, Minikube):
+3. Install KubeRay using the new chart versions on a test cluster (e.g., Kind, Minikube):
+
     ```bash
     # Example using Kind
     kind create cluster
@@ -243,7 +264,8 @@ Perform basic validation to ensure the released artifacts work together.
     helm install raycluster kuberay/ray-cluster --version <new-version>
     ```
 
-4.  Check the pods and basic functionality:
+4. Check the pods and basic functionality:
+
     ```bash
     kubectl get pods
     ```
@@ -260,15 +282,15 @@ Follow [Generating the changelog for a release](https://github.com/ray-project/k
 
 ### Step 9: Publish Release Notes
 
-1.  Go to the [KubeRay Releases page](https://github.com/ray-project/kuberay/releases).
-2.  Find the **draft release** that was created automatically in Step 5 or create a new one if needed, targeting the tag `v1.4.0`.
-3.  Click **"Edit"** on the draft release.
-4.  Paste the generated **CHANGELOG** content from Step 8 into the release description.
-5.  Add any additional release highlights, bug fixes, known issues, etc.
-6.  Ensure the correct tag (`v1.4.0`) is selected.
-7.  Verify the attached assets (kubectl plugins) are correct.
-8.  Mark the release as **"Latest release"** if appropriate (usually for the newest stable release).
-9.  Click **"Publish release"**.
+1. Go to the [KubeRay Releases page](https://github.com/ray-project/kuberay/releases).
+2. Find the **draft release** that was created automatically in Step 5 or create a new one if needed, targeting the tag `v1.4.0`.
+3. Click **"Edit"** on the draft release.
+4. Paste the generated **CHANGELOG** content from Step 8 into the release description.
+5. Add any additional release highlights, bug fixes, known issues, etc.
+6. Ensure the correct tag (`v1.4.0`) is selected.
+7. Verify the attached assets (kubectl plugins) are correct.
+8. Mark the release as **"Latest release"** if appropriate (usually for the newest stable release).
+9. Click **"Publish release"**.
 
 ---
 
