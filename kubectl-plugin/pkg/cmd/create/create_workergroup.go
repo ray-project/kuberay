@@ -21,20 +21,21 @@ import (
 )
 
 type CreateWorkerGroupOptions struct {
-	cmdFactory        cmdutil.Factory
-	ioStreams         *genericclioptions.IOStreams
-	namespace         string
-	clusterName       string
-	groupName         string
-	rayStartParams    map[string]string
-	rayVersion        string
-	image             string
-	workerCPU         string
-	workerGPU         string
-	workerMemory      string
-	workerReplicas    int32
-	workerMinReplicas int32
-	workerMaxReplicas int32
+	cmdFactory          cmdutil.Factory
+	ioStreams           *genericclioptions.IOStreams
+	namespace           string
+	clusterName         string
+	groupName           string
+	rayStartParams      map[string]string
+	workerNodeSelectors map[string]string
+	rayVersion          string
+	image               string
+	workerCPU           string
+	workerGPU           string
+	workerMemory        string
+	workerReplicas      int32
+	workerMinReplicas   int32
+	workerMaxReplicas   int32
 }
 
 var (
@@ -89,6 +90,7 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
 	cmd.Flags().StringToStringVar(&options.rayStartParams, "worker-ray-start-params", options.rayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selector cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	return cmd
 }
@@ -159,6 +161,7 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 					},
 				},
 			},
+			NodeSelector: options.workerNodeSelectors,
 		},
 	}
 
