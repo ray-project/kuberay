@@ -98,3 +98,32 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestNewCreateClusterCommand(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmd := NewCreateClusterCommand(cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)), testStreams)
+	cmd.Flags().StringP("namespace", "n", "", "")
+
+	cmd.SetArgs([]string{
+		"sample-cluster",
+		"--ray-version", "2.44.0",
+		"--image", "rayproject/ray:2.44.0",
+		"--head-cpu", "1",
+		"--head-memory", "5Gi",
+		"--head-gpu", "1",
+		"--head-ephemeral-storage", "10Gi",
+		"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
+		"--worker-replicas", "3",
+		"--worker-cpu", "1",
+		"--worker-memory", "5Gi",
+		"--worker-gpu", "1",
+		"--worker-ephemeral-storage", "10Gi",
+		"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
+		"--labels", "app=ray,env=dev",
+		"--annotations", "ttl-hours=24,owner=chthulu",
+		"--dry-run",
+		"--wait",
+		"--timeout", "10s",
+	})
+	require.NoError(t, cmd.Execute())
+}
