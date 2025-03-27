@@ -90,6 +90,7 @@ kind load docker-image kuberay/operator:nightly
 helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 
 # Step 7: Check the log of KubeRay operator
+# Get {YOUR_OPERATOR_POD} with the command: kubectl get pods
 kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 # {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
 # ...
@@ -100,6 +101,13 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 ### Run the operator outside the cluster
+
+This step requires you to switch your working directory to the kuberay project root. If
+you are in `ray-operator`, do:
+
+```bash
+cd ..
+```
 
 > Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
 
