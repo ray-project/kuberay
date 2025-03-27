@@ -611,7 +611,6 @@ func TestValidateRayJobStatus(t *testing.T) {
 func TestValidateRayJobSpec(t *testing.T) {
 	tests := []struct {
 		name        string
-		beforeHook  func()
 		spec        rayv1.RayJobSpec
 		expectError bool
 	}{
@@ -677,9 +676,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.beforeHook != nil {
-				tt.beforeHook()
-			}
 			err := ValidateRayJobSpec(&rayv1.RayJob{
 				Spec: tt.spec,
 			})
