@@ -70,6 +70,9 @@ type Configuration struct {
 
 	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
 	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
+
+	// EnableMetrics indicates whether to collect metrics in the Ray Operator.
+	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
