@@ -269,7 +269,7 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 }
 
 func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, name ...string) (*api.Cluster, string) {
-	configMapName := e2etc.CreateConfigMap(t, configMapValues)
+	configMapName := e2etc.CreateConfigMap(t, configMapValues, name...)
 	t.Cleanup(func() {
 		e2etc.DeleteConfigMap(t, configMapName)
 	})
@@ -302,7 +302,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 							MountPath:  "/home/ray/samples",
 							VolumeType: api.Volume_CONFIGMAP,
 							Name:       "code-sample",
-							Source:     e2etc.configMapName,
+							Source:     configMapName,
 							Items:      items,
 						},
 					},
@@ -324,7 +324,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 								MountPath:  "/home/ray/samples",
 								VolumeType: api.Volume_CONFIGMAP,
 								Name:       "code-sample",
-								Source:     e2etc.configMapName,
+								Source:     configMapName,
 								Items:      items,
 							},
 						},
@@ -334,7 +334,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 		},
 		Namespace: e2etc.namespaceName,
 	})
-	if !assert.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, e2etc.clusterName) {
+	if !assert.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName) {
 		t.Fatalf("Received status of %v when attempting to create a cluster", status)
 	}
 	// wait for the cluster to be in a running state for 3 minutes
@@ -344,10 +344,10 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 		if err00 != nil {
 			return true, err00
 		}
-		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, e2etc.GetRayClusterName())
+		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
 		return rayCluster.Status.State == rayv1api.Ready, nil
 	})
-	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", e2etc.GetRayClusterName(), err)
+	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", clusterName, err)
 	return actualCluster, configMapName
 }
 
@@ -413,16 +413,20 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 	require.NoErrorf(t, err, "No error expected when waiting to delete ray job: '%s', err %v", rayJobName, err)
 }
 
-func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[string]string) string {
+func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[string]string, name ...string) string {
+	configMapName := e2etc.configMapName
+	if len(name) > 0 {
+		configMapName = name[0]
+	}
 	cm := &corev1.ConfigMap{
 		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{Name: e2etc.configMapName, Namespace: e2etc.namespaceName},
+		ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: e2etc.namespaceName},
 		Immutable:  new(bool),
 		Data:       values,
 	}
 	_, err := e2etc.k8client.CoreV1().ConfigMaps(e2etc.namespaceName).Create(e2etc.ctx, cm, metav1.CreateOptions{})
 	require.NoErrorf(t, err, "No error expected when creating config map '%s' in namespace '%s'", e2etc.configMapName, e2etc.namespaceName)
-	return e2etc.configMapName
+	return configMapName
 }
 
 func (e2etc *End2EndTestingContext) DeleteConfigMap(t *testing.T, configMapName string) {

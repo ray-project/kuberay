@@ -93,8 +93,6 @@ message ListClustersResponse {
   repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The continue token for the next page of clusters.
   string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
-  // The remaining number of clusters that have not been returned.
-  optional int64 remaining_item_count = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllClustersRequest {

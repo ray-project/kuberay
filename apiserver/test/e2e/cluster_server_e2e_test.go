@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -596,18 +597,19 @@ func TestGetClustersByPaginationInNamespace(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	cluster1, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+	cluster1, configMapName1 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
 	}, "cluster1")
-	cluster2, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+	cluster2, configMapName2 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
 	}, "cluster2")
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster1.Name)
 		tCtx.DeleteRayCluster(t, cluster2.Name)
-		tCtx.DeleteConfigMap(t, configMapName)
+		tCtx.DeleteConfigMap(t, configMapName1)
+		tCtx.DeleteConfigMap(t, configMapName2)
 	})
 
 	continueToken := ""
@@ -622,15 +624,8 @@ func TestGetClustersByPaginationInNamespace(t *testing.T) {
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Len(t, response.Clusters, 1)
-		switch i {
-		case 1:
-			require.Equal(t, *response.RemainingItemCount, int64(1))
-			require.Equal(t, response.Clusters[0].Name, "cluster1")
-			require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
-		case 2:
-			require.Equal(t, response.Clusters[0].Name, "cluster2")
-			require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
-		}
+		require.Equal(t, response.Clusters[0].Name, fmt.Sprintf("cluster%d", i))
+		require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
 		continueToken = response.Continue
 	}
 }

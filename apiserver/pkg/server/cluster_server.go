@@ -77,11 +77,10 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 
 	var clusters []*v1.RayCluster
 	var continueToken string
-	var remainingItemCount *int64
 	var err error
 
-	if request.GetLimit() > 0 {
-		clusters, continueToken, remainingItemCount, err = s.resourceManager.ListPagedClusters(ctx, request.Namespace, request.GetContinue(), request.GetLimit())
+	if request.Limit > 0 {
+		clusters, continueToken, err = s.resourceManager.ListPagedClusters(ctx, request.Namespace, request.Continue, request.Limit)
 	} else {
 		clusters, err = s.resourceManager.ListClusters(ctx, request.Namespace)
 	}
@@ -100,9 +99,8 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	}
 
 	return &api.ListClustersResponse{
-		Clusters:           model.FromCrdToApiClusters(clusters, clusterEventMap),
-		Continue:           continueToken,
-		RemainingItemCount: remainingItemCount,
+		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Continue: continueToken,
 	}, nil
 }
 

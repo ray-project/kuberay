@@ -163,7 +163,7 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([
 	return result, nil
 }
 
-func (r *ResourceManager) ListPagedClusters(ctx context.Context, namespace string, continueToken string, limit int64) ([]*rayv1api.RayCluster, string, *int64, error) {
+func (r *ResourceManager) ListPagedClusters(ctx context.Context, namespace string, continueToken string, limit int64) ([]*rayv1api.RayCluster, string, error) {
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			util.KubernetesManagedByLabelKey: util.ComponentName,
@@ -175,7 +175,7 @@ func (r *ResourceManager) ListPagedClusters(ctx context.Context, namespace strin
 		Continue:      continueToken,
 	})
 	if err != nil {
-		return nil, "", nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
+		return nil, "", util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
 	}
 
 	var result []*rayv1api.RayCluster
@@ -184,7 +184,7 @@ func (r *ResourceManager) ListPagedClusters(ctx context.Context, namespace strin
 		result = append(result, &rayClusterList.Items[i])
 	}
 
-	return result, rayClusterList.Continue, rayClusterList.RemainingItemCount, nil
+	return result, rayClusterList.Continue, nil
 }
 
 func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*rayv1api.RayCluster, error) {

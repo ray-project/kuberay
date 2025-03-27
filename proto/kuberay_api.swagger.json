@@ -1386,12 +1386,6 @@
           "type": "string",
           "description": "The continue token for the next page of clusters.",
           "readOnly": true
-        },
-        "remainingItemCount": {
-          "type": "string",
-          "format": "int64",
-          "description": "The remaining number of clusters that have not been returned.",
-          "readOnly": true
         }
       }
     },
