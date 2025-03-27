@@ -268,7 +268,7 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 	}
 }
 
-func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string) (*api.Cluster, string) {
+func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, name ...string) (*api.Cluster, string) {
 	configMapName := e2etc.CreateConfigMap(t, configMapValues)
 	t.Cleanup(func() {
 		e2etc.DeleteConfigMap(t, configMapName)
@@ -277,9 +277,13 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	for k := range configMapValues {
 		items[k] = k
 	}
+	clusterName := e2etc.clusterName
+	if len(name) > 0 {
+		clusterName = name[0]
+	}
 	actualCluster, status, err := e2etc.kuberayAPIServerClient.CreateCluster(&api.CreateClusterRequest{
 		Cluster: &api.Cluster{
-			Name:        e2etc.clusterName,
+			Name:        clusterName,
 			Namespace:   e2etc.namespaceName,
 			User:        "3cpo",
 			Environment: api.Cluster_DEV,

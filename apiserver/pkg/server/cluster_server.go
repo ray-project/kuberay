@@ -7,6 +7,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
+	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 	corev1 "k8s.io/api/core/v1"
 	klog "k8s.io/klog/v2"
@@ -74,7 +75,17 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
 
-	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
+	var clusters []*v1.RayCluster
+	var continueToken string
+	var remainingItemCount *int64
+	var err error
+
+	if request.GetLimit() > 0 {
+		clusters, continueToken, remainingItemCount, err = s.resourceManager.ListPagedClusters(ctx, request.Namespace, request.GetContinue(), request.GetLimit())
+	} else {
+		clusters, err = s.resourceManager.ListClusters(ctx, request.Namespace)
+	}
+
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
@@ -89,7 +100,9 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	}
 
 	return &api.ListClustersResponse{
-		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Clusters:           model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Continue:           continueToken,
+		RemainingItemCount: remainingItemCount,
 	}, nil
 }
 

@@ -163,6 +163,30 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string) ([
 	return result, nil
 }
 
+func (r *ResourceManager) ListPagedClusters(ctx context.Context, namespace string, continueToken string, limit int64) ([]*rayv1api.RayCluster, string, *int64, error) {
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			util.KubernetesManagedByLabelKey: util.ComponentName,
+		},
+	}
+	rayClusterList, err := r.getRayClusterClient(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		Limit:         limit,
+		Continue:      continueToken,
+	})
+	if err != nil {
+		return nil, "", nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
+	}
+
+	var result []*rayv1api.RayCluster
+	length := len(rayClusterList.Items)
+	for i := 0; i < length; i++ {
+		result = append(result, &rayClusterList.Items[i])
+	}
+
+	return result, rayClusterList.Continue, rayClusterList.RemainingItemCount, nil
+}
+
 func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*rayv1api.RayCluster, error) {
 	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
 	if err != nil {

@@ -588,6 +588,53 @@ func TestGetClustersInNamespace(t *testing.T) {
 	}
 }
 
+func TestGetClustersByPaginationInNamespace(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+	cluster1, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+	}, "cluster1")
+	cluster2, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+	}, "cluster2")
+	t.Cleanup(func() {
+		tCtx.DeleteRayCluster(t, cluster1.Name)
+		tCtx.DeleteRayCluster(t, cluster2.Name)
+		tCtx.DeleteConfigMap(t, configMapName)
+	})
+
+	continueToken := ""
+	for i := 1; i <= 2; i++ {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+			&api.ListClustersRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				Limit:     1,
+				Continue:  continueToken,
+			})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Len(t, response.Clusters, 1)
+		switch i {
+		case 1:
+			require.Equal(t, *response.RemainingItemCount, int64(1))
+			require.Equal(t, response.Clusters[0].Name, "cluster1")
+			require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
+		case 2:
+			require.Equal(t, response.Clusters[0].Name, "cluster2")
+			require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
+		}
+		continueToken = response.Continue
+	}
+}
+
 // TestDeleteTemplate sequentially iterates over the delete compute template endpoint
 // to validate various input scenarios
 func TestGetClustersByNameInNamespace(t *testing.T) {
