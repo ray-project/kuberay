@@ -72,6 +72,8 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 	options := CreateClusterOptions{
 		cmdFactory:   cmdFactory,
 		clusterName:  clusterName,
+		labels:       map[string]string{"app": "ray", "env": "dev"},
+		annotations:  map[string]string{"ttl-hours": "24", "owner": "chthulu"},
 		headCPU:      "1",
 		headMemory:   "1Gi",
 		headGPU:      "0",
