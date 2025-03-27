@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"os"
 	"strings"
 
@@ -70,6 +71,7 @@ func main() {
 	var featureGates string
 	var enableBatchScheduler bool
 	var batchScheduler string
+	var enableMetrics bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -100,6 +102,7 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
+	flag.BoolVar(&enableMetrics, "enable-metrics", true, "Enable metrics collection.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -129,6 +132,12 @@ func main() {
 		config.BatchScheduler = batchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
+		config.EnableMetrics = enableMetrics
+	}
+
+	if config.EnableMetrics {
+		// Register the metrics with the global prometheus registry
+		metrics.Register()
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)

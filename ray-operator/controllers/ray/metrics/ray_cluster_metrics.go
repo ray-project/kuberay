@@ -1,35 +1,36 @@
-package common
+package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-// Define all the prometheus counters for all clusters
+// TODO: Deprecate these metrics
+
+// Define all the prometheus metrics for RayCluster
 var (
-	clustersCreatedCount = promauto.NewCounterVec(
+	clustersCreatedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ray_operator_clusters_created_total",
 			Help: "Counts number of clusters created",
 		},
 		[]string{"namespace"},
 	)
-	clustersDeletedCount = promauto.NewCounterVec(
+	clustersDeletedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ray_operator_clusters_deleted_total",
 			Help: "Counts number of clusters deleted",
 		},
 		[]string{"namespace"},
 	)
-	clustersSuccessfulCount = promauto.NewCounterVec(
+	clustersSuccessfulCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ray_operator_clusters_successful_total",
 			Help: "Counts number of clusters successful",
 		},
 		[]string{"namespace"},
 	)
-	clustersFailedCount = promauto.NewCounterVec(
+	clustersFailedCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ray_operator_clusters_failed_total",
 			Help: "Counts number of clusters failed",
@@ -37,14 +38,6 @@ var (
 		[]string{"namespace"},
 	)
 )
-
-func init() {
-	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(clustersCreatedCount,
-		clustersDeletedCount,
-		clustersSuccessfulCount,
-		clustersFailedCount)
-}
 
 func CreatedClustersCounterInc(namespace string) {
 	clustersCreatedCount.WithLabelValues(namespace).Inc()
@@ -61,4 +54,11 @@ func SuccessfulClustersCounterInc(namespace string) {
 
 func FailedClustersCounterInc(namespace string) {
 	clustersFailedCount.WithLabelValues(namespace).Inc()
+}
+
+func registerRayClusterMetrics() {
+	metrics.Registry.MustRegister(clustersCreatedCount,
+		clustersDeletedCount,
+		clustersSuccessfulCount,
+		clustersFailedCount)
 }
