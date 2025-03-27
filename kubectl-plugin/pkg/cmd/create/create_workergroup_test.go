@@ -25,6 +25,9 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 		workerMemory:      "5Gi",
 		workerGPU:         "1",
 		rayStartParams:    rayStartParams,
+		workerNodeSelectors: map[string]string{
+			"worker-node-selector": "worker-node-selector-value",
+		},
 	}
 
 	expected := rayv1.WorkerGroupSpec{
@@ -49,6 +52,9 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 							},
 						},
 					},
+				},
+				NodeSelector: map[string]string{
+					"worker-node-selector": "worker-node-selector-value",
 				},
 			},
 		},
