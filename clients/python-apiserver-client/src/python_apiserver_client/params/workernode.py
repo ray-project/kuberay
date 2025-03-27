@@ -32,6 +32,7 @@ class WorkerNodeSpec:
         annotations - optional, annotations for worker node
         labels - optional, labels for worker node
         image_pull_policy - optional, worker node pull image policy. Default IfNotPresent
+        security_context - optional, security context for worker node
     """
 
     def __init__(
@@ -50,6 +51,7 @@ class WorkerNodeSpec:
             annotations: dict[str, str] = None,
             labels: dict[str, str] = None,
             image_pull_policy: str = None,
+            security_context = None,
     ):
         """
         Initialization
@@ -67,6 +69,7 @@ class WorkerNodeSpec:
         :param annotations: annotations
         :param labels: labels
         :param image_pull_policy: image pull policy
+        :param security_context: security context
         """
         # Validate replicas
         if min_replicas > replicas:
@@ -89,6 +92,7 @@ class WorkerNodeSpec:
         self.annotations = annotations
         self.labels = labels
         self.image_pull_policy = image_pull_policy
+        self.security_context = security_context
 
     def to_string(self) -> str:
         """
@@ -120,6 +124,8 @@ class WorkerNodeSpec:
             val = val + "]"
         if self.environment is not None:
             val = val + f",\n environment = {self.environment.to_string()}"
+        if self.security_context is not None:
+            val = val + f",\n security_context = {self.security_context.to_string()}"
         if self.annotations is not None:
             val = val + f",\n annotations = {str(self.annotations)}"
         if self.labels is not None:
@@ -151,6 +157,8 @@ class WorkerNodeSpec:
             dct["volumes"] = [v.to_dict() for v in self.volumes]
         if self.environment is not None:
             dct["environment"] = self.environment.to_dict()
+        if self.security_context is not None:
+            dct["securityContext"] = self.security_context.to_dict()
         if self.annotations is not None:
             dct["annotations"] = self.annotations
         if self.labels is not None:
@@ -176,6 +184,10 @@ def worker_node_spec_decoder(dct: dict[str, Any]) -> WorkerNodeSpec:
     environments = None
     if "environment" in dct and len(dct.get("environment")) > 0:
         environments = environment_variables_decoder(dct.get("environment"))
+    security_context = None
+    if "securityContext" in dct and len(dct.get("securityContext")) > 0:
+        from .securitycontext import security_context_decoder
+        security_context = security_context_decoder(dct["securityContext"])
     return WorkerNodeSpec(
         group_name=dct.get("groupName"),
         compute_template=dct.get("computeTemplate"),
@@ -189,6 +201,7 @@ def worker_node_spec_decoder(dct: dict[str, Any]) -> WorkerNodeSpec:
         image_pull_secret=dct.get("imagePullSecret", None),
         image_pull_policy=dct.get("imagePullPolicy", None),
         environment=environments,
+        security_context=security_context,
         annotations=dct.get("annotations", None),
         labels=dct.get("labels", None),
     )

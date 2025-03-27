@@ -23,6 +23,7 @@ from python_apiserver_client.params import (
     RayJobInfo,
     RayJobRequest,
     SecretVolume,
+    SecurityContext,
     ServiceType,
     Template,
     Toleration,
@@ -77,7 +78,8 @@ def test_templates():
     tm2_json = json.dumps(temp2.to_dict())
     print(f"template 2 JSON: {tm2_json}")
 
-    temp3 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1, extended_resources={"vpc.amazonaws.com/efa": 32})
+    temp3 = Template(name="template3", namespace="namespace", cpu=2, memory=8, gpu=1,
+                     extended_resources={"vpc.amazonaws.com/efa": 32}, node_selector={"node-role": "util"})
     print(f"template 3: {temp3.to_string()}")
     tm3_json = json.dumps(temp3.to_dict())
     print(f"template 3 JSON: {tm3_json}")
@@ -194,6 +196,7 @@ def test_head_node_spec():
         volumes=volumes,
         environment=env_s,
         image_pull_policy="Always",
+        security_context=SecurityContext(),
     )
     print(f"\nhead node: {head.to_string()}")
     head_json = json.dumps(head.to_dict())
@@ -228,6 +231,7 @@ def test_worker_node_spec():
         environment=env_s,
         labels={"key": "value"},
         image_pull_policy="IfNotPresent",
+        security_context=SecurityContext(),
     )
     print(f"\nworker node: {worker.to_string()}")
     worker_json = json.dumps(worker.to_dict())
