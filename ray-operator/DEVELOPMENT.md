@@ -97,7 +97,7 @@ kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
 ```
 
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
-* The command `make docker-build` (Step 3) will also run `make test` (unit tests).
+* The command `make docker-build` (Step 3) will also run `make build` (Go project compilation).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 ### Run the operator outside the cluster
