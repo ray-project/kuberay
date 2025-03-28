@@ -425,7 +425,7 @@ func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[str
 		Data:       values,
 	}
 	_, err := e2etc.k8client.CoreV1().ConfigMaps(e2etc.namespaceName).Create(e2etc.ctx, cm, metav1.CreateOptions{})
-	require.NoErrorf(t, err, "No error expected when creating config map '%s' in namespace '%s'", e2etc.configMapName, e2etc.namespaceName)
+	require.NoErrorf(t, err, "No error expected when creating config map '%s' in namespace '%s'", configMapName, e2etc.namespaceName)
 	return configMapName
 }
 
