@@ -171,7 +171,6 @@ spec:
             name: client
           resources:
             limits:
-              cpu: "1"
               memory: 5Gi
               nvidia.com/gpu: "1"
             requests:
@@ -191,7 +190,6 @@ spec:
           name: ray-worker
           resources:
             limits:
-              cpu: "2"
               memory: 10Gi
             requests:
               cpu: "2"
@@ -202,12 +200,13 @@ spec:
 
 func TestGenerateResources(t *testing.T) {
 	tests := []struct {
-		expectedResources corev1.ResourceList
-		name              string
-		cpu               string
-		memory            string
-		ephemeralStorage  string
-		gpu               string
+		expectedRequestResources corev1.ResourceList
+		expectedLimitResources   corev1.ResourceList
+		name                     string
+		cpu                      string
+		memory                   string
+		ephemeralStorage         string
+		gpu                      string
 	}{
 		{
 			name:             "should generate resources with CPU, memory, ephemeral storage, and GPU",
@@ -215,8 +214,13 @@ func TestGenerateResources(t *testing.T) {
 			memory:           "5Gi",
 			ephemeralStorage: "10Gi",
 			gpu:              "1",
-			expectedResources: corev1.ResourceList{
+			expectedRequestResources: corev1.ResourceList{
 				corev1.ResourceCPU:                          resource.MustParse("1"),
+				corev1.ResourceMemory:                       resource.MustParse("5Gi"),
+				corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
+				corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
+			},
+			expectedLimitResources: corev1.ResourceList{
 				corev1.ResourceMemory:                       resource.MustParse("5Gi"),
 				corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
 				corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
@@ -228,8 +232,11 @@ func TestGenerateResources(t *testing.T) {
 			memory:           "5Gi",
 			ephemeralStorage: "",
 			gpu:              "0",
-			expectedResources: corev1.ResourceList{
+			expectedRequestResources: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("5Gi"),
+			},
+			expectedLimitResources: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse("5Gi"),
 			},
 		},
@@ -237,7 +244,8 @@ func TestGenerateResources(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedResources, generateResources(test.cpu, test.memory, test.ephemeralStorage, test.gpu))
+			assert.Equal(t, test.expectedRequestResources, generateRequestResources(test.cpu, test.memory, test.ephemeralStorage, test.gpu))
+			assert.Equal(t, test.expectedLimitResources, generateLimitResources(test.memory, test.ephemeralStorage, test.gpu))
 		})
 	}
 }
@@ -285,7 +293,6 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 									corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
 								},
 								Limits: &corev1.ResourceList{
-									corev1.ResourceCPU:                          resource.MustParse("1"),
 									corev1.ResourceMemory:                       resource.MustParse("5Gi"),
 									corev1.ResourceEphemeralStorage:             resource.MustParse("10Gi"),
 									corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
@@ -331,7 +338,6 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 										corev1.ResourceMemory: resource.MustParse("10Gi"),
 									},
 									Limits: &corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse("2"),
 										corev1.ResourceMemory: resource.MustParse("10Gi"),
 									},
 								},

@@ -69,10 +69,27 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 	return rayJobApplyConfig
 }
 
-// generateResources returns a corev1.ResourceList with the given CPU, memory, ephemeral storage, and GPU values for both requests and limits
-func generateResources(cpu, memory, ephemeralStorage, gpu string) corev1.ResourceList {
+// generateRequestResources returns a corev1.ResourceList with the given CPU, memory, ephemeral storage, and GPU values for only resource requests
+func generateRequestResources(cpu, memory, ephemeralStorage, gpu string) corev1.ResourceList {
 	resources := corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse(cpu),
+		corev1.ResourceMemory: resource.MustParse(memory),
+	}
+	if ephemeralStorage != "" {
+		resources[corev1.ResourceEphemeralStorage] = resource.MustParse(ephemeralStorage)
+	}
+
+	gpuResource := resource.MustParse(gpu)
+	if !gpuResource.IsZero() {
+		resources[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+	}
+
+	return resources
+}
+
+// generateLimitResources returns a corev1.ResourceList with the given memory, ephemeral storage, and GPU values for only resource limits
+func generateLimitResources(memory, ephemeralStorage, gpu string) corev1.ResourceList {
+	resources := corev1.ResourceList{
 		corev1.ResourceMemory: resource.MustParse(memory),
 	}
 	if ephemeralStorage != "" {
@@ -100,8 +117,10 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 	maps.Copy(headRayStartParams, rayClusterSpecObject.HeadRayStartParams)
 	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerRayStartParams)
 
-	headResources := generateResources(rayClusterSpecObject.HeadCPU, rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
-	workerResources := generateResources(rayClusterSpecObject.WorkerCPU, rayClusterSpecObject.WorkerMemory, rayClusterSpecObject.WorkerEphemeralStorage, rayClusterSpecObject.WorkerGPU)
+	headRequestResources := generateRequestResources(rayClusterSpecObject.HeadCPU, rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
+	headLimitResources := generateLimitResources(rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
+	workerRequestResources := generateRequestResources(rayClusterSpecObject.WorkerCPU, rayClusterSpecObject.WorkerMemory, rayClusterSpecObject.WorkerEphemeralStorage, rayClusterSpecObject.WorkerGPU)
+	workerLimitResources := generateLimitResources(rayClusterSpecObject.WorkerMemory, rayClusterSpecObject.WorkerEphemeralStorage, rayClusterSpecObject.WorkerGPU)
 
 	rayClusterSpec := rayv1ac.RayClusterSpec().
 		WithRayVersion(rayClusterSpecObject.RayVersion).
@@ -114,8 +133,8 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 						WithName("ray-head").
 						WithImage(rayClusterSpecObject.Image).
 						WithResources(corev1ac.ResourceRequirements().
-							WithRequests(headResources).
-							WithLimits(headResources)).
+							WithRequests(headRequestResources).
+							WithLimits(headLimitResources)).
 						WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("gcs-server"),
 							corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard"),
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
@@ -130,8 +149,8 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 						WithName("ray-worker").
 						WithImage(rayClusterSpecObject.Image).
 						WithResources(corev1ac.ResourceRequirements().
-							WithRequests(workerResources).
-							WithLimits(workerResources))))))
+							WithRequests(workerRequestResources).
+							WithLimits(workerLimitResources))))))
 
 	return rayClusterSpec
 }
