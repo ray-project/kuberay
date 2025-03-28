@@ -93,6 +93,9 @@ featureGates:
   - name: RayJobDeletionPolicy
     enabled: false
 
+metrics:
+  enabled: true
+
 # Path to the operator binary
 operatorComand: /manager
 

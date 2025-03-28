@@ -3,8 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"os"
 	"strings"
 	"time"
@@ -19,7 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
