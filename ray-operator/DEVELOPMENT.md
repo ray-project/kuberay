@@ -73,7 +73,7 @@ kind create cluster --image=kindest/node:v1.24.0
 # Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
 
-# To skip running unit tests, run the following command instead:
+# To skip Go project compilation, run the following command instead:
 # IMG=kuberay/operator:nightly make docker-image
 
 # Step 4: Load the custom KubeRay image into the Kind cluster.
