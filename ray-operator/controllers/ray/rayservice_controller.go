@@ -131,6 +131,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// Increase the counter for the ray_services_created_total metric.
+	if len(rayServiceInstance.Status.Conditions) == 0 {
+		common.CreatedRayServicesCounterInc(rayServiceInstance.Namespace)
+	}
+
 	// Find active and pending ray cluster objects given current service name.
 	var activeRayClusterInstance, pendingRayClusterInstance *rayv1.RayCluster
 	if activeRayClusterInstance, pendingRayClusterInstance, err = r.reconcileRayCluster(ctx, rayServiceInstance); err != nil {
