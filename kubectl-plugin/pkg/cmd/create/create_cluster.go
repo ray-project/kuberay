@@ -40,6 +40,7 @@ type CreateClusterOptions struct {
 	workerMemory           string
 	workerEphemeralStorage string
 	workerGPU              string
+	workerTPU              string
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
@@ -54,7 +55,7 @@ var (
 		kubectl ray create cluster sample-cluster
 
 		# Create a Ray cluster from flags input
-		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --head-ephemeral-storage 10Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --worker-ephemeral-storage 10Gi
+		kubectl ray create cluster sample-cluster --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --head-ephemeral-storage 10Gi --worker-replicas 3 --worker-cpu 1  --worker-tpu 4 --worker-memory 5Gi --worker-ephemeral-storage 10Gi
 
 		# Create a Ray cluster with K8s labels and annotations
 		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
@@ -104,6 +105,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0", "number of TPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerEphemeralStorage, "worker-ephemeral-storage", "", "amount of ephemeral storage in each worker group replica")
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
@@ -148,6 +150,7 @@ func (options *CreateClusterOptions) Validate() error {
 		"head-ephemeral-storage":   options.headEphemeralStorage,
 		"worker-cpu":               options.workerCPU,
 		"worker-gpu":               options.workerGPU,
+		"worker-tpu":               options.workerTPU,
 		"worker-memory":            options.workerMemory,
 		"worker-ephemeral-storage": options.workerEphemeralStorage,
 	}
@@ -190,6 +193,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 				WorkerMemory:           &options.workerMemory,
 				WorkerEphemeralStorage: &options.workerEphemeralStorage,
 				WorkerGPU:              &options.workerGPU,
+				WorkerTPU:              &options.workerTPU,
 				WorkerRayStartParams:   options.workerRayStartParams,
 				WorkerNodeSelectors:    options.workerNodeSelectors,
 			},

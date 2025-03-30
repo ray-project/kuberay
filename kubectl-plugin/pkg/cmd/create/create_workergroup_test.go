@@ -32,6 +32,7 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 				workerCPU:         "2",
 				workerMemory:      "5Gi",
 				workerGPU:         "1",
+				workerTPU:         "1",
 				rayStartParams:    map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"},
 				workerNodeSelectors: map[string]string{
 					"worker-node-selector": "worker-node-selector-value",
@@ -51,11 +52,13 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 										corev1.ResourceCPU:     resource.MustParse("2"),
 										corev1.ResourceMemory:  resource.MustParse("5Gi"),
 										util.ResourceNvidiaGPU: resource.MustParse("1"),
+										util.ResourceGoogleTPU: resource.MustParse("1"),
 									},
 									Limits: corev1.ResourceList{
 										corev1.ResourceCPU:     resource.MustParse("2"),
 										corev1.ResourceMemory:  resource.MustParse("5Gi"),
 										util.ResourceNvidiaGPU: resource.MustParse("1"),
+										util.ResourceGoogleTPU: resource.MustParse("1"),
 									},
 								},
 							},
@@ -71,7 +74,6 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, createWorkerGroupSpec(tt.options))
