@@ -124,5 +124,4 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 			assert.Equal(t, tt.expected, createWorkerGroupSpec(tt.options))
 		})
 	}
-
 }
