@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -164,29 +165,32 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, options.namespace)
 	}
 
-	rayClusterObject := generation.RayClusterYamlObject{
-		Namespace:   options.namespace,
-		ClusterName: options.clusterName,
-		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:             options.rayVersion,
-			Image:                  options.image,
-			HeadCPU:                options.headCPU,
-			HeadMemory:             options.headMemory,
-			HeadEphemeralStorage:   options.headEphemeralStorage,
-			HeadGPU:                options.headGPU,
-			HeadRayStartParams:     options.headRayStartParams,
-			WorkerReplicas:         options.workerReplicas,
-			WorkerCPU:              options.workerCPU,
-			WorkerMemory:           options.workerMemory,
-			WorkerEphemeralStorage: options.workerEphemeralStorage,
-			WorkerGPU:              options.workerGPU,
-			WorkerRayStartParams:   options.workerRayStartParams,
-			HeadNodeSelectors:      options.headNodeSelectors,
-			WorkerNodeSelectors:    options.workerNodeSelectors,
+	rayClusterSpecObject := generation.RayClusterSpecObject{
+		Namespace:            &options.namespace,
+		Name:                 &options.clusterName,
+		RayVersion:           &options.rayVersion,
+		Image:                &options.image,
+		HeadCPU:              &options.headCPU,
+		HeadMemory:           &options.headMemory,
+		HeadEphemeralStorage: &options.headEphemeralStorage,
+		HeadGPU:              &options.headGPU,
+		HeadRayStartParams:   options.headRayStartParams,
+		HeadNodeSelectors:    options.headNodeSelectors,
+		WorkerGroups: []generation.WorkerGroupConfig{
+			{
+				Name:                   ptr.To("default-group"),
+				WorkerReplicas:         &options.workerReplicas,
+				WorkerCPU:              &options.workerCPU,
+				WorkerMemory:           &options.workerMemory,
+				WorkerEphemeralStorage: &options.workerEphemeralStorage,
+				WorkerGPU:              &options.workerGPU,
+				WorkerRayStartParams:   options.workerRayStartParams,
+				WorkerNodeSelectors:    options.workerNodeSelectors,
+			},
 		},
 	}
 
-	rayClusterac := rayClusterObject.GenerateRayClusterApplyConfig()
+	rayClusterac := rayClusterSpecObject.GenerateRayClusterApplyConfig()
 
 	// If dry run is enabled, it will call the YAML converter and print out the YAML
 	if options.dryRun {

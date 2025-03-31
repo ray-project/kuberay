@@ -17,29 +17,34 @@ import (
 )
 
 type RayClusterSpecObject struct {
-	HeadRayStartParams     map[string]string
-	WorkerRayStartParams   map[string]string
-	HeadNodeSelectors      map[string]string
-	WorkerNodeSelectors    map[string]string
-	RayVersion             string
-	Image                  string
-	HeadCPU                string
-	HeadGPU                string
-	HeadMemory             string
-	HeadEphemeralStorage   string
-	WorkerCPU              string
-	WorkerGPU              string
-	WorkerMemory           string
-	WorkerEphemeralStorage string
-	WorkerReplicas         int32
+	Context     *string           `yaml:"context,omitempty"`
+	Namespace   *string           `yaml:"namespace,omitempty"`
+	Name        *string           `yaml:"name,omitempty"`
+	Labels      map[string]string `yaml:"labels,omitempty"`
+	Annotations map[string]string `yaml:"annotations,omitempty"`
+
+	RayVersion *string `yaml:"ray-version,omitempty"`
+	Image      *string `yaml:"image,omitempty"`
+
+	HeadCPU              *string           `yaml:"head-cpu,omitempty"`
+	HeadGPU              *string           `yaml:"head-gpu,omitempty"`
+	HeadMemory           *string           `yaml:"head-memory,omitempty"`
+	HeadEphemeralStorage *string           `yaml:"head-ephemeral-storage,omitempty"`
+	HeadRayStartParams   map[string]string `yaml:"head-ray-start-params,omitempty"`
+	HeadNodeSelectors    map[string]string `yaml:"head-node-selectors,omitempty"`
+
+	WorkerGroups []WorkerGroupConfig `yaml:"worker-groups,omitempty"`
 }
 
-type RayClusterYamlObject struct {
-	ClusterName string
-	Namespace   string
-	Labels      map[string]string
-	Annotations map[string]string
-	RayClusterSpecObject
+type WorkerGroupConfig struct {
+	Name                   *string           `yaml:"name,omitempty"`
+	WorkerCPU              *string           `yaml:"worker-cpu,omitempty"`
+	WorkerGPU              *string           `yaml:"worker-gpu,omitempty"`
+	WorkerMemory           *string           `yaml:"worker-memory,omitempty"`
+	WorkerEphemeralStorage *string           `yaml:"worker-ephemeral-storage,omitempty"`
+	WorkerReplicas         *int32            `yaml:"worker-replicas,omitempty"`
+	WorkerRayStartParams   map[string]string `yaml:"worker-ray-start-params,omitempty"`
+	WorkerNodeSelectors    map[string]string `yaml:"worker-node-selectors,omitempty"`
 }
 
 type RayJobYamlObject struct {
@@ -50,11 +55,11 @@ type RayJobYamlObject struct {
 	RayClusterSpecObject
 }
 
-func (rayClusterObject *RayClusterYamlObject) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
-	rayClusterApplyConfig := rayv1ac.RayCluster(rayClusterObject.ClusterName, rayClusterObject.Namespace).
-		WithLabels(rayClusterObject.Labels).
-		WithAnnotations(rayClusterObject.Annotations).
-		WithSpec(rayClusterObject.generateRayClusterSpec())
+func (rayClusterSpecObject *RayClusterSpecObject) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
+	rayClusterApplyConfig := rayv1ac.RayCluster(*rayClusterSpecObject.Name, *rayClusterSpecObject.Namespace).
+		WithLabels(rayClusterSpecObject.Labels).
+		WithAnnotations(rayClusterSpecObject.Annotations).
+		WithSpec(rayClusterSpecObject.generateRayClusterSpec())
 
 	return rayClusterApplyConfig
 }
@@ -70,35 +75,63 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 }
 
 // generateRequestResources returns a corev1.ResourceList with the given CPU, memory, ephemeral storage, and GPU values for only resource requests
-func generateRequestResources(cpu, memory, ephemeralStorage, gpu string) corev1.ResourceList {
-	resources := corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse(cpu),
-		corev1.ResourceMemory: resource.MustParse(memory),
-	}
-	if ephemeralStorage != "" {
-		resources[corev1.ResourceEphemeralStorage] = resource.MustParse(ephemeralStorage)
+func generateRequestResources(cpu, memory, ephemeralStorage, gpu *string) corev1.ResourceList {
+	resources := corev1.ResourceList{}
+
+	if cpu != nil && *cpu != "" {
+		cpuResource := resource.MustParse(*cpu)
+		if !cpuResource.IsZero() {
+			resources[corev1.ResourceCPU] = cpuResource
+		}
 	}
 
-	gpuResource := resource.MustParse(gpu)
-	if !gpuResource.IsZero() {
-		resources[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+	if memory != nil && *memory != "" {
+		memoryResource := resource.MustParse(*memory)
+		if !memoryResource.IsZero() {
+			resources[corev1.ResourceMemory] = memoryResource
+		}
+	}
+
+	if ephemeralStorage != nil && *ephemeralStorage != "" {
+		ephemeralStorageResource := resource.MustParse(*ephemeralStorage)
+		if !ephemeralStorageResource.IsZero() {
+			resources[corev1.ResourceEphemeralStorage] = ephemeralStorageResource
+		}
+	}
+
+	if gpu != nil && *gpu != "" {
+		gpuResource := resource.MustParse(*gpu)
+		if !gpuResource.IsZero() {
+			resources[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+		}
 	}
 
 	return resources
 }
 
 // generateLimitResources returns a corev1.ResourceList with the given memory, ephemeral storage, and GPU values for only resource limits
-func generateLimitResources(memory, ephemeralStorage, gpu string) corev1.ResourceList {
-	resources := corev1.ResourceList{
-		corev1.ResourceMemory: resource.MustParse(memory),
-	}
-	if ephemeralStorage != "" {
-		resources[corev1.ResourceEphemeralStorage] = resource.MustParse(ephemeralStorage)
+func generateLimitResources(memory, ephemeralStorage, gpu *string) corev1.ResourceList {
+	resources := corev1.ResourceList{}
+
+	if memory != nil && *memory != "" {
+		memoryResource := resource.MustParse(*memory)
+		if !memoryResource.IsZero() {
+			resources[corev1.ResourceMemory] = memoryResource
+		}
 	}
 
-	gpuResource := resource.MustParse(gpu)
-	if !gpuResource.IsZero() {
-		resources[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+	if ephemeralStorage != nil && *ephemeralStorage != "" {
+		ephemeralStorageResource := resource.MustParse(*ephemeralStorage)
+		if !ephemeralStorageResource.IsZero() {
+			resources[corev1.ResourceEphemeralStorage] = ephemeralStorageResource
+		}
+	}
+
+	if gpu != nil && *gpu != "" {
+		gpuResource := resource.MustParse(*gpu)
+		if !gpuResource.IsZero() {
+			resources[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
+		}
 	}
 
 	return resources
@@ -115,15 +148,20 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 		"metrics-export-port": "8080",
 	}
 	maps.Copy(headRayStartParams, rayClusterSpecObject.HeadRayStartParams)
-	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerRayStartParams)
+	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerGroups[0].WorkerRayStartParams)
 
 	headRequestResources := generateRequestResources(rayClusterSpecObject.HeadCPU, rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
 	headLimitResources := generateLimitResources(rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
-	workerRequestResources := generateRequestResources(rayClusterSpecObject.WorkerCPU, rayClusterSpecObject.WorkerMemory, rayClusterSpecObject.WorkerEphemeralStorage, rayClusterSpecObject.WorkerGPU)
-	workerLimitResources := generateLimitResources(rayClusterSpecObject.WorkerMemory, rayClusterSpecObject.WorkerEphemeralStorage, rayClusterSpecObject.WorkerGPU)
+	workerRequestResources := generateRequestResources(rayClusterSpecObject.WorkerGroups[0].WorkerCPU, rayClusterSpecObject.WorkerGroups[0].WorkerMemory, rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage, rayClusterSpecObject.WorkerGroups[0].WorkerGPU)
+	workerLimitResources := generateLimitResources(rayClusterSpecObject.WorkerGroups[0].WorkerMemory, rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage, rayClusterSpecObject.WorkerGroups[0].WorkerGPU)
+
+	workerGroupName := "default-group"
+	if rayClusterSpecObject.WorkerGroups[0].Name != nil {
+		workerGroupName = *rayClusterSpecObject.WorkerGroups[0].Name
+	}
 
 	rayClusterSpec := rayv1ac.RayClusterSpec().
-		WithRayVersion(rayClusterSpecObject.RayVersion).
+		WithRayVersion(*rayClusterSpecObject.RayVersion).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 			WithRayStartParams(headRayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
@@ -131,7 +169,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 					WithNodeSelector(rayClusterSpecObject.HeadNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-head").
-						WithImage(rayClusterSpecObject.Image).
+						WithImage(*rayClusterSpecObject.Image).
 						WithResources(corev1ac.ResourceRequirements().
 							WithRequests(headRequestResources).
 							WithLimits(headLimitResources)).
@@ -140,14 +178,14 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
 		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 			WithRayStartParams(workerRayStartParams).
-			WithGroupName("default-group").
-			WithReplicas(rayClusterSpecObject.WorkerReplicas).
+			WithGroupName(workerGroupName).
+			WithReplicas(*rayClusterSpecObject.WorkerGroups[0].WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
-					WithNodeSelector(rayClusterSpecObject.WorkerNodeSelectors).
+					WithNodeSelector(rayClusterSpecObject.WorkerGroups[0].WorkerNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-worker").
-						WithImage(rayClusterSpecObject.Image).
+						WithImage(*rayClusterSpecObject.Image).
 						WithResources(corev1ac.ResourceRequirements().
 							WithRequests(workerRequestResources).
 							WithLimits(workerLimitResources))))))
