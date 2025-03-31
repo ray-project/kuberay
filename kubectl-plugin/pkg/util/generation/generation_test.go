@@ -3,7 +3,6 @@ package generation
 import (
 	"fmt"
 	"maps"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -207,7 +206,7 @@ spec:
               cpu: "2"
               memory: 10Gi`, util.RayImage, util.RayVersion, util.RayImage)
 
-	assert.Equal(t, strings.TrimSpace(expectedResultYaml), strings.TrimSpace(resultString))
+	assert.YAMLEq(t, expectedResultYaml, resultString)
 }
 
 func TestGenerateResources(t *testing.T) {

@@ -76,7 +76,7 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 		Example:      createWorkerGroupExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Validate(cmd); err != nil {
+			if err := options.Validate(); err != nil {
 				return err
 			}
 
@@ -131,7 +131,7 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 	return nil
 }
 
-func (options *CreateWorkerGroupOptions) Validate(cmd *cobra.Command) error {
+func (options *CreateWorkerGroupOptions) Validate() error {
 	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
 	// if worker-tpu is not 0
 	if options.workerTPU != "0" {
