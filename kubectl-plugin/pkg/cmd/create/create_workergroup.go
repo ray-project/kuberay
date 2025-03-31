@@ -143,6 +143,10 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 }
 
 func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupSpec {
+	if options.rayStartParams == nil {
+		options.rayStartParams = map[string]string{}
+	}
+
 	podTemplate := corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
