@@ -80,7 +80,7 @@ func TestCreatePodGroup(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg := createPodGroup(&cluster, getRayClusterPodGroupName(&cluster), minMember, totalResource)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 

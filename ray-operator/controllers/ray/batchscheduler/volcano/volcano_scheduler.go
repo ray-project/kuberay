@@ -48,33 +48,33 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rayCluster *rayv1.RayCluster) error {
 	var minMember int32
 	var totalResource corev1.ResourceList
-	if !utils.IsAutoscalingEnabled(&app.Spec) {
-		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
-		totalResource = utils.CalculateDesiredResources(app)
+	if !utils.IsAutoscalingEnabled(&rayCluster.Spec) {
+		minMember = utils.CalculateDesiredReplicas(ctx, rayCluster) + 1
+		totalResource = utils.CalculateDesiredResources(rayCluster)
 	} else {
-		minMember = utils.CalculateMinReplicas(app) + 1
-		totalResource = utils.CalculateMinResources(app)
+		minMember = utils.CalculateMinReplicas(rayCluster) + 1
+		totalResource = utils.CalculateMinResources(rayCluster)
 	}
 
-	return v.syncPodGroup(ctx, app, minMember, totalResource)
+	return v.syncPodGroup(ctx, rayCluster, minMember, totalResource)
 }
 
-func getAppPodGroupName(app *rayv1.RayCluster) string {
-	return fmt.Sprintf("ray-%s-pg", app.Name)
+func getRayClusterPodGroupName(rayCluster *rayv1.RayCluster) string {
+	return fmt.Sprintf("ray-%s-pg", rayCluster.Name)
 }
 
-func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.RayCluster, size int32, totalResource corev1.ResourceList) error {
-	podGroupName := getAppPodGroupName(app)
-	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(ctx, podGroupName, metav1.GetOptions{}); err != nil {
+func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+	podGroupName := getRayClusterPodGroupName(rayCluster)
+	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(rayCluster.Namespace).Get(ctx, podGroupName, metav1.GetOptions{}); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 
-		podGroup := createPodGroup(app, podGroupName, size, totalResource)
-		if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Create(
+		podGroup := createPodGroup(rayCluster, podGroupName, size, totalResource)
+		if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(rayCluster.Namespace).Create(
 			ctx, &podGroup, metav1.CreateOptions{},
 		); err != nil {
 			if errors.IsAlreadyExists(err) {
@@ -89,7 +89,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 		if pg.Spec.MinMember != size || !quotav1.Equals(*pg.Spec.MinResources, totalResource) {
 			pg.Spec.MinMember = size
 			pg.Spec.MinResources = &totalResource
-			if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Update(
+			if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(rayCluster.Namespace).Update(
 				ctx, pg, metav1.UpdateOptions{},
 			); err != nil {
 				v.log.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
@@ -101,17 +101,17 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 }
 
 func createPodGroup(
-	app *rayv1.RayCluster,
+	rayCluster *rayv1.RayCluster,
 	podGroupName string,
 	size int32,
 	totalResource corev1.ResourceList,
 ) v1beta1.PodGroup {
 	podGroup := v1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: app.Namespace,
+			Namespace: rayCluster.Namespace,
 			Name:      podGroupName,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(app, rayv1.SchemeGroupVersion.WithKind("RayCluster")),
+				*metav1.NewControllerRef(rayCluster, rayv1.SchemeGroupVersion.WithKind("RayCluster")),
 			},
 		},
 		Spec: v1beta1.PodGroupSpec{
@@ -123,24 +123,24 @@ func createPodGroup(
 		},
 	}
 
-	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+	if queue, ok := rayCluster.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		podGroup.Spec.Queue = queue
 	}
 
-	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
+	if priorityClassName, ok := rayCluster.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		podGroup.Spec.PriorityClassName = priorityClassName
 	}
 
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
+func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getRayClusterPodGroupName(rayCluster)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
-	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+	if queue, ok := rayCluster.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
 	}
-	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
+	if priorityClassName, ok := rayCluster.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 	pod.Spec.SchedulerName = v.Name()
