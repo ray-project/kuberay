@@ -18,7 +18,12 @@ spec:
           image: rayproject/ray:2.41.0
           resources:
             limits:
-              cpu: 1
+              # You no longer need to specify CPU limits in KubeRay >= v1.3.
+              # KubeRay will correctly configure the number of CPU available for Ray based on CPU requests.
+              # In most cases, CPU limits do more harm than help.
+              # See https://home.robusta.dev/blog/stop-using-cpu-limits
+              # cpu: 500m
+              # cpu: 1
               memory: 2G
             requests:
               cpu: 1
@@ -46,7 +51,11 @@ spec:
               image: rayproject/ray:2.41.0
               resources:
                 limits:
-                  cpu: 1
+                  # You no longer need to specify CPU limits in KubeRay >= v1.3.
+                  # KubeRay will correctly configure the number of CPU available for Ray based on CPU requests.
+                  # In most cases, CPU limits do more harm than help.
+                  # See https://home.robusta.dev/blog/stop-using-cpu-limits
+                  # cpu: 1
                   memory: 1G
                 requests:
                   cpu: 1
