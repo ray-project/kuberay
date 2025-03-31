@@ -7,7 +7,10 @@ You need write access to the [KubeRay repo](https://github.com/ray-project/kuber
 
 ## Overview
 
-Each KubeRay minor release series (e.g., `v1.3.X`) is maintained on its own release branch. For example, the `v1.3.X` releases are cut from the `release-1.3` branch. Patch releases (e.g., `v1.3.1`) involve cherry-picking commits onto the corresponding release branch.
+Each KubeRay minor release series (e.g., `v1.3.X`) is maintained on its own release branch.
+For example, the `v1.3.X` releases are cut from the `release-1.3` branch.
+Patch releases (e.g., `v1.3.1`) involve cherry-picking commits onto the corresponding release branch.
+Release candidates (e.g., `v1.4.0-rc.0`) are usually cut from the `master` branch.
 
 The high-level steps for a new minor or patch release are:
 
@@ -16,7 +19,7 @@ The high-level steps for a new minor or patch release are:
 3. Create and push a new git tag based on the target release version (e.g., `v1.4.0`).
 4. Publish container images by running the `release-image-build` GitHub Actions workflow.
 5. Publish kubectl plugin binaries by running the `release-kubectl-plugin` GitHub Actions workflow.
-6. Update the `kuberay-helm` repository to publish the new Helm chart versions.
+6. Update the [kuberay-helm](https://github.com/ray-project/kuberay-helm) repository to publish the new Helm chart versions.
 7. Validate the release artifacts (images, charts).
 8. Generate the CHANGELOG for the release.
 9. Publish the release notes on GitHub Releases.
@@ -131,11 +134,9 @@ Trigger the [`release-image-build`](https://github.com/ray-project/kuberay/actio
 2. Click the **"Run workflow"** dropdown button.
 3. Set the parameters:
     * **Use workflow from:** Select **`Tags`** and choose the tag you just pushed (e.g., **`v1.4.0`**).
-    * **Commit reference:** Leave this blank or ensure it points to the commit associated with the tag `v1.4.0`. *Usually derived from the tag.*
-    * **Desired release version:** Enter the tag name (e.g., **`v1.4.0`**). This determines the image tag.
 4. Click **"Run workflow"**.
 
-**Verification:** Monitor the workflow run. Once completed successfully, check that the corresponding image tags are available on quay.io.
+**Verification:** Monitor the workflow run. Once completed successfully, check that the corresponding image tags are available on [quay.io](https://quay.io/repository/kuberay/operator?tab=tags).
 
 ---
 
@@ -160,6 +161,7 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 ### Step 6: Publish KubeRay Helm Charts
 
 Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
+See [helm-chart.md](./helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
 
 1. **Create Release Branch (if it doesn't exist):**
     * Clone the `kuberay-helm` repository if you haven't already.
@@ -201,9 +203,6 @@ Helm charts are published via the [ray-project/kuberay-helm](https://github.com/
         rm -rf helm-chart/
         # Copy the updated charts from the kuberay repo
         cp -R ../kuberay/helm-chart/ .
-        # Remove test file not needed in kuberay-helm repo
-        # (Adjust path if needed)
-        rm -f helm-chart/script/rbac_test.py
         ```
 
 3. **Commit and Create Pull Request:**
@@ -272,6 +271,12 @@ Perform basic validation to ensure the released artifacts work together.
 
     You should see the kuberay-operator pod in `Running` state and 1 active RayCluster.
 
+5. Validate Go modules are published:
+
+    ```bash
+    go install github.com/ray-project/kuberay/ray-operator@v1.4.0
+    ```
+
 ---
 
 ### Step 8: Generate the CHANGELOG
@@ -291,6 +296,8 @@ Follow [Generating the changelog for a release](https://github.com/ray-project/k
 7. Verify the attached assets (kubectl plugins) are correct.
 8. Mark the release as **"Latest release"** if appropriate (usually for the newest stable release).
 9. Click **"Publish release"**.
+
+Announce the new release in the [kuberay Slack channel](https://ray.slack.com/archives/C01CKH05XBN).
 
 ---
 
