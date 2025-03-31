@@ -133,7 +133,6 @@ spec:
             name: client
           resources:
             limits:
-              cpu: "1"
               memory: 5Gi
               nvidia.com/gpu: "1"
             requests:
@@ -153,7 +152,6 @@ spec:
           name: ray-worker
           resources:
             limits:
-              cpu: "2"
               memory: 10Gi
             requests:
               cpu: "2"

@@ -81,7 +81,6 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
 							}).
 							WithLimits(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.HeadCPU),
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
 							})).
 						WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("gcs-server"),
@@ -103,7 +102,6 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}).
 							WithLimits(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.WorkerCPU),
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}))))))
 
