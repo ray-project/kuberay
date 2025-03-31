@@ -105,7 +105,13 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
-	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0", "number of TPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0",
+		fmt.Sprintf(
+			"number of TPUs in each worker group replica (if set > 0, also specify --worker-node-selectors with %s and %s)",
+			util.NodeSelectorGKETPUAccelerator,
+			util.NodeSelectorGKETPUTopology,
+		),
+	)
 	cmd.Flags().StringVar(&options.workerEphemeralStorage, "worker-ephemeral-storage", "", "amount of ephemeral storage in each worker group replica")
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
@@ -163,7 +169,13 @@ func (options *CreateClusterOptions) Validate() error {
 			return fmt.Errorf("%w", err)
 		}
 	}
-
+	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
+	// if worker-tpu is not 0
+	if options.workerTPU != "0" {
+		if err := util.ValidateTPUNodeSelector(options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
 	return nil
 }
 

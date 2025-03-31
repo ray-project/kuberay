@@ -20,3 +20,13 @@ func ValidateResourceQuantity(value string, name string) error {
 	}
 	return nil
 }
+
+func ValidateTPUNodeSelector(nodeSelector map[string]string) error {
+	if _, ok := nodeSelector[NodeSelectorGKETPUAccelerator]; !ok {
+		return fmt.Errorf("%s is not set in --worker-node-selectors", NodeSelectorGKETPUAccelerator)
+	}
+	if _, ok := nodeSelector[NodeSelectorGKETPUTopology]; !ok {
+		return fmt.Errorf("%s is not set in --worker-node-selectors", NodeSelectorGKETPUTopology)
+	}
+	return nil
+}
