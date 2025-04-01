@@ -41,6 +41,7 @@ type WorkerGroupConfig struct {
 	WorkerCPU              *string           `yaml:"worker-cpu,omitempty"`
 	WorkerGPU              *string           `yaml:"worker-gpu,omitempty"`
 	WorkerTPU              *string           `yaml:"worker-tpu,omitempty"`
+	NumOfHosts             *int32            `yaml:"num-of-hosts,omitempty"`
 	WorkerMemory           *string           `yaml:"worker-memory,omitempty"`
 	WorkerEphemeralStorage *string           `yaml:"worker-ephemeral-storage,omitempty"`
 	WorkerReplicas         *int32            `yaml:"worker-replicas,omitempty"`
@@ -219,6 +220,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithRayStartParams(workerRayStartParams).
 			WithGroupName(workerGroupName).
 			WithReplicas(*rayClusterSpecObject.WorkerGroups[0].WorkerReplicas).
+			WithNumOfHosts(*rayClusterSpecObject.WorkerGroups[0].NumOfHosts).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithNodeSelector(rayClusterSpecObject.WorkerGroups[0].WorkerNodeSelectors).

@@ -32,6 +32,7 @@ type CreateClusterOptions struct {
 	clusterName            string
 	rayVersion             string
 	image                  string
+	numOfHosts             int32
 	headCPU                string
 	headMemory             string
 	headEphemeralStorage   string
@@ -102,6 +103,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", "", "amount of ephemeral storage in the Ray head")
 	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in default worker group per replica")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
@@ -201,6 +203,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 			{
 				Name:                   ptr.To("default-group"),
 				WorkerReplicas:         &options.workerReplicas,
+				NumOfHosts:             &options.numOfHosts,
 				WorkerCPU:              &options.workerCPU,
 				WorkerMemory:           &options.workerMemory,
 				WorkerEphemeralStorage: &options.workerEphemeralStorage,

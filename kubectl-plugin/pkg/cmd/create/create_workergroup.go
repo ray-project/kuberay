@@ -35,6 +35,7 @@ type CreateWorkerGroupOptions struct {
 	workerTPU           string
 	workerMemory        string
 	workerReplicas      int32
+	numOfHosts          int32
 	workerMinReplicas   int32
 	workerMaxReplicas   int32
 }
@@ -92,6 +93,7 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
+	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in the worker group per replica")
 	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "minimum number of replicas")
 	cmd.Flags().Int32Var(&options.workerMaxReplicas, "worker-max-replicas", 10, "maximum number of replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
@@ -203,6 +205,7 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 	return rayv1.WorkerGroupSpec{
 		GroupName:      options.groupName,
 		Replicas:       &options.workerReplicas,
+		NumOfHosts:     options.numOfHosts,
 		MinReplicas:    &options.workerMinReplicas,
 		MaxReplicas:    &options.workerMaxReplicas,
 		RayStartParams: options.rayStartParams,

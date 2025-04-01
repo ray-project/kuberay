@@ -28,6 +28,7 @@ func TestValidateResourceQuantity(t *testing.T) {
 		})
 	}
 }
+
 func TestValidateTPUNodeSelector(t *testing.T) {
 	tests := []struct {
 		nodeSelector map[string]string

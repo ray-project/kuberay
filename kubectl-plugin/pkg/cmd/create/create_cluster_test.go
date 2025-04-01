@@ -126,6 +126,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 		"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
 		"--head-node-selectors", "app=ray,env=dev",
 		"--worker-replicas", "3",
+		"--num-of-hosts", "2",
 		"--worker-cpu", "1",
 		"--worker-memory", "5Gi",
 		"--worker-gpu", "1",
