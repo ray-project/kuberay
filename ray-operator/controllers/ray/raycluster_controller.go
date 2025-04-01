@@ -1108,7 +1108,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 		if rayContainer.Lifecycle == nil {
 			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommand)
 		} else {
-			logger.Info("Lifecycle already exists for ray container, not overriding with lifecycle defined by PRE_STOP_COMMAND")
+			logger.Info("Lifecycle already exists for ray head container, not overriding with lifecycle defined by PRE_STOP_COMMAND")
 		}
 	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
@@ -1139,8 +1139,13 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
+	rayContainer := podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
 	if r.PreStopCommand != "" {
-		podTemplateSpec.Spec.Containers[utils.RayContainerIndex].Lifecycle = createPreStopLifecycle(r.PreStopCommand)
+		if rayContainer.Lifecycle == nil {
+			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommand)
+		} else {
+			logger.Info("Lifecycle already exists for ray worker container, not overriding with lifecycle defined by PRE_STOP_COMMAND")
+		}
 	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
