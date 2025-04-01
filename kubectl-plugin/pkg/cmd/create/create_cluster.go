@@ -32,7 +32,6 @@ type CreateClusterOptions struct {
 	clusterName            string
 	rayVersion             string
 	image                  string
-	numOfHosts             int32
 	headCPU                string
 	headMemory             string
 	headEphemeralStorage   string
@@ -42,10 +41,11 @@ type CreateClusterOptions struct {
 	workerEphemeralStorage string
 	workerGPU              string
 	workerTPU              string
+	timeout                time.Duration
+	numOfHosts             int32
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
-	timeout                time.Duration
 }
 
 var (
