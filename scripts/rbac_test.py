@@ -8,7 +8,7 @@ import yaml
 import jsonpatch
 
 
-REPO_ROOT = Path(__file__).absolute().parent.parent.parent
+REPO_ROOT = Path(__file__).absolute().parent.parent
 
 
 def generate_config_patch(config):
