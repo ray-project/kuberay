@@ -51,9 +51,6 @@ var (
 
 		# Create a worker group in an existing Ray cluster
 		kubectl ray create workergroup example-group --ray-cluster sample-cluster --image %s --worker-cpu 2 --worker-memory 5Gi
-
-		# Create a worker group in an existing Ray cluster with worker TPU
-		kubectl ray create workergroup example-group --ray-cluster sample-cluster --worker-tpu 1
 	`, util.RayImage))
 )
 
