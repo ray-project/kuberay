@@ -78,6 +78,11 @@ var (
 										ContainerPort: 8000,
 										Name:          "serve",
 									},
+									{
+										// Override the default port value for client
+										ContainerPort: 12345,
+										Name:          "client",
+									},
 								},
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
@@ -149,13 +154,30 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
+	defaultPorts := getDefaultPorts()
 	ports := svc.Spec.Ports
+
 	expectedResult = utils.DefaultServiceAppProtocol
+	svcPorts := map[string]int32{}
 	for _, port := range ports {
 		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
+		svcPorts[port.Name] = port.Port
 	}
+
+	// Ensure the default port value is applied
+	for name, defaultPort := range defaultPorts {
+		if _, defined := svcPorts[name]; !defined {
+			t.Fatalf("Port `%v` not set", name)
+		}
+		if name == utils.ClientPortName {
+			assert.Equalf(t, 12345, int(svcPorts[name]), "Expected `%v` as `%v` port value but got `%v`", 12345, name, svcPorts[name])
+		} else {
+			assert.Equalf(t, defaultPort, svcPorts[name], "Expected `%v` as `%v` port value but got `%v`", defaultPort, name, svcPorts[name])
+		}
+	}
+
 	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
 	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
 		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
@@ -585,8 +607,15 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 		},
 	}
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
-	require.Error(t, err)
-	assert.Nil(t, svc)
+
+	// No error should be raised as default port value will be used
+	require.NoError(t, err)
+
+	ports := svc.Spec.Ports
+	// assert only serve port is set
+	assert.Len(t, ports, 1)
+	assert.Equal(t, utils.ServingPortName, ports[0].Name)
+	assert.Equal(t, utils.DefaultServingPort, int(ports[0].Port))
 }
 
 func TestUserSpecifiedServeService(t *testing.T) {
