@@ -31,18 +31,22 @@ func TestValidateResourceQuantity(t *testing.T) {
 
 func TestValidateTPUNodeSelector(t *testing.T) {
 	tests := []struct {
+		numOfHosts   int32
 		nodeSelector map[string]string
 		wantErr      bool
 	}{
-		{map[string]string{}, true},
-		{map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, true},
-		{map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, true},
-		{map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, false},
+		{1, map[string]string{}, true},
+		{1, map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, true},
+		{1, map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, true},
+		{0, map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, true},
+		{0, map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, true},
+		{0, map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, true},
+		{1, map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%v", tt.nodeSelector), func(t *testing.T) {
-			err := ValidateTPUNodeSelector(tt.nodeSelector)
+			err := ValidateTPUNodeSelector(tt.numOfHosts, tt.nodeSelector)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateTPUNodeSelector() = %v, wantErr %v", err, tt.wantErr)
 			}

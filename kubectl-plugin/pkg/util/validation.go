@@ -21,7 +21,10 @@ func ValidateResourceQuantity(value string, name string) error {
 	return nil
 }
 
-func ValidateTPUNodeSelector(nodeSelector map[string]string) error {
+func ValidateTPUNodeSelector(numOfHosts int32, nodeSelector map[string]string) error {
+	if numOfHosts == 0 {
+		return fmt.Errorf("numOfHosts cannot be 0 when using TPU")
+	}
 	if _, ok := nodeSelector[NodeSelectorGKETPUAccelerator]; !ok {
 		return fmt.Errorf("%s is not set in --worker-node-selectors", NodeSelectorGKETPUAccelerator)
 	}

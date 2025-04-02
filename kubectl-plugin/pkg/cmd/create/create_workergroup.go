@@ -134,7 +134,7 @@ func (options *CreateWorkerGroupOptions) Validate() error {
 	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
 	// if worker-tpu is not 0
 	if options.workerTPU != "0" {
-		if err := util.ValidateTPUNodeSelector(options.workerNodeSelectors); err != nil {
+		if err := util.ValidateTPUNodeSelector(options.numOfHosts, options.workerNodeSelectors); err != nil {
 			return fmt.Errorf("%w", err)
 		}
 	}
