@@ -260,6 +260,7 @@ var templateWorker = api.ComputeTemplate{
 	Memory:            8,
 	Gpu:               4,
 	ExtendedResources: map[string]uint32{"vpc.amazonaws.com/efa": 32},
+	NodeSelector:      map[string]string{"node-role": "util"},
 	Tolerations: []*api.PodToleration{
 		{
 			Key:      "blah1",
@@ -277,6 +278,10 @@ var expectedToleration = corev1.Toleration{
 
 var expectedLabels = map[string]string{
 	"foo": "bar",
+}
+
+var expectedNodeSelector = map[string]string{
+	"node-role": "util",
 }
 
 var expectedHeadNodeEnv = []corev1.EnvVar{
@@ -640,6 +645,7 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 	assert.Equal(t, expectedToleration, podSpec.Spec.Tolerations[0], "failed to propagate tolerations")
 	assert.Equal(t, "bar", podSpec.Annotations["foo"], "failed to convert annotations")
 	assert.Equal(t, expectedLabels, podSpec.Labels, "failed to convert labels")
+	assert.Equal(t, expectedNodeSelector, podSpec.Spec.NodeSelector, "failed to propagate node selector")
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_REQUEST", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.cpu"}}), "failed to propagate environment variable: CPU_REQUEST")
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "CPU_LIMITS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "limits.cpu"}}), "failed to propagate environment variable: CPU_LIMITS")
 	assert.True(t, containsEnvValueFrom(podSpec.Spec.Containers[0].Env, "MEMORY_REQUESTS", &corev1.EnvVarSource{ResourceFieldRef: &corev1.ResourceFieldSelector{ContainerName: "ray-worker", Resource: "requests.memory"}}), "failed to propagate environment variable: MEMORY_REQUESTS")

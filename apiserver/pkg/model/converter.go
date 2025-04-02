@@ -329,6 +329,8 @@ func convertSecurityContext(securityCtx *corev1.SecurityContext) *api.SecurityCo
 	result := &api.SecurityContext{
 		Privileged:   securityCtx.Privileged,
 		Capabilities: &api.Capabilities{},
+		RunAsUser:    *securityCtx.RunAsUser,
+		RunAsGroup:   *securityCtx.RunAsGroup,
 	}
 	if securityCtx.Capabilities != nil {
 		for _, cap := range securityCtx.Capabilities.Add {
@@ -421,6 +423,15 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 		if err != nil {
 			klog.Error("failed to unmarshall extended resources for compute template ", runtime.Name, " value ",
 				runtime.ExtendedResources, " error ", err)
+		}
+	}
+
+	val, ok = configMap.Data["node_selector"]
+	if ok {
+		err := json.Unmarshal([]byte(val), &runtime.NodeSelector)
+		if err != nil {
+			klog.Error("failed to unmarshall node selector for compute template ", runtime.Name, " value ",
+				runtime.NodeSelector, " error ", err)
 		}
 	}
 
