@@ -31,17 +31,17 @@ func TestValidateResourceQuantity(t *testing.T) {
 
 func TestValidateTPUNodeSelector(t *testing.T) {
 	tests := []struct {
-		numOfHosts   int32
 		nodeSelector map[string]string
+		numOfHosts   int32
 		wantErr      bool
 	}{
-		{1, map[string]string{}, true},
-		{1, map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, true},
-		{1, map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, true},
-		{0, map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, true},
-		{0, map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, true},
-		{0, map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, true},
-		{1, map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, false},
+		{map[string]string{}, 1, true},
+		{map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, 1, true},
+		{map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, 1, true},
+		{map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, 0, true},
+		{map[string]string{NodeSelectorGKETPUAccelerator: "v2"}, 0, true},
+		{map[string]string{NodeSelectorGKETPUTopology: "topology-1"}, 0, true},
+		{map[string]string{NodeSelectorGKETPUAccelerator: "v2", NodeSelectorGKETPUTopology: "topology-1"}, 1, false},
 	}
 
 	for _, tt := range tests {
