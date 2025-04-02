@@ -153,7 +153,8 @@ The e2e tests can be run by executing the following command:
 
 ```bash
 # Reinstall the kuberay-operator to make sure it use the latest nightly image you just built.
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 make test-e2e
 ```
 
@@ -205,7 +206,8 @@ make install
 Deploy the manifests and controller
 
 ```bash
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 ```
 
 > Note: remember to replace with your own image
