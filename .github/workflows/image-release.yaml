@@ -2,13 +2,6 @@ name: release-image-build
 
 on:
   workflow_dispatch:
-    inputs:
-      commit:
-        description: 'Commit reference (branch or SHA) from which to build the images.'
-        required: true
-      tag:
-        description: 'Desired release version tag (e.g. v1.1.0-rc.1).'
-        required: true
 
 jobs:
   release_apiserver_image:
@@ -18,6 +11,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
 
+    - name: Error if not a tag
+      uses: actions/github-script@v7
+      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+      with:
+        script: core.setFailed('This action can only be run on tags')
+
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
@@ -26,9 +25,13 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
       with:
-        ref: ${{ github.event.inputs.commit }}
+        fetch-depth: 0
 
-    - name: install kubebuilder
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+    - name: Install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
         sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
@@ -68,8 +71,8 @@ jobs:
       run: |
         docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
         docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ github.event.inputs.tag }};
-        docker push quay.io/kuberay/apiserver:${{ github.event.inputs.tag }}
+        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ env.tag }};
+        docker push quay.io/kuberay/apiserver:${{ env.tag }}
 
   release_operator_image:
     env:
@@ -77,6 +80,12 @@ jobs:
     name: Release Operator Docker Images
     runs-on: ubuntu-22.04
     steps:
+
+    - name: Error if not a tag
+      uses: actions/github-script@v7
+      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+      with:
+        script: core.setFailed('This action can only be run on tags')
 
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -86,9 +95,13 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
       with:
-        ref: ${{ github.event.inputs.commit }}
+        fetch-depth: 0
 
-    - name: install kubebuilder
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+    - name: Install kubebuilder
       run: |
         wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
         sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
@@ -160,15 +173,4 @@ jobs:
         provenance: false
         tags: |
           quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ github.event.inputs.tag }}
-
-    - name: Create tag
-      uses: actions/github-script@v6
-      with:
-        script: |
-          await github.rest.git.createRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: 'refs/tags/ray-operator/${{ github.event.inputs.tag }}',
-            sha: '${{ github.event.inputs.commit }}'
-          })
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}

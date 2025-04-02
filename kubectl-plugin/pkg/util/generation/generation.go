@@ -17,15 +17,17 @@ const (
 )
 
 type RayClusterSpecObject struct {
-	RayVersion     string
-	Image          string
-	HeadCPU        string
-	HeadGPU        string
-	HeadMemory     string
-	WorkerCPU      string
-	WorkerGPU      string
-	WorkerMemory   string
-	WorkerReplicas int32
+	HeadNodeSelectors   map[string]string
+	WorkerNodeSelectors map[string]string
+	RayVersion          string
+	Image               string
+	HeadCPU             string
+	HeadGPU             string
+	HeadMemory          string
+	WorkerCPU           string
+	WorkerGPU           string
+	WorkerMemory        string
+	WorkerReplicas      int32
 }
 
 type RayClusterYamlObject struct {
@@ -38,6 +40,7 @@ type RayJobYamlObject struct {
 	RayJobName     string
 	Namespace      string
 	SubmissionMode string
+	Entrypoint     string
 	RayClusterSpecObject
 }
 
@@ -52,6 +55,7 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 	rayJobApplyConfig := rayv1ac.RayJob(rayJobObject.RayJobName, rayJobObject.Namespace).
 		WithSpec(rayv1ac.RayJobSpec().
 			WithSubmissionMode(rayv1.JobSubmissionMode(rayJobObject.SubmissionMode)).
+			WithEntrypoint(rayJobObject.Entrypoint).
 			WithRayClusterSpec(rayJobObject.generateRayClusterSpec()))
 
 	return rayJobApplyConfig
@@ -67,6 +71,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.HeadNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-head").
 						WithImage(rayClusterSpecObject.Image).
@@ -76,7 +81,6 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
 							}).
 							WithLimits(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.HeadCPU),
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.HeadMemory),
 							})).
 						WithPorts(corev1ac.ContainerPort().WithContainerPort(6379).WithName("gcs-server"),
@@ -88,6 +92,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithReplicas(rayClusterSpecObject.WorkerReplicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
+					WithNodeSelector(rayClusterSpecObject.WorkerNodeSelectors).
 					WithContainers(corev1ac.Container().
 						WithName("ray-worker").
 						WithImage(rayClusterSpecObject.Image).
@@ -97,7 +102,6 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}).
 							WithLimits(corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse(rayClusterSpecObject.WorkerCPU),
 								corev1.ResourceMemory: resource.MustParse(rayClusterSpecObject.WorkerMemory),
 							}))))))
 

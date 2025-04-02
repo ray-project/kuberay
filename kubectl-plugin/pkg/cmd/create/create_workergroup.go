@@ -25,18 +25,19 @@ const (
 )
 
 type CreateWorkerGroupOptions struct {
-	configFlags       *genericclioptions.ConfigFlags
-	ioStreams         *genericclioptions.IOStreams
-	clusterName       string
-	groupName         string
-	rayVersion        string
-	image             string
-	workerCPU         string
-	workerGPU         string
-	workerMemory      string
-	workerReplicas    int32
-	workerMinReplicas int32
-	workerMaxReplicas int32
+	configFlags         *genericclioptions.ConfigFlags
+	ioStreams           *genericclioptions.IOStreams
+	workerNodeSelectors map[string]string
+	clusterName         string
+	groupName           string
+	rayVersion          string
+	image               string
+	workerCPU           string
+	workerGPU           string
+	workerMemory        string
+	workerReplicas      int32
+	workerMinReplicas   int32
+	workerMaxReplicas   int32
 }
 
 var (
@@ -93,6 +94,7 @@ func NewCreateWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Com
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in this worker group (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -170,6 +172,7 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 					},
 				},
 			},
+			NodeSelector: options.workerNodeSelectors,
 		},
 	}
 

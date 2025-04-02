@@ -16,19 +16,21 @@ import (
 )
 
 type CreateClusterOptions struct {
-	configFlags    *genericclioptions.ConfigFlags
-	ioStreams      *genericclioptions.IOStreams
-	clusterName    string
-	rayVersion     string
-	image          string
-	headCPU        string
-	headMemory     string
-	headGPU        string
-	workerCPU      string
-	workerMemory   string
-	workerGPU      string
-	workerReplicas int32
-	dryRun         bool
+	configFlags         *genericclioptions.ConfigFlags
+	ioStreams           *genericclioptions.IOStreams
+	headNodeSelectors   map[string]string
+	workerNodeSelectors map[string]string
+	clusterName         string
+	rayVersion          string
+	image               string
+	headCPU             string
+	headMemory          string
+	headGPU             string
+	workerCPU           string
+	workerMemory        string
+	workerGPU           string
+	workerReplicas      int32
+	dryRun              bool
 }
 
 var (
@@ -83,6 +85,8 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
+	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
@@ -128,15 +132,17 @@ func (options *CreateClusterOptions) Run(ctx context.Context, factory cmdutil.Fa
 		Namespace:   *options.configFlags.Namespace,
 		ClusterName: options.clusterName,
 		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:     options.rayVersion,
-			Image:          options.image,
-			HeadCPU:        options.headCPU,
-			HeadMemory:     options.headMemory,
-			HeadGPU:        options.headGPU,
-			WorkerReplicas: options.workerReplicas,
-			WorkerCPU:      options.workerCPU,
-			WorkerMemory:   options.workerMemory,
-			WorkerGPU:      options.workerGPU,
+			RayVersion:          options.rayVersion,
+			Image:               options.image,
+			HeadCPU:             options.headCPU,
+			HeadMemory:          options.headMemory,
+			HeadGPU:             options.headGPU,
+			WorkerReplicas:      options.workerReplicas,
+			WorkerCPU:           options.workerCPU,
+			WorkerMemory:        options.workerMemory,
+			WorkerGPU:           options.workerGPU,
+			HeadNodeSelectors:   options.headNodeSelectors,
+			WorkerNodeSelectors: options.workerNodeSelectors,
 		},
 	}
 
