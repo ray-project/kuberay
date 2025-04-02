@@ -39,38 +39,40 @@ const (
 )
 
 type SubmitJobOptions struct {
-	ioStreams          *genericiooptions.IOStreams
-	cmdFactory         cmdutil.Factory
-	RayJob             *rayv1.RayJob
-	namespace          string
-	submissionID       string
-	entryPoint         string
-	fileName           string
-	workingDir         string
-	runtimeEnv         string
-	headers            string
-	verify             string
-	cluster            string
-	runtimeEnvJson     string
-	entryPointResource string
-	metadataJson       string
-	logStyle           string
-	logColor           string
-	rayjobName         string
-	rayVersion         string
-	image              string
-	headCPU            string
-	headMemory         string
-	headGPU            string
-	workerCPU          string
-	workerMemory       string
-	workerGPU          string
-	entryPointCPU      float32
-	entryPointGPU      float32
-	entryPointMemory   int
-	workerReplicas     int32
-	noWait             bool
-	dryRun             bool
+	ioStreams           *genericiooptions.IOStreams
+	cmdFactory          cmdutil.Factory
+	RayJob              *rayv1.RayJob
+	namespace           string
+	submissionID        string
+	entryPoint          string
+	fileName            string
+	workingDir          string
+	runtimeEnv          string
+	headers             string
+	verify              string
+	cluster             string
+	runtimeEnvJson      string
+	entryPointResource  string
+	metadataJson        string
+	logStyle            string
+	logColor            string
+	rayjobName          string
+	rayVersion          string
+	image               string
+	headCPU             string
+	headMemory          string
+	headGPU             string
+	workerCPU           string
+	workerMemory        string
+	workerGPU           string
+	entryPointCPU       float32
+	entryPointGPU       float32
+	entryPointMemory    int
+	workerReplicas      int32
+	noWait              bool
+	dryRun              bool
+	headNodeSelectors   map[string]string
+	workerNodeSelectors map[string]string
 }
 
 var (
@@ -160,6 +162,9 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 
 	return cmd
@@ -281,17 +286,19 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			// See https://github.com/ray-project/kuberay/issues/3126.
 			Entrypoint: options.entryPoint,
 			RayClusterSpecObject: generation.RayClusterSpecObject{
-				RayVersion: &options.rayVersion,
-				Image:      &options.image,
-				HeadCPU:    &options.headCPU,
-				HeadMemory: &options.headMemory,
-				HeadGPU:    &options.headGPU,
+				RayVersion:        &options.rayVersion,
+				Image:             &options.image,
+				HeadCPU:           &options.headCPU,
+				HeadMemory:        &options.headMemory,
+				HeadGPU:           &options.headGPU,
+				HeadNodeSelectors: options.headNodeSelectors,
 				WorkerGroups: []generation.WorkerGroupConfig{
 					{
-						WorkerCPU:      &options.workerCPU,
-						WorkerMemory:   &options.workerMemory,
-						WorkerGPU:      &options.workerGPU,
-						WorkerReplicas: &options.workerReplicas,
+						WorkerCPU:           &options.workerCPU,
+						WorkerMemory:        &options.workerMemory,
+						WorkerGPU:           &options.workerGPU,
+						WorkerReplicas:      &options.workerReplicas,
+						WorkerNodeSelectors: options.workerNodeSelectors,
 					},
 				},
 			},
