@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -23,6 +24,9 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayClusterNameLength {
 		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayCluster name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }
@@ -109,6 +113,9 @@ func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayJobNameLength {
 		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
 	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayJob name should be a valid DNS1035 label: %v", errs)
+	}
 	return nil
 }
 
@@ -175,6 +182,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayServiceNameLength {
 		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }
