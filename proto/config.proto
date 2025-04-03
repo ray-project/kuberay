@@ -130,6 +130,7 @@ message ComputeTemplate {
   repeated PodToleration tolerations = 7;
   // Optional. Name and number of the extended resources
   map<string, uint32> extended_resources = 8;
+  map<string, string> node_selector = 9;
 }
 
 // This service is not implemented.
