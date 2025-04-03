@@ -51,7 +51,10 @@ var (
 
 		# Create a worker group in an existing Ray cluster
 		kubectl ray create workergroup example-group --ray-cluster sample-cluster --image %s --worker-cpu 2 --worker-memory 5Gi
-	`, util.RayImage))
+
+		# Create a worker group in an existing Ray cluster with TPU
+		kubectl ray create workergroup example-tpu-group --ray-cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
+	`, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {

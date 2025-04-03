@@ -60,7 +60,10 @@ var (
 
 		# Create a Ray cluster with K8s labels and annotations
 		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
-	`, util.RayVersion, util.RayImage))
+
+		# Create a Ray cluster with TPU in default worker group
+		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
@@ -109,7 +112,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0",
 		fmt.Sprintf(
-			"number of TPUs in each worker group replica (if set > 0, also specify --worker-node-selectors with %s and %s)",
+			"number of TPUs in each worker group replica. If greater than 0, you must also set %s and %s in --worker-node-selectors.",
 			util.NodeSelectorGKETPUAccelerator,
 			util.NodeSelectorGKETPUTopology,
 		),
