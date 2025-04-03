@@ -311,8 +311,6 @@ spec:
         {{- if .Values.worker.runtimeClassName }}
         runtimeClassName: {{  .Values.worker.runtimeClassName | quote }}
         {{- end }}
-        {{- if .Values.worker.topologySpreadConstraints }}
-        {{- end }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
         {{- with .Values.worker.podSecurityContext}}
