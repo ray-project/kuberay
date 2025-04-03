@@ -786,6 +786,21 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
+			if workerPod.ObjectMeta.DeletionTimestamp != nil {
+				if controllerutil.ContainsFinalizer(&workerPod, utils.WorkerDeletionFinalizer) {
+					if int32(len(workerPods.Items)) <= *worker.MinReplicas {
+						// If the number of worker Pods is less than or equal to the minimum number of replicas, we should not delete the Pod.
+						logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", false, "reason", "Number of worker Pods is less than or equal to the minimum number of replicas")
+					} else {
+						controllerutil.RemoveFinalizer(&workerPod, utils.WorkerDeletionFinalizer)
+						if err := r.Update(ctx, &workerPod); err != nil {
+							return err
+						}
+					}
+
+				}
+				continue
+			}
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
@@ -1125,6 +1140,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
+	podTemplateSpec.Finalizers = append(podTemplateSpec.Finalizers, utils.WorkerDeletionFinalizer)
 	if len(r.workerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
