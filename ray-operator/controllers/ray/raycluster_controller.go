@@ -734,12 +734,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
-		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
-			common.FailedClustersCounterInc(instance.Namespace)
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
-		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
 		headPodNames := make([]string, len(headPods.Items))
@@ -1336,6 +1333,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Reason:  rayv1.AllPodRunningAndReadyFirstTime,
 					Message: "All Ray Pods are ready for the first time",
 				})
+
+				// Record ray_cluster_provisioned_duration_seconds duration metric
+				// Calculate the time between cluster creation and being fully provisioned
+				provisionDuration := time.Since(instance.CreationTimestamp.Time)
+				common.ObserveRayClusterProvisionedDuration(instance.Namespace, provisionDuration)
 			} else {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
