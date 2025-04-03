@@ -33,6 +33,10 @@ type SessionOptions struct {
 }
 
 var (
+	gcsPort = appPort{
+		name: "Ray GCS Server",
+		port: 6379,
+	}
 	dashboardPort = appPort{
 		name: "Ray Dashboard",
 		port: 8265,
@@ -165,7 +169,7 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	var appPorts []appPort
 	switch options.ResourceType {
 	case util.RayCluster:
-		appPorts = []appPort{dashboardPort, clientPort}
+		appPorts = []appPort{gcsPort, dashboardPort, clientPort}
 	case util.RayJob:
 		appPorts = []appPort{dashboardPort}
 	case util.RayService:
