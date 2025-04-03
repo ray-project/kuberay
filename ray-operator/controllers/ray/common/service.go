@@ -372,11 +372,20 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 	ports := getPortsFromCluster(cluster)
 
-	// If any port is not configured, use its default value
 	defaultPorts := getDefaultPorts()
+	usedPorts := make(map[int32]bool) // Track assigned port values
+
+	for _, port := range ports {
+		usedPorts[port] = true
+	}
+
 	for name, defaultPort := range defaultPorts {
 		if _, defined := ports[name]; !defined {
-			ports[name] = defaultPort
+			// Only assign defaultPort if the port is not already in use
+			if !usedPorts[defaultPort] {
+				ports[name] = defaultPort
+				usedPorts[defaultPort] = true // Mark this port as used
+			}
 		}
 	}
 
