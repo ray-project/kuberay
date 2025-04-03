@@ -89,11 +89,8 @@ kind load docker-image kuberay/operator:nightly
 # Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} ../helm-chart/kuberay-operator
 helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 
-# Step 7: Check the log of KubeRay operator
-# Get {YOUR_OPERATOR_POD} with the command: kubectl get pods
-kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
-# {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
-# ...
+# Step 7: Check the logs
+kubectl logs deployments/kuberay-operator
 ```
 
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
