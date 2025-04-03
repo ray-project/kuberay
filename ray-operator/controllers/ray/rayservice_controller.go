@@ -317,6 +317,8 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 		message := "RayService is initializing"
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
+		// Increase the counter for the ray_services_created_total metric.
+		common.CreatedRayServicesCounterInc(rayServiceInstance.Namespace)
 	}
 	if rayServiceInstance.Status.NumServeEndpoints > 0 {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
