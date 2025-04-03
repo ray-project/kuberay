@@ -380,7 +380,7 @@ func TestValidateRayClusterSpecNames(t *testing.T) {
 		{
 			name: "RayCluster name is too long (> MaxRayClusterNameLength characters)",
 			metadata: metav1.ObjectMeta{
-				Name: strings.Repeat("A", MaxRayClusterNameLength+1),
+				Name: strings.Repeat("a", MaxRayClusterNameLength+1),
 			},
 			expectError:  true,
 			errorMessage: fmt.Sprintf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength),
@@ -388,9 +388,17 @@ func TestValidateRayClusterSpecNames(t *testing.T) {
 		{
 			name: "RayCluster name is ok (== MaxRayClusterNameLength)",
 			metadata: metav1.ObjectMeta{
-				Name: strings.Repeat("A", MaxRayClusterNameLength),
+				Name: strings.Repeat("a", MaxRayClusterNameLength),
 			},
 			expectError: false,
+		},
+		{
+			name: "RayCluster name is not a DNS1035 label",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("1", MaxRayClusterNameLength),
+			},
+			expectError:  true,
+			errorMessage: "RayCluster name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]",
 		},
 	}
 	for _, tt := range tests {
@@ -792,6 +800,11 @@ func TestValidateRayJobMetadata(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("RayJob name should be no more than %d characters", MaxRayJobNameLength))
 
 	err = ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("1", MaxRayJobNameLength),
+	})
+	require.ErrorContains(t, err, "RayJob name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]")
+
+	err = ValidateRayJobMetadata(metav1.ObjectMeta{
 		Name: strings.Repeat("j", MaxRayJobNameLength),
 	})
 	require.NoError(t, err)
@@ -864,6 +877,11 @@ func TestValidateRayServiceMetadata(t *testing.T) {
 		Name: strings.Repeat("j", MaxRayServiceNameLength+1),
 	})
 	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("1", MaxRayServiceNameLength),
+	})
+	require.ErrorContains(t, err, "RayService name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]")
 
 	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
 		Name: strings.Repeat("j", MaxRayServiceNameLength),
