@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -585,6 +586,47 @@ func TestGetClustersInNamespace(t *testing.T) {
 	}
 	if !gotCluster {
 		t.Error("Getting clusters din namespace did not return expected one")
+	}
+}
+
+func TestGetClustersByPaginationInNamespace(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+	cluster1, configMapName1 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+	}, "cluster1")
+	cluster2, configMapName2 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+	}, "cluster2")
+	t.Cleanup(func() {
+		tCtx.DeleteRayCluster(t, cluster1.Name)
+		tCtx.DeleteRayCluster(t, cluster2.Name)
+		tCtx.DeleteConfigMap(t, configMapName1)
+		tCtx.DeleteConfigMap(t, configMapName2)
+	})
+
+	continueToken := ""
+	for i := 1; i <= 2; i++ {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+			&api.ListClustersRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				Limit:     1,
+				Continue:  continueToken,
+			})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Len(t, response.Clusters, 1)
+		require.Equal(t, response.Clusters[0].Name, fmt.Sprintf("cluster%d", i))
+		require.Equal(t, response.Clusters[0].Namespace, tCtx.GetNamespaceName())
+		continueToken = response.Continue
 	}
 }
 

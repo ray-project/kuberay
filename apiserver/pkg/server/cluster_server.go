@@ -74,7 +74,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
 	}
 
-	clusters, err := s.resourceManager.ListClusters(ctx, request.Namespace)
+	clusters, continueToken, err := s.resourceManager.ListClusters(ctx, request.Namespace, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters failed.")
 	}
@@ -90,6 +90,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 
 	return &api.ListClustersResponse{
 		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Continue: continueToken,
 	}, nil
 }
 
