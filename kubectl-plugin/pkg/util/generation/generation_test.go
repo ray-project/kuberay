@@ -39,23 +39,27 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 		RayVersion:  ptr.To(util.RayVersion),
 		Image:       ptr.To(util.RayImage),
 		Head: &Head{
-			CPU:    ptr.To("1"),
-			Memory: ptr.To("5Gi"),
-			GPU:    ptr.To("1"),
-			RayStartParams: map[string]string{
-				"dashboard-host": "1.2.3.4",
-				"num-cpus":       "0",
+			GroupSpec: GroupSpec{
+				CPU:    ptr.To("1"),
+				Memory: ptr.To("5Gi"),
+				GPU:    ptr.To("1"),
+				RayStartParams: map[string]string{
+					"dashboard-host": "1.2.3.4",
+					"num-cpus":       "0",
+				},
 			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
 				Replicas: int32(3),
-				CPU:      ptr.To("2"),
-				Memory:   ptr.To("10Gi"),
-				GPU:      ptr.To("1"),
-				RayStartParams: map[string]string{
-					"dagon":    "azathoth",
-					"shoggoth": "cthulhu",
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("10Gi"),
+					GPU:    ptr.To("1"),
+					RayStartParams: map[string]string{
+						"dagon":    "azathoth",
+						"shoggoth": "cthulhu",
+					},
 				},
 			},
 		},
@@ -94,16 +98,20 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			RayVersion: ptr.To(util.RayVersion),
 			Image:      ptr.To(util.RayImage),
 			Head: &Head{
-				CPU:    ptr.To("1"),
-				GPU:    ptr.To("1"),
-				Memory: ptr.To("5Gi"),
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To("1"),
+					GPU:    ptr.To("1"),
+					Memory: ptr.To("5Gi"),
+				},
 			},
 			WorkerGroups: []WorkerGroup{
 				{
 					Replicas: int32(3),
-					CPU:      ptr.To("2"),
-					Memory:   ptr.To("10Gi"),
-					GPU:      ptr.To("0"),
+					GroupSpec: GroupSpec{
+						CPU:    ptr.To("2"),
+						Memory: ptr.To("10Gi"),
+						GPU:    ptr.To("0"),
+					},
 				},
 			},
 		},
@@ -140,16 +148,20 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 		RayVersion: ptr.To(util.RayVersion),
 		Image:      ptr.To(util.RayImage),
 		Head: &Head{
-			CPU:    ptr.To("1"),
-			Memory: ptr.To("5Gi"),
-			GPU:    ptr.To("1"),
+			GroupSpec: GroupSpec{
+				CPU:    ptr.To("1"),
+				Memory: ptr.To("5Gi"),
+				GPU:    ptr.To("1"),
+			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
 				Replicas: int32(3),
-				CPU:      ptr.To("2"),
-				Memory:   ptr.To("10Gi"),
-				GPU:      ptr.To("0"),
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("10Gi"),
+					GPU:    ptr.To("0"),
+				},
 			},
 		},
 	}
@@ -269,35 +281,41 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 		RayVersion: ptr.To("1.2.3"),
 		Image:      ptr.To("rayproject/ray:1.2.3"),
 		Head: &Head{
-			CPU:              ptr.To("1"),
-			Memory:           ptr.To("5Gi"),
-			GPU:              ptr.To("1"),
-			EphemeralStorage: ptr.To("10Gi"),
-			RayStartParams: map[string]string{
-				"softmax": "GELU",
-			},
-			NodeSelectors: map[string]string{
-				"head-selector1": "foo",
-				"head-selector2": "bar",
+			GroupSpec: GroupSpec{
+				CPU:              ptr.To("1"),
+				Memory:           ptr.To("5Gi"),
+				GPU:              ptr.To("1"),
+				EphemeralStorage: ptr.To("10Gi"),
+				RayStartParams: map[string]string{
+					"softmax": "GELU",
+				},
+				NodeSelectors: map[string]string{
+					"head-selector1": "foo",
+					"head-selector2": "bar",
+				},
 			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
 				Replicas: int32(3),
-				CPU:      ptr.To("2"),
-				Memory:   ptr.To("10Gi"),
-				GPU:      ptr.To("0"),
-				RayStartParams: map[string]string{
-					"metrics-export-port": "8080",
-				},
-				NodeSelectors: map[string]string{
-					"worker-selector1": "baz",
-					"worker-selector2": "qux",
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("10Gi"),
+					GPU:    ptr.To("0"),
+					RayStartParams: map[string]string{
+						"metrics-export-port": "8080",
+					},
+					NodeSelectors: map[string]string{
+						"worker-selector1": "baz",
+						"worker-selector2": "qux",
+					},
 				},
 			},
 			{
 				Name: ptr.To("worker-group-2"),
-				GPU:  ptr.To("1"),
+				GroupSpec: GroupSpec{
+					GPU: ptr.To("1"),
+				},
 			},
 		},
 	}
@@ -608,14 +626,18 @@ func TestNewRayClusterConfigWithDefaults(t *testing.T) {
 		Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
 		RayVersion: ptr.To(util.RayVersion),
 		Head: &Head{
-			CPU:    ptr.To("2"),
-			Memory: ptr.To("4Gi"),
+			GroupSpec: GroupSpec{
+				CPU:    ptr.To("2"),
+				Memory: ptr.To("4Gi"),
+			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
-				Name:     ptr.To("default-group"),
-				CPU:      ptr.To("2"),
-				Memory:   ptr.To("4Gi"),
+				Name: ptr.To("default-group"),
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
 				Replicas: int32(1),
 			},
 		},
@@ -644,15 +666,19 @@ func TestParseConfigFile(t *testing.T) {
 				RayVersion: ptr.To(util.RayVersion),
 				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
 				Head: &Head{
-					CPU:    ptr.To("2"),
-					Memory: ptr.To("4Gi"),
+					GroupSpec: GroupSpec{
+						CPU:    ptr.To("2"),
+						Memory: ptr.To("4Gi"),
+					},
 				},
 				WorkerGroups: []WorkerGroup{
 					{
 						Name:     ptr.To("default-group"),
 						Replicas: int32(1),
-						CPU:      ptr.To("2"),
-						Memory:   ptr.To("4Gi"),
+						GroupSpec: GroupSpec{
+							CPU:    ptr.To("2"),
+							Memory: ptr.To("4Gi"),
+						},
 					},
 				},
 			},
@@ -666,13 +692,17 @@ func TestParseConfigFile(t *testing.T) {
 				RayVersion: ptr.To(util.RayVersion),
 				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
 				Head: &Head{
-					CPU:    ptr.To("2"),
-					Memory: ptr.To("4Gi"),
+					GroupSpec: GroupSpec{
+						CPU:    ptr.To("2"),
+						Memory: ptr.To("4Gi"),
+					},
 				},
 				WorkerGroups: []WorkerGroup{
 					{
 						Replicas: int32(1),
-						GPU:      ptr.To("1"),
+						GroupSpec: GroupSpec{
+							GPU: ptr.To("1"),
+						},
 					},
 				},
 			},
@@ -737,30 +767,36 @@ gke:
 				RayVersion:  ptr.To("2.44.0"),
 				Image:       ptr.To("rayproject/ray:2.44.0"),
 				Head: &Head{
-					CPU:              ptr.To("3"),
-					Memory:           ptr.To("5Gi"),
-					GPU:              ptr.To("0"),
-					RayStartParams:   map[string]string{"metrics-export-port": "8082"},
-					EphemeralStorage: ptr.To("8Gi"),
+					GroupSpec: GroupSpec{
+						CPU:              ptr.To("3"),
+						Memory:           ptr.To("5Gi"),
+						GPU:              ptr.To("0"),
+						RayStartParams:   map[string]string{"metrics-export-port": "8082"},
+						EphemeralStorage: ptr.To("8Gi"),
+					},
 				},
 				WorkerGroups: []WorkerGroup{
 					{
-						Name:             ptr.To("cpu-workers"),
-						Replicas:         int32(1),
-						CPU:              ptr.To("2"),
-						Memory:           ptr.To("4Gi"),
-						GPU:              ptr.To("0"),
-						EphemeralStorage: ptr.To("12Gi"),
-						RayStartParams:   map[string]string{"metrics-export-port": "8081"},
+						Name:     ptr.To("cpu-workers"),
+						Replicas: int32(1),
+						GroupSpec: GroupSpec{
+							CPU:              ptr.To("2"),
+							Memory:           ptr.To("4Gi"),
+							GPU:              ptr.To("0"),
+							EphemeralStorage: ptr.To("12Gi"),
+							RayStartParams:   map[string]string{"metrics-export-port": "8081"},
+						},
 					},
 					{
-						Name:             ptr.To("gpu-workers"),
-						Replicas:         int32(1),
-						CPU:              ptr.To("3"),
-						Memory:           ptr.To("6Gi"),
-						GPU:              ptr.To("1"),
-						EphemeralStorage: ptr.To("13Gi"),
-						RayStartParams:   map[string]string{"metrics-export-port": "8081"},
+						Name:     ptr.To("gpu-workers"),
+						Replicas: int32(1),
+						GroupSpec: GroupSpec{
+							CPU:              ptr.To("3"),
+							Memory:           ptr.To("6Gi"),
+							GPU:              ptr.To("1"),
+							EphemeralStorage: ptr.To("13Gi"),
+							RayStartParams:   map[string]string{"metrics-export-port": "8081"},
+						},
 					},
 				},
 				GKE: &GKE{
@@ -811,7 +847,9 @@ func TestValidateConfig(t *testing.T) {
 		"invalid config": {
 			config: &RayClusterConfig{
 				Head: &Head{
-					CPU: ptr.To("invalid"),
+					GroupSpec: GroupSpec{
+						CPU: ptr.To("invalid"),
+					},
 				},
 			},
 			expectedErr: "cpu is not a valid resource quantity",
@@ -819,17 +857,21 @@ func TestValidateConfig(t *testing.T) {
 		"valid config": {
 			config: &RayClusterConfig{
 				Head: &Head{
-					CPU:              ptr.To("2"),
-					Memory:           ptr.To("4Gi"),
-					GPU:              ptr.To("0"),
-					EphemeralStorage: ptr.To("8Gi"),
-				},
-				WorkerGroups: []WorkerGroup{
-					{
+					GroupSpec: GroupSpec{
 						CPU:              ptr.To("2"),
 						Memory:           ptr.To("4Gi"),
 						GPU:              ptr.To("0"),
 						EphemeralStorage: ptr.To("8Gi"),
+					},
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						GroupSpec: GroupSpec{
+							CPU:              ptr.To("2"),
+							Memory:           ptr.To("4Gi"),
+							GPU:              ptr.To("0"),
+							EphemeralStorage: ptr.To("8Gi"),
+						},
 					},
 				},
 			},

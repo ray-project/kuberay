@@ -43,7 +43,7 @@ type RayClusterConfig struct {
 	WorkerGroups []WorkerGroup `yaml:"worker-groups,omitempty"`
 }
 
-type Head struct {
+type GroupSpec struct {
 	CPU              *string           `yaml:"cpu,omitempty"`
 	GPU              *string           `yaml:"gpu,omitempty"`
 	Memory           *string           `yaml:"memory,omitempty"`
@@ -52,15 +52,14 @@ type Head struct {
 	NodeSelectors    map[string]string `yaml:"node-selectors,omitempty"`
 }
 
+type Head struct {
+	GroupSpec `yaml:",inline"`
+}
+
 type WorkerGroup struct {
-	Name             *string           `yaml:"name,omitempty"`
-	CPU              *string           `yaml:"cpu,omitempty"`
-	GPU              *string           `yaml:"gpu,omitempty"`
-	Memory           *string           `yaml:"memory,omitempty"`
-	EphemeralStorage *string           `yaml:"ephemeral-storage,omitempty"`
-	RayStartParams   map[string]string `yaml:"ray-start-params,omitempty"`
-	NodeSelectors    map[string]string `yaml:"node-selectors,omitempty"`
-	Replicas         int32             `yaml:"replicas"`
+	Name      *string `yaml:"name,omitempty"`
+	GroupSpec `yaml:",inline"`
+	Replicas  int32 `yaml:"replicas"`
 }
 
 // GKE is a struct that contains the GKE specific configuration
@@ -361,15 +360,19 @@ func newRayClusterConfigWithDefaults() *RayClusterConfig {
 		RayVersion: ptr.To(util.RayVersion),
 		Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
 		Head: &Head{
-			CPU:    ptr.To(util.DefaultHeadCPU),
-			Memory: ptr.To(util.DefaultHeadMemory),
+			GroupSpec: GroupSpec{
+				CPU:    ptr.To(util.DefaultHeadCPU),
+				Memory: ptr.To(util.DefaultHeadMemory),
+			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
 				Name:     ptr.To("default-group"),
 				Replicas: util.DefaultWorkerReplicas,
-				CPU:      ptr.To(util.DefaultWorkerCPU),
-				Memory:   ptr.To(util.DefaultWorkerMemory),
+				GroupSpec: GroupSpec{
+					CPU:    ptr.To(util.DefaultWorkerCPU),
+					Memory: ptr.To(util.DefaultWorkerMemory),
+				},
 			},
 		},
 	}

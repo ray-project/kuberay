@@ -284,15 +284,19 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				RayVersion: &options.rayVersion,
 				Image:      &options.image,
 				Head: &generation.Head{
-					CPU:    &options.headCPU,
-					Memory: &options.headMemory,
-					GPU:    &options.headGPU,
+					GroupSpec: generation.GroupSpec{
+						CPU:    &options.headCPU,
+						Memory: &options.headMemory,
+						GPU:    &options.headGPU,
+					},
 				},
 				WorkerGroups: []generation.WorkerGroup{
 					{
-						CPU:      &options.workerCPU,
-						Memory:   &options.workerMemory,
-						GPU:      &options.workerGPU,
+						GroupSpec: generation.GroupSpec{
+							CPU:    &options.workerCPU,
+							Memory: &options.workerMemory,
+							GPU:    &options.workerGPU,
+						},
 						Replicas: options.workerReplicas,
 					},
 				},
