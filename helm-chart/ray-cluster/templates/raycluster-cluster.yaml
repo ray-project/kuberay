@@ -199,11 +199,14 @@ spec:
         topologySpreadConstraints: {{- toYaml $values.topologySpreadConstraints | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml $values.affinity | nindent 10 }}
-        {{ if $values.priorityClassName }}
+        {{- if $values.priorityClassName }}
         priorityClassName: {{- toYaml $values.priorityClassName | nindent 10 }}
         {{- end }}
-        {{ if $values.priority }}
+        {{- if $values.priority }}
         priority: {{- toYaml $values.priority | nindent 10 }}
+        {{- end }}
+        {{- if $values.runtimeClassName }}
+        runtimeClassName: {{ $values.runtimeClassName | quote }}
         {{- end }}
         tolerations: {{- toYaml $values.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml $values.nodeSelector | nindent 10 }}
@@ -299,11 +302,14 @@ spec:
         volumes: {{- toYaml .Values.worker.volumes | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml .Values.worker.affinity | nindent 10 }}
-        {{ if .Values.worker.priorityClassName }}
+        {{- if .Values.worker.priorityClassName }}
         priorityClassName: {{- toYaml .Values.worker.priorityClassName | nindent 10 }}
         {{- end }}
-        {{ if .Values.worker.priority }}
+        {{- if .Values.worker.priority }}
         priority: {{- toYaml .Values.worker.priority | nindent 10 }}
+        {{- end }}
+        {{- if .Values.worker.runtimeClassName }}
+        runtimeClassName: {{  .Values.worker.runtimeClassName | quote }}
         {{- end }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
