@@ -158,23 +158,23 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	ports := svc.Spec.Ports
 
 	expectedResult = utils.DefaultServiceAppProtocol
-	svcPorts := map[string]int32{}
+	svcPorts := make(map[string]int32)
+	usedPorts := make(map[int32]bool)
 	for _, port := range ports {
 		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
 		svcPorts[port.Name] = port.Port
+		usedPorts[port.Port] = true
 	}
 
-	// Ensure the default port value is applied
 	for name, defaultPort := range defaultPorts {
-		if _, defined := svcPorts[name]; !defined {
-			t.Fatalf("Port `%v` not set", name)
-		}
+		// ensure client port value overwrite
 		if name == utils.ClientPortName {
 			assert.Equalf(t, 12345, int(svcPorts[name]), "Expected `%v` as `%v` port value but got `%v`", 12345, name, svcPorts[name])
-		} else {
-			assert.Equalf(t, defaultPort, svcPorts[name], "Expected `%v` as `%v` port value but got `%v`", defaultPort, name, svcPorts[name])
+		} else if !usedPorts[defaultPort] {
+			// Ensure the default port value is applied
+			t.Fatalf("Port `%v` not set", defaultPort)
 		}
 	}
 

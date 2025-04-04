@@ -379,6 +379,10 @@ func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 		usedPorts[port] = true
 	}
 
+	// 1. If a value is provided in the YAML file, overwrite the default value
+	// 2. If no port value is provided, use the default name and port
+	// 3. If a port value is provided in the YAML file, retain the original name
+
 	for name, defaultPort := range defaultPorts {
 		if _, defined := ports[name]; !defined {
 			// Only assign defaultPort if the port is not already in use
