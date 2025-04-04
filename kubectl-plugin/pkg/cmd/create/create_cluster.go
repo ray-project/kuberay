@@ -51,6 +51,13 @@ type CreateClusterOptions struct {
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
 
+	createClusterLong = templates.LongDesc(fmt.Sprintf(`
+	Create a Ray cluster with the given name and options.
+
+	For more details on TPU-related node selectors like %s and %s, refer to:
+	https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+
 	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray cluster using default values
 		kubectl ray create cluster sample-cluster
@@ -79,6 +86,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd := &cobra.Command{
 		Use:          "cluster [CLUSTERNAME]",
 		Short:        "Create Ray cluster",
+		Long:         createClusterLong,
 		Example:      createClusterExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

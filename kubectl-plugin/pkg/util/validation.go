@@ -22,14 +22,21 @@ func ValidateResourceQuantity(value string, name string) error {
 }
 
 func ValidateTPUNodeSelector(numOfHosts int32, nodeSelector map[string]string) error {
+	// @TODO:
+	// In the future we could validate that the accelerator and topology nodeSelectors are supported values,
+	// and also validate the value for numOfHosts since it is deterministic based on the previous two values.
+	// https://github.com/ray-project/kuberay/pull/3258#discussion_r2027973436
+
+	const docURL = "https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability"
+
 	if numOfHosts == 0 {
 		return fmt.Errorf("numOfHosts cannot be 0 when using TPU")
 	}
 	if _, ok := nodeSelector[NodeSelectorGKETPUAccelerator]; !ok {
-		return fmt.Errorf("%s is not set in --worker-node-selectors", NodeSelectorGKETPUAccelerator)
+		return fmt.Errorf("%s is not set in --worker-node-selectors. See %s for supported values", NodeSelectorGKETPUAccelerator, docURL)
 	}
 	if _, ok := nodeSelector[NodeSelectorGKETPUTopology]; !ok {
-		return fmt.Errorf("%s is not set in --worker-node-selectors", NodeSelectorGKETPUTopology)
+		return fmt.Errorf("%s is not set in --worker-node-selectors. See %s for supported values", NodeSelectorGKETPUTopology, docURL)
 	}
 	return nil
 }

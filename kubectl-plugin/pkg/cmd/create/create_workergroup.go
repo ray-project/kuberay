@@ -41,9 +41,12 @@ type CreateWorkerGroupOptions struct {
 }
 
 var (
-	createWorkerGroupLong = templates.LongDesc(`
-		Adds a worker group to an existing Ray cluster.
-	`)
+	createWorkerGroupLong = templates.LongDesc(fmt.Sprintf(`
+	Adds a worker group to an existing Ray cluster.
+
+	For more details on TPU-related node selectors like %s and %s, refer to:
+	https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 
 	createWorkerGroupExample = templates.Examples(fmt.Sprintf(`
 		# Create a worker group in an existing Ray cluster with defaults
