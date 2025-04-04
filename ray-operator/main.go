@@ -102,7 +102,7 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
-	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable metrics collection.")
+	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,

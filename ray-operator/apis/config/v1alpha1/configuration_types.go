@@ -71,7 +71,7 @@ type Configuration struct {
 	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
 	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
 
-	// EnableMetrics indicates whether to collect metrics in the Ray Operator.
+	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 

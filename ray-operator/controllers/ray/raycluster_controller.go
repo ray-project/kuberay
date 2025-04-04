@@ -19,7 +19,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -735,12 +734,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
-		metrics.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
-			metrics.FailedClustersCounterInc(instance.Namespace)
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
-		metrics.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
 		headPodNames := make([]string, len(headPods.Items))

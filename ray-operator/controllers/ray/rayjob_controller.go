@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -174,10 +173,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("JobDeploymentStatusNew")
 		if err = initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-
-		if r.enableMetrics {
-			metrics.RayJobsCreatedTotalInc(rayJobInstance.Namespace)
 		}
 	case rayv1.JobDeploymentStatusInitializing:
 		if shouldUpdate := updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {

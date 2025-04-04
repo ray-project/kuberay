@@ -93,7 +93,9 @@ featureGates:
   - name: RayJobDeletionPolicy
     enabled: false
 
+# Configurations for KubeRay operator metrics.
 metrics:
+  #  Whether KubeRay operator should emit control plane metrics.
   enabled: true
 
 # Path to the operator binary
