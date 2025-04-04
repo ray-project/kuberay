@@ -47,6 +47,9 @@ type Configuration struct {
 	// based on the given name, currently, supported values are volcano and yunikorn.
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
+	// PreStopCommand is the command to run when the Kubernetes Pod PreStop hook is called.
+	PreStopCommand string `json:"preStopCommand,omitempty"`
+
 	// HeadSidecarContainers includes specification for a sidecar container
 	// to inject into every Head pod.
 	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
