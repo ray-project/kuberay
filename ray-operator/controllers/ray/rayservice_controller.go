@@ -211,6 +211,12 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
+		// Record ray_services_ready_duration_seconds metric if the current RayService is ready and the previous one is not.
+		if !meta.IsStatusConditionTrue(originalRayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) &&
+			meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
+			readyDuration := time.Since(rayServiceInstance.CreationTimestamp.Time)
+			common.ObserveRayServicesReadyDuration(rayServiceInstance.Namespace, readyDuration)
+		}
 	}
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }

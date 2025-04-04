@@ -1,6 +1,8 @@
 package common
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -8,31 +10,13 @@ import (
 
 // Define all the prometheus counters for all clusters
 var (
-	clustersCreatedCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ray_operator_clusters_created_total",
-			Help: "Counts number of clusters created",
-		},
-		[]string{"namespace"},
-	)
-	clustersDeletedCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ray_operator_clusters_deleted_total",
-			Help: "Counts number of clusters deleted",
-		},
-		[]string{"namespace"},
-	)
-	clustersSuccessfulCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ray_operator_clusters_successful_total",
-			Help: "Counts number of clusters successful",
-		},
-		[]string{"namespace"},
-	)
-	clustersFailedCount = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ray_operator_clusters_failed_total",
-			Help: "Counts number of clusters failed",
+	rayServicesReadyHistogram = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "ray_services_ready_duration_seconds",
+			Help: "The time between RayServices created to ready",
+			// It may not be applicable to all users, but default buckets cannot be used either.
+			// For reference, see: https://github.com/prometheus/client_golang/blob/331dfab0cc853dca0242a0d96a80184087a80c1d/prometheus/histogram.go#L271
+			Buckets: []float64{30, 60, 120, 180, 240, 300, 600, 900, 1800, 3600},
 		},
 		[]string{"namespace"},
 	)
@@ -40,25 +24,9 @@ var (
 
 func init() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(clustersCreatedCount,
-		clustersDeletedCount,
-		clustersSuccessfulCount,
-		clustersFailedCount)
+	metrics.Registry.MustRegister(rayServicesReadyHistogram)
 }
 
-func CreatedClustersCounterInc(namespace string) {
-	clustersCreatedCount.WithLabelValues(namespace).Inc()
-}
-
-// TODO: We don't handle the delete events in new reconciler mode, how to emit deletion metrics?
-func DeletedClustersCounterInc(namespace string) {
-	clustersDeletedCount.WithLabelValues(namespace).Inc()
-}
-
-func SuccessfulClustersCounterInc(namespace string) {
-	clustersSuccessfulCount.WithLabelValues(namespace).Inc()
-}
-
-func FailedClustersCounterInc(namespace string) {
-	clustersFailedCount.WithLabelValues(namespace).Inc()
+func ObserveRayServicesReadyDuration(namespace string, duration time.Duration) {
+	rayServicesReadyHistogram.WithLabelValues(namespace).Observe(duration.Seconds())
 }
