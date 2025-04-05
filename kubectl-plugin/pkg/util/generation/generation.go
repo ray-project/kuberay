@@ -40,6 +40,8 @@ type WorkerGroupConfig struct {
 	Name                   *string           `yaml:"name,omitempty"`
 	WorkerCPU              *string           `yaml:"worker-cpu,omitempty"`
 	WorkerGPU              *string           `yaml:"worker-gpu,omitempty"`
+	WorkerTPU              *string           `yaml:"worker-tpu,omitempty"`
+	NumOfHosts             *int32            `yaml:"num-of-hosts,omitempty"`
 	WorkerMemory           *string           `yaml:"worker-memory,omitempty"`
 	WorkerEphemeralStorage *string           `yaml:"worker-ephemeral-storage,omitempty"`
 	WorkerReplicas         *int32            `yaml:"worker-replicas,omitempty"`
@@ -74,8 +76,8 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 	return rayJobApplyConfig
 }
 
-// generateRequestResources returns a corev1.ResourceList with the given CPU, memory, ephemeral storage, and GPU values for only resource requests
-func generateRequestResources(cpu, memory, ephemeralStorage, gpu *string) corev1.ResourceList {
+// generateRequestResources returns a corev1.ResourceList with the given CPU, memory, ephemeral storage, GPU, and TPU values for only resource requests
+func generateRequestResources(cpu, memory, ephemeralStorage, gpu, tpu *string) corev1.ResourceList {
 	resources := corev1.ResourceList{}
 
 	if cpu != nil && *cpu != "" {
@@ -106,11 +108,18 @@ func generateRequestResources(cpu, memory, ephemeralStorage, gpu *string) corev1
 		}
 	}
 
+	if tpu != nil && *tpu != "" {
+		tpuResource := resource.MustParse(*tpu)
+		if !tpuResource.IsZero() {
+			resources[corev1.ResourceName(util.ResourceGoogleTPU)] = tpuResource
+		}
+	}
+
 	return resources
 }
 
-// generateLimitResources returns a corev1.ResourceList with the given memory, ephemeral storage, and GPU values for only resource limits
-func generateLimitResources(memory, ephemeralStorage, gpu *string) corev1.ResourceList {
+// generateLimitResources returns a corev1.ResourceList with the given memory, ephemeral storage, GPU, and TPU values for only resource limits
+func generateLimitResources(memory, ephemeralStorage, gpu, tpu *string) corev1.ResourceList {
 	resources := corev1.ResourceList{}
 
 	if memory != nil && *memory != "" {
@@ -134,6 +143,13 @@ func generateLimitResources(memory, ephemeralStorage, gpu *string) corev1.Resour
 		}
 	}
 
+	if tpu != nil && *tpu != "" {
+		tpuResource := resource.MustParse(*tpu)
+		if !tpuResource.IsZero() {
+			resources[corev1.ResourceName(util.ResourceGoogleTPU)] = tpuResource
+		}
+	}
+
 	return resources
 }
 
@@ -150,10 +166,34 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 	maps.Copy(headRayStartParams, rayClusterSpecObject.HeadRayStartParams)
 	maps.Copy(workerRayStartParams, rayClusterSpecObject.WorkerGroups[0].WorkerRayStartParams)
 
-	headRequestResources := generateRequestResources(rayClusterSpecObject.HeadCPU, rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
-	headLimitResources := generateLimitResources(rayClusterSpecObject.HeadMemory, rayClusterSpecObject.HeadEphemeralStorage, rayClusterSpecObject.HeadGPU)
-	workerRequestResources := generateRequestResources(rayClusterSpecObject.WorkerGroups[0].WorkerCPU, rayClusterSpecObject.WorkerGroups[0].WorkerMemory, rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage, rayClusterSpecObject.WorkerGroups[0].WorkerGPU)
-	workerLimitResources := generateLimitResources(rayClusterSpecObject.WorkerGroups[0].WorkerMemory, rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage, rayClusterSpecObject.WorkerGroups[0].WorkerGPU)
+	headRequestResources := generateRequestResources(
+		rayClusterSpecObject.HeadCPU,
+		rayClusterSpecObject.HeadMemory,
+		rayClusterSpecObject.HeadEphemeralStorage,
+		rayClusterSpecObject.HeadGPU,
+		// TPU is not used for head request resources
+		nil,
+	)
+	headLimitResources := generateLimitResources(
+		rayClusterSpecObject.HeadMemory,
+		rayClusterSpecObject.HeadEphemeralStorage,
+		rayClusterSpecObject.HeadGPU,
+		// TPU is not used for head limit resources
+		nil,
+	)
+	workerRequestResources := generateRequestResources(
+		rayClusterSpecObject.WorkerGroups[0].WorkerCPU,
+		rayClusterSpecObject.WorkerGroups[0].WorkerMemory,
+		rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage,
+		rayClusterSpecObject.WorkerGroups[0].WorkerGPU,
+		rayClusterSpecObject.WorkerGroups[0].WorkerTPU,
+	)
+	workerLimitResources := generateLimitResources(
+		rayClusterSpecObject.WorkerGroups[0].WorkerMemory,
+		rayClusterSpecObject.WorkerGroups[0].WorkerEphemeralStorage,
+		rayClusterSpecObject.WorkerGroups[0].WorkerGPU,
+		rayClusterSpecObject.WorkerGroups[0].WorkerTPU,
+	)
 
 	workerGroupName := "default-group"
 	if rayClusterSpecObject.WorkerGroups[0].Name != nil {
@@ -180,6 +220,7 @@ func (rayClusterSpecObject *RayClusterSpecObject) generateRayClusterSpec() *rayv
 			WithRayStartParams(workerRayStartParams).
 			WithGroupName(workerGroupName).
 			WithReplicas(*rayClusterSpecObject.WorkerGroups[0].WorkerReplicas).
+			WithNumOfHosts(*rayClusterSpecObject.WorkerGroups[0].NumOfHosts).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithNodeSelector(rayClusterSpecObject.WorkerGroups[0].WorkerNodeSelectors).

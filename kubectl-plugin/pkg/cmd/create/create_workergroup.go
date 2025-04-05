@@ -32,15 +32,17 @@ type CreateWorkerGroupOptions struct {
 	image               string
 	workerCPU           string
 	workerGPU           string
+	workerTPU           string
 	workerMemory        string
 	workerReplicas      int32
+	numOfHosts          int32
 	workerMinReplicas   int32
 	workerMaxReplicas   int32
 }
 
 var (
 	createWorkerGroupLong = templates.LongDesc(`
-		Adds a worker group to an existing Ray cluster.
+	Adds a worker group to an existing Ray cluster.
 	`)
 
 	createWorkerGroupExample = templates.Examples(fmt.Sprintf(`
@@ -49,7 +51,13 @@ var (
 
 		# Create a worker group in an existing Ray cluster
 		kubectl ray create workergroup example-group --ray-cluster sample-cluster --image %s --worker-cpu 2 --worker-memory 5Gi
-	`, util.RayImage))
+
+		# Create a worker group in an existing Ray cluster with TPU
+		kubectl ray create workergroup example-tpu-group --ray-cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
+
+		# For more details on TPU-related node selectors like %s and %s, refer to:
+		#https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
@@ -72,6 +80,10 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 		Example:      createWorkerGroupExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := options.Validate(); err != nil {
+				return err
+			}
+
 			if err := options.Complete(cmd, args); err != nil {
 				return err
 			}
@@ -84,10 +96,12 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
 	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
+	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in the worker group per replica")
 	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "minimum number of replicas")
 	cmd.Flags().Int32Var(&options.workerMaxReplicas, "worker-max-replicas", 10, "maximum number of replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
+	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0", "number of TPUs in each replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
 	cmd.Flags().StringToStringVar(&options.rayStartParams, "worker-ray-start-params", options.rayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in this worker group (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
@@ -119,6 +133,17 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 		options.image = fmt.Sprintf("rayproject/ray:%s", options.rayVersion)
 	}
 
+	return nil
+}
+
+func (options *CreateWorkerGroupOptions) Validate() error {
+	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
+	// if worker-tpu is not 0
+	if options.workerTPU != "0" {
+		if err := util.ValidateTPUNodeSelector(options.numOfHosts, options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
 	return nil
 }
 
@@ -175,9 +200,15 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
 	}
 
+	tpuResource := resource.MustParse(options.workerTPU)
+	if !tpuResource.IsZero() {
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceGoogleTPU)] = tpuResource
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceGoogleTPU)] = tpuResource
+	}
 	return rayv1.WorkerGroupSpec{
 		GroupName:      options.groupName,
 		Replicas:       &options.workerReplicas,
+		NumOfHosts:     options.numOfHosts,
 		MinReplicas:    &options.workerMinReplicas,
 		MaxReplicas:    &options.workerMaxReplicas,
 		RayStartParams: options.rayStartParams,
