@@ -171,7 +171,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	for name, defaultPort := range defaultPorts {
 		// ensure client port value overwrite
 		if name == utils.ClientPortName {
-			assert.Equalf(t, 12345, int(svcPorts[name]), "Expected `%v` as `%v` port value but got `%v`", 12345, name, svcPorts[name])
+			assert.Equal(t, 12345, int(svcPorts[name]))
 		} else if !usedPorts[defaultPort] {
 			// Ensure the default port value is applied
 			t.Fatalf("Port `%v` not set", defaultPort)
