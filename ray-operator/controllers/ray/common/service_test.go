@@ -69,14 +69,15 @@ var (
 								Ports: []corev1.ContainerPort{
 									{
 										ContainerPort: 6379,
-										Name:          "gcs",
+										Name:          utils.GcsServerPortName,
 									},
 									{
 										ContainerPort: 8265,
+										Name:          utils.DashboardPortName,
 									},
 									{
 										ContainerPort: 8000,
-										Name:          "serve",
+										Name:          utils.ServingPortName,
 									},
 								},
 								Command: []string{"python"},
@@ -214,14 +215,14 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 			name: "A custom port with different name is specified by the user.",
 			ports: []corev1.ContainerPort{
 				{
-					Name:          "gcs",
+					Name:          "gcs-server",
 					ContainerPort: int32(utils.DefaultGcsServerPort),
 				},
 			},
 			expectResult: func() map[string]int32 {
 				ports := getDefaultPorts()
 				delete(ports, utils.GcsServerPortName)
-				ports["gcs"] = int32(utils.DefaultGcsServerPort)
+				ports["gcs-server"] = int32(utils.DefaultGcsServerPort)
 				return ports
 			}(),
 			expectError: true,
@@ -665,7 +666,7 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 							{
 								Name: "ray-head",
 								Ports: []corev1.ContainerPort{
-									{ContainerPort: 6379, Name: "gcs"},
+									{ContainerPort: 6379, Name: utils.GcsServerPortName},
 								},
 							},
 						},
