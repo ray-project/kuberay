@@ -78,11 +78,6 @@ var (
 										ContainerPort: 8000,
 										Name:          "serve",
 									},
-									{
-										// Override the default port value for client
-										ContainerPort: 12345,
-										Name:          "client",
-									},
 								},
 								Command: []string{"python"},
 								Args:    []string{"/opt/code.py"},
@@ -154,33 +149,96 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
 	}
 
-	defaultPorts := getDefaultPorts()
 	ports := svc.Spec.Ports
 
 	expectedResult = utils.DefaultServiceAppProtocol
-	svcPorts := make(map[string]int32)
-	usedPorts := make(map[int32]bool)
 	for _, port := range ports {
 		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
-		}
-		svcPorts[port.Name] = port.Port
-		usedPorts[port.Port] = true
-	}
-
-	for name, defaultPort := range defaultPorts {
-		// ensure client port value overwrite
-		if name == utils.ClientPortName {
-			assert.Equal(t, 12345, int(svcPorts[name]))
-		} else if !usedPorts[defaultPort] {
-			// Ensure the default port value is applied
-			t.Fatalf("Port `%v` not set", defaultPort)
 		}
 	}
 
 	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
 	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
 		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
+}
+
+// Test if default ports is applied and can be overwritten by config
+func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
+	type testCase struct {
+		name         string
+		expectResult map[string]int32
+		ports        []corev1.ContainerPort
+	}
+
+	testCases := []testCase{
+		{
+			name:         "No ports are specified by the user.",
+			ports:        []corev1.ContainerPort{},
+			expectResult: getDefaultPorts(),
+		},
+		{
+			name: "Only a random port is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "random",
+					ContainerPort: 1234,
+				},
+			},
+			expectResult: func() map[string]int32 {
+				ports := getDefaultPorts()
+				ports["random"] = 1234
+				return ports
+			}(),
+		},
+		{
+			name: "A custom port is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          utils.ClientPortName,
+					ContainerPort: 12345,
+				},
+			},
+			expectResult: func() map[string]int32 {
+				ports := getDefaultPorts()
+				ports[utils.ClientPortName] = 12345
+				return ports
+			}(),
+		},
+		{
+			name: "A custom port with different name is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "gcs",
+					ContainerPort: int32(utils.DefaultGcsServerPort),
+				},
+			},
+			expectResult: func() map[string]int32 {
+				ports := getDefaultPorts()
+				delete(ports, utils.GcsServerPortName)
+				ports["gcs"] = int32(utils.DefaultGcsServerPort)
+				return ports
+			}(),
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cluster := instanceWithWrongSvc.DeepCopy()
+			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
+			svc, err := BuildServiceForHeadPod(context.Background(), *cluster, nil, nil)
+			require.NoError(t, err)
+			ports := svc.Spec.Ports
+
+			svcPorts := make(map[string]int32)
+			for _, port := range ports {
+				svcPorts[port.Name] = port.Port
+			}
+
+			for name, port := range testCase.expectResult {
+				assert.Equal(t, port, svcPorts[name])
+			}
+		})
 	}
 }
 
