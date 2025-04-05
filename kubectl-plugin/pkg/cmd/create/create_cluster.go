@@ -40,14 +40,20 @@ type CreateClusterOptions struct {
 	workerMemory           string
 	workerEphemeralStorage string
 	workerGPU              string
+	workerTPU              string
+	timeout                time.Duration
+	numOfHosts             int32
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
-	timeout                time.Duration
 }
 
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
+
+	createClusterLong = templates.LongDesc(`
+	Create a Ray cluster with the given name and options.
+	`)
 
 	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray cluster using default values
@@ -58,7 +64,13 @@ var (
 
 		# Create a Ray cluster with K8s labels and annotations
 		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
-	`, util.RayVersion, util.RayImage))
+
+		# Create a Ray cluster with TPU in default worker group
+		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
+
+		# For more details on TPU-related node selectors like %s and %s, refer to:
+		# https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
@@ -74,6 +86,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd := &cobra.Command{
 		Use:          "cluster [CLUSTERNAME]",
 		Short:        "Create Ray cluster",
+		Long:         createClusterLong,
 		Example:      createClusterExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -101,9 +114,17 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", "", "amount of ephemeral storage in the Ray head")
 	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in default worker group per replica")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0",
+		fmt.Sprintf(
+			"number of TPUs in each worker group replica. If greater than 0, you must also set %s and %s in --worker-node-selectors.",
+			util.NodeSelectorGKETPUAccelerator,
+			util.NodeSelectorGKETPUTopology,
+		),
+	)
 	cmd.Flags().StringVar(&options.workerEphemeralStorage, "worker-ephemeral-storage", "", "amount of ephemeral storage in each worker group replica")
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
@@ -148,6 +169,7 @@ func (options *CreateClusterOptions) Validate() error {
 		"head-ephemeral-storage":   options.headEphemeralStorage,
 		"worker-cpu":               options.workerCPU,
 		"worker-gpu":               options.workerGPU,
+		"worker-tpu":               options.workerTPU,
 		"worker-memory":            options.workerMemory,
 		"worker-ephemeral-storage": options.workerEphemeralStorage,
 	}
@@ -160,7 +182,13 @@ func (options *CreateClusterOptions) Validate() error {
 			return fmt.Errorf("%w", err)
 		}
 	}
-
+	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
+	// if worker-tpu is not 0
+	if options.workerTPU != "0" {
+		if err := util.ValidateTPUNodeSelector(options.numOfHosts, options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
 	return nil
 }
 
@@ -186,10 +214,12 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 			{
 				Name:                   ptr.To("default-group"),
 				WorkerReplicas:         &options.workerReplicas,
+				NumOfHosts:             &options.numOfHosts,
 				WorkerCPU:              &options.workerCPU,
 				WorkerMemory:           &options.workerMemory,
 				WorkerEphemeralStorage: &options.workerEphemeralStorage,
 				WorkerGPU:              &options.workerGPU,
+				WorkerTPU:              &options.workerTPU,
 				WorkerRayStartParams:   options.workerRayStartParams,
 				WorkerNodeSelectors:    options.workerNodeSelectors,
 			},

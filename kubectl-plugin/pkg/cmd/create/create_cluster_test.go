@@ -2,8 +2,10 @@ package create
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -80,6 +82,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		workerCPU:    "1",
 		workerMemory: "1Gi",
 		workerGPU:    "1",
+		workerTPU:    "0",
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
@@ -106,6 +109,12 @@ func TestNewCreateClusterCommand(t *testing.T) {
 	cmd := NewCreateClusterCommand(cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)), testStreams)
 	cmd.Flags().StringP("namespace", "n", "", "")
 
+	workerNodeSelectors := fmt.Sprintf(
+		"app=ray,env=dev,%s=tpu-v5,%s=2x4",
+		util.NodeSelectorGKETPUAccelerator,
+		util.NodeSelectorGKETPUTopology,
+	)
+
 	cmd.SetArgs([]string{
 		"sample-cluster",
 		"--ray-version", "2.44.0",
@@ -117,12 +126,14 @@ func TestNewCreateClusterCommand(t *testing.T) {
 		"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
 		"--head-node-selectors", "app=ray,env=dev",
 		"--worker-replicas", "3",
+		"--num-of-hosts", "2",
 		"--worker-cpu", "1",
 		"--worker-memory", "5Gi",
 		"--worker-gpu", "1",
+		"--worker-tpu", "1",
 		"--worker-ephemeral-storage", "10Gi",
 		"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
-		"--worker-node-selectors", "app=ray,env=dev",
+		"--worker-node-selectors", workerNodeSelectors,
 		"--labels", "app=ray,env=dev",
 		"--annotations", "ttl-hours=24,owner=chthulu",
 		"--dry-run",
