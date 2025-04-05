@@ -41,12 +41,9 @@ type CreateWorkerGroupOptions struct {
 }
 
 var (
-	createWorkerGroupLong = templates.LongDesc(fmt.Sprintf(`
+	createWorkerGroupLong = templates.LongDesc(`
 	Adds a worker group to an existing Ray cluster.
-
-	For more details on TPU-related node selectors like %s and %s, refer to:
-	https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
-	`, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+	`)
 
 	createWorkerGroupExample = templates.Examples(fmt.Sprintf(`
 		# Create a worker group in an existing Ray cluster with defaults
@@ -57,7 +54,10 @@ var (
 
 		# Create a worker group in an existing Ray cluster with TPU
 		kubectl ray create workergroup example-tpu-group --ray-cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
-	`, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+
+		# For more details on TPU-related node selectors like %s and %s, refer to:
+		#https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {

@@ -51,12 +51,9 @@ type CreateClusterOptions struct {
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
 
-	createClusterLong = templates.LongDesc(fmt.Sprintf(`
+	createClusterLong = templates.LongDesc(`	
 	Create a Ray cluster with the given name and options.
-
-	For more details on TPU-related node selectors like %s and %s, refer to:
-	https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
-	`, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+	`)
 
 	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray cluster using default values
@@ -70,7 +67,10 @@ var (
 
 		# Create a Ray cluster with TPU in default worker group
 		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
-	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+
+		# For more details on TPU-related node selectors like %s and %s, refer to:
+		# https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
