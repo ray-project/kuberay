@@ -36,15 +36,6 @@ spec:
             # replace $VLLM_IMAGE with your vLLM container image
             image: $VLLM_IMAGE
             imagePullPolicy: IfNotPresent
-            ports:
-            - containerPort: 6379
-              name: gcs
-            - containerPort: 8265
-              name: dashboard
-            - containerPort: 10001
-              name: client
-            - containerPort: 8000
-              name: serve
             env:
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
