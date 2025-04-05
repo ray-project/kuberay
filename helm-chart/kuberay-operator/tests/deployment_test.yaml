@@ -98,20 +98,27 @@ tests:
 
   - it: Should use the specified container security context if `securityContext` is set
     set:
-      podSecurityContext:
-        runAsUser: 1000
-        runAsGroup: 2000
-        fsGroup: 3000
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+          - ALL
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
     asserts:
       - equal:
-          path: spec.template.spec.securityContext.runAsUser
-          value: 1000
-      - equal:
-          path: spec.template.spec.securityContext.runAsGroup
-          value: 2000
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 3000
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
 
   - it: Should add environment variables if `env` is set
     set:
