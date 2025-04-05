@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +22,8 @@ import (
 type CreateClusterOptions struct {
 	cmdFactory             cmdutil.Factory
 	ioStreams              *genericclioptions.IOStreams
+	labels                 map[string]string
+	annotations            map[string]string
 	workerRayStartParams   map[string]string
 	headRayStartParams     map[string]string
 	headNodeSelectors      map[string]string
@@ -108,6 +111,8 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.labels, "labels", nil, "K8s labels (e.g. --labels app=ray,env=dev)")
+	cmd.Flags().StringToStringVar(&options.annotations, "annotations", nil, "K8s annotations (e.g. --annotations ttl-hours=24,owner=chthulu)")
 
 	return cmd
 }
@@ -164,29 +169,34 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, options.namespace)
 	}
 
-	rayClusterObject := generation.RayClusterYamlObject{
-		Namespace:   options.namespace,
-		ClusterName: options.clusterName,
-		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:             options.rayVersion,
-			Image:                  options.image,
-			HeadCPU:                options.headCPU,
-			HeadMemory:             options.headMemory,
-			HeadEphemeralStorage:   options.headEphemeralStorage,
-			HeadGPU:                options.headGPU,
-			HeadRayStartParams:     options.headRayStartParams,
-			WorkerReplicas:         options.workerReplicas,
-			WorkerCPU:              options.workerCPU,
-			WorkerMemory:           options.workerMemory,
-			WorkerEphemeralStorage: options.workerEphemeralStorage,
-			WorkerGPU:              options.workerGPU,
-			WorkerRayStartParams:   options.workerRayStartParams,
-			HeadNodeSelectors:      options.headNodeSelectors,
-			WorkerNodeSelectors:    options.workerNodeSelectors,
+	rayClusterSpecObject := generation.RayClusterSpecObject{
+		Namespace:            &options.namespace,
+		Name:                 &options.clusterName,
+		Labels:               options.labels,
+		Annotations:          options.annotations,
+		RayVersion:           &options.rayVersion,
+		Image:                &options.image,
+		HeadCPU:              &options.headCPU,
+		HeadMemory:           &options.headMemory,
+		HeadEphemeralStorage: &options.headEphemeralStorage,
+		HeadGPU:              &options.headGPU,
+		HeadRayStartParams:   options.headRayStartParams,
+		HeadNodeSelectors:    options.headNodeSelectors,
+		WorkerGroups: []generation.WorkerGroupConfig{
+			{
+				Name:                   ptr.To("default-group"),
+				WorkerReplicas:         &options.workerReplicas,
+				WorkerCPU:              &options.workerCPU,
+				WorkerMemory:           &options.workerMemory,
+				WorkerEphemeralStorage: &options.workerEphemeralStorage,
+				WorkerGPU:              &options.workerGPU,
+				WorkerRayStartParams:   options.workerRayStartParams,
+				WorkerNodeSelectors:    options.workerNodeSelectors,
+			},
 		},
 	}
 
-	rayClusterac := rayClusterObject.GenerateRayClusterApplyConfig()
+	rayClusterac := rayClusterSpecObject.GenerateRayClusterApplyConfig()
 
 	// If dry run is enabled, it will call the YAML converter and print out the YAML
 	if options.dryRun {

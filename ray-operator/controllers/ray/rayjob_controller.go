@@ -43,16 +43,22 @@ type RayJobReconciler struct {
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
+	enableMetrics       bool
+}
+
+type RayJobReconcilerOptions struct {
+	EnableMetrics bool
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
+		enableMetrics:       options.EnableMetrics,
 	}
 }
 

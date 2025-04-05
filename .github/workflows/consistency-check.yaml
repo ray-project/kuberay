@@ -154,5 +154,4 @@ jobs:
 
       - name: Check rbac configuration
         run: |
-          cd helm-chart/script/
-          pytest -s
+          pytest -s scripts/rbac_test.py

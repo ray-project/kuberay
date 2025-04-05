@@ -1,0 +1,3 @@
+package metrics
+
+func registerRayJobMetrics() {}

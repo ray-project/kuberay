@@ -106,6 +106,10 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 		options.namespace = "default"
 	}
 
+	if options.rayStartParams == nil {
+		options.rayStartParams = map[string]string{}
+	}
+
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 	}
