@@ -98,7 +98,7 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithName("ray-head").
 				WithImage(GetRayImage()).
 				WithPorts(
-					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
 					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
 					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
 					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
@@ -122,7 +122,7 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 				WithName("ray-head").
 				WithImage(GetRayImage()).
 				WithPorts(
-					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
+					corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
 					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
 					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
 					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),

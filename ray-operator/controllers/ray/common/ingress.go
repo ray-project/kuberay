@@ -41,7 +41,10 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	pathType := networkingv1.PathTypeExact
-	servicePorts := getServicePorts(cluster)
+	servicePorts, err := getServicePorts(cluster)
+	if err != nil {
+		return nil, err
+	}
 	dashboardPort := int32(utils.DefaultDashboardPort)
 	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = port
