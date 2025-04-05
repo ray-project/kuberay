@@ -20,7 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: kuberay-operator
+        app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
         {{- if .Values.labels }}
         {{- toYaml .Values.labels | nindent 8 }}
         {{- end }}
@@ -97,6 +97,9 @@ spec:
             {{- end -}}
             {{- if hasKey .Values "leaderElectionEnabled" -}}
             {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
+            {{- end -}}
+            {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
+            {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}

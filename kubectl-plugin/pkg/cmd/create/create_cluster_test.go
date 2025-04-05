@@ -2,6 +2,7 @@ package create
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
@@ -12,7 +13,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/utils/ptr"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	kubefake "k8s.io/client-go/kubernetes/fake"
 
@@ -22,44 +23,32 @@ import (
 
 func TestRayCreateClusterComplete(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeCreateClusterOptions := NewCreateClusterOptions(testStreams)
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	fakeCreateClusterOptions := NewCreateClusterOptions(cmdFactory, testStreams)
 	fakeArgs := []string{"testRayClusterName"}
 	cmd := &cobra.Command{Use: "cluster"}
+	cmd.Flags().StringVarP(&fakeCreateClusterOptions.namespace, "namespace", "n", "", "")
 
 	err := fakeCreateClusterOptions.Complete(cmd, fakeArgs)
 	require.NoError(t, err)
-	assert.Equal(t, "default", *fakeCreateClusterOptions.configFlags.Namespace)
+	assert.Equal(t, "default", fakeCreateClusterOptions.namespace)
 	assert.Equal(t, "testRayClusterName", fakeCreateClusterOptions.clusterName)
 }
 
 func TestRayCreateClusterValidate(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
 	tests := []struct {
 		name        string
 		opts        *CreateClusterOptions
 		expectError string
 	}{
 		{
-			name: "should error when no K8s context is set",
-			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-			},
-		},
-		{
 			name: "should error when a resource quantity is invalid",
 			opts: &CreateClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				headCPU:       "1",
-				headMemory:    "softmax",
+				cmdFactory: cmdFactory,
+				headCPU:    "1",
+				headMemory: "softmax",
 			},
 			expectError: "head-memory is not a valid resource quantity: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'",
 		},
@@ -80,13 +69,20 @@ func TestRayCreateClusterValidate(t *testing.T) {
 func TestRayClusterCreateClusterRun(t *testing.T) {
 	namespace := "namespace-1"
 	clusterName := "cluster-1"
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	options := CreateClusterOptions{
-		configFlags: &genericclioptions.ConfigFlags{
-			Namespace: ptr.To(namespace),
-		},
-		kubeContexter: util.NewMockKubeContexter(true),
-		clusterName:   clusterName,
+		cmdFactory:   cmdFactory,
+		clusterName:  clusterName,
+		labels:       map[string]string{"app": "ray", "env": "dev"},
+		annotations:  map[string]string{"ttl-hours": "24", "owner": "chthulu"},
+		headCPU:      "1",
+		headMemory:   "1Gi",
+		headGPU:      "0",
+		workerCPU:    "1",
+		workerMemory: "1Gi",
+		workerGPU:    "1",
+		workerTPU:    "0",
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
@@ -106,4 +102,43 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		err := options.Run(context.Background(), k8sClients)
 		require.Error(t, err)
 	})
+}
+
+func TestNewCreateClusterCommand(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmd := NewCreateClusterCommand(cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)), testStreams)
+	cmd.Flags().StringP("namespace", "n", "", "")
+
+	workerNodeSelectors := fmt.Sprintf(
+		"app=ray,env=dev,%s=tpu-v5,%s=2x4",
+		util.NodeSelectorGKETPUAccelerator,
+		util.NodeSelectorGKETPUTopology,
+	)
+
+	cmd.SetArgs([]string{
+		"sample-cluster",
+		"--ray-version", "2.44.0",
+		"--image", "rayproject/ray:2.44.0",
+		"--head-cpu", "1",
+		"--head-memory", "5Gi",
+		"--head-gpu", "1",
+		"--head-ephemeral-storage", "10Gi",
+		"--head-ray-start-params", "metrics-export-port=8080,num-cpus=2",
+		"--head-node-selectors", "app=ray,env=dev",
+		"--worker-replicas", "3",
+		"--num-of-hosts", "2",
+		"--worker-cpu", "1",
+		"--worker-memory", "5Gi",
+		"--worker-gpu", "1",
+		"--worker-tpu", "1",
+		"--worker-ephemeral-storage", "10Gi",
+		"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
+		"--worker-node-selectors", workerNodeSelectors,
+		"--labels", "app=ray,env=dev",
+		"--annotations", "ttl-hours=24,owner=chthulu",
+		"--dry-run",
+		"--wait",
+		"--timeout", "10s",
+	})
+	require.NoError(t, cmd.Execute())
 }

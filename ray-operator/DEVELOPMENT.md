@@ -73,7 +73,7 @@ kind create cluster --image=kindest/node:v1.24.0
 # Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
 
-# To skip running unit tests, run the following command instead:
+# To skip Go project compilation, run the following command instead:
 # IMG=kuberay/operator:nightly make docker-image
 
 # Step 4: Load the custom KubeRay image into the Kind cluster.
@@ -89,17 +89,22 @@ kind load docker-image kuberay/operator:nightly
 # Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} ../helm-chart/kuberay-operator
 helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 
-# Step 7: Check the log of KubeRay operator
-kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
-# {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
-# ...
+# Step 7: Check the logs
+kubectl logs deployments/kuberay-operator
 ```
 
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
-* The command `make docker-build` (Step 3) will also run `make test` (unit tests).
+* The command `make docker-build` (Step 3) will also run `make build` (Go project compilation).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 ### Run the operator outside the cluster
+
+This step requires you to switch your working directory to the kuberay project root. If
+you are in `ray-operator`, do:
+
+```bash
+cd ..
+```
 
 > Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
 
@@ -145,7 +150,8 @@ The e2e tests can be run by executing the following command:
 
 ```bash
 # Reinstall the kuberay-operator to make sure it use the latest nightly image you just built.
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 make test-e2e
 ```
 
@@ -197,7 +203,8 @@ make install
 Deploy the manifests and controller
 
 ```bash
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 ```
 
 > Note: remember to replace with your own image

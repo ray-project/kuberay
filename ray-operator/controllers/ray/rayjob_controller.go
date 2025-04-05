@@ -43,16 +43,22 @@ type RayJobReconciler struct {
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
+	enableMetrics       bool
+}
+
+type RayJobReconcilerOptions struct {
+	EnableMetrics bool
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
+		enableMetrics:       options.EnableMetrics,
 	}
 }
 
@@ -511,7 +517,8 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-c", strings.Join(k8sJobCommand, " ")}
+		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-ce", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
 		logger.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)

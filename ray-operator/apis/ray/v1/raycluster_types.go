@@ -13,6 +13,7 @@ import (
 type RayClusterSpec struct {
 	// Suspend indicates whether a RayCluster should be suspended.
 	// A suspended RayCluster will have head pods and worker pods deleted.
+	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
@@ -22,34 +23,46 @@ type RayClusterSpec struct {
 	// The field is immutable.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions      *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations map[string]string  `json:"headServiceAnnotations,omitempty"`
+	// +optional
+	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	// +optional
+	HeadServiceAnnotations map[string]string `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	// +optional
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
+	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
+	// +optional
 	RayVersion string `json:"rayVersion,omitempty"`
 	// WorkerGroupSpecs are the specs for the worker pods
+	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
 // GcsFaultToleranceOptions contains configs for GCS FT
 type GcsFaultToleranceOptions struct {
-	RedisUsername            *RedisCredential `json:"redisUsername,omitempty"`
-	RedisPassword            *RedisCredential `json:"redisPassword,omitempty"`
-	ExternalStorageNamespace string           `json:"externalStorageNamespace,omitempty"`
-	RedisAddress             string           `json:"redisAddress"`
+	// +optional
+	RedisUsername *RedisCredential `json:"redisUsername,omitempty"`
+	// +optional
+	RedisPassword *RedisCredential `json:"redisPassword,omitempty"`
+	// +optional
+	ExternalStorageNamespace string `json:"externalStorageNamespace,omitempty"`
+	RedisAddress             string `json:"redisAddress"`
 }
 
 // RedisCredential is the redis username/password or a reference to the source containing the username/password
 type RedisCredential struct {
+	// +optional
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
-	Value     string               `json:"value,omitempty"`
+	// +optional
+	Value string `json:"value,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod
@@ -57,12 +70,15 @@ type HeadGroupSpec struct {
 	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
 	Template corev1.PodTemplateSpec `json:"template"`
 	// HeadService is the Kubernetes service of the head pod.
+	// +optional
 	HeadService *corev1.Service `json:"headService,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
+	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
+	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 }
 
@@ -71,11 +87,13 @@ type WorkerGroupSpec struct {
 	// Suspend indicates whether a worker group should be suspended.
 	// A suspended worker group will have all pods deleted.
 	// This is not a user-facing API and is only used by RayJob DeletionPolicy.
+	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
 	// we can have multiple worker groups, we distinguish them by name
 	GroupName string `json:"groupName"`
 	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
 	// +kubebuilder:default:=0
+	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
 	// MinReplicas denotes the minimum number of desired Pods for this worker group.
 	// +kubebuilder:default:=0
@@ -85,15 +103,18 @@ type WorkerGroupSpec struct {
 	MaxReplicas *int32 `json:"maxReplicas"`
 	// IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
 	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
+	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is a pod template for the worker
 	Template corev1.PodTemplateSpec `json:"template"`
 	// ScaleStrategy defines which pods to remove
+	// +optional
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	// +kubebuilder:default:=1
+	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
 }
 
@@ -107,29 +128,38 @@ type ScaleStrategy struct {
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
 	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
+	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
+	// +optional
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
+	// +optional
 	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// SecurityContext defines the security options the container should be run with.
 	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+	// +optional
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
+	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
 	// Aggressive: An alias for Default; upscaling is not rate-limited.
 	// It is not read by the KubeRay operator but by the Ray autoscaler.
+	// +optional
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 	// Optional list of environment variables to set in the autoscaler container.
+	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 	// Optional list of sources to populate environment variables in the autoscaler container.
+	// +optional
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
+	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
@@ -153,25 +183,34 @@ type RayClusterStatus struct {
 	// Status reflects the status of the cluster
 	//
 	// Deprecated: the State field is replaced by the Conditions field.
+	// +optional
 	State ClusterState `json:"state,omitempty"`
 	// DesiredCPU indicates total desired CPUs for the cluster
+	// +optional
 	DesiredCPU resource.Quantity `json:"desiredCPU,omitempty"`
 	// DesiredMemory indicates total desired memory for the cluster
+	// +optional
 	DesiredMemory resource.Quantity `json:"desiredMemory,omitempty"`
 	// DesiredGPU indicates total desired GPUs for the cluster
+	// +optional
 	DesiredGPU resource.Quantity `json:"desiredGPU,omitempty"`
 	// DesiredTPU indicates total desired TPUs for the cluster
+	// +optional
 	DesiredTPU resource.Quantity `json:"desiredTPU,omitempty"`
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 	// StateTransitionTimes indicates the time of the last state transition for each state.
+	// +optional
 	StateTransitionTimes map[ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`
 	// Service Endpoints
+	// +optional
 	Endpoints map[string]string `json:"endpoints,omitempty"`
 	// Head info
+	// +optional
 	Head HeadInfo `json:"head,omitempty"`
 	// Reason provides more information about current State
+	// +optional
 	Reason string `json:"reason,omitempty"`
 
 	// Represents the latest available observations of a RayCluster's current state.
@@ -179,20 +218,27 @@ type RayClusterStatus struct {
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
+	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
+	// +optional
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
 	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
+	// +optional
 	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
 	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.
+	// +optional
 	DesiredWorkerReplicas int32 `json:"desiredWorkerReplicas,omitempty"`
 	// MinWorkerReplicas indicates sum of minimum replicas of each node group.
+	// +optional
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
 	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
+	// +optional
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
 	// RayCluster's generation, which is updated on mutation by the API Server.
+	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
@@ -224,9 +270,13 @@ const (
 
 // HeadInfo gives info about head
 type HeadInfo struct {
-	PodIP       string `json:"podIP,omitempty"`
-	ServiceIP   string `json:"serviceIP,omitempty"`
-	PodName     string `json:"podName,omitempty"`
+	// +optional
+	PodIP string `json:"podIP,omitempty"`
+	// +optional
+	ServiceIP string `json:"serviceIP,omitempty"`
+	// +optional
+	PodName string `json:"podName,omitempty"`
+	// +optional
 	ServiceName string `json:"serviceName,omitempty"`
 }
 
@@ -263,7 +313,8 @@ type RayCluster struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Specification of the desired behavior of the RayCluster.
-	Spec   RayClusterSpec   `json:"spec,omitempty"`
+	Spec RayClusterSpec `json:"spec,omitempty"`
+	// +optional
 	Status RayClusterStatus `json:"status,omitempty"`
 }
 

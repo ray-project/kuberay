@@ -6,9 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func NewCreateCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewCreateCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create Ray resources",
@@ -21,7 +22,7 @@ func NewCreateCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewCreateClusterCommand(streams))
-	cmd.AddCommand(NewCreateWorkerGroupCommand(streams))
+	cmd.AddCommand(NewCreateClusterCommand(cmdFactory, streams))
+	cmd.AddCommand(NewCreateWorkerGroupCommand(cmdFactory, streams))
 	return cmd
 }

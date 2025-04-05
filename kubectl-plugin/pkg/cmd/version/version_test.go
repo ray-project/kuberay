@@ -4,63 +4,49 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime/debug"
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	clientfake "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func TestRayVersionCheckContext(t *testing.T) {
-	tests := []struct {
-		name        string
-		opts        *VersionOptions
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &VersionOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+func createBuildInfo(revision, time string) *debug.BuildInfo {
+	return &debug.BuildInfo{
+		Main: debug.Module{
+			Path:    "github.com/ray-project/kuberay/kubectl-plugin",
+			Version: "(devel)",
 		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &VersionOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
+		Settings: []debug.BuildSetting{
+			{
+				Key:   "vcs.revision",
+				Value: revision,
+			},
+			{
+				Key:   "vcs.time",
+				Value: time,
 			},
 		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.checkContext()
-			fmt.Printf("err: %v\n", err)
-			if tc.expectError != "" {
-				require.EqualError(t, err, tc.expectError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
 	}
 }
 
 // Tests the Run() step of the command and checks the output.
 func TestRayVersionRun(t *testing.T) {
 	fakeVersionOptions := &VersionOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		kubeContexter: util.NewMockKubeContexter(true),
+		cmdFactory: cmdutil.NewFactory(genericclioptions.NewConfigFlags(true)),
 	}
 
 	tests := []struct {
 		name                           string
 		kuberayImageVersion            string
 		getKubeRayOperatorVersionError error
+		pluginCommit                   string
+		pluginBuildTime                string
 		expected                       string
+		buildInfoErr                   bool
 	}{
 		{
 			name:                           "Test when we can successfully get the KubeRay operator image version",
@@ -77,14 +63,37 @@ func TestRayVersionRun(t *testing.T) {
 				"warning: KubeRay operator installation cannot be found: something went wrong. "+
 				"Did you install it with the name \"kuberay-operator\"?\n", Version),
 		},
+		{
+			name:                "Test when build info is included",
+			kuberayImageVersion: "v0.0.1",
+			pluginCommit:        "abcdefg",
+			pluginBuildTime:     "2023-10-27T12:00:00Z",
+			buildInfoErr:        false,
+			expected: fmt.Sprintf("kubectl ray plugin version: development (%s, built %s)\n"+
+				"KubeRay operator version: %s\n", "abcdefg", "2023-10-27T12:00:00Z", "v0.0.1"),
+		},
+		{
+			name:                "Test when build info fails",
+			kuberayImageVersion: "v0.0.1",
+			buildInfoErr:        true,
+			expected: fmt.Sprintf("kubectl ray plugin version: %s\n"+
+				"KubeRay operator version: %s\n", Version, "v0.0.1"),
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			testVersion := Version                   // Store the global Version value
+			defer func() { Version = testVersion }() // Restore after the test
+
 			client := clientfake.NewFakeClient().WithKubeRayImageVersion(tc.kuberayImageVersion).WithKubeRayOperatorVersionError(tc.getKubeRayOperatorVersionError)
 
+			fakeBuildInfo := func() (*debug.BuildInfo, bool) {
+				return createBuildInfo(tc.pluginCommit, tc.pluginBuildTime), !tc.buildInfoErr
+			}
+
 			var buf bytes.Buffer
-			err := fakeVersionOptions.Run(context.Background(), client, &buf)
+			err := fakeVersionOptions.Run(context.Background(), client, fakeBuildInfo, &buf)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected, buf.String())

@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,11 +20,15 @@ import (
 )
 
 type CreateClusterOptions struct {
-	configFlags            *genericclioptions.ConfigFlags
+	cmdFactory             cmdutil.Factory
 	ioStreams              *genericclioptions.IOStreams
+	labels                 map[string]string
+	annotations            map[string]string
 	workerRayStartParams   map[string]string
 	headRayStartParams     map[string]string
-	kubeContexter          util.KubeContexter
+	headNodeSelectors      map[string]string
+	workerNodeSelectors    map[string]string
+	namespace              string
 	clusterName            string
 	rayVersion             string
 	image                  string
@@ -35,14 +40,20 @@ type CreateClusterOptions struct {
 	workerMemory           string
 	workerEphemeralStorage string
 	workerGPU              string
+	workerTPU              string
+	timeout                time.Duration
+	numOfHosts             int32
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
-	timeout                time.Duration
 }
 
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
+
+	createClusterLong = templates.LongDesc(`
+	Create a Ray cluster with the given name and options.
+	`)
 
 	createClusterExample = templates.Examples(fmt.Sprintf(`
 		# Create a Ray cluster using default values
@@ -53,24 +64,29 @@ var (
 
 		# Create a Ray cluster with K8s labels and annotations
 		kubectl ray create cluster sample-cluster --labels app=ray,env=dev --annotations ttl-hours=24,owner=chthulu
-	`, util.RayVersion, util.RayImage))
+
+		# Create a Ray cluster with TPU in default worker group
+		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
+
+		# For more details on TPU-related node selectors like %s and %s, refer to:
+		# https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
-func NewCreateClusterOptions(streams genericclioptions.IOStreams) *CreateClusterOptions {
+func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
 	return &CreateClusterOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewCreateClusterOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewCreateClusterOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:          "cluster [CLUSTERNAME]",
 		Short:        "Create Ray cluster",
+		Long:         createClusterLong,
 		Example:      createClusterExample,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -98,22 +114,39 @@ func NewCreateClusterCommand(streams genericclioptions.IOStreams) *cobra.Command
 	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", "", "amount of ephemeral storage in the Ray head")
 	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in default worker group per replica")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0",
+		fmt.Sprintf(
+			"number of TPUs in each worker group replica. If greater than 0, you must also set %s and %s in --worker-node-selectors.",
+			util.NodeSelectorGKETPUAccelerator,
+			util.NodeSelectorGKETPUTopology,
+		),
+	)
 	cmd.Flags().StringVar(&options.workerEphemeralStorage, "worker-ephemeral-storage", "", "amount of ephemeral storage in each worker group replica")
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
+	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.labels, "labels", nil, "K8s labels (e.g. --labels app=ray,env=dev)")
+	cmd.Flags().StringToStringVar(&options.annotations, "annotations", nil, "K8s annotations (e.g. --annotations ttl-hours=24,owner=chthulu)")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string) error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	if len(args) != 1 {
@@ -129,14 +162,6 @@ func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string)
 }
 
 func (options *CreateClusterOptions) Validate() error {
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-
 	resourceFields := map[string]string{
 		"head-cpu":                 options.headCPU,
 		"head-gpu":                 options.headGPU,
@@ -144,6 +169,7 @@ func (options *CreateClusterOptions) Validate() error {
 		"head-ephemeral-storage":   options.headEphemeralStorage,
 		"worker-cpu":               options.workerCPU,
 		"worker-gpu":               options.workerGPU,
+		"worker-tpu":               options.workerTPU,
 		"worker-memory":            options.workerMemory,
 		"worker-ephemeral-storage": options.workerEphemeralStorage,
 	}
@@ -156,36 +182,51 @@ func (options *CreateClusterOptions) Validate() error {
 			return fmt.Errorf("%w", err)
 		}
 	}
-
+	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
+	// if worker-tpu is not 0
+	if options.workerTPU != "0" {
+		if err := util.ValidateTPUNodeSelector(options.numOfHosts, options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
 	return nil
 }
 
 func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.Client) error {
-	if clusterExists(k8sClient.RayClient(), *options.configFlags.Namespace, options.clusterName) {
-		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, *options.configFlags.Namespace)
+	if clusterExists(k8sClient.RayClient(), options.namespace, options.clusterName) {
+		return fmt.Errorf("the Ray cluster %s in namespace %s already exists", options.clusterName, options.namespace)
 	}
 
-	rayClusterObject := generation.RayClusterYamlObject{
-		Namespace:   *options.configFlags.Namespace,
-		ClusterName: options.clusterName,
-		RayClusterSpecObject: generation.RayClusterSpecObject{
-			RayVersion:             options.rayVersion,
-			Image:                  options.image,
-			HeadCPU:                options.headCPU,
-			HeadMemory:             options.headMemory,
-			HeadEphemeralStorage:   options.headEphemeralStorage,
-			HeadGPU:                options.headGPU,
-			HeadRayStartParams:     options.headRayStartParams,
-			WorkerReplicas:         options.workerReplicas,
-			WorkerCPU:              options.workerCPU,
-			WorkerMemory:           options.workerMemory,
-			WorkerEphemeralStorage: options.workerEphemeralStorage,
-			WorkerGPU:              options.workerGPU,
-			WorkerRayStartParams:   options.workerRayStartParams,
+	rayClusterSpecObject := generation.RayClusterSpecObject{
+		Namespace:            &options.namespace,
+		Name:                 &options.clusterName,
+		Labels:               options.labels,
+		Annotations:          options.annotations,
+		RayVersion:           &options.rayVersion,
+		Image:                &options.image,
+		HeadCPU:              &options.headCPU,
+		HeadMemory:           &options.headMemory,
+		HeadEphemeralStorage: &options.headEphemeralStorage,
+		HeadGPU:              &options.headGPU,
+		HeadRayStartParams:   options.headRayStartParams,
+		HeadNodeSelectors:    options.headNodeSelectors,
+		WorkerGroups: []generation.WorkerGroupConfig{
+			{
+				Name:                   ptr.To("default-group"),
+				WorkerReplicas:         &options.workerReplicas,
+				NumOfHosts:             &options.numOfHosts,
+				WorkerCPU:              &options.workerCPU,
+				WorkerMemory:           &options.workerMemory,
+				WorkerEphemeralStorage: &options.workerEphemeralStorage,
+				WorkerGPU:              &options.workerGPU,
+				WorkerTPU:              &options.workerTPU,
+				WorkerRayStartParams:   options.workerRayStartParams,
+				WorkerNodeSelectors:    options.workerNodeSelectors,
+			},
 		},
 	}
 
-	rayClusterac := rayClusterObject.GenerateRayClusterApplyConfig()
+	rayClusterac := rayClusterSpecObject.GenerateRayClusterApplyConfig()
 
 	// If dry run is enabled, it will call the YAML converter and print out the YAML
 	if options.dryRun {
@@ -199,14 +240,14 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 
 	// TODO: Decide whether to save YAML to file or not.
 
-	result, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: "kubectl-plugin"})
+	result, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Apply(ctx, rayClusterac, metav1.ApplyOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("failed to create Ray cluster: %w", err)
 	}
 	fmt.Printf("Created Ray cluster: %s\n", result.GetName())
 
 	if options.wait {
-		err = k8sClient.WaitRayClusterProvisioned(ctx, *options.configFlags.Namespace, result.GetName(), options.timeout)
+		err = k8sClient.WaitRayClusterProvisioned(ctx, options.namespace, result.GetName(), options.timeout)
 		if err != nil {
 			return err
 		}

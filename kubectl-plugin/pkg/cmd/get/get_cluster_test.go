@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,8 +17,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	kubefake "k8s.io/client-go/kubernetes/fake"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -29,6 +30,7 @@ import (
 func TestRayClusterGetComplete(t *testing.T) {
 	// Initialize members of the cluster get option struct and the struct itself
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	tests := []struct {
 		name                  string
@@ -69,11 +71,11 @@ func TestRayClusterGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClusterGetOptions := NewGetClusterOptions(testStreams)
+			fakeClusterGetOptions := NewGetClusterOptions(cmdFactory, testStreams)
 
-			*fakeClusterGetOptions.configFlags.Namespace = tc.namespace
-
-			err := fakeClusterGetOptions.Complete(tc.args)
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVarP(&fakeClusterGetOptions.namespace, "namespace", "n", tc.namespace, "")
+			err := fakeClusterGetOptions.Complete(tc.args, cmd)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.allNamespaces)
@@ -82,47 +84,10 @@ func TestRayClusterGetComplete(t *testing.T) {
 	}
 }
 
-// Test the Validation() step of the command.
-func TestRayClusterGetValidate(t *testing.T) {
-	tests := []struct {
-		name        string
-		opts        *GetClusterOptions
-		expect      string
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &GetClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-				cluster:       "random_arg",
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
-			name: "should not error when K8s context is set",
-			opts: &GetClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				cluster:       "my-cluster",
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
-			if tc.expectError != "" {
-				require.EqualError(t, err, tc.expectError)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 // Tests the Run() step of the command and ensure that the output is as expected.
 func TestRayClusterGetRun(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
 	tests := []struct {
 		name                  string
 		state                 rayv1.ClusterState
@@ -175,7 +140,7 @@ func TestRayClusterGetRun(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
-			fakeClusterGetOptions := NewGetClusterOptions(testStreams)
+			fakeClusterGetOptions := NewGetClusterOptions(cmdFactory, testStreams)
 
 			rayCluster := &rayv1.RayCluster{
 				ObjectMeta: v1.ObjectMeta{
@@ -249,6 +214,7 @@ func TestRayClusterGetRun(t *testing.T) {
 
 func TestGetRayClusters(t *testing.T) {
 	testStreams := genericiooptions.NewTestIOStreamsDiscard()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	namespace := "my-namespace"
 	rayCluster := &rayv1.RayCluster{
@@ -317,12 +283,12 @@ func TestGetRayClusters(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeClusterGetOptions := GetClusterOptions{
-				configFlags: genericclioptions.NewConfigFlags(true),
-				ioStreams:   &testStreams,
-				cluster:     tc.cluster,
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				cluster:    tc.cluster,
 			}
 			if tc.namespace != nil {
-				*fakeClusterGetOptions.configFlags.Namespace = *tc.namespace
+				fakeClusterGetOptions.namespace = *tc.namespace
 			}
 
 			kubeClientSet := kubefake.NewClientset()

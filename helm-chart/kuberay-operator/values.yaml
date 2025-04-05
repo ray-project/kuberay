@@ -9,6 +9,7 @@ image:
 
 nameOverride: "kuberay-operator"
 fullnameOverride: "kuberay-operator"
+componentOverride: "kuberay-operator"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -91,6 +92,11 @@ featureGates:
     enabled: true
   - name: RayJobDeletionPolicy
     enabled: false
+
+# Configurations for KubeRay operator metrics.
+metrics:
+  #  Whether KubeRay operator should emit control plane metrics.
+  enabled: true
 
 # Path to the operator binary
 operatorComand: /manager
