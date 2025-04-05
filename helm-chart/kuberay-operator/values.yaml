@@ -11,6 +11,12 @@ nameOverride: "kuberay-operator"
 fullnameOverride: "kuberay-operator"
 componentOverride: "kuberay-operator"
 
+# -- Extra labels.
+labels: {}
+
+# -- Extra annotations.
+annotations: {}
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
