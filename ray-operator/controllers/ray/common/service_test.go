@@ -215,14 +215,14 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 			name: "A custom port with different name is specified by the user.",
 			ports: []corev1.ContainerPort{
 				{
-					Name:          "gcs-server",
+					Name:          "gcs",
 					ContainerPort: int32(utils.DefaultGcsServerPort),
 				},
 			},
 			expectResult: func() map[string]int32 {
 				ports := getDefaultPorts()
 				delete(ports, utils.GcsServerPortName)
-				ports["gcs-server"] = int32(utils.DefaultGcsServerPort)
+				ports["gcs"] = int32(utils.DefaultGcsServerPort)
 				return ports
 			}(),
 			expectError: true,

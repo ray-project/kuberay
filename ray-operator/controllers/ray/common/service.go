@@ -393,7 +393,7 @@ func getServicePorts(cluster rayv1.RayCluster) (map[string]int32, error) {
 		if _, defined := ports[name]; !defined {
 			// Only assign defaultPort if the port is not already in use
 			if usedPorts[defaultPort] {
-				return nil, fmt.Errorf("Default port %d for name %q is already in use", defaultPort, name)
+				return nil, fmt.Errorf("Port %d is already in use with name %q", defaultPort, name)
 			}
 			ports[name] = defaultPort
 			usedPorts[defaultPort] = true // Mark this port as used
