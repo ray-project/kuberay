@@ -1,16 +1,16 @@
 {{- if and .Values.rbacEnable (not .Values.singleNamespaceInstall) }}
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: rayservice-viewer-role
+  name: raycluster-viewer-role
   labels:
     rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
 - apiGroups:
   - ray.io
   resources:
-  - rayservices
-  - rayservices/status
+  - rayclusters
+  - rayclusters/status
   verbs:
   - get
   - list
