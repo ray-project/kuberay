@@ -19,11 +19,11 @@ type BatchScheduler interface {
 
 	// DoBatchSchedulingOnSubmission handles submitting the RayCluster to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
-	DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error
+	DoBatchSchedulingOnSubmission(ctx context.Context, rayCluster *rayv1.RayCluster) error
 
 	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod)
+	AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
