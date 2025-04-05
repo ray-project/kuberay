@@ -280,18 +280,20 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			// here, even though it will be ignored.
 			// See https://github.com/ray-project/kuberay/issues/3126.
 			Entrypoint: options.entryPoint,
-			RayClusterSpecObject: generation.RayClusterSpecObject{
+			RayClusterConfig: generation.RayClusterConfig{
 				RayVersion: &options.rayVersion,
 				Image:      &options.image,
-				HeadCPU:    &options.headCPU,
-				HeadMemory: &options.headMemory,
-				HeadGPU:    &options.headGPU,
-				WorkerGroups: []generation.WorkerGroupConfig{
+				Head: &generation.Head{
+					CPU:    &options.headCPU,
+					Memory: &options.headMemory,
+					GPU:    &options.headGPU,
+				},
+				WorkerGroups: []generation.WorkerGroup{
 					{
-						WorkerCPU:      &options.workerCPU,
-						WorkerMemory:   &options.workerMemory,
-						WorkerGPU:      &options.workerGPU,
-						WorkerReplicas: &options.workerReplicas,
+						CPU:      &options.workerCPU,
+						Memory:   &options.workerMemory,
+						GPU:      &options.workerGPU,
+						Replicas: options.workerReplicas,
 					},
 				},
 			},
