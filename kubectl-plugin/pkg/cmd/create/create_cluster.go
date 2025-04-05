@@ -51,7 +51,7 @@ type CreateClusterOptions struct {
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
 
-	createClusterLong = templates.LongDesc(`	
+	createClusterLong = templates.LongDesc(`
 	Create a Ray cluster with the given name and options.
 	`)
 
