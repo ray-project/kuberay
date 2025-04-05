@@ -98,6 +98,9 @@ spec:
             {{- if hasKey .Values "leaderElectionEnabled" -}}
             {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
             {{- end -}}
+            {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
+            {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
+            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
