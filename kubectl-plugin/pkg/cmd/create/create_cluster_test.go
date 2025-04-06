@@ -165,14 +165,13 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 				"--worker-gpu", "1",
 				"--worker-ephemeral-storage", "10Gi",
 				"--worker-ray-start-params", "metrics-export-port=8081,num-cpus=2",
-				// TODO (dxia): Add labels and annotations back in once https://github.com/ray-project/kuberay/pull/3237 is merged
-				// "--labels", "app=ray,env=dev",
-				// "--annotations", "ttl-hours=24,owner=chthulu",
+				"--labels", "app=ray,env=dev",
+				"--annotations", "ttl-hours=24,owner=chthulu",
 				"--dry-run",
 				"--wait",
 				"--timeout", "10s",
 			},
-			expectError: "the following flags are incompatible with --file: [head-cpu head-ephemeral-storage head-gpu head-memory head-ray-start-params image ray-version worker-cpu worker-ephemeral-storage worker-gpu worker-memory worker-ray-start-params worker-replicas]",
+			expectError: "the following flags are incompatible with --file: [annotations head-cpu head-ephemeral-storage head-gpu head-memory head-ray-start-params image labels ray-version worker-cpu worker-ephemeral-storage worker-gpu worker-memory worker-ray-start-params worker-replicas]",
 		},
 	}
 

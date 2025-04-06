@@ -33,8 +33,9 @@ type RayClusterConfig struct {
 	Labels      map[string]string `yaml:"labels,omitempty"`
 	Annotations map[string]string `yaml:"annotations,omitempty"`
 
-	RayVersion *string `yaml:"ray-version,omitempty"`
-	Image      *string `yaml:"image,omitempty"`
+	RayVersion     *string `yaml:"ray-version,omitempty"`
+	Image          *string `yaml:"image,omitempty"`
+	ServiceAccount *string `yaml:"service-account,omitempty"`
 
 	Head *Head `yaml:"head,omitempty"`
 
@@ -242,6 +243,10 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 		if workerGroup.NumOfHosts != nil {
 			workerGroupSpecs[i].WithNumOfHosts(*workerGroup.NumOfHosts)
 		}
+
+		if rayClusterConfig.ServiceAccount != nil && *rayClusterConfig.ServiceAccount != "" {
+			workerGroupSpecs[i].Template.Spec.ServiceAccountName = ptr.To(*rayClusterConfig.ServiceAccount)
+		}
 	}
 
 	rayClusterSpec := rayv1ac.RayClusterSpec().
@@ -261,6 +266,10 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 							corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard"),
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
 		WithWorkerGroupSpecs(workerGroupSpecs...)
+
+	if rayClusterConfig.ServiceAccount != nil && *rayClusterConfig.ServiceAccount != "" {
+		rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName = ptr.To(*rayClusterConfig.ServiceAccount)
+	}
 
 	if rayClusterConfig.GKE != nil {
 		setGCSFuseOptions(rayClusterSpec, rayClusterConfig.GKE.GCSFuse)
@@ -400,7 +409,6 @@ func newRayClusterConfigWithDefaults() *RayClusterConfig {
 }
 
 // ParseConfigFile parses the YAML configuration file into a RayClusterConfig object
-
 func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file %s does not exist", filePath)
@@ -443,6 +451,7 @@ func ValidateConfig(config *RayClusterConfig) error {
 		workerResourceFields := map[string]*string{
 			"cpu":               workerGroup.CPU,
 			"gpu":               workerGroup.GPU,
+			"tpu":               workerGroup.TPU,
 			"memory":            workerGroup.Memory,
 			"ephemeral-storage": workerGroup.EphemeralStorage,
 		}
@@ -454,6 +463,10 @@ func ValidateConfig(config *RayClusterConfig) error {
 			if err := util.ValidateResourceQuantity(*value, fmt.Sprintf("%s (worker group %d)", name, i)); err != nil {
 				return fmt.Errorf("%w", err)
 			}
+		}
+
+		if err := util.ValidateTPU(workerGroup.TPU, workerGroup.NumOfHosts, workerGroup.NodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
 		}
 	}
 

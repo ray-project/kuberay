@@ -45,9 +45,9 @@ type CreateClusterOptions struct {
 	workerEphemeralStorage string
 	workerGPU              string
 	workerTPU              string
+	configFile             string
 	timeout                time.Duration
 	numOfHosts             int32
-	configFile             string
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
@@ -206,13 +206,11 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 			}
 		}
 	}
-	// we must assign gke-tpu-accelerator and gke-tpu-topology in nodeSelector
-	// if worker-tpu is not 0
-	if options.workerTPU != "" && options.workerTPU != "0" {
-		if err := util.ValidateTPUNodeSelector(options.numOfHosts, options.workerNodeSelectors); err != nil {
-			return fmt.Errorf("%w", err)
-		}
+
+	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
+		return fmt.Errorf("%w", err)
 	}
+
 	return nil
 }
 

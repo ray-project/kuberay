@@ -435,8 +435,9 @@ func TestGenerateResources(t *testing.T) {
 
 func TestGenerateRayClusterSpec(t *testing.T) {
 	testRayClusterConfig := RayClusterConfig{
-		RayVersion: ptr.To("1.2.3"),
-		Image:      ptr.To("rayproject/ray:1.2.3"),
+		RayVersion:     ptr.To("1.2.3"),
+		Image:          ptr.To("rayproject/ray:1.2.3"),
+		ServiceAccount: ptr.To("my-service-account"),
 		Head: &Head{
 			CPU:              ptr.To("1"),
 			Memory:           ptr.To("5Gi"),
@@ -479,6 +480,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 				Spec: &corev1ac.PodSpecApplyConfiguration{
+					ServiceAccountName: ptr.To("my-service-account"),
 					Containers: []corev1ac.ContainerApplyConfiguration{
 						{
 							Name:  ptr.To("ray-head"),
@@ -527,6 +529,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 				RayStartParams: map[string]string{"metrics-export-port": "8080"},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
+						ServiceAccountName: ptr.To("my-service-account"),
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
@@ -557,6 +560,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 				},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
+						ServiceAccountName: ptr.To("my-service-account"),
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
