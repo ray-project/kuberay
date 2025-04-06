@@ -135,9 +135,11 @@ func main() {
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
 		preStopCommandListJson := os.Getenv(utils.PRE_STOP_COMMAND_LIST_JSON)
-		umarshalErr := json.Unmarshal([]byte(preStopCommandListJson), &config.PreStopCommandList)
-		if umarshalErr != nil {
-			exitOnError(umarshalErr, "Failed to json parse preStopCommand")
+		if preStopCommandListJson != "" {
+			umarshalErr := json.Unmarshal([]byte(preStopCommandListJson), &config.PreStopCommandList)
+			if umarshalErr != nil {
+				exitOnError(umarshalErr, "Failed to json parse preStopCommand")
+			}
 		}
 	}
 
