@@ -37,7 +37,7 @@ func TestStaticRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -87,7 +87,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -157,7 +157,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -243,7 +243,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
