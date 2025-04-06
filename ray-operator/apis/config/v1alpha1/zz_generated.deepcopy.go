@@ -18,6 +18,11 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.PreStopCommandList != nil {
+		in, out := &in.PreStopCommandList, &out.PreStopCommandList
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.HeadSidecarContainers != nil {
 		in, out := &in.HeadSidecarContainers, &out.HeadSidecarContainers
 		*out = make([]v1.Container, len(*in))
