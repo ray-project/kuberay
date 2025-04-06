@@ -30,7 +30,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
