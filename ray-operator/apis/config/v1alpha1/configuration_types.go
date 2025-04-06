@@ -48,7 +48,7 @@ type Configuration struct {
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
 	// PreStopCommand is the command to run when the Kubernetes Pod PreStop hook is called.
-	PreStopCommandListJson string `json:"preStopCommandListJson,omitempty"`
+	PreStopCommandList []string `json:"preStopCommandList,omitempty"`
 
 	// HeadSidecarContainers includes specification for a sidecar container
 	// to inject into every Head pod.

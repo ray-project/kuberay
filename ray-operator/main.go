@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -133,7 +134,11 @@ func main() {
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
-		config.PreStopCommandListJson = os.Getenv(utils.PRE_STOP_COMMAND_LIST_JSON)
+		preStopCommandListJson := os.Getenv(utils.PRE_STOP_COMMAND_LIST_JSON)
+		umarshalErr := json.Unmarshal([]byte(preStopCommandListJson), &config.PreStopCommandList)
+		if umarshalErr != nil {
+			exitOnError(umarshalErr, "Failed to json parse preStopCommand")
+		}
 	}
 
 	if config.EnableMetrics {
@@ -241,7 +246,7 @@ func main() {
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
-		PreStopCommandListJson:  config.PreStopCommandListJson,
+		PreStopCommandList:      config.PreStopCommandList,
 	}
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),

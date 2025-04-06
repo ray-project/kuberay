@@ -2,7 +2,6 @@ package ray
 
 import (
 	"context"
-	"encoding/json"
 	errstd "errors"
 	"fmt"
 	"os"
@@ -117,12 +116,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
-	logger := ctrl.LoggerFrom(ctx)
-	var preStopCommandList []string
-	umarshalErr := json.Unmarshal([]byte(options.PreStopCommandListJson), &preStopCommandList)
-	if umarshalErr != nil {
-		logger.Error(umarshalErr, "Failed to json parse preStopCommand")
-	}
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -133,7 +126,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		headSidecarContainers:      options.HeadSidecarContainers,
 		workerSidecarContainers:    options.WorkerSidecarContainers,
-		PreStopCommandList:         preStopCommandList,
+		PreStopCommandList:         options.PreStopCommandList,
 	}
 }
 
@@ -153,7 +146,7 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	PreStopCommandListJson  string
+	PreStopCommandList      []string
 	HeadSidecarContainers   []corev1.Container
 	WorkerSidecarContainers []corev1.Container
 }
