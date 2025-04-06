@@ -133,7 +133,7 @@ func main() {
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
-		config.PreStopCommand = os.Getenv(utils.PRE_STOP_COMMAND)
+		config.PreStopCommandListJson = os.Getenv(utils.PRE_STOP_COMMAND_LIST_JSON)
 	}
 
 	if config.EnableMetrics {
@@ -241,7 +241,7 @@ func main() {
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
-		PreStopCommand:          config.PreStopCommand,
+		PreStopCommandListJson:  config.PreStopCommandListJson,
 	}
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),

@@ -143,8 +143,8 @@ const (
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
-	// The command to run when the Kubernetes Pod PreStop hook is called.
-	PRE_STOP_COMMAND = "PRE_STOP_COMMAND"
+	// What to to run when the Kubernetes Pod PreStop hook is called.
+	PRE_STOP_COMMAND_LIST_JSON = "PRE_STOP_COMMAND_LIST_JSON"
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"

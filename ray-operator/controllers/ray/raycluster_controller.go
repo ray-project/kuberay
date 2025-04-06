@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"encoding/json"
 	errstd "errors"
 	"fmt"
 	"os"
@@ -116,6 +117,12 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
+	logger := ctrl.LoggerFrom(ctx)
+	var preStopCommandList []string
+	umarshalErr := json.Unmarshal([]byte(options.PreStopCommandListJson), &preStopCommandList)
+	if umarshalErr != nil {
+		logger.Error(umarshalErr, "Failed to json parse preStopCommand")
+	}
 	return &RayClusterReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -126,14 +133,14 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		headSidecarContainers:      options.HeadSidecarContainers,
 		workerSidecarContainers:    options.WorkerSidecarContainers,
-		PreStopCommand:             options.PreStopCommand,
+		PreStopCommandList:         preStopCommandList,
 	}
 }
 
 // RayClusterReconciler reconciles a RayCluster object
 type RayClusterReconciler struct {
 	client.Client
-	PreStopCommand             string
+	PreStopCommandList         []string
 	Scheme                     *k8sruntime.Scheme
 	Recorder                   record.EventRecorder
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
@@ -146,7 +153,7 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	PreStopCommand          string
+	PreStopCommandListJson  string
 	HeadSidecarContainers   []corev1.Container
 	WorkerSidecarContainers []corev1.Container
 }
@@ -1101,9 +1108,9 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
 	}
 	rayContainer := podConf.Spec.Containers[utils.RayContainerIndex]
-	if r.PreStopCommand != "" {
+	if r.PreStopCommandList != nil {
 		if rayContainer.Lifecycle == nil {
-			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommand)
+			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommandList)
 		} else {
 			logger.Info("Lifecycle already exists for ray head container, not overriding with lifecycle defined by PRE_STOP_COMMAND")
 		}
@@ -1137,9 +1144,9 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
 	}
 	rayContainer := podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
-	if r.PreStopCommand != "" {
+	if r.PreStopCommandList != nil {
 		if rayContainer.Lifecycle == nil {
-			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommand)
+			rayContainer.Lifecycle = createPreStopLifecycle(r.PreStopCommandList)
 		} else {
 			logger.Info("Lifecycle already exists for ray worker container, not overriding with lifecycle defined by PRE_STOP_COMMAND")
 		}
@@ -1154,11 +1161,11 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	return pod
 }
 
-func createPreStopLifecycle(preStopCommand string) *corev1.Lifecycle {
+func createPreStopLifecycle(preStopCommandList []string) *corev1.Lifecycle {
 	return &corev1.Lifecycle{
 		PreStop: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
-				Command: []string{"/bin/sh", "-c", preStopCommand},
+				Command: preStopCommandList,
 			},
 		},
 	}
