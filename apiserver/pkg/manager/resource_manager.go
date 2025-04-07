@@ -212,7 +212,7 @@ func (r *ResourceManager) GetJob(ctx context.Context, jobName string, namespace 
 	return getJobByName(ctx, client, jobName)
 }
 
-func (r *ResourceManager) ListJobs(ctx context.Context, namespace string) ([]*rayv1api.RayJob, error) {
+func (r *ResourceManager) ListJobs(ctx context.Context, namespace string, continueToken string, limit int64) ([]*rayv1api.RayJob, string, error) {
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			util.KubernetesManagedByLabelKey: util.ComponentName,
@@ -220,9 +220,11 @@ func (r *ResourceManager) ListJobs(ctx context.Context, namespace string) ([]*ra
 	}
 	rayJobList, err := r.getRayJobClient(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		Limit:         limit,
+		Continue:      continueToken,
 	})
 	if err != nil {
-		return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
+		return nil, "", util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace))
 	}
 
 	var result []*rayv1api.RayJob
@@ -231,7 +233,7 @@ func (r *ResourceManager) ListJobs(ctx context.Context, namespace string) ([]*ra
 		result = append(result, &rayJobList.Items[i])
 	}
 
-	return result, nil
+	return result, rayJobList.Continue, nil
 }
 
 func (r *ResourceManager) ListAllJobs(ctx context.Context) ([]*rayv1api.RayJob, error) {
