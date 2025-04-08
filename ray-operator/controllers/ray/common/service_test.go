@@ -189,43 +189,12 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 					ContainerPort: 1234,
 				},
 			},
-			expectResult: func() map[string]int32 {
-				ports := getDefaultPorts()
-				ports["random"] = 1234
-				return ports
-			}(),
-			expectError: false,
-		},
-		{
-			name: "A custom port is specified by the user.",
-			ports: []corev1.ContainerPort{
-				{
-					Name:          utils.ClientPortName,
-					ContainerPort: 12345,
-				},
+			expectResult: map[string]int32{
+				"random": 1234,
+				// metrics port will always be there
+				utils.MetricsPortName: utils.DefaultMetricsPort,
 			},
-			expectResult: func() map[string]int32 {
-				ports := getDefaultPorts()
-				ports[utils.ClientPortName] = 12345
-				return ports
-			}(),
 			expectError: false,
-		},
-		{
-			name: "A custom port with different name is specified by the user.",
-			ports: []corev1.ContainerPort{
-				{
-					Name:          "gcs",
-					ContainerPort: int32(utils.DefaultGcsServerPort),
-				},
-			},
-			expectResult: func() map[string]int32 {
-				ports := getDefaultPorts()
-				delete(ports, utils.GcsServerPortName)
-				ports["gcs"] = int32(utils.DefaultGcsServerPort)
-				return ports
-			}(),
-			expectError: true,
 		},
 	}
 	for _, testCase := range testCases {
@@ -359,8 +328,7 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			cluster := instanceWithWrongSvc.DeepCopy()
 			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
-			ports, err := getServicePorts(*cluster)
-			require.NoError(t, err)
+			ports := getServicePorts(*cluster)
 			if ports[utils.MetricsPortName] != testCase.expectResult {
 				t.Fatalf("Expected `%v` but got `%v`", testCase.expectResult, ports[utils.MetricsPortName])
 			}
@@ -676,15 +644,8 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 		},
 	}
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
-
-	// No error should be raised as default port value will be used
-	require.NoError(t, err)
-
-	ports := svc.Spec.Ports
-	// assert only serve port is set
-	assert.Len(t, ports, 1)
-	assert.Equal(t, utils.ServingPortName, ports[0].Name)
-	assert.Equal(t, utils.DefaultServingPort, int(ports[0].Port))
+	require.Error(t, err)
+	assert.Nil(t, svc)
 }
 
 func TestUserSpecifiedServeService(t *testing.T) {

@@ -27,10 +27,7 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) 
 		annotation[key] = value
 	}
 
-	servicePorts, err := getServicePorts(cluster)
-	if err != nil {
-		return nil, err
-	}
+	servicePorts := getServicePorts(cluster)
 	dashboardPort := utils.DefaultDashboardPort
 	if port, ok := servicePorts["dashboard"]; ok {
 		dashboardPort = int(port)

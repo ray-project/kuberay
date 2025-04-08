@@ -70,10 +70,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 
 	defaultAppProtocol := utils.DefaultServiceAppProtocol
 	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	portsInt, err := getServicePorts(cluster)
-	if err != nil {
-		return nil, err
-	}
+	portsInt := getServicePorts(cluster)
 	ports := []corev1.ServicePort{}
 	for name, port := range portsInt {
 		svcPort := corev1.ServicePort{Name: name, Port: port, AppProtocol: &defaultAppProtocol}
@@ -213,13 +210,13 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	}
 
 	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	portsInt, err := getServicePorts(rayCluster)
-	if err != nil {
-		return nil, err
+	portsInt := getServicePorts(rayCluster)
+	ports := []corev1.ServicePort{}
+	if _, defined := portsInt[utils.ServingPortName]; defined {
+		// Only include serve port
+		svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
+		ports = append(ports, svcPort)
 	}
-	svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
-	// Only include serve port
-	ports := []corev1.ServicePort{svcPort}
 
 	if isRayService {
 		// We are invoked from RayService
@@ -375,28 +372,20 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 }
 
 // getServicePorts will either user passing ports or default ports to create service.
-func getServicePorts(cluster rayv1.RayCluster) (map[string]int32, error) {
+func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 	ports := getPortsFromCluster(cluster)
 
-	defaultPorts := getDefaultPorts()
-	usedPorts := make(map[int32]bool) // Track assigned port values
-
-	for _, port := range ports {
-		usedPorts[port] = true
+	// Assign default ports
+	if len(ports) == 0 {
+		ports = getDefaultPorts()
 	}
 
-	for name, defaultPort := range defaultPorts {
-		if _, defined := ports[name]; !defined {
-			// Only assign defaultPort if the port is not already in use
-			if usedPorts[defaultPort] {
-				return nil, fmt.Errorf("Port %d is already in use with name %q", defaultPort, name)
-			}
-			ports[name] = defaultPort
-			usedPorts[defaultPort] = true // Mark this port as used
-		}
+	// check if metrics port is defined. If not, add default value for it.
+	if _, metricsDefined := ports[utils.MetricsPortName]; !metricsDefined {
+		ports[utils.MetricsPortName] = utils.DefaultMetricsPort
 	}
 
-	return ports, nil
+	return ports
 }
 
 // getPortsFromCluster get the ports from head container and directly map them in service
