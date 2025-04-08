@@ -186,3 +186,7 @@ env:
 # If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
 #   value: "false"
+# If this environment variable is set, its value will be injected into the PreStop hooks of the Ray
+# containers in all Ray Pods—including both head and worker Pods.
+# - name: PRE_STOP_COMMAND_LIST_JSON
+#   value: '["/bin/sh", "-c", "myscript.sh"]'
