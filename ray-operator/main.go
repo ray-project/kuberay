@@ -136,9 +136,9 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		preStopCommandListJson := os.Getenv(utils.PRE_STOP_COMMAND_LIST_JSON)
 		if preStopCommandListJson != "" {
-			umarshalErr := json.Unmarshal([]byte(preStopCommandListJson), &config.PreStopCommandList)
-			if umarshalErr != nil {
-				exitOnError(umarshalErr, "Failed to json parse preStopCommand")
+			unmarshalErr := json.Unmarshal([]byte(preStopCommandListJson), &config.PreStopCommandList)
+			if unmarshalErr != nil {
+				exitOnError(unmarshalErr, "Failed to parse the environment variable PRE_STOP_COMMAND_LIST_JSON as a JSON array of strings")
 			}
 		}
 	}
