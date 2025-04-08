@@ -344,6 +344,41 @@ func TestGetJobsInNamespace(t *testing.T) {
 	require.True(t, foundName)
 }
 
+func TestGetJobByPaginationInNamespace(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+	testJobs := []*api.CreateRayJobRequest{}
+	for i := 0; i < 2; i++ {
+		testJobs = append(testJobs,createTestJob(t, tCtx, tCtx.GetNextName()))
+	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 2; i++ {
+			tCtx.DeleteRayJobByName(t, testJobs[i].Job.Name)
+		}
+	})
+
+	continueToken := ""
+	for i := 0; i < 2; i++ {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+			Namespace: tCtx.GetNamespaceName(),
+			Limit:	1,
+			Continue: continueToken,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Len(t, response.Jobs, 1)
+		require.Equal(t, response.Jobs[0].Namespace, tCtx.GetNamespaceName())
+		continueToken = response.Continue
+	}
+}
+
 func TestGetJob(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -500,12 +535,12 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 	}
 }
 
-func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobRequest {
+func createTestJob(t *testing.T, tCtx *End2EndTestingContext, name ...string) *api.CreateRayJobRequest {
 	// create config map and register a cleanup hook upon success
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
+	}, name...)
 	t.Cleanup(func() {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
@@ -523,7 +558,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 		MountPath:  "/home/ray/samples",
 		VolumeType: api.Volume_CONFIGMAP,
 		Name:       "code-sample",
-		Source:     tCtx.GetConfigMapName(),
+		Source:     configMapName,
 		Items:      items,
 	}
 
