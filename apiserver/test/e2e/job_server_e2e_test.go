@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -354,7 +355,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	})
 	testJobs := []*api.CreateRayJobRequest{}
 	for i := 0; i < 2; i++ {
-		testJobs = append(testJobs,createTestJob(t, tCtx, tCtx.GetNextName()))
+		testJobs = append(testJobs,createTestJob(t, tCtx, fmt.Sprintf("job%d", i)))
 	}
 
 	t.Cleanup(func() {
@@ -375,6 +376,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 		require.NotNil(t, response, "A response is expected")
 		require.Len(t, response.Jobs, 1)
 		require.Equal(t, response.Jobs[0].Namespace, tCtx.GetNamespaceName())
+		require.Equal(t, response.Jobs[0].Name, testJobs[i].Job.Name)
 		continueToken = response.Continue
 	}
 }
@@ -562,9 +564,14 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, name ...string) *a
 		Items:      items,
 	}
 
+	jobName := tCtx.GetNextName()
+	if len(name) > 0 {
+		jobName = name[0]
+	}
+
 	testJobRequest := &api.CreateRayJobRequest{
 		Job: &api.RayJob{
-			Name:                     tCtx.GetNextName(),
+			Name:                     jobName,
 			Namespace:                tCtx.GetNamespaceName(),
 			User:                     "natacha",
 			Version:                  tCtx.GetRayVersion(),
