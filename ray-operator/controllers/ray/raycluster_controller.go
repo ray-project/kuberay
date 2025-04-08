@@ -737,20 +737,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
 
-		if r.EnableMetrics {
-			creatorCRDType := getCreatorCRDType(*instance)
-			// Increment the counter for ray_clusters_created_total metric based on the creator CRD type.
-			if creatorCRDType == utils.RayClusterCRD {
-				metrics.CreatedRayClustersCounterInc(instance.Namespace, false, false)
-			} else if creatorCRDType == utils.RayJobCRD {
-				metrics.CreatedRayClustersCounterInc(instance.Namespace, true, false)
-			} else if creatorCRDType == utils.RayServiceCRD {
-				metrics.CreatedRayClustersCounterInc(instance.Namespace, false, true)
-			}
-		}
-
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
+		}
+
+		if r.EnableMetrics {
+			emitRayClusterMetrics("ray_clusters_created_total", instance.Namespace, *instance)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
@@ -915,6 +907,19 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 	return nil
+}
+
+// emitRayClusterMetrics emits metrics based on the specified metric name
+func emitRayClusterMetrics(metricName string, namespace string, instance rayv1.RayCluster) {
+	switch metricName {
+	case "ray_clusters_created_total":
+		// Increment the counter for created Ray clusters based on the creator CRD type
+		creatorCRDType := getCreatorCRDType(instance)
+		isFromRayJob := creatorCRDType == utils.RayJobCRD
+		isFromRayService := creatorCRDType == utils.RayServiceCRD
+		metrics.CreatedRayClustersCounterInc(namespace, isFromRayJob, isFromRayService)
+	default:
+	}
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason

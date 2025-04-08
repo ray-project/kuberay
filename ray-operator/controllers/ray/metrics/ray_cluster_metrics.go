@@ -4,11 +4,10 @@ import (
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-var rayClustersCreatedCounter = promauto.NewCounterVec(
+var rayClustersCreatedCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "ray_clusters_created_total",
 		Help: "The total number of RayClusters created",
