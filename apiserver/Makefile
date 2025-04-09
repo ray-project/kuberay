@@ -75,8 +75,7 @@ imports: goimports ## Run goimports against code.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
-	#$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019' --no-config
-	echo "pass"
+	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019' --no-config
 
 build: fmt vet fumpt imports lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -159,7 +158,7 @@ load-ray-test-image: ## Load the ray test images
 	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
 
 ##@ Docker Build
-docker-image: ## Build image for the api server.
+docker-image: test ## Build image for the api server.
 	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
 docker-push: ## Push image for the api server.
