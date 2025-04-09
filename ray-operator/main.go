@@ -28,12 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+	kuberaymetrics "github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
@@ -135,10 +136,6 @@ func main() {
 		config.EnableMetrics = enableMetrics
 	}
 
-	if config.EnableMetrics {
-		metrics.Register()
-	}
-
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
 	exitOnError(err, "failed to create log encoder for stdout")
 	opts.Encoder = stdoutEncoder
@@ -237,11 +234,18 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:   config.HeadSidecarContainers,
-		WorkerSidecarContainers: config.WorkerSidecarContainers,
-		EnableMetrics:           config.EnableMetrics,
+	var rayClusterMetricCollector *kuberaymetrics.RayClusterMetricCollector
+	if config.EnableMetrics {
+		rayClusterMetricCollector = kuberaymetrics.NewRayClusterMetricCollector()
+		metrics.Registry.MustRegister(rayClusterMetricCollector)
 	}
+
+	rayClusterOptions := ray.RayClusterReconcilerOptions{
+		HeadSidecarContainers:     config.HeadSidecarContainers,
+		WorkerSidecarContainers:   config.WorkerSidecarContainers,
+		RayClusterMetricCollector: rayClusterMetricCollector,
+	}
+
 	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")

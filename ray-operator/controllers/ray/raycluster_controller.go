@@ -137,17 +137,17 @@ type RayClusterReconciler struct {
 	Recorder                   record.EventRecorder
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
+	rayClusterMetricCollector  *metrics.RayClusterMetricCollector
 
 	options RayClusterReconcilerOptions
 
-	IsOpenShift   bool
-	EnableMetrics bool
+	IsOpenShift bool
 }
 
 type RayClusterReconcilerOptions struct {
-	HeadSidecarContainers   []corev1.Container
-	WorkerSidecarContainers []corev1.Container
-	EnableMetrics           bool
+	RayClusterMetricCollector *metrics.RayClusterMetricCollector
+	HeadSidecarContainers     []corev1.Container
+	WorkerSidecarContainers   []corev1.Container
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -741,8 +741,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 
-		if r.EnableMetrics {
-			emitRayClusterMetrics("ray_clusters_created_total", instance.Namespace, *instance)
+		if r.rayClusterMetricCollector != nil {
+			creatorCRDType := getCreatorCRDType(*instance)
+			isFromRayJob := creatorCRDType == utils.RayJobCRD
+			isFromRayService := creatorCRDType == utils.RayServiceCRD
+			r.rayClusterMetricCollector.IncRayClustersCreatedCounter(instance.Namespace, isFromRayJob, isFromRayService)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
@@ -907,19 +910,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 	return nil
-}
-
-// emitRayClusterMetrics emits metrics based on the specified metric name
-func emitRayClusterMetrics(metricName string, namespace string, instance rayv1.RayCluster) {
-	switch metricName {
-	case "ray_clusters_created_total":
-		// Increment the counter for created Ray clusters based on the creator CRD type
-		creatorCRDType := getCreatorCRDType(instance)
-		isFromRayJob := creatorCRDType == utils.RayJobCRD
-		isFromRayService := creatorCRDType == utils.RayServiceCRD
-		metrics.CreatedRayClustersCounterInc(namespace, isFromRayJob, isFromRayService)
-	default:
-	}
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
