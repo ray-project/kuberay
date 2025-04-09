@@ -579,9 +579,9 @@ type ListAllClustersRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	// A continue token to request the next page of results. The token is acquired
-	// from the previous ListCluster call or can be omitted when fetching the first page.
+	// from the previous ListAllClusters call or can be omitted when fetching the first page.
 	Continue string `protobuf:"bytes,1,opt,name=continue,proto3" json:"continue,omitempty"`
-	// The maximum number of clusters to return for the requested page.
+	// The maximum number of clusters to return per page across all namespaces.
 	// For backward compatibility, the default value is 0 which returns all clusters without pagination.
 	Limit int64 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 }

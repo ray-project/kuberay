@@ -45,14 +45,14 @@
         "parameters": [
           {
             "name": "continue",
-            "description": "A continue token to request the next page of results. The token is acquired\nfrom the previous ListCluster call or can be omitted when fetching the first page.",
+            "description": "A continue token to request the next page of results. The token is acquired\nfrom the previous ListAllClusters call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
           },
           {
             "name": "limit",
-            "description": "The maximum number of clusters to return for the requested page.\nFor backward compatibility, the default value is 0 which returns all clusters without pagination.",
+            "description": "The maximum number of clusters to return per page across all namespaces.\nFor backward compatibility, the default value is 0 which returns all clusters without pagination.",
             "in": "query",
             "required": false,
             "type": "string",
