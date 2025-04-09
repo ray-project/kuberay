@@ -517,13 +517,11 @@ func TestDeleteCluster(t *testing.T) {
 	}
 }
 
-// TestGetAllClusters tests gets all Ray clusters from k8s cluster
-func TestGetAllClusters(t *testing.T) {
-	numberOfNamespaces := 3
+func createClustersInNamespaces(t *testing.T, numberOfNamespaces int) []*End2EndTestingContext {
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
 	var wg sync.WaitGroup
 	wg.Add(numberOfNamespaces)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < numberOfNamespaces; i++ {
 		go func(i int) {
 			defer wg.Done()
 			tCtx, err := NewEnd2EndTestingContext(t)
@@ -545,7 +543,13 @@ func TestGetAllClusters(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	return tCtxs
+}
 
+// TestGetAllClusters tests gets all Ray clusters from k8s cluster
+func TestGetAllClusters(t *testing.T) {
+	numberOfNamespaces := 3
+	tCtxs := createClustersInNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
 	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{})
 	require.NoError(t, err, "No error expected")
@@ -571,32 +575,7 @@ func TestGetAllClusters(t *testing.T) {
 // TestGetAllClustersByPagination tests gets all Ray clusters from k8s cluster with pagination
 func TestGetAllClustersByPagination(t *testing.T) {
 	numberOfNamespaces := 3
-	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	var wg sync.WaitGroup
-	wg.Add(numberOfNamespaces)
-	for i := 0; i < 3; i++ {
-		go func(i int) {
-			defer wg.Done()
-			tCtx, err := NewEnd2EndTestingContext(t)
-			require.NoError(t, err, "No error expected when creating testing context")
-
-			tCtx.CreateComputeTemplate(t)
-			t.Cleanup(func() {
-				tCtx.DeleteComputeTemplate(t)
-			})
-			actualCluster, confiMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
-				"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
-				"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-			})
-			t.Cleanup(func() {
-				tCtx.DeleteRayCluster(t, actualCluster.Name)
-				tCtx.DeleteConfigMap(t, confiMapName)
-			})
-			tCtxs[i] = tCtx
-		}(i)
-	}
-	wg.Wait()
-
+	tCtxs := createClustersInNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
 	gotClusters := make([]bool, numberOfNamespaces)
 	continueToken := ""
@@ -619,6 +598,34 @@ func TestGetAllClustersByPagination(t *testing.T) {
 			}
 		}
 		continueToken = response.Continue
+	}
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotClusters[i] {
+			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
+		}
+	}
+}
+
+// TestGetAllClustersByPaginationWithAllResults tests gets all Ray clusters from k8s cluster with pagination returning all results
+func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
+	numberOfNamespaces := 3
+	tCtxs := createClustersInNamespaces(t, numberOfNamespaces)
+	tCtx := tCtxs[0]
+	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+		Limit: 10,
+	})
+	require.NoError(t, err, "No error expected")
+	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.NotNil(t, response, "A response is expected")
+	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
+	gotClusters := make([]bool, numberOfNamespaces)
+	for _, cluster := range response.Clusters {
+		for i := 0; i < numberOfNamespaces; i++ {
+			if tCtxs[i].GetRayClusterName() == cluster.Name && tCtxs[i].GetNamespaceName() == cluster.Namespace {
+				gotClusters[i] = true
+				break
+			}
+		}
 	}
 	for i := 0; i < numberOfNamespaces; i++ {
 		if !gotClusters[i] {
