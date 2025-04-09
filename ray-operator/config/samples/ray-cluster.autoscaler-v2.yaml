@@ -14,6 +14,10 @@ spec:
     # Optionally specify the Autoscaler container's securityContext.
     securityContext: {}
     env: []
+    # AUTOSCALER_UPDATE_INTERVAL_S is used to control how often the Ray head queries the Kubernetes API
+    # to determine whether the cluster needs to scale up or down. The default value is 5 seconds.
+    # - name: AUTOSCALER_UPDATE_INTERVAL_S
+    #   value: "5"
     envFrom: []
     resources:
       limits:
