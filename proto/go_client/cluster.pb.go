@@ -640,6 +640,7 @@ type ListAllClustersResponse struct {
 	// A list of clusters returned.
 	Clusters []*Cluster `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
 	// The continue token for the next page of clusters.
+	// If there are no more clusters, this field will be empty.
 	Continue string `protobuf:"bytes,2,opt,name=continue,proto3" json:"continue,omitempty"`
 }
 

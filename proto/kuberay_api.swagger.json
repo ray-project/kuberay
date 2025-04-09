@@ -1388,7 +1388,7 @@
         },
         "continue": {
           "type": "string",
-          "description": "The continue token for the next page of clusters.",
+          "description": "The continue token for the next page of clusters.\nIf there are no more clusters, this field will be empty.",
           "readOnly": true
         }
       }

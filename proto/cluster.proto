@@ -109,6 +109,7 @@ message ListAllClustersResponse {
   repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
   // The continue token for the next page of clusters.
+  // If there are no more clusters, this field will be empty.
   string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
