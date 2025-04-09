@@ -556,6 +556,7 @@ func TestGetAllClusters(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
+	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
 		for i := 0; i < numberOfNamespaces; i++ {
@@ -580,15 +581,16 @@ func TestGetAllClustersByPagination(t *testing.T) {
 	gotClusters := make([]bool, numberOfNamespaces)
 	continueToken := ""
 	for i := 0; i < numberOfNamespaces; i++ {
+		limit := 1
 		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
-			Limit:    1,
+			Limit:    int64(limit),
 			Continue: continueToken,
 		})
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Clusters, "A list of clusters is required")
-
+		require.Len(t, response.Clusters, limit, "Number of clusters returned is not as expected")
 		for _, cluster := range response.Clusters {
 			for i := 0; i < numberOfNamespaces; i++ {
 				if tCtxs[i].GetRayClusterName() == cluster.Name && tCtxs[i].GetNamespaceName() == cluster.Namespace {
@@ -618,6 +620,7 @@ func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
+	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
 		for i := 0; i < numberOfNamespaces; i++ {
