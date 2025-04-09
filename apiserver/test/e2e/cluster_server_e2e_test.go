@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -516,38 +517,134 @@ func TestDeleteCluster(t *testing.T) {
 	}
 }
 
+func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*End2EndTestingContext {
+	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
+	var wg sync.WaitGroup
+	wg.Add(numberOfNamespaces)
+	for i := 0; i < numberOfNamespaces; i++ {
+		go func(i int) {
+			defer wg.Done()
+			tCtx, err := NewEnd2EndTestingContext(t)
+			assert.NoError(t, err, "No error expected when creating testing context")
+
+			tCtx.CreateComputeTemplate(t)
+			t.Cleanup(func() {
+				tCtx.DeleteComputeTemplate(t)
+			})
+			actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+				"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+				"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+			})
+			t.Cleanup(func() {
+				tCtx.DeleteRayCluster(t, actualCluster.Name)
+				tCtx.DeleteConfigMap(t, configMapName)
+			})
+			tCtxs[i] = tCtx
+		}(i)
+	}
+	wg.Wait()
+	return tCtxs
+}
+
+func isMatchingCluster(tCtx *End2EndTestingContext, cluster *api.Cluster) bool {
+	return tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace
+}
+
 // TestGetAllClusters tests gets all Ray clusters from k8s cluster
 func TestGetAllClusters(t *testing.T) {
-	tCtx, err := NewEnd2EndTestingContext(t)
-	require.NoError(t, err, "No error expected when creating testing context")
-
-	tCtx.CreateComputeTemplate(t)
-	t.Cleanup(func() {
-		tCtx.DeleteComputeTemplate(t)
-	})
-	actualCluster, confiMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
-		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
-		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
-	t.Cleanup(func() {
-		tCtx.DeleteRayCluster(t, actualCluster.Name)
-		tCtx.DeleteConfigMap(t, confiMapName)
-	})
-
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters()
+	numberOfNamespaces := 3
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtx := tCtxs[0]
+	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{})
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
+	require.Empty(t, response.Continue, "No continue token is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
-	gotCluster := false
+	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
+	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
-		if tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace {
-			gotCluster = true
-			break
+		for i := 0; i < numberOfNamespaces; i++ {
+			if isMatchingCluster(tCtxs[i], cluster) {
+				gotClusters[i] = true
+				break
+			}
 		}
 	}
-	if !gotCluster {
-		t.Error("Getting all clusters did not return expected one")
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotClusters[i] {
+			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
+		}
+	}
+}
+
+// TestGetAllClustersByPagination tests gets all Ray clusters from k8s cluster with pagination
+func TestGetAllClustersByPagination(t *testing.T) {
+	numberOfNamespaces := 3
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtx := tCtxs[0]
+	gotClusters := make([]bool, numberOfNamespaces)
+	continueToken := ""
+	for i := 0; i < numberOfNamespaces; i++ {
+		limit := 1
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+			Limit:    int64(limit),
+			Continue: continueToken,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		if i != numberOfNamespaces-1 {
+			require.NotEmpty(t, response.Continue, "A continue token is expected")
+		} else {
+			require.Empty(t, response.Continue, "No continue token is expected")
+		}
+		require.NotEmpty(t, response.Clusters, "A list of clusters is required")
+		require.Len(t, response.Clusters, limit, "Number of clusters returned is not as expected")
+		for _, cluster := range response.Clusters {
+			for i := 0; i < numberOfNamespaces; i++ {
+				if isMatchingCluster(tCtxs[i], cluster) {
+					gotClusters[i] = true
+					break
+				}
+			}
+		}
+		continueToken = response.Continue
+	}
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotClusters[i] {
+			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
+		}
+	}
+}
+
+// TestGetAllClustersByPaginationWithAllResults tests gets all Ray clusters from k8s cluster with pagination returning all results
+func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
+	numberOfNamespaces := 3
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtx := tCtxs[0]
+	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+		Limit: 10,
+	})
+	require.NoError(t, err, "No error expected")
+	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.NotNil(t, response, "A response is expected")
+	require.Empty(t, response.Continue, "No continue token is expected")
+	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
+	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
+	gotClusters := make([]bool, numberOfNamespaces)
+	for _, cluster := range response.Clusters {
+		for i := 0; i < numberOfNamespaces; i++ {
+			if isMatchingCluster(tCtxs[i], cluster) {
+				gotClusters[i] = true
+				break
+			}
+		}
+	}
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotClusters[i] {
+			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
+		}
 	}
 }
 

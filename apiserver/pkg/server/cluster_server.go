@@ -97,7 +97,8 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 // Finds all Clusters in all namespaces.
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
-	clusters, err := s.resourceManager.ListAllClusters(ctx)
+	// Leave the namespace empty to list all clusters in all namespaces.
+	clusters, continueToken, err := s.resourceManager.ListClusters(ctx, /*namespace=*/ "", request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
 	}
@@ -113,6 +114,7 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 
 	return &api.ListAllClustersResponse{
 		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Continue: continueToken,
 	}, nil
 }
 
