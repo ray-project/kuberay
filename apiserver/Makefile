@@ -237,7 +237,7 @@ $(GOFUMPT): $(REPO_ROOT_BIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci_lint locally if necessary.
 $(GOLANGCI_LINT): $(REPO_ROOT_BIN)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION)
+	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
 
 .PHONY: kind
 kind: $(KIND) ## Download kind locally if necessary.
