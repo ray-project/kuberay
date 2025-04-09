@@ -96,21 +96,20 @@ message ListClustersResponse {
 }
 
 message ListAllClustersRequest {
-  // A page token to request the next page of results. The token is acquried
-  // from the nextPageToken field of the response from the previous
-  // ListCluster call or can be omitted when fetching the first page.
-  // TODO: support this later
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListCluster call or can be omitted when fetching the first page.
+  string continue = 1;
+  // The maximum number of clusters to return for the requested page.
+  // For backward compatibility, the default value is 0 which returns all clusters without pagination.
+  int64 limit = 2;
 }
 
 message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
+  // The continue token for the next page of clusters.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteClusterRequest {

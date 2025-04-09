@@ -239,12 +239,17 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 }
 
 // ListAllClusters finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
-func (krc *KuberayAPIServerClient) ListAllClusters() (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
+func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/clusters"
 	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
+
+	q := httpRequest.URL.Query()
+	q.Set("limit", strconv.FormatInt(request.Limit, 10))
+	q.Set("continue", request.Continue)
+	httpRequest.URL.RawQuery = q.Encode()
 
 	httpRequest.Header.Add("Accept", "application/json")
 

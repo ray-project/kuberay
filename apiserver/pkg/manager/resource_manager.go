@@ -165,34 +165,6 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string, co
 	return result, rayClusterList.Continue, nil
 }
 
-func (r *ResourceManager) ListAllClusters(ctx context.Context) ([]*rayv1api.RayCluster, error) {
-	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
-	}
-
-	var result []*rayv1api.RayCluster
-	labelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			util.KubernetesManagedByLabelKey: util.ComponentName,
-		},
-	}
-	for _, namespace := range namespaces.Items {
-		rayClusterList, err := r.getRayClusterClient(namespace.Name).List(ctx, metav1.ListOptions{
-			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
-		})
-		if err != nil {
-			return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace.Name))
-		}
-
-		length := len(rayClusterList.Items)
-		for i := 0; i < length; i++ {
-			result = append(result, &rayClusterList.Items[i])
-		}
-	}
-	return result, nil
-}
-
 func (r *ResourceManager) DeleteCluster(ctx context.Context, clusterName string, namespace string) error {
 	client := r.getRayClusterClient(namespace)
 	cluster, err := getClusterByName(ctx, client, clusterName)
