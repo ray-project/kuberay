@@ -77,7 +77,7 @@ lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
 	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019' --no-config
 
-build: fmt vet fumpt imports lint ## Build api server binary.
+build: fmt vet fumpt imports ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
@@ -90,7 +90,7 @@ build-swagger: go-bindata
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports lint  ## Run all unit tests.
+test: fmt vet fumpt imports ## Run all unit tests.
 	go test ./pkg/... ./cmd/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
 
 .PHONY: e2e-test
