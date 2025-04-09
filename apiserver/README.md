@@ -400,7 +400,8 @@ Examples: (please make sure that template `default-template` is created before r
   }'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -474,6 +475,8 @@ Examples: (please make sure that template `default-template` is created before r
   }
   ```
 
+</details>
+
 #### List all clusters in a given namespace
 
 ```text
@@ -490,7 +493,8 @@ Examples:
     -H 'accept: application/json'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -607,6 +611,8 @@ Examples:
     ]
   }
   ```
+
+</details>
 
 #### List all clusters in all namespaces
 
@@ -624,7 +630,8 @@ Examples:
     -H 'accept: application/json'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -741,6 +748,8 @@ Examples:
     ]
   }
   ```
+
+</details>
 
 #### Get cluster by its name and namespace
 
@@ -758,7 +767,8 @@ Examples:
     -H 'accept: application/json'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -875,6 +885,8 @@ Examples:
     ]
   }
   ```
+
+</details>
 
 #### Delete cluster by its name and namespace
 
@@ -947,7 +959,8 @@ Examples:
     }'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -981,6 +994,8 @@ Examples:
     "createdAt": "2023-09-25T11:36:02Z"
   }
   ```
+
+</details>
 
 The above example creates a new Ray cluster, executes a job on it and optionally deletes a cluster. As an alternative, the same command allows creating a new job on the existing cluster by referencing it in the payload.
 
@@ -1044,7 +1059,8 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 }'
 ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
 ```json
 {
@@ -1110,6 +1126,8 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
    "createdAt":"2023-10-18T08:47:48Z"
 }
 ```
+
+</details>
 
 Once the cluster is created, we can create a job to run on it.
 
@@ -1258,7 +1276,8 @@ Examples:
   -H 'accept: application/json'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -1300,6 +1319,8 @@ Examples:
     ]
   }
   ```
+
+</details>
 
 #### List all jobs in all namespaces
 
@@ -1317,7 +1338,8 @@ Examples:
   -H 'accept: application/json'
   ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -1360,6 +1382,8 @@ Examples:
   }
   ```
 
+</details>
+
 #### Get job by its name and namespace
 
 ```text
@@ -1376,7 +1400,8 @@ Examples:
   -H 'accept: application/json'
   ```
 
-* Response:
+<details>
+  <summary>* Response</summary>
 
   ```json
   {
@@ -1414,6 +1439,8 @@ Examples:
     "message": "Job finished successfully."
   }
   ```
+
+</details>
 
 #### Delete job by its name and namespace
 
@@ -1488,7 +1515,8 @@ Examples:
   }'
 ```
 
-* Response
+<details>
+  <summary>* Response</summary>
 
 ```json
 {
@@ -1634,6 +1662,8 @@ Examples:
 }
 ```
 
+</details>
+
 #### List all services in a given namespace
 
 ```text
@@ -1650,7 +1680,8 @@ Examples
   -H 'accept: application/json'
   ```
 
-* Response:
+<details>
+  <summary>* Response</summary>
 
 ```json
   {
@@ -1909,6 +1940,8 @@ Examples
 }
 ```
 
+</details>
+
 #### List all services in all namespaces
 
 ```text
@@ -1925,7 +1958,8 @@ Examples:
   -H 'accept: application/json'
   ```
 
-* Response:
+<details>
+  <summary>* Response</summary>
 
 ```json
 {
@@ -2184,6 +2218,8 @@ Examples:
 }
 ```
 
+</details>
+
 #### Get service by its name and namespace
 
 ```text
@@ -2200,7 +2236,8 @@ Examples:
     -H 'accept: application/json'
   ```
 
-* Response:
+<details>
+  <summary>* Response</summary>
 
 ```json
 {
@@ -2454,6 +2491,8 @@ Examples:
    "deleteAt":"1969-12-31T23:59:59Z"
 }
 ```
+
+</details>
 
 #### Delete service by its name and namespace
 
