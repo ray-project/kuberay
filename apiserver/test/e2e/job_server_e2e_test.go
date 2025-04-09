@@ -355,7 +355,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	})
 	testJobs := []*api.CreateRayJobRequest{}
 	for i := 0; i < 2; i++ {
-		testJobs = append(testJobs,createTestJob(t, tCtx, fmt.Sprintf("job%d", i)))
+		testJobs = append(testJobs, createTestJob(t, tCtx, fmt.Sprintf("job%d", i)))
 	}
 
 	t.Cleanup(func() {
@@ -368,8 +368,8 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
-			Limit:	1,
-			Continue: continueToken,
+			Limit:     1,
+			Continue:  continueToken,
 		})
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
