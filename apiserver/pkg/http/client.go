@@ -9,8 +9,10 @@ import (
 	"strconv"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
+
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	klog "k8s.io/klog/v2"
 )
 
 type KuberayAPIServerClient struct {
@@ -608,7 +610,11 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			klog.Errorf("Failed to close http response body because %+v", closeErr)
+		}
+	}()
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read response body bytes: %w", err)
