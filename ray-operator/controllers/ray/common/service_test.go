@@ -213,9 +213,7 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 					svcPorts[port.Name] = port.Port
 				}
 
-				for name, port := range testCase.expectResult {
-					assert.Equal(t, port, svcPorts[name])
-				}
+				assert.Equal(t, testCase.expectResult, svcPorts)
 			}
 		})
 	}
