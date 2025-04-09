@@ -546,6 +546,10 @@ func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*E
 	return tCtxs
 }
 
+func isMatchingCluster(tCtx *End2EndTestingContext, cluster *api.Cluster) bool {
+	return tCtx.GetRayClusterName() == cluster.Name && tCtx.GetNamespaceName() == cluster.Namespace
+}
+
 // TestGetAllClusters tests gets all Ray clusters from k8s cluster
 func TestGetAllClusters(t *testing.T) {
 	numberOfNamespaces := 3
@@ -555,12 +559,13 @@ func TestGetAllClusters(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
+	require.Empty(t, response.Continue, "No continue token is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
 	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
 		for i := 0; i < numberOfNamespaces; i++ {
-			if tCtxs[i].GetRayClusterName() == cluster.Name && tCtxs[i].GetNamespaceName() == cluster.Namespace {
+			if isMatchingCluster(tCtxs[i], cluster) {
 				gotClusters[i] = true
 				break
 			}
@@ -589,11 +594,16 @@ func TestGetAllClustersByPagination(t *testing.T) {
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
+		if i != numberOfNamespaces-1 {
+			require.NotEmpty(t, response.Continue, "A continue token is expected")
+		} else {
+			require.Empty(t, response.Continue, "No continue token is expected")
+		}
 		require.NotEmpty(t, response.Clusters, "A list of clusters is required")
 		require.Len(t, response.Clusters, limit, "Number of clusters returned is not as expected")
 		for _, cluster := range response.Clusters {
 			for i := 0; i < numberOfNamespaces; i++ {
-				if tCtxs[i].GetRayClusterName() == cluster.Name && tCtxs[i].GetNamespaceName() == cluster.Namespace {
+				if isMatchingCluster(tCtxs[i], cluster) {
 					gotClusters[i] = true
 					break
 				}
@@ -619,12 +629,13 @@ func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
+	require.Empty(t, response.Continue, "No continue token is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
 	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
 		for i := 0; i < numberOfNamespaces; i++ {
-			if tCtxs[i].GetRayClusterName() == cluster.Name && tCtxs[i].GetNamespaceName() == cluster.Namespace {
+			if isMatchingCluster(tCtxs[i], cluster) {
 				gotClusters[i] = true
 				break
 			}
