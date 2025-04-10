@@ -933,7 +933,7 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 			evCount := 0
 			for key, value := range autoscalerOptions.Envs.Values {
 				options.Env[evCount] = corev1.EnvVar{Name: key, Value: value}
-				evCount += 1
+				evCount++
 			}
 		}
 		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {

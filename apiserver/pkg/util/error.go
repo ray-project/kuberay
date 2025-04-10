@@ -95,12 +95,12 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(apiError.Code))
+				codes.Code(uint32(apiError.Code)))
 		}
 		return newUserError(
 			errors.Wrapf(err, internalMessage),
 			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-			codes.Code(apiError.Code))
+			codes.Code(uint32(apiError.Code)))
 	}
 
 	return newUserError(
@@ -115,9 +115,8 @@ func ExtractErrorForCLI(err error, isDebugMode bool) error {
 			return fmt.Errorf("%+w", userError.internalError)
 		}
 		return fmt.Errorf("%v", userError.externalMessage)
-	} else {
-		return err
-	}
+	} 
+	return err
 }
 
 func NewInternalServerError(err error, internalMessageFormat string,

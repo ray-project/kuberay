@@ -105,7 +105,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	}, nil
 }
 
-func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
+func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
 	services, err := s.resourceManager.ListAllServices(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
@@ -163,11 +163,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Service.ClusterSpec)
 }
 
 func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
@@ -194,9 +190,5 @@ func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Service.ClusterSpec)
 }

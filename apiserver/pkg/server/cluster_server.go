@@ -155,11 +155,7 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 		return util.NewInvalidInputError("User who create the cluster is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Cluster.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Cluster.ClusterSpec)
 }
 
 func NewClusterServer(resourceManager *manager.ResourceManager, options *ClusterServerOptions) *ClusterServer {

@@ -235,7 +235,7 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 	}
 	response := &api.ListClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, err
 	}
 	return response, nil, nil
 }
@@ -261,7 +261,7 @@ func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersR
 	}
 	response := &api.ListAllClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, err
 	}
 	return response, nil, nil
 }
