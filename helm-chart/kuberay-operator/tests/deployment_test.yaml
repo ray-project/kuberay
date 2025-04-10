@@ -1,0 +1,269 @@
+suite: Test Deployment
+
+templates:
+  - deployment.yaml
+
+release:
+  name: kuberay-operator
+  namespace: kuberay-system
+
+tests:
+  - it: Should create deployment
+    asserts:
+      - containsDocument:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: kuberay-operator
+          namespace: kuberay-system
+
+  - it: Should add deployment labels if `labels` is set
+    set:
+      labels:
+        key1: value1
+        key2: value2
+    asserts:
+      - equal:
+          path: metadata.labels.key1
+          value: value1
+      - equal:
+          path: metadata.labels.key2
+          value: value2
+
+  - it: Should add pod template labels if `labels` is set
+    set:
+      labels:
+        key1: value1
+        key2: value2
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels.key1
+          value: value1
+      - equal:
+          path: spec.template.metadata.labels.key2
+          value: value2
+
+  - it: Should add pod template annotations if `annotations` is set
+    set:
+      annotations:
+        key1: value1
+        key2: value2
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations.key1
+          value: value1
+      - equal:
+          path: spec.template.metadata.annotations.key2
+          value: value2
+
+  - it: Should use the specified image pull policy if `image.pullPolicy` is set
+    set:
+      image:
+        pullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[*].imagePullPolicy
+          value: Always
+
+  - it: Should use the specified image pull secrets if `imagePullsecrets` is set
+    set:
+      imagePullSecrets:
+        - name: test-secret1
+        - name: test-secret2
+    asserts:
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: test-secret1
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: test-secret2
+
+  - it: Should use the specified service account name if `serviceAccount.name` is set
+    set:
+      serviceAccount:
+        name: test-service-account
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: test-service-account
+
+  - it: Should use the specified pod security context if `podSecurityContext` is set
+    set:
+      podSecurityContext:
+        runAsUser: 1000
+        runAsGroup: 2000
+        fsGroup: 3000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 1000
+      - equal:
+          path: spec.template.spec.securityContext.runAsGroup
+          value: 2000
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 3000
+
+  - it: Should use the specified container security context if `securityContext` is set
+    set:
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+
+  - it: Should add environment variables if `env` is set
+    set:
+      env:
+        - name: KEY1
+          value: VALUE1
+        - name: KEY2
+          valueFrom:
+            configMapKeyRef:
+              name: test-configmap
+              key: TEST_KEY2
+              optional: false
+        - name: KEY3
+          valueFrom:
+            secretRef:
+              name: test-secret
+              key: TEST_KEY3
+              optional: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].env
+          content:
+            name: KEY1
+            value: VALUE1
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].env
+          content:
+            name: KEY2
+            valueFrom:
+              configMapKeyRef:
+                name: test-configmap
+                key: TEST_KEY2
+                optional: false
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].env
+          content:
+            name: KEY3
+            valueFrom:
+              secretRef:
+                name: test-secret
+                key: TEST_KEY3
+                optional: false
+
+  - it: Should add resources if `resources` is set
+    set:
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 250m
+        limits:
+          memory: 128Mi
+          cpu: 500m
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].resources
+          value:
+            requests:
+              memory: 64Mi
+              cpu: 250m
+            limits:
+              memory: 128Mi
+              cpu: 500m
+
+  - it: Should add nodeSelector if `nodeSelector` is set
+    set:
+      nodeSelector:
+        key1: value1
+        key2: value2
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.key1
+          value: value1
+      - equal:
+          path: spec.template.spec.nodeSelector.key2
+          value: value2
+
+  - it: Should add affinity if `affinity` is set
+    set:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - antarctica-east1
+                      - antarctica-west1
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: another-node-label-key
+                    operator: In
+                    values:
+                      - another-node-label-value
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity
+          value:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: topology.kubernetes.io/zone
+                        operator: In
+                        values:
+                          - antarctica-east1
+                          - antarctica-west1
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 1
+                  preference:
+                    matchExpressions:
+                      - key: another-node-label-key
+                        operator: In
+                        values:
+                          - another-node-label-value
+
+  - it: Should add tolerations if `tolerations` is set
+    set:
+      tolerations:
+        - key: key1
+          operator: Equal
+          value: value1
+          effect: NoSchedule
+        - key: key2
+          operator: Exists
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations
+          value:
+            - key: key1
+              operator: Equal
+              value: value1
+              effect: NoSchedule
+            - key: key2
+              operator: Exists
+              effect: NoSchedule
