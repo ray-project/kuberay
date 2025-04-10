@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -646,7 +647,8 @@ func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.S
 }
 
 func (krc *KuberayAPIServerClient) createHttpRequest(method string, endPoint string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, endPoint, body)
+	// TODO(hjiang): Figure out how to pass in context from callers.
+	req, err := http.NewRequestWithContext(context.TODO(), method, endPoint, body)
 	if err != nil {
 		return nil, err
 	}
