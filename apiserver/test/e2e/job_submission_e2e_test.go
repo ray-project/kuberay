@@ -73,9 +73,9 @@ func TestCreateJobSubmission(t *testing.T) {
 	}
 
 	// Create cluster
-	actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&clusterReq)
+	actualCluster, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&clusterReq)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 

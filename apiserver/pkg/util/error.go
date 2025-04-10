@@ -115,7 +115,7 @@ func ExtractErrorForCLI(err error, isDebugMode bool) error {
 			return fmt.Errorf("%+w", userError.internalError)
 		}
 		return fmt.Errorf("%v", userError.externalMessage)
-	} 
+	}
 	return err
 }
 
@@ -142,7 +142,7 @@ func NewNotFoundError(err error, externalMessageFormat string,
 func NewResourceNotFoundError(resourceType string, resourceName string) *UserError {
 	externalMessage := fmt.Sprintf("%s %s not found.", resourceType, resourceName)
 	return newUserError(
-		errors.New(fmt.Sprintf("ResourceNotFoundError: %v", externalMessage)),
+		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }

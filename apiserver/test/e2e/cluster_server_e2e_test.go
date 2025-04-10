@@ -433,7 +433,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualCluster, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateCluster(tc.Input)
+			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -504,7 +504,7 @@ func TestDeleteCluster(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualRPCStatus, err := tCtx.GetRayApiServerClient().DeleteCluster(tc.Input)
+			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -555,7 +555,7 @@ func TestGetAllClusters(t *testing.T) {
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{})
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{})
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
@@ -587,7 +587,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 	continueToken := ""
 	for i := 0; i < numberOfNamespaces; i++ {
 		limit := 1
-		response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 			Limit:    int64(limit),
 			Continue: continueToken,
 		})
@@ -623,7 +623,7 @@ func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 		Limit: 10,
 	})
 	require.NoError(t, err, "No error expected")
@@ -666,7 +666,7 @@ func TestGetClustersInNamespace(t *testing.T) {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListClusters(
 		&api.ListClustersRequest{
 			Namespace: tCtx.GetNamespaceName(),
 		})
@@ -711,7 +711,7 @@ func TestGetClustersByPaginationInNamespace(t *testing.T) {
 
 	continueToken := ""
 	for i := 1; i <= 2; i++ {
-		response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListClusters(
 			&api.ListClustersRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				Limit:     1,
@@ -788,7 +788,7 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualCluster, actualRPCStatus, err := tCtx.GetRayApiServerClient().GetCluster(tc.Input)
+			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")

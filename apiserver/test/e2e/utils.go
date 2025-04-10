@@ -43,8 +43,7 @@ func PrettyPrintResponseBody(body io.ReadCloser) (string, error) {
 		return "", err
 	}
 	var prettyJSON bytes.Buffer
-	error := json.Indent(&prettyJSON, inputBytez, "", "\t")
-	if error != nil {
+	if err := json.Indent(&prettyJSON, inputBytez, "", "\t"); err != nil {
 		return "", err
 	}
 	return prettyJSON.String(), nil
