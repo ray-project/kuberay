@@ -22,9 +22,9 @@ func NewRayJobServer(resourceManager *manager.ResourceManager, options *JobServe
 }
 
 type RayJobServer struct {
+	api.UnimplementedRayJobServiceServer
 	resourceManager *manager.ResourceManager
 	options         *JobServerOptions
-	api.UnimplementedRayJobServiceServer
 }
 
 // Creates a new Ray Job.
@@ -128,9 +128,5 @@ func ValidateCreateJobRequest(request *api.CreateRayJobRequest) error {
 		return nil
 	}
 
-	if err := ValidateClusterSpec(request.Job.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Job.ClusterSpec)
 }

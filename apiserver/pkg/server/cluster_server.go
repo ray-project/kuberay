@@ -19,9 +19,9 @@ type ClusterServerOptions struct {
 // implements `type ClusterServiceServer interface` in cluster_grpc.pb.go
 // ClusterServer is the server API for ClusterService service.
 type ClusterServer struct {
+	api.UnimplementedClusterServiceServer
 	resourceManager *manager.ResourceManager
 	options         *ClusterServerOptions
-	api.UnimplementedClusterServiceServer
 }
 
 // Creates a new Cluster.

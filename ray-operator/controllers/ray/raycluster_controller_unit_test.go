@@ -1600,7 +1600,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	cluster := rayv1.RayCluster{}
 	err := fakeClient.Get(ctx, namespacedName, &cluster)
 	require.NoError(t, err, "Fail to get RayCluster")
-	assert.Empty(t, cluster.Status.State, "Cluster state should be empty") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Empty(t, cluster.Status.State, "Cluster state should be empty")
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
@@ -1611,14 +1611,14 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 
 	state := rayv1.Ready
 	newTestRayCluster := testRayCluster.DeepCopy()
-	newTestRayCluster.Status.State = state //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	newTestRayCluster.Status.State = state
 	inconsistent, err := testRayClusterReconciler.updateRayClusterStatus(ctx, testRayCluster, newTestRayCluster)
 	require.NoError(t, err, "Fail to update cluster state")
 	assert.True(t, inconsistent)
 
 	err = fakeClient.Get(ctx, namespacedName, &cluster)
 	require.NoError(t, err, "Fail to get RayCluster after updating state")
-	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated") //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated")
 }
 
 func TestInconsistentRayClusterStatus(t *testing.T) {
@@ -1668,7 +1668,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 		{
 			name: "State is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.State = rayv1.Suspended //nolint:staticcheck // Still need to check State even though it is deprecated, delete this no lint after this field is removed.
+				newStatus.State = rayv1.Suspended
 			},
 			expectResult: true,
 		},
@@ -1927,7 +1927,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.NotEqual(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState("")) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, newInstance.Status.State, rayv1.ClusterState(""))
 	assert.Empty(t, newInstance.Status.Reason)
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 }
@@ -1995,7 +1995,7 @@ func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	assert.Zero(t, newInstance.Status.MaxWorkerReplicas)
 	assert.Zero(t, newInstance.Status.DesiredCPU)
 	assert.Zero(t, newInstance.Status.DesiredMemory)
-	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 }
 
@@ -2069,7 +2069,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	// Note that even if there are DesiredWorkerReplicas ready, we don't mark CR to be Ready state due to the reconcile error.
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, rayv1.ClusterState(""), newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, rayv1.ClusterState(""), newInstance.Status.State)
 	assert.Empty(t, newInstance.Status.Reason)
 	assert.Nil(t, newInstance.Status.StateTransitionTimes)
 
@@ -2078,7 +2078,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State)
 	assert.Empty(t, newInstance.Status.Reason)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
@@ -2089,7 +2089,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, newInstance.Status.DesiredWorkerReplicas)
 	assert.Equal(t, newInstance.Status.DesiredWorkerReplicas, newInstance.Status.ReadyWorkerReplicas)
-	assert.Equal(t, rayv1.Ready, newInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State)
 	assert.Empty(t, newInstance.Status.Reason)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes)
 	assert.NotNil(t, newInstance.Status.StateTransitionTimes[rayv1.Ready])
@@ -2236,7 +2236,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	}
 
 	preUpdateTime := metav1.Now()
-	testRayCluster.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	testRayCluster.Status.State = rayv1.Ready
 	testRayCluster.Status.StateTransitionTimes = map[rayv1.ClusterState]*metav1.Time{rayv1.Ready: &preUpdateTime}
 	newInstance, err := r.calculateStatus(ctx, testRayCluster, nil)
 	require.NoError(t, err)

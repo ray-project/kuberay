@@ -66,9 +66,9 @@ var _ = Context("RayJob with suspend operation", func() {
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
 			// The actual cluster instance and underlying resources SHOULD be created when suspend == false
 			Eventually(
-				// k8sClient client does not throw error if cluster IS found
+
 				getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
 		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
@@ -98,7 +98,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			// The underlying Kubernetes Job should be created when the RayJob is created
 			Eventually(
 				getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Expected Kubernetes job to be present")
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Expected Kubernetes job to be present")
 		})
 	})
 

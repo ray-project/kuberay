@@ -605,5 +605,5 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 }
 
 func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
-	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready //nolint:staticcheck // Still need to check State even though it is deprecated
+	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready
 }

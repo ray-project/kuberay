@@ -37,7 +37,7 @@ func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
 	expected := `{"test":"test"}`
 	jsonOutput, err := getRuntimeEnvJson(testRayJob)
 	require.NoError(t, err)
-	assert.Equal(t, expected, jsonOutput)
+	assert.JSONEq(t, expected, jsonOutput)
 }
 
 func TestGetRuntimeEnvJsonFromYAML(t *testing.T) {
@@ -68,7 +68,7 @@ func TestGetMetadataJson(t *testing.T) {
 	expected := `{"testKey":"testValue"}`
 	metadataJson, err := GetMetadataJson(testRayJob.Spec.Metadata, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
-	assert.Equal(t, expected, metadataJson)
+	assert.JSONEq(t, expected, metadataJson)
 }
 
 func TestGetK8sJobCommand(t *testing.T) {

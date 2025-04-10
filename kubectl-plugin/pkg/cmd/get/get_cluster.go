@@ -163,7 +163,7 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 				raycluster.Status.DesiredTPU.String(),
 				raycluster.Status.DesiredMemory.String(),
 				relevantConditionType,
-				raycluster.Status.State, //nolint:staticcheck // Display State for now until it's removed from the CRD
+				raycluster.Status.State,
 				age,
 			},
 		})

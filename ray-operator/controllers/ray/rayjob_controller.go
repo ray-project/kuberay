@@ -190,8 +190,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of RayCluster before submitting.
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
-			if rayClusterInstance.Status.State != rayv1.Ready { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			if rayClusterInstance.Status.State != rayv1.Ready {
+				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 

@@ -311,7 +311,7 @@ func TestGetAllJobs(t *testing.T) {
 			break
 		}
 	}
-	require.Equal(t, foundName, true)
+	require.True(t, foundName)
 }
 
 func TestGetJobsInNamespace(t *testing.T) {
@@ -341,7 +341,7 @@ func TestGetJobsInNamespace(t *testing.T) {
 			break
 		}
 	}
-	require.Equal(t, foundName, true)
+	require.True(t, foundName)
 }
 
 func TestGetJob(t *testing.T) {

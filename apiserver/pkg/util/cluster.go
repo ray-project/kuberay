@@ -836,7 +836,7 @@ func (c *RayCluster) Get() *rayv1api.RayCluster {
 }
 
 // SetAnnotations sets annotations on all templates in a RayCluster
-func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
+func (c *RayCluster) SetAnnotationsToAllTemplates(_ string, _ string) {
 	// TODO: reserved for common parameters.
 }
 
@@ -844,7 +844,7 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
 	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+		return nil, fmt.Errorf("failed to marshal extended resources: %w", err)
 	}
 
 	// Create data map
@@ -930,10 +930,10 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
 			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))
-			ev_count := 0
+			evCount := 0
 			for key, value := range autoscalerOptions.Envs.Values {
-				options.Env[ev_count] = corev1.EnvVar{Name: key, Value: value}
-				ev_count += 1
+				options.Env[evCount] = corev1.EnvVar{Name: key, Value: value}
+				evCount += 1
 			}
 		}
 		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {
