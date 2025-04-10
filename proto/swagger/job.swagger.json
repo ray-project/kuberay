@@ -498,7 +498,7 @@
         },
         "continue": {
           "type": "string",
-          "description": "The continue token for the next page of jobs.",
+          "description": "The continue token for the next page of jobs. If it is empty, it means this is the last page.",
           "readOnly": true
         }
       }
