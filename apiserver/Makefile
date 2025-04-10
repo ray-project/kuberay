@@ -75,8 +75,7 @@ imports: goimports ## Run goimports against code.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
-	# exclude the S1009 for false positive.
-	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019,S1009' --no-config --allow-parallel-runners)
+	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
 
 build: fmt vet fumpt imports ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
