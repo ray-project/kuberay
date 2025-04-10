@@ -91,7 +91,8 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	}
 
 	// convert *api.Cluster to rayv1api.RayCluster
-	rayCluster, err := util.NewRayCluster(apiCluster, computeTemplateDict)
+	rayCluster, err := util.
+							NewRayCluster(apiCluster, computeTemplateDict)
 	if err != nil {
 		return nil, util.NewInvalidInputErrorWithDetails(err, "Failed to create a Ray cluster")
 	}
