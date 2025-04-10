@@ -91,17 +91,20 @@ func NewUserErrorWithSingleMessage(err error, message string) *UserError {
 
 func NewUserError(err error, internalMessage string, externalMessage string) *UserError {
 	// Note apiError.Response is of type github.com/go-openapi/runtime/client
-	if apiError, ok := err.(*runtime.APIError); ok {
+	var apiError *runtime.APIError
+	if errors.As(err, &apiError) {
 		if apiError.Code == API_CODE_NOT_FOUND {
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(uint32(apiError.Code)))
+				codes.Code(uint32(apiError.Code)),
+			)
 		}
 		return newUserError(
 			errors.Wrapf(err, internalMessage),
 			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-			codes.Code(uint32(apiError.Code)))
+			codes.Code(uint32(apiError.Code)),
+		)
 	}
 
 	return newUserError(
@@ -111,7 +114,9 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 }
 
 func ExtractErrorForCLI(err error, isDebugMode bool) error {
-	if userError, ok := err.(*UserError); ok {
+	// Check if the error is of type *UserError, even if it's wrapped
+	var userError *UserError
+	if errors.As(err, &userError) {
 		if isDebugMode {
 			return fmt.Errorf("%+w", userError.internalError)
 		}
@@ -266,12 +271,12 @@ func Wrap(err error, message string) error {
 		return nil
 	}
 
-	switch e := err.(type) {
-	case *UserError:
-		return e.wrap(message)
-	default:
-		return errors.Wrapf(err, message)
+	var userErr *UserError
+	if errors.As(err, &userErr) {
+		return userErr.wrap(message)
 	}
+
+	return errors.Wrapf(err, message)
 }
 
 func LogError(err error) {
@@ -298,17 +303,24 @@ func IsNotFound(err error) bool {
 
 // IsUserErrorCodeMatch returns whether the error is a user error with specified code.
 func IsUserErrorCodeMatch(err error, code codes.Code) bool {
-	userError, ok := err.(*UserError)
-	return ok && userError.externalStatusCode == code
+	var userError *UserError
+	if errors.As(err, &userError) {
+		return userError.externalStatusCode == code
+	}
+	return false
 }
 
 // ReasonForError returns the HTTP status for a particular error.
 func reasonForError(err error) k8metav1.StatusReason {
-	switch t := err.(type) {
-	case *k8errors.StatusError:
-		return t.Status().Reason
-	case k8errors.APIStatus:
-		return t.Status().Reason
+	var statusErr *k8errors.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Status().Reason
 	}
+
+	var apiStatus k8errors.APIStatus
+	if errors.As(err, &apiStatus) {
+		return apiStatus.Status().Reason
+	}
+
 	return k8metav1.StatusReasonUnknown
 }
