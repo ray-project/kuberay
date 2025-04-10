@@ -255,12 +255,12 @@ func Wrapf(err error, format string, args ...interface{}) error {
 		return nil
 	}
 
-	switch e := err.(type) {
-	case *UserError:
-		return e.wrapf(format, args...)
-	default:
-		return errors.Wrapf(err, format, args...)
+	var userError *UserError
+	if errors.As(err, &userError) {
+		return userError.wrapf(format, args...)
 	}
+
+	return errors.Wrapf(err, format, args...)
 }
 
 func Wrap(err error, message string) error {
@@ -277,11 +277,13 @@ func Wrap(err error, message string) error {
 }
 
 func LogError(err error) {
-	switch e := err.(type) {
-	case *UserError:
-		e.Log()
-	default:
-		// We log all the details.
+	// Check if the error is of type *UserError, even if it's wrapped
+	var userError *UserError
+	if errors.As(err, &userError) {
+		// If it's a *UserError, log it using the Log method
+		userError.Log()
+	} else {
+		// For all other errors, log all the details
 		klog.Errorf("InternalError: %+v", err)
 	}
 }
