@@ -212,7 +212,7 @@ type ListRayJobsResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	Jobs []*RayJob `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"`
-	// The continue token for the next page of jobs.
+	// The continue token for the next page of jobs. If it is empty, it means this is the last page.
 	Continue string `protobuf:"bytes,2,opt,name=continue,proto3" json:"continue,omitempty"`
 }
 

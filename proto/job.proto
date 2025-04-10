@@ -91,7 +91,7 @@ message ListRayJobsRequest {
 
 message ListRayJobsResponse {
   repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
-  // The continue token for the next page of jobs.
+  // The continue token for the next page of jobs. If it is empty, it means this is the last page.
   string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
