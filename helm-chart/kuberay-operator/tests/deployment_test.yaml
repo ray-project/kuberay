@@ -55,6 +55,15 @@ tests:
           path: spec.template.metadata.annotations.key2
           value: value2
 
+  - it: Should use the specified image pull policy if `image.pullPolicy` is set
+    set:
+      image:
+        pullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[*].imagePullPolicy
+          value: Always
+
   - it: Should use the specified image pull secrets if `imagePullsecrets` is set
     set:
       imagePullSecrets:
@@ -103,7 +112,7 @@ tests:
         readOnlyRootFilesystem: true
         capabilities:
           drop:
-          - ALL
+            - ALL
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
@@ -115,7 +124,7 @@ tests:
             readOnlyRootFilesystem: true
             capabilities:
               drop:
-              - ALL
+                - ALL
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault

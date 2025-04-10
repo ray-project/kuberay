@@ -4,9 +4,9 @@ metadata:
   name: {{ include "kuberay-operator.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{ include "kuberay-operator.labels" . | nindent 4 }}
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
     {{- with .Values.labels }}
-    {{-  toYaml . | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   replicas: 1
@@ -45,8 +45,10 @@ spec:
           emptyDir: {}
           {{- end }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           {{- with .Values.securityContext }}
@@ -54,7 +56,7 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          {{- with .Values.imagePullPolicy }}
+          {{- with .Values.image.pullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
           {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
@@ -109,7 +111,7 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-          {{ with .Values.env }}
+          {{- with .Values.env }}
           env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
