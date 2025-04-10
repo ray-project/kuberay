@@ -97,13 +97,13 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(uint32(apiError.Code)),
+				codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
 			)
 		}
 		return newUserError(
 			errors.Wrapf(err, internalMessage),
 			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-			codes.Code(uint32(apiError.Code)),
+			codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
 		)
 	}
 
