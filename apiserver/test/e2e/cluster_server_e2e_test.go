@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -813,8 +814,7 @@ func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil &&
-			require.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
+		if err00 != nil && strings.Contains(err00.Error(), "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
