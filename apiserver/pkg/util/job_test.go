@@ -110,7 +110,7 @@ func TestBuildRayJob(t *testing.T) {
 	require.Greater(t, len(job.Spec.RuntimeEnvYAML), 1)
 	require.NotNil(t, job.Spec.ClusterSelector)
 	require.Nil(t, job.Spec.RayClusterSpec)
-	require.InEpsilon(t, float32(2), job.Spec.EntrypointNumCpus)
+	require.InEpsilon(t, float32(2), job.Spec.EntrypointNumCpus, 1e-9 /*epsilon*/)
 	require.NotNil(t, job.Spec.SubmitterPodTemplate)
 	require.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	require.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
