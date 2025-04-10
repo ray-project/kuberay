@@ -43,7 +43,7 @@ type RayJobReconciler struct {
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
-	enableMetrics       bool
+	options             RayJobReconcilerOptions
 }
 
 type RayJobReconcilerOptions struct {
@@ -58,7 +58,7 @@ func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobR
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
-		enableMetrics:       options.EnableMetrics,
+		options:             options,
 	}
 }
 
