@@ -541,7 +541,7 @@ func getRayClusterEventsByName(ctx context.Context, name string, client clientv1
 		return nil, util.Wrap(err, "Get Ray Cluster Events failed")
 	}
 	if len(events.Items) == 0 {
-		return nil, fmt.Errorf("No Event with RayCluster name %s", name)
+		return nil, fmt.Errorf("no Event with RayCluster name %s", name)
 	}
 
 	return events.Items, nil
