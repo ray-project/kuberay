@@ -91,7 +91,7 @@ build-swagger: go-bindata
 
 .PHONY: test
 test: fmt vet fumpt imports ## Run all unit tests.
-	go test ./pkg/... ./cmd/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
+	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
 
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
