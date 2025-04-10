@@ -32,6 +32,8 @@ type SessionOptions struct {
 	Verbose        bool
 }
 
+const reconnectDelay = 3 * time.Second
+
 var (
 	dashboardPort = appPort{
 		name: "Ray Dashboard",
@@ -195,9 +197,9 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	go func() {
 		defer wg.Done()
 		for {
-			const reconnectDelay = 100
-			var err error
 			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+			portforwardCmd.Stdout = options.ioStreams.Out
+			portforwardCmd.Stderr = options.ioStreams.ErrOut
 
 			if options.Verbose {
 				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
@@ -206,8 +208,8 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}
-			fmt.Printf("failed to port-forward: %v, try to reconnect after %d miliseconds...\n", err, reconnectDelay)
-			time.Sleep(reconnectDelay * time.Millisecond)
+			fmt.Printf("failed to port-forward: %v. Retrying in %v ...\n\n", err, reconnectDelay)
+			time.Sleep(reconnectDelay)
 		}
 	}()
 
