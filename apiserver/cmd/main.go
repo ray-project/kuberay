@@ -135,7 +135,7 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", runtimeMux)
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
-	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
+	// Create a top-level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()
 	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
 	topMux.Handle("/", runtimeMux)
@@ -144,7 +144,17 @@ func startHttpProxy() {
 	topMux.HandleFunc("/healthz", serveHealth)
 	serveSwaggerUI(topMux)
 
-	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
+	// Create a custom HTTP server with timeouts.
+	srv := &http.Server{
+		Addr:         *httpPortFlag,
+		Handler:      topMux,
+		ReadTimeout:  0, // No timeout
+		WriteTimeout: 0, // No timeout
+		IdleTimeout:  0, // No timeout
+	}
+
+	// Start the server.
+	if err := srv.ListenAndServe(); err != nil {
 		klog.Fatal(err)
 	}
 
