@@ -10,7 +10,6 @@ import (
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -520,7 +519,7 @@ func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*E
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
 	for i := 0; i < numberOfNamespaces; i++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
-		assert.NoError(t, err, "No error expected when creating testing context")
+		require.NoError(t, err, "No error expected when creating testing context")
 
 		tCtx.CreateComputeTemplate(t)
 		t.Cleanup(func() {
@@ -815,7 +814,7 @@ func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
 		if err00 != nil &&
-			assert.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
+			require.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
