@@ -124,8 +124,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		IsOpenShift:       isOpenShift,
 
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
-		headSidecarContainers:      options.HeadSidecarContainers,
-		workerSidecarContainers:    options.WorkerSidecarContainers,
+		options:                    options,
 	}
 }
 
@@ -137,8 +136,7 @@ type RayClusterReconciler struct {
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
 
-	headSidecarContainers   []corev1.Container
-	workerSidecarContainers []corev1.Container
+	options RayClusterReconcilerOptions
 
 	IsOpenShift bool
 }
@@ -1094,8 +1092,8 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
-	if len(r.headSidecarContainers) > 0 {
-		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
+	if len(r.options.HeadSidecarContainers) > 0 {
+		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
@@ -1122,8 +1120,8 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
-	if len(r.workerSidecarContainers) > 0 {
-		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
+	if len(r.options.WorkerSidecarContainers) > 0 {
+		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
