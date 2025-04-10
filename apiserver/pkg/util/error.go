@@ -57,12 +57,13 @@ func HasCustomCode(err error, code CustomCode) bool {
 	if err == nil {
 		return false
 	}
-	switch e := err.(type) {
-	case *CustomError:
-		return e.code == code
-	default:
-		return false
+
+	var customErr *CustomError
+	if errors.As(err, &customErr) {
+		return customErr.code == code
 	}
+
+	return false
 }
 
 type UserError struct {
