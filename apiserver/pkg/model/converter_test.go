@@ -569,7 +569,7 @@ func TestAutoscalerOptions(t *testing.T) {
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
-	cluster := FromCrdToApiCluster(&ClusterSpecTest, []corev1.Event{})
+	cluster := FromCrdToAPICluster(&ClusterSpecTest, []corev1.Event{})
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
@@ -577,7 +577,7 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	if cluster.ClusterSpec.AutoscalerOptions != nil {
 		t.Errorf("unexpected autoscaler annotations")
 	}
-	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
+	cluster = FromCrdToAPICluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
 	assert.True(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions == nil {
 		t.Errorf("autoscaler annotations not found")
@@ -643,7 +643,7 @@ func tolerationToString(toleration *api.PodToleration) string {
 }
 
 func TestPopulateJob(t *testing.T) {
-	job := FromCrdToApiJob(&JobNewClusterTest)
+	job := FromCrdToAPIJob(&JobNewClusterTest)
 	fmt.Printf("jobWithCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -652,7 +652,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Nil(t, job.ClusterSelector)
 	assert.NotNil(t, job.ClusterSpec)
 
-	job = FromCrdToApiJob(&JobExistingClusterTest)
+	job = FromCrdToAPIJob(&JobExistingClusterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -661,7 +661,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.NotNil(t, job.ClusterSelector)
 	assert.Nil(t, job.ClusterSpec)
 
-	job = FromCrdToApiJob(&JobExistingClusterSubmitterTest)
+	job = FromCrdToAPIJob(&JobExistingClusterSubmitterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -672,7 +672,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "image", job.JobSubmitter.Image)
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
 
-	job = FromCrdToApiJob(&JobWithOutputTest)
+	job = FromCrdToAPIJob(&JobWithOutputTest)
 	fmt.Printf("jobWithOutput = %#v\n", job)
 	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
 	assert.Nil(t, job.EndTime)

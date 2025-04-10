@@ -44,7 +44,7 @@ func (s *RayServiceServer) CreateRayService(ctx context.Context, request *api.Cr
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", rayService.Namespace, rayService.Name, err)
 	}
-	return model.FromCrdToApiService(rayService, events), nil
+	return model.FromCrdToAPIService(rayService, events), nil
 }
 
 func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*api.RayService, error) {
@@ -61,7 +61,7 @@ func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.Up
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", rayService.Namespace, rayService.Name, err)
 	}
-	return model.FromCrdToApiService(rayService, events), nil
+	return model.FromCrdToAPIService(rayService, events), nil
 }
 
 func (s *RayServiceServer) GetRayService(ctx context.Context, request *api.GetRayServiceRequest) (*api.RayService, error) {
@@ -80,7 +80,7 @@ func (s *RayServiceServer) GetRayService(ctx context.Context, request *api.GetRa
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", service.Namespace, service.Name, err)
 	}
-	return model.FromCrdToApiService(service, events), nil
+	return model.FromCrdToAPIService(service, events), nil
 }
 
 func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, error) {
@@ -101,7 +101,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services: model.FromCrdToAPIServices(services, serviceEventMap),
 	}, nil
 }
 
@@ -120,7 +120,7 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAl
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListAllRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services: model.FromCrdToAPIServices(services, serviceEventMap),
 	}, nil
 }
 
