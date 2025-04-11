@@ -322,6 +322,11 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
 
+	q := httpRequest.URL.Query()
+	q.Set("limit", strconv.FormatInt(request.Limit, 10))
+	q.Set("continue", request.Continue)
+	httpRequest.URL.RawQuery = q.Encode()
+
 	httpRequest.Header.Add("Accept", "application/json")
 
 	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)

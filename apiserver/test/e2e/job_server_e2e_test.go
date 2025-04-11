@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -344,6 +345,72 @@ func TestGetJobsInNamespace(t *testing.T) {
 	require.True(t, foundName)
 }
 
+func TestGetJobByPaginationInNamespace(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+	testJobs := []*api.CreateRayJobRequest{}
+	for i := 0; i < 10; i++ {
+		tCtx.currentName = fmt.Sprintf("job%d", i)
+		testJobs = append(testJobs, createTestJob(t, tCtx))
+	}
+
+	t.Cleanup(func() {
+		for i := 0; i < 10; i++ {
+			tCtx.DeleteRayJobByName(t, testJobs[i].Job.Name)
+		}
+	})
+
+	// Test pagination with limit 1
+	t.Run("Test pagination return part of the result jobs", func(t *testing.T) {
+		continueToken := ""
+		for i := 0; i < 10; i++ {
+			response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				Limit:     1,
+				Continue:  continueToken,
+			})
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRpcStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			require.Len(t, response.Jobs, 1)
+			require.Equal(t, response.Jobs[0].Namespace, tCtx.GetNamespaceName())
+			require.Equal(t, response.Jobs[0].Name, testJobs[i].Job.Name)
+			continueToken = response.Continue
+		}
+		require.Equal(t, continueToken, "") // Continue token should be empty because this is the last page
+	})
+
+	// Test pagination return all jobs
+	t.Run("Test pagination return all jobs", func(t *testing.T) {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+			Namespace: tCtx.GetNamespaceName(),
+			Limit:     10,
+			Continue:  "",
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Equal(t, len(response.Jobs), 10)
+		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
+	})
+
+	t.Run("Test no pagination", func(t *testing.T) {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+			Namespace: tCtx.GetNamespaceName(),
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Equal(t, len(response.Jobs), 10)
+		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
+	})
+}
+
 func TestGetJob(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -505,7 +572,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
+	}, tCtx.currentName) // set the name of the config map to the current name
 	t.Cleanup(func() {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
@@ -523,13 +590,13 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 		MountPath:  "/home/ray/samples",
 		VolumeType: api.Volume_CONFIGMAP,
 		Name:       "code-sample",
-		Source:     tCtx.GetConfigMapName(),
+		Source:     configMapName,
 		Items:      items,
 	}
 
 	testJobRequest := &api.CreateRayJobRequest{
 		Job: &api.RayJob{
-			Name:                     tCtx.GetNextName(),
+			Name:                     tCtx.currentName,
 			Namespace:                tCtx.GetNamespaceName(),
 			User:                     "natacha",
 			Version:                  tCtx.GetRayVersion(),
