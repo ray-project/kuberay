@@ -46,7 +46,7 @@ repos:
         always_run: true
         pass_filenames: false
         additional_dependencies:
-          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.3
+          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - id: generate-crd-schema
         name: generate CRD schemas for use of kubeconform
         entry: ./scripts/generate-crd-schema.sh
@@ -71,7 +71,6 @@ repos:
     hooks:
       - id: markdownlint-fix
         name: Markdown linting
-        language: system
         args:
           - --ignore=.github/pull_request_template.md
           - --disable=MD033
