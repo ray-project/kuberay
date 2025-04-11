@@ -31,9 +31,6 @@ import (
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
-
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -58,45 +55,6 @@ var (
 	podUIDIndexField = "metadata.uid"
 )
 
-// getDiscoveryClient returns a discovery client for the current reconciler
-func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error) {
-	return discovery.NewDiscoveryClientForConfig(config)
-}
-
-// Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or Openshift
-func getClusterType(ctx context.Context) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if os.Getenv("USE_INGRESS_ON_OPENSHIFT") == "true" {
-		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
-		return false
-	}
-
-	// The discovery package is used to discover APIs supported by a Kubernetes API server.
-	config, err := ctrl.GetConfig()
-	if err == nil && config != nil {
-		dclient, err := getDiscoveryClient(config)
-		if err == nil && dclient != nil {
-			apiGroupList, err := dclient.ServerGroups()
-			if err != nil {
-				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
-				return false
-			}
-			for i := 0; i < len(apiGroupList.Groups); i++ {
-				if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
-					logger.Info("We detected being on OpenShift!")
-					return true
-				}
-			}
-			return false
-		}
-		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
-		return false
-	}
-	logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
-	return false
-}
-
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions, rayConfigs configapi.Configuration) *RayClusterReconciler {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
@@ -113,8 +71,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		// prevent running the controller in an undefined state
 		panic(err)
 	}
-
-	options.IsOpenShift = getClusterType(ctx)
 
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
