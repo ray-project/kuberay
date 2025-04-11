@@ -129,11 +129,11 @@ func startHttpProxy() {
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
 	)
 	// Register endpoints
-	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", ctx, runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()
@@ -204,7 +204,7 @@ func serveSwaggerUI(mux *http.ServeMux) {
 	mux.Handle(prefix, http.StripPrefix(prefix, fileServer))
 }
 
-func registerHttpHandlerFromEndpoint(handler RegisterHttpHandlerFromEndpoint, serviceName string, ctx context.Context, mux *runtime.ServeMux) {
+func registerHttpHandlerFromEndpoint(ctx context.Context, handler RegisterHttpHandlerFromEndpoint, serviceName string, mux *runtime.ServeMux) {
 	endpoint := "localhost" + *rpcPortFlag
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32))}
 
