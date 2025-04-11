@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
@@ -87,10 +89,16 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
 	}
-	services, err := s.resourceManager.ListServices(ctx, request.Namespace)
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, request.Namespace, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "failed to list rayservice.")
 	}
+
+	/////////////// debug
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(file, "serve server next token = %s\n", nextPageToken)
+	/////////////// debug
+
 	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
@@ -101,7 +109,8 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services:      model.FromCrdToApiServices(services, serviceEventMap),
+		NextPageToken: nextPageToken,
 	}, nil
 }
 

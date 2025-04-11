@@ -113,6 +113,8 @@ message ListRayServicesResponse {
   // The total number of RayServices for the given query.
   int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
+  //
+  // If there are no more clusters, this field will be empty.
   string next_page_token = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
