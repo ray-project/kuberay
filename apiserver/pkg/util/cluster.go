@@ -836,7 +836,7 @@ func (c *RayCluster) Get() *rayv1api.RayCluster {
 }
 
 // SetAnnotations sets annotations on all templates in a RayCluster
-func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
+func (c *RayCluster) SetAnnotationsToAllTemplates(_ string, _ string) {
 	// TODO: reserved for common parameters.
 }
 

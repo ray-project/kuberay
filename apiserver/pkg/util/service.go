@@ -44,7 +44,7 @@ func buildRayServiceLabels(apiService *api.RayService) map[string]string {
 	return labels
 }
 
-func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
+func buildRayServiceAnnotations(_ *api.RayService) map[string]string {
 	annotations := map[string]string{}
 	// TODO: Add optional annotations
 	return annotations

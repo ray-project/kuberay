@@ -151,7 +151,7 @@ func startHttpProxy() {
 	klog.Info("Http Proxy started")
 }
 
-func serveHealth(w http.ResponseWriter, r *http.Request) {
+func serveHealth(w http.ResponseWriter, _ *http.Request) {
 	if atomic.LoadInt32(&healthy) == 1 {
 		w.WriteHeader(http.StatusOK)
 	} else {

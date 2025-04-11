@@ -79,7 +79,7 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 }
 
 // Finds all Jobs in all namespaces.
-func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
+func (s *RayJobServer) ListAllRayJobs(ctx context.Context, _ *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
 	jobs, err := s.resourceManager.ListAllJobs(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")

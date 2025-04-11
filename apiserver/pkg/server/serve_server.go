@@ -105,7 +105,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	}, nil
 }
 
-func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
+func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
 	services, err := s.resourceManager.ListAllServices(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
