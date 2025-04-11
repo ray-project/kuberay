@@ -193,7 +193,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 			Labels:      map[string]string{},
 		},
 		Spec: corev1.PodSpec{
-			Tolerations: []corev1.Toleration{},
+			Tolerations:  []corev1.Toleration{},
+			NodeSelector: map[string]string{},
 			Containers: []corev1.Container{
 				{
 					Name:            "ray-head",
@@ -297,12 +298,19 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 		}
 	}
 
-	// Add specific tollerations
+	// Add pod tollerations
 	if computeRuntime.Tolerations != nil {
 		for _, t := range computeRuntime.Tolerations {
 			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, corev1.Toleration{
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
+		}
+	}
+
+	// Add node selector
+	if computeRuntime.NodeSelector != nil {
+		for k, v := range computeRuntime.NodeSelector {
+			podTemplateSpec.Spec.NodeSelector[k] = v
 		}
 	}
 
@@ -447,7 +455,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 			Labels:      map[string]string{},
 		},
 		Spec: corev1.PodSpec{
-			Tolerations: []corev1.Toleration{},
+			Tolerations:  []corev1.Toleration{},
+			NodeSelector: map[string]string{},
 			Containers: []corev1.Container{
 				{
 					Name:            "ray-worker",
@@ -591,12 +600,19 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 		}
 	}
 
-	// Add specific tollerations
+	// Add pod tollerations
 	if computeRuntime.Tolerations != nil {
 		for _, t := range computeRuntime.Tolerations {
 			podTemplateSpec.Spec.Tolerations = append(podTemplateSpec.Spec.Tolerations, corev1.Toleration{
 				Key: t.Key, Operator: convertTolerationOperator(t.Operator), Value: t.Value, Effect: convertTaintEffect(t.Effect),
 			})
+		}
+	}
+
+	// Add node selector
+	if computeRuntime.NodeSelector != nil {
+		for k, v := range computeRuntime.NodeSelector {
+			podTemplateSpec.Spec.NodeSelector[k] = v
 		}
 	}
 
@@ -847,6 +863,11 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
 	}
 
+	nodeSelectorJSON, err := json.Marshal(runtime.NodeSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+	}
+
 	// Create data map
 	dmap := map[string]string{
 		"name":               runtime.Name,
@@ -856,6 +877,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
 		"gpu_accelerator":    runtime.GpuAccelerator,
 		"extended_resources": string(extendedResourcesJSON),
+		"node_selector":      string(nodeSelectorJSON),
 	}
 	// Add tolerations in defined
 	if len(runtime.Tolerations) > 0 {

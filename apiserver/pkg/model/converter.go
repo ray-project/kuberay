@@ -424,6 +424,15 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 		}
 	}
 
+	val, ok = configMap.Data["node_selector"]
+	if ok {
+		err := json.Unmarshal([]byte(val), &runtime.NodeSelector)
+		if err != nil {
+			klog.Error("failed to unmarshall node selector for compute template ", runtime.Name, " value ",
+				runtime.ExtendedResources, " error ", err)
+		}
+	}
+
 	val, ok = configMap.Data["tolerations"]
 	if ok {
 		err := json.Unmarshal(pkgutils.ConvertStringToByteSlice(val), &runtime.Tolerations)

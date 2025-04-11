@@ -157,6 +157,19 @@ var configMapWithTolerations = corev1.ConfigMap{
 	},
 }
 
+var configMapWithNodeSelector = corev1.ConfigMap{
+	Data: map[string]string{
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
+		"node_selector":      "{\"nvidia.com/gpu.product\": \"Tesla-V100-PCIE-16GB\", \"kubernetes.io/hostname\": \"cpu15\"}",
+	},
+}
+
 var workerSpecTest = rayv1api.WorkerGroupSpec{
 	GroupName:   "",
 	Replicas:    &workerReplicas,
@@ -502,6 +515,11 @@ var expectedTolerations = api.PodToleration{
 	Effect:   "NoExecute",
 }
 
+var expectedNodeSelector = map[string]string{
+	"nvidia.com/gpu.product": "Tesla-V100-PCIE-16GB",
+	"kubernetes.io/hostname": "cpu15",
+}
+
 func TestPopulateHeadNodeSpec(t *testing.T) {
 	groupSpec := PopulateHeadNodeSpec(headSpecTest)
 
@@ -615,8 +633,14 @@ func TestPopulateTemplate(t *testing.T) {
 	if len(template.Tolerations) != 0 {
 		t.Errorf("failed to convert config map, expected no tolerations, got %d", len(template.Tolerations))
 	}
+	if len(template.NodeSelector) != 0 {
+		t.Errorf("failed to convert config map, expected no node selector, got %d", len(template.NodeSelector))
+	}
 
 	template = FromKubeToAPIComputeTemplate(&configMapWithTolerations)
+	if len(template.NodeSelector) != 0 {
+		t.Errorf("failed to convert config map, expected no node selector, got %d", len(template.NodeSelector))
+	}
 	if len(template.Tolerations) != 1 {
 		t.Errorf("failed to convert config map, expected 1 toleration, got %d", len(template.Tolerations))
 	}
@@ -625,6 +649,17 @@ func TestPopulateTemplate(t *testing.T) {
 		template.Tolerations[0].Effect != expectedTolerations.Effect {
 		t.Errorf("failed to convert config map, got %v, expected %v", tolerationToString(template.Tolerations[0]),
 			tolerationToString(&expectedTolerations))
+	}
+
+	template = FromKubeToAPIComputeTemplate(&configMapWithNodeSelector)
+	if len(template.Tolerations) != 0 {
+		t.Errorf("failed to convert config map, expected no tolerations, got %d", len(template.Tolerations))
+	}
+	if len(template.NodeSelector) != 2 {
+		t.Errorf("failed to convert config map, expected 1 node selector got %d", len(template.NodeSelector))
+	}
+	if !reflect.DeepEqual(template.NodeSelector, expectedNodeSelector) {
+		t.Errorf("failed to convert node selector, got %v, expected %v", template.NodeSelector, expectedNodeSelector)
 	}
 
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
