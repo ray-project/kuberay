@@ -16,10 +16,8 @@ import (
 
 const (
 	SchedulerName                       string = "yunikorn"
-	YuniKornPodApplicationIDLabelName   string = "applicationId"
-	YuniKornPodQueueLabelName           string = "queue"
-	RayClusterApplicationIDLabelName    string = "yunikorn.apache.org/app-id"
-	RayClusterQueueLabelName            string = "yunikorn.apache.org/queue"
+	YuniKornPodApplicationIDLabelName   string = "yunikorn.apache.org/app-id"
+	YuniKornPodQueueLabelName           string = "yunikorn.apache.org/queue"
 	YuniKornTaskGroupNameAnnotationName string = "yunikorn.apache.org/task-group-name"
 	YuniKornTaskGroupsAnnotationName    string = "yunikorn.apache.org/task-groups"
 )
@@ -42,19 +40,13 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *
 	return nil
 }
 
-// populatePodLabels is a helper function that copies RayCluster's label to the given pod based on the label key
-// TODO: remove the legacy labels, i.e "applicationId" and "queue", directly populate labels
-// RayClusterApplicationIDLabelName to RayClusterQueueLabelName to pod labels.
-// Currently we use this function to translate labels "yunikorn.apache.org/app-id" and "yunikorn.apache.org/queue"
-// to legacy labels "applicationId" and "queue", this is for the better compatibilities to support older yunikorn
-// versions.
-func (y *YuniKornScheduler) populatePodLabels(ctx context.Context, app *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
+// populatePodLabels is a helper function that populate required YuniKorn labels to the pod.
+func (y *YuniKornScheduler) populatePodLabels(ctx context.Context, app *rayv1.RayCluster, pod *corev1.Pod, labelName string) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 	// check labels
-	if value, exist := app.Labels[sourceKey]; exist {
-		logger.Info("Updating pod label based on RayCluster labels",
-			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
-		pod.Labels[targetKey] = value
+	if value, exist := app.Labels[labelName]; exist {
+		logger.Info("Updating pod label", "key", labelName, "value", value)
+		pod.Labels[labelName] = value
 	}
 }
 
@@ -62,8 +54,8 @@ func (y *YuniKornScheduler) populatePodLabels(ctx context.Context, app *rayv1.Ra
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
 func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	// the applicationID and queue name must be provided in the labels
-	y.populatePodLabels(ctx, app, pod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	y.populatePodLabels(ctx, app, pod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	y.populatePodLabels(ctx, app, pod, YuniKornPodApplicationIDLabelName)
+	y.populatePodLabels(ctx, app, pod, YuniKornPodQueueLabelName)
 	pod.Spec.SchedulerName = y.Name()
 
 	// when gang scheduling is enabled, extra annotations need to be added to all pods

@@ -39,8 +39,8 @@ func TestPopulatePodLabels(t *testing.T) {
 			clusterName:      "ray-cluster-with-labels",
 			clusterNameSpace: "test",
 			clusterLabel: map[string]string{
-				RayClusterApplicationIDLabelName: "job-1-01234",
-				RayClusterQueueLabelName:         "root.default",
+				YuniKornPodApplicationIDLabelName: "job-1-01234",
+				YuniKornPodQueueLabelName:         "root.default",
 			},
 			podName:                "my-pod-1",
 			expectJobLabelResult:   true,
@@ -63,8 +63,8 @@ func TestPopulatePodLabels(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			rayCluster := createRayClusterWithLabels(testCase.clusterName, testCase.clusterNameSpace, testCase.clusterLabel)
 			rayPod := createPod(testCase.podName, testCase.clusterNameSpace)
-			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+			yk.populatePodLabels(ctx, rayCluster, rayPod, YuniKornPodApplicationIDLabelName)
+			yk.populatePodLabels(ctx, rayCluster, rayPod, YuniKornPodQueueLabelName)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, testCase.job), testCase.expectJobLabelResult)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, testCase.queue), testCase.expectQueueLabelResult)
 		})
@@ -80,8 +80,8 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test1",
 		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
+			YuniKornPodApplicationIDLabelName:     job1,
+			YuniKornPodQueueLabelName:             queue1,
 			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
@@ -92,8 +92,8 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test2",
 		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
+			YuniKornPodApplicationIDLabelName:     job1,
+			YuniKornPodQueueLabelName:             queue1,
 			utils.RayClusterGangSchedulingEnabled: "",
 		},
 	)
@@ -104,8 +104,8 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test3",
 		map[string]string{
-			RayClusterApplicationIDLabelName: job1,
-			RayClusterQueueLabelName:         queue1,
+			YuniKornPodApplicationIDLabelName: job1,
+			YuniKornPodQueueLabelName:         queue1,
 		},
 	)
 
@@ -124,8 +124,8 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test3",
 		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
+			YuniKornPodApplicationIDLabelName:     job1,
+			YuniKornPodQueueLabelName:             queue1,
 			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
