@@ -71,6 +71,7 @@ repos:
     hooks:
       - id: markdownlint-fix
         name: Markdown linting
+        language: system
         args:
           - --ignore=.github/pull_request_template.md
           - --disable=MD033
