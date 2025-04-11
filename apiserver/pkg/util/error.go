@@ -36,7 +36,7 @@ type CustomError struct {
 func NewCustomError(err error, code CustomCode, format string, a ...interface{}) *CustomError {
 	message := fmt.Sprintf(format, a...)
 	return &CustomError{
-		error: errors.Wrapf(err, fmt.Sprintf("CustomError (code: %v): %v", code, message)),
+		error: errors.Wrapf(err, "CustomError (code: %v): %v", code, message),
 		code:  code,
 	}
 }
@@ -127,7 +127,7 @@ func NewInternalServerError(err error, internalMessageFormat string,
 ) *UserError {
 	internalMessage := fmt.Sprintf(internalMessageFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("InternalServerError: %v", internalMessage)),
+		errors.Wrapf(err, "InternalServerError: %v", internalMessage),
 		"Internal Server Error",
 		codes.Internal)
 }
@@ -137,7 +137,7 @@ func NewNotFoundError(err error, externalMessageFormat string,
 ) *UserError {
 	externalMessage := fmt.Sprintf(externalMessageFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("NotFoundError: %v", externalMessage)),
+		errors.Wrapf(err, "NotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
@@ -165,7 +165,7 @@ func NewInvalidInputError(messageFormat string, a ...interface{}) *UserError {
 
 func NewInvalidInputErrorWithDetails(err error, externalMessage string) *UserError {
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("InvalidInputError: %v", externalMessage)),
+		errors.Wrapf(err, "InvalidInputError: %v", externalMessage),
 		externalMessage,
 		codes.InvalidArgument)
 }
@@ -178,7 +178,7 @@ func NewAlreadyExistError(messageFormat string, a ...interface{}) *UserError {
 func NewBadRequestError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("BadRequestError: %v", externalMessage)),
+		errors.Wrapf(err, "BadRequestError: %v", externalMessage),
 		externalMessage,
 		codes.Aborted)
 }
@@ -186,7 +186,7 @@ func NewBadRequestError(err error, externalFormat string, a ...interface{}) *Use
 func NewUnauthenticatedError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("Unauthenticated: %v", externalMessage)),
+		errors.Wrapf(err, "Unauthenticated: %v", externalMessage),
 		externalMessage,
 		codes.Unauthenticated)
 }
@@ -194,7 +194,7 @@ func NewUnauthenticatedError(err error, externalFormat string, a ...interface{})
 func NewPermissionDeniedError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("PermissionDenied: %v", externalMessage)),
+		errors.Wrapf(err, "PermissionDenied: %v", externalMessage),
 		externalMessage,
 		codes.PermissionDenied)
 }
