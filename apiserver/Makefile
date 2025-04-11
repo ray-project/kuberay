@@ -73,9 +73,7 @@ imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .
 
 .PHONY: lint
-lint: golangci-lint fmt vet fumpt imports ## Run the linter.
-	# exclude the SA1019 check which checks the usage of deprecated fields.
-	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
+lint: fmt vet fumpt imports ## Run the linter.
 
 build: fmt vet fumpt imports ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -204,7 +202,6 @@ $(REPO_ROOT_BIN):
 KUSTOMIZE ?= $(REPO_ROOT_BIN)/kustomize
 GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
 GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
-GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 KIND ?= $(REPO_ROOT_BIN)/kind
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 
@@ -233,11 +230,6 @@ gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
 $(GOFUMPT): $(REPO_ROOT_BIN)
 	test -s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
-.PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Download golangci_lint locally if necessary.
-$(GOLANGCI_LINT): $(REPO_ROOT_BIN)
-	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
-
 .PHONY: kind
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(REPO_ROOT_BIN)
@@ -249,11 +241,10 @@ $(GOBINDATA): $(REPO_ROOT_BIN)
 	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
+dev-tools: kind gofumpt kustomize goimports go-bindata ## Install all development tools
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
-	rm -f $(REPO_ROOT_BIN)/golangci-lint
 	rm -f $(REPO_ROOT_BIN)/gofumpt
 	rm -f $(REPO_ROOT_BIN)/kustomize
 	rm -f $(REPO_ROOT_BIN)/goimports
