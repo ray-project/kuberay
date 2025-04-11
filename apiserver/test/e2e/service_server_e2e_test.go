@@ -2,7 +2,9 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -255,6 +257,50 @@ func TestGetServicesInNamespace(t *testing.T) {
 	require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
 }
 
+func TestGetServicesInNamespaceWithPagination(t *testing.T) {
+	const serviceCount = 2
+	expectedServiceNames := make([]string, 0, serviceCount)
+
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	for ii := 0; ii < serviceCount; ii++ {
+		testServiceRequest := createTestServiceV2(t, tCtx)
+		t.Cleanup(func() {
+			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
+		})
+		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
+	}
+
+	pageToken := ""
+	for ii := 0; ii < serviceCount; ii++ {
+		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayServices(&api.ListRayServicesRequest{
+			Namespace: tCtx.GetNamespaceName(),
+			PageToken: pageToken,
+			PageSize:  1,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.NotEmpty(t, response.Services, "A list of compute templates is required")
+		require.Equal(t, 1, len(response.Services))
+		require.Equal(t, expectedServiceNames[ii], response.Services[0].Name)
+		require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
+
+		// Check next page token.
+		if ii == serviceCount-1 {
+			require.Empty(t, pageToken, "Last page token should be empty")
+		} else {
+			require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+		}
+	}
+}
+
 func TestGetService(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -369,6 +415,11 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.Nil(t, actualRpcStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
 	waitForRunningService(t, tCtx, actualService.Name)
+
+	/////////////// debug
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(file, "actual service = %+v, rpc status = %+v\n", actualService, actualRpcStatus)
+	/////////////// debug
 
 	return testServiceRequest
 }
