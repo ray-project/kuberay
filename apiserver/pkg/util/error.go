@@ -95,20 +95,20 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 	if errors.As(err, &apiError) {
 		if apiError.Code == API_CODE_NOT_FOUND {
 			return newUserError(
-				errors.Wrapf(err, internalMessage),
+				errors.Wrapf(err, "%s", internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
 				codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
 			)
 		}
 		return newUserError(
-			errors.Wrapf(err, internalMessage),
+			errors.Wrapf(err, "%s", internalMessage),
 			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
 			codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
 		)
 	}
 
 	return newUserError(
-		errors.Wrapf(err, internalMessage),
+		errors.Wrapf(err, "%s", internalMessage),
 		fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
 		codes.Internal)
 }
@@ -276,7 +276,7 @@ func Wrap(err error, message string) error {
 		return userErr.wrap(message)
 	}
 
-	return errors.Wrapf(err, message)
+	return errors.Wrapf(err, "%s", message)
 }
 
 func LogError(err error) {
