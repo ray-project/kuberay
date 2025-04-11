@@ -569,7 +569,7 @@ func TestAutoscalerOptions(t *testing.T) {
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
-	cluster := FromCrdToApiCluster(&ClusterSpecTest, []corev1.Event{})
+	cluster := FromCrdToAPICluster(&ClusterSpecTest, []corev1.Event{})
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
@@ -577,7 +577,7 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	if cluster.ClusterSpec.AutoscalerOptions != nil {
 		t.Errorf("unexpected autoscaler annotations")
 	}
-	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
+	cluster = FromCrdToAPICluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
 	assert.True(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions == nil {
 		t.Errorf("autoscaler annotations not found")

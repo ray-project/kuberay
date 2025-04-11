@@ -54,7 +54,7 @@ func main() {
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	go startRpcServer(resourceManager)
+	go startRPCServer(resourceManager)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
 	quit := make(chan os.Signal, 1)
@@ -70,7 +70,7 @@ func main() {
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
-func startRpcServer(resourceManager *manager.ResourceManager) {
+func startRPCServer(resourceManager *manager.ResourceManager) {
 	klog.Info("Starting gRPC server")
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)
@@ -86,7 +86,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, interceptor.ApiServerInterceptor)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, interceptor.APIServerInterceptor)),
 		grpc.MaxRecvMsgSize(math.MaxInt32))
 	api.RegisterClusterServiceServer(s, clusterServer)
 	api.RegisterComputeTemplateServiceServer(s, templateServer)
