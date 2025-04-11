@@ -113,7 +113,7 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 func ExtractErrorForCLI(err error, isDebugMode bool) error {
 	if userError, ok := err.(*UserError); ok {
 		if isDebugMode {
-			return fmt.Errorf("%+v", userError.internalError)
+			return fmt.Errorf("%+w", userError.internalError)
 		} else {
 			return fmt.Errorf("%v", userError.externalMessage)
 		}
