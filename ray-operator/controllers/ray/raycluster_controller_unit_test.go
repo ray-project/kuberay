@@ -1642,10 +1642,10 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 		MaxWorkerReplicas:       10,
 		LastUpdateTime:          &timeNow,
 		Endpoints: map[string]string{
-			"client":    "10001",
-			"dashboard": "8265",
-			"gcs":       "6379",
-			"metrics":   "8080",
+			"client":     "10001",
+			"dashboard":  "8265",
+			"gcs-server": "6379",
+			"metrics":    "8080",
 		},
 		Head: rayv1.HeadInfo{
 			PodIP:     "10.244.0.6",

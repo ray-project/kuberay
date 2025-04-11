@@ -212,12 +212,10 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
 	portsInt := getServicePorts(rayCluster)
 	ports := make([]corev1.ServicePort, 0, 1)
-	for name, port := range portsInt {
-		if name == utils.ServingPortName {
-			svcPort := corev1.ServicePort{Name: name, Port: port}
-			ports = append(ports, svcPort)
-			break
-		}
+	if _, defined := portsInt[utils.ServingPortName]; defined {
+		// Only include serve port
+		svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
+		ports = append(ports, svcPort)
 	}
 
 	if isRayService {
@@ -376,6 +374,7 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 // getServicePorts will either user passing ports or default ports to create service.
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 	ports := getPortsFromCluster(cluster)
+
 	// Assign default ports
 	if len(ports) == 0 {
 		ports = getDefaultPorts()
