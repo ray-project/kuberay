@@ -355,7 +355,8 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	})
 	testJobs := []*api.CreateRayJobRequest{}
 	for i := 0; i < 10; i++ {
-		testJobs = append(testJobs, createTestJob(t, tCtx, fmt.Sprintf("job%d", i)))
+		tCtx.currentName = fmt.Sprintf("job%d", i)
+		testJobs = append(testJobs, createTestJob(t, tCtx))
 	}
 
 	t.Cleanup(func() {
@@ -566,12 +567,12 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 	}
 }
 
-func createTestJob(t *testing.T, tCtx *End2EndTestingContext, name ...string) *api.CreateRayJobRequest {
+func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobRequest {
 	// create config map and register a cleanup hook upon success
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	}, name...)
+	}, tCtx.currentName) // set the name of the config map to the current name
 	t.Cleanup(func() {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
@@ -593,14 +594,9 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, name ...string) *a
 		Items:      items,
 	}
 
-	jobName := tCtx.GetNextName()
-	if len(name) > 0 {
-		jobName = name[0]
-	}
-
 	testJobRequest := &api.CreateRayJobRequest{
 		Job: &api.RayJob{
-			Name:                     jobName,
+			Name:                     tCtx.currentName,
 			Namespace:                tCtx.GetNamespaceName(),
 			User:                     "natacha",
 			Version:                  tCtx.GetRayVersion(),
