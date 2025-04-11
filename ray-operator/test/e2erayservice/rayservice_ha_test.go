@@ -290,7 +290,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	})
 	// Because this test shares the Locust RayCluster YAML file with other tests,
 	// we need to ensure the YAML file is not accidentally updated.
-	g.Expect(time.Since(startTime) > 2*time.Minute).To(BeTrue())
+	g.Expect(time.Since(startTime)).To(BeNumerically(">", 2*time.Minute))
 
 	newHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
