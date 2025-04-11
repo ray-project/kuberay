@@ -3,12 +3,12 @@ package e2e
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -392,8 +392,7 @@ func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayservices.ray.io \""+serviceName+"\" not found") {
+		if err00 != nil && strings.Contains(err00.Error(), "rayservices.ray.io \""+serviceName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)

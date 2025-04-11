@@ -12,7 +12,6 @@ import (
 	petnames "github.com/dustinkirkland/golang-petname"
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	batchv1 "k8s.io/api/batch/v1"
@@ -171,7 +170,7 @@ func withNamespace() contextOption {
 		// register an automatic deletion of the namespace at test's end
 		t.Cleanup(func() {
 			err := tCtx.k8client.CoreV1().Namespaces().Delete(tCtx.ctx, tCtx.namespaceName, metav1.DeleteOptions{})
-			assert.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
+			require.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
 		})
 		return nil
 	}
@@ -427,6 +426,6 @@ func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[str
 func (e2etc *End2EndTestingContext) DeleteConfigMap(t *testing.T, configMapName string) {
 	err := e2etc.k8client.CoreV1().ConfigMaps(e2etc.namespaceName).Delete(e2etc.ctx, configMapName, metav1.DeleteOptions{})
 	if err != nil {
-		assert.Truef(t, k8sApiErrors.IsNotFound(err), "Only IsNotFoundException allowed, received %v", err)
+		require.Truef(t, k8sApiErrors.IsNotFound(err), "Only IsNotFoundException allowed, received %v", err)
 	}
 }

@@ -8,7 +8,7 @@ import (
 
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -557,15 +557,15 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 
 func TestAutoscalerOptions(t *testing.T) {
 	options := convertAutoscalingOptions(autoscalerOptions)
-	assert.Equal(t, int32(60), options.IdleTimeoutSeconds)
-	assert.Equal(t, "Default", options.UpscalingMode)
-	assert.Equal(t, "Some Image", options.Image)
-	assert.Equal(t, "Always", options.ImagePullPolicy)
-	assert.Equal(t, "500m", options.Cpu)
-	assert.Equal(t, "512Mi", options.Memory)
-	assert.Len(t, options.Envs.Values, 1)
-	assert.Len(t, options.Envs.ValuesFrom, 2)
-	assert.Len(t, options.Volumes, 2)
+	require.Equal(t, int32(60), options.IdleTimeoutSeconds)
+	require.Equal(t, "Default", options.UpscalingMode)
+	require.Equal(t, "Some Image", options.Image)
+	require.Equal(t, "Always", options.ImagePullPolicy)
+	require.Equal(t, "500m", options.Cpu)
+	require.Equal(t, "512Mi", options.Memory)
+	require.Len(t, options.Envs.Values, 1)
+	require.Len(t, options.Envs.ValuesFrom, 2)
+	require.Len(t, options.Volumes, 2)
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
@@ -573,39 +573,39 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
-	assert.False(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
+	require.False(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions != nil {
 		t.Errorf("unexpected autoscaler annotations")
 	}
 	cluster = FromCrdToAPICluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
-	assert.True(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
+	require.True(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions == nil {
 		t.Errorf("autoscaler annotations not found")
 	}
-	assert.Equal(t, int32(60), cluster.ClusterSpec.AutoscalerOptions.IdleTimeoutSeconds)
-	assert.Equal(t, "Default", cluster.ClusterSpec.AutoscalerOptions.UpscalingMode)
-	assert.Equal(t, "Always", cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy)
-	assert.Equal(t, "500m", cluster.ClusterSpec.AutoscalerOptions.Cpu)
-	assert.Equal(t, "512Mi", cluster.ClusterSpec.AutoscalerOptions.Memory)
-	assert.Len(t, cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom, 4)
+	require.Equal(t, int32(60), cluster.ClusterSpec.AutoscalerOptions.IdleTimeoutSeconds)
+	require.Equal(t, "Default", cluster.ClusterSpec.AutoscalerOptions.UpscalingMode)
+	require.Equal(t, "Always", cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy)
+	require.Equal(t, "500m", cluster.ClusterSpec.AutoscalerOptions.Cpu)
+	require.Equal(t, "512Mi", cluster.ClusterSpec.AutoscalerOptions.Memory)
+	require.Len(t, cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom, 4)
 	for name, value := range cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom {
 		switch name {
 		case "REDIS_PASSWORD":
-			assert.Equal(t, "SECRET", value.Source.String())
-			assert.Equal(t, "redis-password-secret", value.Name)
-			assert.Equal(t, "password", value.Key)
+			require.Equal(t, "SECRET", value.Source.String())
+			require.Equal(t, "redis-password-secret", value.Name)
+			require.Equal(t, "password", value.Key)
 		case "CONFIGMAP":
-			assert.Equal(t, "CONFIGMAP", value.Source.String())
-			assert.Equal(t, "special-config", value.Name)
-			assert.Equal(t, "special.how", value.Key)
+			require.Equal(t, "CONFIGMAP", value.Source.String())
+			require.Equal(t, "special-config", value.Name)
+			require.Equal(t, "special.how", value.Key)
 		case "ResourceFieldRef":
-			assert.Equal(t, "RESOURCEFIELD", value.Source.String())
-			assert.Equal(t, "my-container", value.Name)
-			assert.Equal(t, "resource", value.Key)
+			require.Equal(t, "RESOURCEFIELD", value.Source.String())
+			require.Equal(t, "my-container", value.Name)
+			require.Equal(t, "resource", value.Key)
 		default:
-			assert.Equal(t, "FIELD", value.Source.String())
-			assert.Equal(t, "", value.Name)
-			assert.Equal(t, "path", value.Key)
+			require.Equal(t, "FIELD", value.Source.String())
+			require.Equal(t, "", value.Name)
+			require.Equal(t, "path", value.Key)
 		}
 	}
 }
@@ -627,10 +627,10 @@ func TestPopulateTemplate(t *testing.T) {
 			tolerationToString(&expectedTolerations))
 	}
 
-	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
-	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
-	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
-	assert.Equal(
+	require.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	require.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	require.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	require.Equal(
 		t,
 		map[string]uint32{"vpc.amazonaws.com/efa": 32},
 		template.ExtendedResources,
@@ -645,39 +645,39 @@ func tolerationToString(toleration *api.PodToleration) string {
 func TestPopulateJob(t *testing.T) {
 	job := FromCrdToAPIJob(&JobNewClusterTest)
 	fmt.Printf("jobWithCluster = %#v\n", job)
-	assert.Equal(t, "test", job.Name)
-	assert.Equal(t, "test", job.Namespace)
-	assert.Equal(t, "user", job.User)
-	assert.Greater(t, len(job.RuntimeEnv), 1)
-	assert.Nil(t, job.ClusterSelector)
-	assert.NotNil(t, job.ClusterSpec)
+	require.Equal(t, "test", job.Name)
+	require.Equal(t, "test", job.Namespace)
+	require.Equal(t, "user", job.User)
+	require.Greater(t, len(job.RuntimeEnv), 1)
+	require.Nil(t, job.ClusterSelector)
+	require.NotNil(t, job.ClusterSpec)
 
 	job = FromCrdToAPIJob(&JobExistingClusterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
-	assert.Equal(t, "test", job.Name)
-	assert.Equal(t, "test", job.Namespace)
-	assert.Equal(t, "user", job.User)
-	assert.Greater(t, len(job.RuntimeEnv), 1)
-	assert.NotNil(t, job.ClusterSelector)
-	assert.Nil(t, job.ClusterSpec)
+	require.Equal(t, "test", job.Name)
+	require.Equal(t, "test", job.Namespace)
+	require.Equal(t, "user", job.User)
+	require.Greater(t, len(job.RuntimeEnv), 1)
+	require.NotNil(t, job.ClusterSelector)
+	require.Nil(t, job.ClusterSpec)
 
 	job = FromCrdToAPIJob(&JobExistingClusterSubmitterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
-	assert.Equal(t, "test", job.Name)
-	assert.Equal(t, "test", job.Namespace)
-	assert.Equal(t, "user", job.User)
-	assert.Greater(t, len(job.RuntimeEnv), 1)
-	assert.NotNil(t, job.ClusterSelector)
-	assert.Nil(t, job.ClusterSpec)
-	assert.Equal(t, "image", job.JobSubmitter.Image)
-	assert.Equal(t, "2", job.JobSubmitter.Cpu)
+	require.Equal(t, "test", job.Name)
+	require.Equal(t, "test", job.Namespace)
+	require.Equal(t, "user", job.User)
+	require.Greater(t, len(job.RuntimeEnv), 1)
+	require.NotNil(t, job.ClusterSelector)
+	require.Nil(t, job.ClusterSpec)
+	require.Equal(t, "image", job.JobSubmitter.Image)
+	require.Equal(t, "2", job.JobSubmitter.Cpu)
 
 	job = FromCrdToAPIJob(&JobWithOutputTest)
 	fmt.Printf("jobWithOutput = %#v\n", job)
-	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
-	assert.Nil(t, job.EndTime)
-	assert.Equal(t, "RUNNING", job.JobStatus)
-	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
-	assert.Equal(t, "Job is currently running", job.Message)
-	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
+	require.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
+	require.Nil(t, job.EndTime)
+	require.Equal(t, "RUNNING", job.JobStatus)
+	require.Equal(t, "Initializing", job.JobDeploymentStatus)
+	require.Equal(t, "Job is currently running", job.Message)
+	require.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
 }

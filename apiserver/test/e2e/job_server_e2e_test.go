@@ -3,10 +3,10 @@ package e2e
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -590,8 +590,7 @@ func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName str
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayJob, err00 := tCtx.GetRayJobByName(jobName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayjobs.ray.io \""+jobName+"\" not found") {
+		if err00 != nil && strings.Contains(err00.Error(), "rayjobs.ray.io \""+jobName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, jobName)
