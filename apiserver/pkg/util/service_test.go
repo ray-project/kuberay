@@ -26,12 +26,12 @@ var apiServiceV2 = &api.RayService{
 
 func TestBuildService(t *testing.T) {
 	_, err := NewRayService(apiServiceNoServe, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	if err.Error() != "serve configuration is not defined" {
 		t.Errorf("wrong error returned")
 	}
 	got, err := NewRayService(apiServiceV2, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	if got.RayService.Spec.ServeConfigV2 == "" {
 		t.Errorf("Got empty V2")
 	}

@@ -145,7 +145,7 @@ func (c *k8sClient) WaitRayClusterProvisioned(ctx context.Context, namespace, na
 				return fmt.Errorf("unexpected type %T", event.Object)
 			}
 
-			if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) || cluster.Status.State == rayv1.Ready { //nolint:staticcheck // Check .Status.State in case RayClusterStatusConditions feature gate isn't enabled
+			if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) || cluster.Status.State == rayv1.Ready {
 				return nil
 			}
 		}

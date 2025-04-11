@@ -214,7 +214,7 @@ func TestGetAllComputeTemplates(t *testing.T) {
 			break
 		}
 	}
-	require.Equal(t, foundName, true)
+	require.True(t, foundName)
 }
 
 // TestGetTemplatesInNamespace get all compute templates in namespace endpoint
@@ -243,7 +243,7 @@ func TestGetTemplatesInNamespace(t *testing.T) {
 			break
 		}
 	}
-	require.Equal(t, foundName, true)
+	require.True(t, foundName)
 }
 
 // TestDeleteTemplate sequentially iterates over the delete compute template endpoint

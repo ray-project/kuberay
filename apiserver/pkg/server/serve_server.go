@@ -19,9 +19,9 @@ type ServiceServerOptions struct {
 // implements `type RayServeServiceServer interface` in serve_grpc.pb.go
 // RayServiceServer is the server API for RayServeService service.
 type RayServiceServer struct {
+	api.UnimplementedRayServeServiceServer
 	resourceManager *manager.ResourceManager
 	options         *ServiceServerOptions
-	api.UnimplementedRayServeServiceServer
 }
 
 func NewRayServiceServer(resourceManager *manager.ResourceManager, options *ServiceServerOptions) *RayServiceServer {

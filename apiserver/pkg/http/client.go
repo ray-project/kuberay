@@ -17,9 +17,9 @@ import (
 
 type KuberayAPIServerClient struct {
 	httpClient  *http.Client
-	baseURL     string
 	marshaler   *protojson.MarshalOptions
 	unmarshaler *protojson.UnmarshalOptions
+	baseURL     string
 }
 
 type KuberayAPIServerClientError struct {

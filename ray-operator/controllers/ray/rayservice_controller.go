@@ -302,9 +302,9 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	calculateConditions(rayServiceInstance)
 
 	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
-	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning //nolint:staticcheck // `ServiceStatus` is deprecated
+	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
-		rayServiceInstance.Status.ServiceStatus = rayv1.Running //nolint:staticcheck // `ServiceStatus` is deprecated
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running
 	}
 	return nil
 }
@@ -405,8 +405,8 @@ func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServic
 // Determine whether to update the status of the RayService instance.
 func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
 	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.ServiceStatus != newStatus.ServiceStatus { //nolint:staticcheck // `ServiceStatus` is deprecated
-		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus) //nolint:staticcheck // `ServiceStatus` is deprecated
+	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
+		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
 		return true
 	}
 

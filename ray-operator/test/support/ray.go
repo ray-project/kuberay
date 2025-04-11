@@ -71,7 +71,7 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
-	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	return cluster.Status.State
 }
 
 func StatusCondition(condType rayv1.RayClusterConditionType) func(*rayv1.RayCluster) metav1.Condition {
@@ -201,7 +201,7 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 }
 
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
-	return service.Status.ServiceStatus //nolint:staticcheck // `ServiceStatus` is deprecated
+	return service.Status.ServiceStatus
 }
 
 func IsRayServiceReady(service *rayv1.RayService) bool {

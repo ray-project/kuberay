@@ -844,7 +844,7 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
 	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+		return nil, fmt.Errorf("failed to marshal extended resources: %w", err)
 	}
 
 	// Create data map

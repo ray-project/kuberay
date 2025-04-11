@@ -29,9 +29,9 @@ import (
 
 // GenericEnd2EndTest struct allows for reuse in setting up and running tests
 type GenericEnd2EndTest[I proto.Message] struct {
-	Name          string
 	Input         I
 	ExpectedError error
+	Name          string
 }
 
 // End2EndTestingContext provides a common set of values and methods that
