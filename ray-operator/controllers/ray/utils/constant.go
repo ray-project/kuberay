@@ -137,6 +137,10 @@ const (
 	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
 	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
 
+	// This KubeRay operator environment variable is used to determine
+	// if operator should treat OpenShift cluster as Vanilla Kubernetes.
+	USE_INGRESS_ON_OPENSHIFT = "USE_INGRESS_ON_OPENSHIFT"
+
 	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
 	ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
 

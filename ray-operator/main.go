@@ -237,11 +237,12 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
+	ctx := ctrl.SetupSignalHandler()
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
+		IsOpenShift:             utils.GetClusterType(),
 	}
-	ctx := ctrl.SetupSignalHandler()
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
