@@ -91,11 +91,9 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 	}
 
 	// convert *api.Cluster to rayv1api.RayCluster
-	rayCluster, err := util.
-		NewRayCluster(apiCluster, computeTemplateDict)
+	rayCluster, err := util.NewRayCluster(apiCluster, computeTemplateDict)
 	if err != nil {
-		return nil, util.
-			NewInvalidInputErrorWithDetails(err, "Failed to create a Ray cluster")
+		return nil, util.NewInvalidInputErrorWithDetails(err, "Failed to create a Ray cluster")
 	}
 
 	// set our own fields.
@@ -104,8 +102,7 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 
 	newRayCluster, err := r.getRayClusterClient(apiCluster.Namespace).Create(ctx, rayCluster.Get(), metav1.CreateOptions{})
 	if err != nil {
-		return nil, util.
-			NewInternalServerError(err, "Failed to create a cluster for (%s/%s)", rayCluster.Namespace, rayCluster.Name)
+		return nil, util.NewInternalServerError(err, "Failed to create a cluster for (%s/%s)", rayCluster.Namespace, rayCluster.Name)
 	}
 
 	return newRayCluster, nil
