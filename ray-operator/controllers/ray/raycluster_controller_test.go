@@ -117,7 +117,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check head service", func() {
@@ -129,7 +129,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			Eventually(
 				getResourceFunc(ctx, namespacedName, svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Head service: %v", svc)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Head service: %v", svc)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -210,7 +210,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster: %v", rayCluster)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "rayCluster: %v", rayCluster)
 				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](5)
 
 				// Operator may update revision after we get cluster earlier. Update may result in 409 conflict error.
@@ -256,7 +256,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of head Pods", func() {
@@ -350,7 +350,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of head Pods", func() {
@@ -442,7 +442,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check RoleBinding / Role / ServiceAccount", func() {
@@ -450,19 +450,19 @@ var _ = Context("Inside the default namespace", func() {
 			namespacedName := common.RayClusterAutoscalerRoleBindingNamespacedName(rayCluster)
 			Eventually(
 				getResourceFunc(ctx, namespacedName, rb),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Autoscaler RoleBinding: %v", namespacedName)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Autoscaler RoleBinding: %v", namespacedName)
 
 			role := &rbacv1.Role{}
 			namespacedName = common.RayClusterAutoscalerRoleNamespacedName(rayCluster)
 			Eventually(
 				getResourceFunc(ctx, namespacedName, role),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Autoscaler Role: %v", namespacedName)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Autoscaler Role: %v", namespacedName)
 
 			sa := &corev1.ServiceAccount{}
 			namespacedName = common.RayClusterAutoscalerServiceAccountNamespacedName(rayCluster)
 			Eventually(
 				getResourceFunc(ctx, namespacedName, sa),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Autoscaler ServiceAccount: %v", namespacedName)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Autoscaler ServiceAccount: %v", namespacedName)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -476,7 +476,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 				podToDelete := workerPods.Items[0]
 				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](2)
 				rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{podToDelete.Name}
@@ -498,7 +498,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](4)
 				return k8sClient.Update(ctx, rayCluster)
 			})
@@ -515,7 +515,7 @@ var _ = Context("Inside the default namespace", func() {
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "rayCluster = %v", rayCluster)
 			rayCluster.Spec.Suspend = &suspend
 			return k8sClient.Update(ctx, rayCluster)
 		})
@@ -525,7 +525,7 @@ var _ = Context("Inside the default namespace", func() {
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "rayCluster = %v", rayCluster)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "rayCluster = %v", rayCluster)
 			rayCluster.Spec.WorkerGroupSpecs[0].Suspend = &suspend
 			return k8sClient.Update(ctx, rayCluster)
 		})
@@ -578,7 +578,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		By("Check the number of worker Pods", func() {
@@ -733,7 +733,7 @@ var _ = Context("Inside the default namespace", func() {
 				err := k8sClient.Create(ctx, rayCluster)
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 				Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 			})
 
 			By("Check the number of Pods and add finalizers", func() {
@@ -830,7 +830,7 @@ var _ = Context("Inside the default namespace", func() {
 				err := k8sClient.Create(ctx, rayCluster)
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 				Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 			})
 
 			By("Check the number of Pods and add finalizers", func() {
@@ -875,7 +875,7 @@ var _ = Context("Inside the default namespace", func() {
 				err := k8sClient.Create(ctx, rayCluster)
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 				Eventually(getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 			})
 
 			By("Check the number of Pods", func() {
@@ -930,7 +930,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -944,7 +944,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](2)
 				rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{
 					workerPods.Items[0].Name, workerPods.Items[1].Name, workerPods.Items[2].Name, workerPods.Items[3].Name,
@@ -967,7 +967,7 @@ var _ = Context("Inside the default namespace", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 				rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](4)
 				return k8sClient.Update(ctx, rayCluster)
 			})
@@ -1013,7 +1013,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check workers are in the same namespace as RayCluster", func() {
@@ -1065,7 +1065,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -1108,7 +1108,7 @@ var _ = Context("Inside the default namespace", func() {
 		It("Check DesiredMemory and DesiredCPU", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 			desiredMemory := resource.MustParse("4Gi")
 			desiredCPU := resource.MustParse("4")
 			Expect(rayCluster.Status.DesiredMemory).To(Equal(desiredMemory))
@@ -1144,7 +1144,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -1184,7 +1184,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 
 			By("Check the number of worker Pods")
 			Eventually(
@@ -1318,7 +1318,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 
 			By("Check RayCluster RayClusterReplicaFailure condition is true")
 			Eventually(
@@ -1348,7 +1348,7 @@ var _ = Context("Inside the default namespace", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check the number of worker Pods", func() {
@@ -1362,13 +1362,13 @@ var _ = Context("Inside the default namespace", func() {
 			var svc corev1.Service
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-head-svc", Namespace: namespace}, &svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-serve-svc", Namespace: namespace}, &svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-headless", Namespace: namespace}, &svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 	})
 })
