@@ -171,7 +171,7 @@ func withNamespace() contextOption {
 		// register an automatic deletion of the namespace at test's end
 		t.Cleanup(func() {
 			err := tCtx.k8client.CoreV1().Namespaces().Delete(tCtx.ctx, tCtx.namespaceName, metav1.DeleteOptions{})
-			assert.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
+			require.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
 		})
 		return nil
 	}
@@ -251,10 +251,8 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 		Namespace: e2etc.namespaceName,
 	}
 
-	_, status, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
-	if !assert.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName) {
-		t.Fatalf("Received status of %v when attempting to create compute template", status)
-	}
+	_, _, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
+	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
 }
 
 func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
@@ -262,10 +260,8 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 		Name:      e2etc.computeTemplateName,
 		Namespace: e2etc.namespaceName,
 	}
-	status, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
-	if !assert.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName) {
-		t.Fatalf("Received status of %v when attempting to create compute template", status)
-	}
+	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
+	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
 }
 
 func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, name ...string) (*api.Cluster, string) {
@@ -281,7 +277,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	if len(name) > 0 {
 		clusterName = name[0]
 	}
-	actualCluster, status, err := e2etc.kuberayAPIServerClient.CreateCluster(&api.CreateClusterRequest{
+	actualCluster, _, err := e2etc.kuberayAPIServerClient.CreateCluster(&api.CreateClusterRequest{
 		Cluster: &api.Cluster{
 			Name:        clusterName,
 			Namespace:   e2etc.namespaceName,
@@ -334,9 +330,8 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 		},
 		Namespace: e2etc.namespaceName,
 	})
-	if !assert.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName) {
-		t.Fatalf("Received status of %v when attempting to create a cluster", status)
-	}
+	require.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName)
+
 	// wait for the cluster to be in a running state for 3 minutes
 	// if is not in that state, return an error
 	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {

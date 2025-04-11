@@ -525,7 +525,7 @@ func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*E
 		go func(i int) {
 			defer wg.Done()
 			tCtx, err := NewEnd2EndTestingContext(t)
-			assert.NoError(t, err, "No error expected when creating testing context")
+			require.NoError(t, err, "No error expected when creating testing context")
 
 			tCtx.CreateComputeTemplate(t)
 			t.Cleanup(func() {
