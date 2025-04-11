@@ -410,9 +410,9 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	runtime := &api.ComputeTemplate{}
 	runtime.Name = configMap.Name
 	runtime.Namespace = configMap.Namespace
-	runtime.Cpu = uint32(cpu)
-	runtime.Memory = uint32(memory)
-	runtime.Gpu = uint32(gpu)
+	runtime.Cpu = uint32(cpu) //nolint:gosec // value is a valid uint32
+	runtime.Memory = uint32(memory) //nolint:gosec // value is a valid uint32
+	runtime.Gpu = uint32(gpu) //nolint:gosec // value is a valid uint32
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 
 	val, ok := configMap.Data["extended_resources"]
