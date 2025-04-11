@@ -78,7 +78,7 @@ func cleanUpWorkersToDelete(ctx context.Context, rayCluster *rayv1.RayCluster) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		gomega.Eventually(
 			getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: "default"}, rayCluster),
-			time.Second*9, time.Millisecond*500).Should(gomega.BeNil(), "raycluster = %v", rayCluster)
+			time.Second*9, time.Millisecond*500).Should(gomega.Succeed(), "raycluster = %v", rayCluster)
 		rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 		return k8sClient.Update(ctx, rayCluster)
 	})
@@ -252,7 +252,7 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, 
 	var instance rayv1.RayCluster
 	gomega.Eventually(
 		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, &instance),
-		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
+		time.Second*3, time.Millisecond*500).Should(gomega.Succeed(), "RayCluster %v not found", rayClusterName)
 
 	headPods := corev1.PodList{}
 	headLabels := common.RayClusterHeadPodsAssociationOptions(&instance).ToListOptions()
@@ -282,7 +282,7 @@ func updateWorkerPodsToRunningAndReady(ctx context.Context, rayClusterName strin
 	rayCluster := &rayv1.RayCluster{}
 	gomega.Eventually(
 		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, rayCluster),
-		time.Second*3, time.Millisecond*500).Should(gomega.BeNil(), "RayCluster %v not found", rayClusterName)
+		time.Second*3, time.Millisecond*500).Should(gomega.Succeed(), "RayCluster %v not found", rayClusterName)
 
 	workerPods := corev1.PodList{}
 	workerLabels := common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToListOptions()

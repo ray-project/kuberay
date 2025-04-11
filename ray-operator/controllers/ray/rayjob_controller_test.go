@@ -145,7 +145,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob: %v", rayJob.Name)
 					Eventually(
 						getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-						time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 				}
 			})
 
@@ -162,7 +162,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					rayCluster := &rayv1.RayCluster{}
 					Eventually(
 						getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-						time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 					// Make RayCluster.Status.State to be rayv1.Ready.
 					updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -216,7 +216,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -233,7 +233,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -316,7 +316,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				job := &batchv1.Job{}
 				Consistently(
 					getResourceFunc(ctx, namespacedName, job),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 		})
 
@@ -331,7 +331,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -349,11 +349,11 @@ var _ = Context("RayJob with different submission modes", func() {
 				var svc corev1.Service
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 				// Also check its service name.
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName + "-head-svc", Namespace: namespace}, &svc),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 		})
 
@@ -375,7 +375,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -387,7 +387,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 			})
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
@@ -441,7 +441,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -458,7 +458,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -561,7 +561,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -605,7 +605,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -622,7 +622,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -717,7 +717,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created (attempt 2)", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -823,7 +823,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			It("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -839,7 +839,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -911,7 +911,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -928,7 +928,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			By("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -1011,7 +1011,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				job := &batchv1.Job{}
 				Consistently(
 					getResourceFunc(ctx, namespacedName, job),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 		})
 
@@ -1033,7 +1033,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -1050,7 +1050,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			By("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -1127,7 +1127,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				// RayCluster exists
 				Consistently(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check worker group is suspended
 				Expect(*rayCluster.Spec.WorkerGroupSpecs[0].Suspend).To(BeTrue())
@@ -1150,7 +1150,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				job := &batchv1.Job{}
 				Consistently(
 					getResourceFunc(ctx, namespacedName, job),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 		})
 
@@ -1168,7 +1168,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -1185,7 +1185,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			By("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -1278,7 +1278,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Should be able to see RayJob: %v", rayJob.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
 			})
 
 			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
@@ -1295,7 +1295,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			By("In Initializing state, the RayCluster should eventually be created.", func() {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
 				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
@@ -1372,12 +1372,12 @@ var _ = Context("RayJob with different submission modes", func() {
 				// RayJob exists
 				Consistently(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayJob %v not found", rayJob)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayJob %v not found", rayJob)
 
 				// RayCluster exists
 				Consistently(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
 
 				// Worker replicas set to 3
 				Expect(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(int32(3)))
@@ -1400,7 +1400,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				job := &batchv1.Job{}
 				Consistently(
 					getResourceFunc(ctx, namespacedName, job),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 		})
 	})
