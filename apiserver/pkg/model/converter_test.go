@@ -639,11 +639,7 @@ func TestPopulateTemplate(t *testing.T) {
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
-	return "Key: " + toleration.Key + " Operator: " + string(
-		toleration.Operator,
-	) + " Effect: " + string(
-		toleration.Effect,
-	)
+	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
 }
 
 func TestPopulateJob(t *testing.T) {
