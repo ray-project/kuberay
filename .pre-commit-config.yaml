@@ -6,6 +6,35 @@ default_language_version:
   golang: 1.23.2
 
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^helm-chart/|^mkdocs\.yml$|^benchmark/perf-tests/|^\.krew\.yaml$
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-vcs-permalinks
+      - id: check-json
+      - id: pretty-format-json
+        args: [--autofix, --no-sort-keys, --no-ensure-ascii]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+
   - repo: local
     hooks:
       - id: golangci-lint
@@ -17,4 +46,31 @@ repos:
         always_run: true
         pass_filenames: false
         additional_dependencies:
-          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.3
+      - id: generate-crd-schema
+        name: generate CRD schemas for use of kubeconform
+        entry: ./scripts/generate-crd-schema.sh
+        language: python
+        require_serial: true
+        always_run: true
+        pass_filenames: false
+        additional_dependencies:
+          - PyYAML==6.0.1
+      - id: validate-helm-charts
+        name: validate helm charts with kubeconform
+        entry: bash scripts/validate-helm.sh
+        language: golang
+        require_serial: true
+        always_run: true
+        pass_filenames: false
+        additional_dependencies:
+          - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.44.0
+    hooks:
+      - id: markdownlint-fix
+        name: Markdown linting
+        args:
+          - --ignore=.github/pull_request_template.md
+          - --disable=MD033
