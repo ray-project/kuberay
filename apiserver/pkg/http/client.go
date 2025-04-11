@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -445,7 +446,16 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
 
+	q := httpRequest.URL.Query()
+	q.Set("limit", strconv.FormatInt(int64(request.PageSize), 10))
+	q.Set("continue", request.PageToken)
+	httpRequest.URL.RawQuery = q.Encode()
 	httpRequest.Header.Add("Accept", "application/json")
+
+	/////////////// debug
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(file, "raw query = %s\n", httpRequest.URL.RawQuery)
+	/////////////// debug
 
 	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
 	if err != nil {
@@ -455,6 +465,12 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, status, nil
 	}
+
+	/////////////// debug
+	file2, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(file2, "http client response = %+v\n", response)
+	/////////////// debug
+
 	return response, nil, nil
 }
 

@@ -284,6 +284,8 @@ type ListRayServicesResponse struct {
 	// The total number of RayServices for the given query.
 	TotalSize int32 `protobuf:"varint,2,opt,name=total_size,json=totalSize,proto3" json:"total_size,omitempty"`
 	// The token to list the next page of RayServices.
+	//
+	// If there are no more clusters, this field will be empty.
 	NextPageToken string `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 }
 

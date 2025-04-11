@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -24,7 +25,7 @@ const DefaultNamespace = "ray-system"
 type ResourceManagerInterface interface {
 	CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*rayv1api.RayCluster, error)
 	GetCluster(ctx context.Context, clusterName string, namespace string) (*rayv1api.RayCluster, error)
-	ListClusters(ctx context.Context, namespace string) ([]*rayv1api.RayCluster, error)
+	ListClusters(ctx context.Context, namespace string, continueToken string, limit int64) ([]*rayv1api.RayCluster, string, error)
 	ListAllClusters(ctx context.Context) ([]*rayv1api.RayCluster, error)
 	DeleteCluster(ctx context.Context, clusterName string, namespace string) error
 	CreateComputeTemplate(ctx context.Context, runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
@@ -39,7 +40,7 @@ type ResourceManagerInterface interface {
 	CreateService(ctx context.Context, apiService *api.RayService) (*rayv1api.RayService, error)
 	UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*rayv1api.RayService, error)
 	GetService(ctx context.Context, serviceName, namespace string) error
-	ListServices(ctx context.Context, namespace string) ([]*rayv1api.RayService, error)
+	ListServices(ctx context.Context, namespace string, pageToken string, pageSize int32) ([]*rayv1api.RayService, string, error)
 	ListAllServices(ctx context.Context) ([]*rayv1api.RayService, error)
 	DeleteService(ctx context.Context, serviceName, namespace string) error
 	GetClusterEvents(ctx context.Context, clusterName string, namespace string) ([]corev1.Event, error)
@@ -329,7 +330,7 @@ func (r *ResourceManager) GetService(ctx context.Context, serviceName, namespace
 	return getServiceByName(ctx, client, serviceName)
 }
 
-func (r *ResourceManager) ListServices(ctx context.Context, namespace string) ([]*rayv1api.RayService, error) {
+func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pageToken string, pageSize int32) ([]*rayv1api.RayService, string /*nextPageToken*/, error) {
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			util.KubernetesManagedByLabelKey: util.ComponentName,
@@ -337,16 +338,24 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string) ([
 	}
 	rayServiceList, err := r.getRayServiceClient(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		Limit:         int64(pageSize),
+		Continue:      pageToken,
 	})
+
+	/////////////// debug
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fmt.Fprintf(file, "at resource manager ray service list = %+v\n", rayServiceList)
+	/////////////// debug
+
 	if err != nil {
-		return nil, util.Wrap(err, fmt.Sprintf("List RayService failed in %s", namespace))
+		return nil, "" /*nextPageToken*/, util.Wrap(err, fmt.Sprintf("List RayService failed in %s with next page token %s and page limit %d", namespace, pageToken, pageSize))
 	}
-	rayServices := make([]*rayv1api.RayService, 0)
+	rayServices := make([]*rayv1api.RayService, 0, len(rayServiceList.Items))
 	for _, service := range rayServiceList.Items {
 		rayServices = append(rayServices, &service)
 	}
 
-	return rayServices, nil
+	return rayServices, rayServiceList.Continue, nil
 }
 
 func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayService, error) {
@@ -358,7 +367,8 @@ func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayS
 	}
 
 	for _, namespace := range namespaces.Items {
-		servicesByNamespace, err := r.ListServices(ctx, namespace.Name)
+		// TODO(tinaxfwu): Implement list all services with pagination support.
+		servicesByNamespace, _, err := r.ListServices(ctx, namespace.Name, "" /*pageToken*/, 0 /*pageSize*/)
 		if err != nil {
 			return nil, util.Wrap(err, "List All Rayservices failed")
 		}
