@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -430,6 +431,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
+	if r.enableMetrics {
+		emitRayJobMetrics(originalRayJobInstance, rayJobInstance)
 	}
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
@@ -887,4 +892,11 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
+}
+
+func emitRayJobMetrics(originalRayJobInstance, rayJobInstance *rayv1.RayJob) {
+	// If a RayJob was in `New` status and is now in `Initializing`, it means the RayJob has been created.
+	if originalRayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusNew && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusInitializing {
+		metrics.RayJobsCreatedTotalInc(rayJobInstance.Namespace)
+	}
 }
