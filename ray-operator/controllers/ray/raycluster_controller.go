@@ -15,6 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -135,6 +137,7 @@ type RayClusterReconciler struct {
 	Recorder                   record.EventRecorder
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
+	rayClusterMetricCollector  *metrics.RayClusterMetricCollector
 
 	options RayClusterReconcilerOptions
 
@@ -142,8 +145,9 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	HeadSidecarContainers   []corev1.Container
-	WorkerSidecarContainers []corev1.Container
+	RayClusterMetricCollector *metrics.RayClusterMetricCollector
+	HeadSidecarContainers     []corev1.Container
+	WorkerSidecarContainers   []corev1.Container
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -732,8 +736,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
+
 		if err := r.createHeadPod(ctx, *instance); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
+		}
+
+		if r.rayClusterMetricCollector != nil {
+			creatorCRDType := getCreatorCRDType(*instance)
+			isFromRayJob := creatorCRDType == utils.RayJobCRD
+			isFromRayService := creatorCRDType == utils.RayServiceCRD
+			r.rayClusterMetricCollector.IncRayClustersCreatedCounter(instance.Namespace, isFromRayJob, isFromRayService)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
