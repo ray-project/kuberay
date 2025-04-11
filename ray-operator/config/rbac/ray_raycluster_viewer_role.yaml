@@ -1,18 +1,18 @@
-{{- if and .Values.rbacEnable (not .Values.singleNamespaceInstall) }}
+---
+# Source: kuberay-operator/templates/ray_raycluster_viewer_role.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: rayjob-viewer-role
+  name: raycluster-viewer-role
   labels:
     rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
 - apiGroups:
   - ray.io
   resources:
-  - rayjobs
-  - rayjobs/status
+  - rayclusters
+  - rayclusters/status
   verbs:
   - get
   - list
   - watch
-{{- end }}
