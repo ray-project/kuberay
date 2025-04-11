@@ -248,7 +248,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -392,7 +392,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -473,7 +473,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -637,7 +637,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -732,7 +732,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready (attempt 2)", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -854,7 +854,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -943,7 +943,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -1065,7 +1065,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -1200,7 +1200,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
@@ -1310,7 +1310,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
-				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready)) //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
 
 				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
 				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)

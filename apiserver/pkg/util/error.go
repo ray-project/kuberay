@@ -36,7 +36,7 @@ type CustomError struct {
 func NewCustomError(err error, code CustomCode, format string, a ...interface{}) *CustomError {
 	message := fmt.Sprintf(format, a...)
 	return &CustomError{
-		error: errors.Wrapf(err, fmt.Sprintf("CustomError (code: %v): %v", code, message)),
+		error: errors.Wrapf(err, "CustomError (code: %v): %v", code, message),
 		code:  code,
 	}
 }
@@ -57,12 +57,13 @@ func HasCustomCode(err error, code CustomCode) bool {
 	if err == nil {
 		return false
 	}
-	switch e := err.(type) {
-	case *CustomError:
-		return e.code == code
-	default:
-		return false
+
+	var customErr *CustomError
+	if errors.As(err, &customErr) {
+		return customErr.code == code
 	}
+
+	return false
 }
 
 type UserError struct {
@@ -90,36 +91,38 @@ func NewUserErrorWithSingleMessage(err error, message string) *UserError {
 
 func NewUserError(err error, internalMessage string, externalMessage string) *UserError {
 	// Note apiError.Response is of type github.com/go-openapi/runtime/client
-	if apiError, ok := err.(*runtime.APIError); ok {
+	var apiError *runtime.APIError
+	if errors.As(err, &apiError) {
 		if apiError.Code == API_CODE_NOT_FOUND {
 			return newUserError(
-				errors.Wrapf(err, internalMessage),
+				errors.Wrapf(err, "%s", internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(apiError.Code))
-		} else {
-			return newUserError(
-				errors.Wrapf(err, internalMessage),
-				fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-				codes.Code(apiError.Code))
+				codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
+			)
 		}
+		return newUserError(
+			errors.Wrapf(err, "%s", internalMessage),
+			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
+			codes.Code(uint32(apiError.Code)), //nolint:gosec // apiError.Code is validated upstream
+		)
 	}
 
 	return newUserError(
-		errors.Wrapf(err, internalMessage),
+		errors.Wrapf(err, "%s", internalMessage),
 		fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
 		codes.Internal)
 }
 
 func ExtractErrorForCLI(err error, isDebugMode bool) error {
-	if userError, ok := err.(*UserError); ok {
+	// Check if the error is of type *UserError, even if it's wrapped
+	var userError *UserError
+	if errors.As(err, &userError) {
 		if isDebugMode {
-			return fmt.Errorf("%+v", userError.internalError)
-		} else {
-			return fmt.Errorf("%v", userError.externalMessage)
+			return fmt.Errorf("%+w", userError.internalError)
 		}
-	} else {
-		return err
+		return fmt.Errorf("%v", userError.externalMessage)
 	}
+	return err
 }
 
 func NewInternalServerError(err error, internalMessageFormat string,
@@ -127,7 +130,7 @@ func NewInternalServerError(err error, internalMessageFormat string,
 ) *UserError {
 	internalMessage := fmt.Sprintf(internalMessageFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("InternalServerError: %v", internalMessage)),
+		errors.Wrapf(err, "InternalServerError: %v", internalMessage),
 		"Internal Server Error",
 		codes.Internal)
 }
@@ -137,7 +140,7 @@ func NewNotFoundError(err error, externalMessageFormat string,
 ) *UserError {
 	externalMessage := fmt.Sprintf(externalMessageFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("NotFoundError: %v", externalMessage)),
+		errors.Wrapf(err, "NotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
@@ -145,7 +148,7 @@ func NewNotFoundError(err error, externalMessageFormat string,
 func NewResourceNotFoundError(resourceType string, resourceName string) *UserError {
 	externalMessage := fmt.Sprintf("%s %s not found.", resourceType, resourceName)
 	return newUserError(
-		errors.New(fmt.Sprintf("ResourceNotFoundError: %v", externalMessage)),
+		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
@@ -153,7 +156,7 @@ func NewResourceNotFoundError(resourceType string, resourceName string) *UserErr
 func NewResourcesNotFoundError(resourceTypesFormat string, resourceNames ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf("%s not found.", fmt.Sprintf(resourceTypesFormat, resourceNames...))
 	return newUserError(
-		errors.New(fmt.Sprintf("ResourceNotFoundError: %v", externalMessage)),
+		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
@@ -165,7 +168,7 @@ func NewInvalidInputError(messageFormat string, a ...interface{}) *UserError {
 
 func NewInvalidInputErrorWithDetails(err error, externalMessage string) *UserError {
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("InvalidInputError: %v", externalMessage)),
+		errors.Wrapf(err, "InvalidInputError: %v", externalMessage),
 		externalMessage,
 		codes.InvalidArgument)
 }
@@ -178,7 +181,7 @@ func NewAlreadyExistError(messageFormat string, a ...interface{}) *UserError {
 func NewBadRequestError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("BadRequestError: %v", externalMessage)),
+		errors.Wrapf(err, "BadRequestError: %v", externalMessage),
 		externalMessage,
 		codes.Aborted)
 }
@@ -186,7 +189,7 @@ func NewBadRequestError(err error, externalFormat string, a ...interface{}) *Use
 func NewUnauthenticatedError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("Unauthenticated: %v", externalMessage)),
+		errors.Wrapf(err, "Unauthenticated: %v", externalMessage),
 		externalMessage,
 		codes.Unauthenticated)
 }
@@ -194,7 +197,7 @@ func NewUnauthenticatedError(err error, externalFormat string, a ...interface{})
 func NewPermissionDeniedError(err error, externalFormat string, a ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
-		errors.Wrapf(err, fmt.Sprintf("PermissionDenied: %v", externalMessage)),
+		errors.Wrapf(err, "PermissionDenied: %v", externalMessage),
 		externalMessage,
 		codes.PermissionDenied)
 }
@@ -255,12 +258,12 @@ func Wrapf(err error, format string, args ...interface{}) error {
 		return nil
 	}
 
-	switch e := err.(type) {
-	case *UserError:
-		return e.wrapf(format, args...)
-	default:
-		return errors.Wrapf(err, format, args...)
+	var userError *UserError
+	if errors.As(err, &userError) {
+		return userError.wrapf(format, args...)
 	}
+
+	return errors.Wrapf(err, format, args...)
 }
 
 func Wrap(err error, message string) error {
@@ -268,20 +271,22 @@ func Wrap(err error, message string) error {
 		return nil
 	}
 
-	switch e := err.(type) {
-	case *UserError:
-		return e.wrap(message)
-	default:
-		return errors.Wrapf(err, message)
+	var userErr *UserError
+	if errors.As(err, &userErr) {
+		return userErr.wrap(message)
 	}
+
+	return errors.Wrapf(err, "%s", message)
 }
 
 func LogError(err error) {
-	switch e := err.(type) {
-	case *UserError:
-		e.Log()
-	default:
-		// We log all the details.
+	// Check if the error is of type *UserError, even if it's wrapped
+	var userError *UserError
+	if errors.As(err, &userError) {
+		// If it's a *UserError, log it using the Log method
+		userError.Log()
+	} else {
+		// For all other errors, log all the details
 		klog.Errorf("InternalError: %+v", err)
 	}
 }
@@ -300,17 +305,24 @@ func IsNotFound(err error) bool {
 
 // IsUserErrorCodeMatch returns whether the error is a user error with specified code.
 func IsUserErrorCodeMatch(err error, code codes.Code) bool {
-	userError, ok := err.(*UserError)
-	return ok && userError.externalStatusCode == code
+	var userError *UserError
+	if errors.As(err, &userError) {
+		return userError.externalStatusCode == code
+	}
+	return false
 }
 
 // ReasonForError returns the HTTP status for a particular error.
 func reasonForError(err error) k8metav1.StatusReason {
-	switch t := err.(type) {
-	case *k8errors.StatusError:
-		return t.Status().Reason
-	case k8errors.APIStatus:
-		return t.Status().Reason
+	var statusErr *k8errors.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Status().Reason
 	}
+
+	var apiStatus k8errors.APIStatus
+	if errors.As(err, &apiStatus) {
+		return apiStatus.Status().Reason
+	}
+
 	return k8metav1.StatusReasonUnknown
 }

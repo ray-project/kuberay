@@ -19,9 +19,9 @@ type ClusterServerOptions struct {
 // implements `type ClusterServiceServer interface` in cluster_grpc.pb.go
 // ClusterServer is the server API for ClusterService service.
 type ClusterServer struct {
+	api.UnimplementedClusterServiceServer
 	resourceManager *manager.ResourceManager
 	options         *ClusterServerOptions
-	api.UnimplementedClusterServiceServer
 }
 
 // Creates a new Cluster.
@@ -42,7 +42,7 @@ func (s *ClusterServer) CreateCluster(ctx context.Context, request *api.CreateCl
 		klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
 	}
 
-	return model.FromCrdToApiCluster(cluster, events), nil
+	return model.FromCrdToAPICluster(cluster, events), nil
 }
 
 // Finds a specific Cluster by cluster name.
@@ -64,7 +64,7 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 		klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
 	}
 
-	return model.FromCrdToApiCluster(cluster, events), nil
+	return model.FromCrdToAPICluster(cluster, events), nil
 }
 
 // Finds all Clusters in a given namespace.
@@ -89,7 +89,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 	}
 
 	return &api.ListClustersResponse{
-		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Clusters: model.FromCrdToAPIClusters(clusters, clusterEventMap),
 		Continue: continueToken,
 	}, nil
 }
@@ -98,7 +98,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 // TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
 	// Leave the namespace empty to list all clusters in all namespaces.
-	clusters, continueToken, err := s.resourceManager.ListClusters(ctx, /*namespace=*/ "", request.Continue, request.Limit)
+	clusters, continueToken, err := s.resourceManager.ListClusters(ctx, "" /*namespace=*/, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
 	}
@@ -113,7 +113,7 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 	}
 
 	return &api.ListAllClustersResponse{
-		Clusters: model.FromCrdToApiClusters(clusters, clusterEventMap),
+		Clusters: model.FromCrdToAPIClusters(clusters, clusterEventMap),
 		Continue: continueToken,
 	}, nil
 }
@@ -155,11 +155,7 @@ func ValidateCreateClusterRequest(request *api.CreateClusterRequest) error {
 		return util.NewInvalidInputError("User who create the cluster is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Cluster.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Cluster.ClusterSpec)
 }
 
 func NewClusterServer(resourceManager *manager.ResourceManager, options *ClusterServerOptions) *ClusterServer {

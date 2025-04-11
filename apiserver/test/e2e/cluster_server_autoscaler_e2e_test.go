@@ -89,9 +89,9 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	}
 
 	// Create cluster
-	actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&clusterReq)
+	actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(&clusterReq)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 
@@ -114,9 +114,9 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 		},
 	}
 
-	actualJob, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(&createActorRequest)
+	actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(&createActorRequest)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
 
@@ -141,9 +141,9 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 			},
 		},
 	}
-	actualJob, actualRpcStatus, err = tCtx.GetRayApiServerClient().CreateRayJob(&deleteActorRequest)
+	actualJob, actualRPCStatus, err = tCtx.GetRayAPIServerClient().CreateRayJob(&deleteActorRequest)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
 

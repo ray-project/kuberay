@@ -28,12 +28,11 @@ type RayJobSubmissionServiceServerOptions struct {
 // implements `type ClusterServiceServer interface` in cluster_grpc.pb.go
 // ClusterServer is the server API for ClusterService service.
 type RayJobSubmissionServiceServer struct {
-	options       *RayJobSubmissionServiceServerOptions
-	clusterServer *ClusterServer
-	log           logr.Logger
 	api.UnimplementedRayJobSubmissionServiceServer
-
+	options             *RayJobSubmissionServiceServerOptions
+	clusterServer       *ClusterServer
 	dashboardClientFunc func() utils.RayDashboardClientInterface
+	log                 logr.Logger
 }
 
 // Create RayJobSubmissionServiceServer

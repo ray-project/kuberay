@@ -88,15 +88,15 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func FromCrdToApiClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
+func FromCrdToAPIClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
 	apiClusters := make([]*api.Cluster, 0)
 	for _, cluster := range clusters {
-		apiClusters = append(apiClusters, FromCrdToApiCluster(cluster, clusterEventsMap[cluster.Name]))
+		apiClusters = append(apiClusters, FromCrdToAPICluster(cluster, clusterEventsMap[cluster.Name]))
 	}
 	return apiClusters
 }
 
-func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []corev1.Event) *api.Cluster {
+func FromCrdToAPICluster(cluster *rayv1api.RayCluster, events []corev1.Event) *api.Cluster {
 	pbCluster := &api.Cluster{
 		Name:      cluster.Name,
 		Namespace: cluster.Namespace,
@@ -443,15 +443,15 @@ func FromKubeToAPIComputeTemplates(configMaps []*corev1.ConfigMap) []*api.Comput
 	return apiComputeTemplates
 }
 
-func FromCrdToApiJobs(jobs []*rayv1api.RayJob) []*api.RayJob {
+func FromCrdToAPIJobs(jobs []*rayv1api.RayJob) []*api.RayJob {
 	apiJobs := make([]*api.RayJob, 0)
 	for _, job := range jobs {
-		apiJobs = append(apiJobs, FromCrdToApiJob(job))
+		apiJobs = append(apiJobs, FromCrdToAPIJob(job))
 	}
 	return apiJobs
 }
 
-func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
+func FromCrdToAPIJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -523,18 +523,18 @@ func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 	return pbJob
 }
 
-func FromCrdToApiServices(
+func FromCrdToAPIServices(
 	services []*rayv1api.RayService,
 	serviceEventsMap map[string][]corev1.Event,
 ) []*api.RayService {
 	apiServices := make([]*api.RayService, 0)
 	for _, service := range services {
-		apiServices = append(apiServices, FromCrdToApiService(service, serviceEventsMap[service.Name]))
+		apiServices = append(apiServices, FromCrdToAPIService(service, serviceEventsMap[service.Name]))
 	}
 	return apiServices
 }
 
-func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *api.RayService {
+func FromCrdToAPIService(service *rayv1api.RayService, events []corev1.Event) *api.RayService {
 	defer func() {
 		err := recover()
 		if err != nil {

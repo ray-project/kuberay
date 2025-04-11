@@ -47,7 +47,7 @@ func getClusterState(ctx context.Context, namespace string, clusterName string) 
 		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, &cluster); err != nil {
 			log.Fatal(err)
 		}
-		return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		return cluster.Status.State
 	}
 }
 
