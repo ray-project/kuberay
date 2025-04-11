@@ -418,11 +418,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context, oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
-	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
 		logger.Info(
 			"inconsistentRayClusterStatus",
-			"oldState", oldStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-			"newState", newStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			"oldState", oldStatus.State,
+			"newState", newStatus.State,
 			"oldReason", oldStatus.Reason,
 			"newReason", newStatus.Reason,
 		)
@@ -1296,7 +1296,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
 		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			newInstance.Status.State = rayv1.Ready
 			newInstance.Status.Reason = ""
 		}
 	}
@@ -1401,7 +1401,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
-		newInstance.Status.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		newInstance.Status.State = rayv1.Suspended
 	}
 
 	if err := r.updateEndpoints(ctx, newInstance); err != nil {
@@ -1415,11 +1415,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
-	if instance.Status.State != newInstance.Status.State { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	if instance.Status.State != newInstance.Status.State {
 		if newInstance.Status.StateTransitionTimes == nil {
 			newInstance.Status.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time)
 		}
-		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow
 	}
 
 	return newInstance, nil

@@ -22,9 +22,9 @@ func NewRayJobServer(resourceManager *manager.ResourceManager, options *JobServe
 }
 
 type RayJobServer struct {
+	api.UnimplementedRayJobServiceServer
 	resourceManager *manager.ResourceManager
 	options         *JobServerOptions
-	api.UnimplementedRayJobServiceServer
 }
 
 // Creates a new Ray Job.

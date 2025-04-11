@@ -11,9 +11,9 @@ import (
 
 func TestValidateClusterSpec(t *testing.T) {
 	tests := []struct {
-		name          string
-		clusterSpec   *api.ClusterSpec
 		expectedError error
+		clusterSpec   *api.ClusterSpec
+		name          string
 	}{
 		{
 			name: "A valid cluster spec",
@@ -221,9 +221,9 @@ func TestValidateClusterSpec(t *testing.T) {
 
 func TestValidateCreateServiceRequest(t *testing.T) {
 	tests := []struct {
-		name          string
-		request       *api.CreateRayServiceRequest
 		expectedError error
+		request       *api.CreateRayServiceRequest
+		name          string
 	}{
 		{
 			name: "A valid create service request V2",
