@@ -105,7 +105,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	}); err != nil {
 		panic(err)
 	}
-	isOpenShift := getClusterType(ctx)
+
 	// init the batch scheduler manager
 	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig())
 	if err != nil {
@@ -114,15 +114,15 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		panic(err)
 	}
 
+	options.IsOpenShift = getClusterType(ctx)
+
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
 	return &RayClusterReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
-		BatchSchedulerMgr: schedulerMgr,
-		IsOpenShift:       isOpenShift,
-
+		Client:                     mgr.GetClient(),
+		Scheme:                     mgr.GetScheme(),
+		Recorder:                   mgr.GetEventRecorderFor("raycluster-controller"),
+		BatchSchedulerMgr:          schedulerMgr,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		options:                    options,
 	}
@@ -135,15 +135,13 @@ type RayClusterReconciler struct {
 	Recorder                   record.EventRecorder
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
-
-	options RayClusterReconcilerOptions
-
-	IsOpenShift bool
+	options                    RayClusterReconcilerOptions
 }
 
 type RayClusterReconcilerOptions struct {
 	HeadSidecarContainers   []corev1.Container
 	WorkerSidecarContainers []corev1.Container
+	IsOpenShift             bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -472,7 +470,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 		return nil
 	}
 
-	if r.IsOpenShift {
+	if r.options.IsOpenShift {
 		// This is open shift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
 	}
