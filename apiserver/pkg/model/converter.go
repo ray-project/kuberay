@@ -88,15 +88,15 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func FromCrdToApiClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
+func FromCrdToAPIClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
 	apiClusters := make([]*api.Cluster, 0)
 	for _, cluster := range clusters {
-		apiClusters = append(apiClusters, FromCrdToApiCluster(cluster, clusterEventsMap[cluster.Name]))
+		apiClusters = append(apiClusters, FromCrdToAPICluster(cluster, clusterEventsMap[cluster.Name]))
 	}
 	return apiClusters
 }
 
-func FromCrdToApiCluster(cluster *rayv1api.RayCluster, events []corev1.Event) *api.Cluster {
+func FromCrdToAPICluster(cluster *rayv1api.RayCluster, events []corev1.Event) *api.Cluster {
 	pbCluster := &api.Cluster{
 		Name:      cluster.Name,
 		Namespace: cluster.Namespace,
