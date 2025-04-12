@@ -7,6 +7,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -476,7 +477,7 @@ func TestBuildVolumes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := buildVols(tt.apiVolume)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			if tt.name == "configmap test" {
 				// Sort items for comparison
 				sort.SliceStable(got[0].ConfigMap.Items, func(i, j int) bool {
@@ -545,7 +546,7 @@ func TestBuildVolumeMounts(t *testing.T) {
 
 func TestBuildHeadPodTemplate(t *testing.T) {
 	podSpec, err := buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if podSpec.Spec.ServiceAccountName != "account" {
 		t.Errorf("failed to propagate service account")
@@ -593,7 +594,7 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	}
 
 	podSpec, err = buildHeadPodTemplate("2.4", &api.EnvironmentVariables{}, &headGroup, &template, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if len(podSpec.Spec.Containers[0].Ports) != 6 {
 		t.Errorf("failed build ports")
 	}
@@ -601,7 +602,7 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 
 func TestConvertAutoscalerOptions(t *testing.T) {
 	options, err := buildAutoscalerOptions(&testAutoscalerOptions)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, int32(25), *options.IdleTimeoutSeconds)
 	assert.Equal(t, (string)(*options.UpscalingMode), "Default")
 	assert.Equal(t, (string)(*options.ImagePullPolicy), "Always")
@@ -614,7 +615,7 @@ func TestConvertAutoscalerOptions(t *testing.T) {
 
 func TestBuildRayCluster(t *testing.T) {
 	cluster, err := NewRayCluster(&rayCluster, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if len(cluster.ObjectMeta.Annotations) != 1 {
 		t.Errorf("failed to propagate annotations")
 	}
@@ -623,14 +624,14 @@ func TestBuildRayCluster(t *testing.T) {
 	}
 	assert.Equal(t, (*bool)(nil), cluster.Spec.EnableInTreeAutoscaling)
 	cluster, err = NewRayCluster(&rayClusterAutoScaler, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, *cluster.Spec.EnableInTreeAutoscaling)
 	assert.NotNil(t, cluster.Spec.AutoscalerOptions)
 }
 
 func TestBuilWorkerPodTemplate(t *testing.T) {
 	podSpec, err := buildWorkerPodTemplate("2.4", &api.EnvironmentVariables{}, &workerGroup, &templateWorker)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "account", podSpec.Spec.ServiceAccountName, "failed to propagate service account")
 	assert.Equal(t, "foo", podSpec.Spec.ImagePullSecrets[0].Name, "failed to propagate image pull secret")

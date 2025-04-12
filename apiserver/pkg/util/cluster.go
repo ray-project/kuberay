@@ -836,7 +836,7 @@ func (c *RayCluster) Get() *rayv1api.RayCluster {
 }
 
 // SetAnnotations sets annotations on all templates in a RayCluster
-func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
+func (c *RayCluster) SetAnnotationsToAllTemplates(_ string, _ string) {
 	// TODO: reserved for common parameters.
 }
 
@@ -930,10 +930,10 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
 			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))
-			ev_count := 0
+			evCount := 0
 			for key, value := range autoscalerOptions.Envs.Values {
-				options.Env[ev_count] = corev1.EnvVar{Name: key, Value: value}
-				ev_count += 1
+				options.Env[evCount] = corev1.EnvVar{Name: key, Value: value}
+				evCount++
 			}
 		}
 		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {

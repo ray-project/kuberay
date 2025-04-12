@@ -73,9 +73,9 @@ func TestCreateJobSubmission(t *testing.T) {
 	}
 
 	// Create cluster
-	actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(&clusterReq)
+	actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(&clusterReq)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 
@@ -90,13 +90,13 @@ func TestCreateJobSubmission(t *testing.T) {
 		},
 	}
 	// Request for the wrong namespace, should fail
-	_, jobSubmissionStatus, err := tCtx.GetRayApiServerClient().SubmitRayJob(&submitJobRequest)
+	_, jobSubmissionStatus, err := tCtx.GetRayAPIServerClient().SubmitRayJob(&submitJobRequest)
 	require.Error(t, err, "An error is expected")
 	require.NotNil(t, jobSubmissionStatus, "A not nill RPC status is required")
 
 	// Fix request and resubmit
 	submitJobRequest.Namespace = tCtx.GetNamespaceName()
-	jobSubmission, jobSubmissionStatus, err := tCtx.GetRayApiServerClient().SubmitRayJob(&submitJobRequest)
+	jobSubmission, jobSubmissionStatus, err := tCtx.GetRayAPIServerClient().SubmitRayJob(&submitJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobSubmissionStatus, "No RPC status expected")
 	require.NotNil(t, jobSubmission, "A job  submission is expected")
@@ -108,13 +108,13 @@ func TestCreateJobSubmission(t *testing.T) {
 		Submissionid: "1234567", // Not valid submission ID
 	}
 	// Request with the wrong submission ID should fail
-	_, jobDetailsStatus, err := tCtx.GetRayApiServerClient().GetRayJobDetails(&jobDetailsRequest)
+	_, jobDetailsStatus, err := tCtx.GetRayAPIServerClient().GetRayJobDetails(&jobDetailsRequest)
 	require.Error(t, err, "An error is expected")
 	require.NotNil(t, jobDetailsStatus, "A not nill RPC status is required")
 
 	// Set the correct submission ID and resubmit
 	jobDetailsRequest.Submissionid = jobSubmission.SubmissionId
-	jobDetails, jobDetailsStatus, err := tCtx.GetRayApiServerClient().GetRayJobDetails(&jobDetailsRequest)
+	jobDetails, jobDetailsStatus, err := tCtx.GetRayAPIServerClient().GetRayJobDetails(&jobDetailsRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobDetailsStatus, "No RPC status expected")
 	require.NotNil(t, jobDetails, "Job  details are expected")
@@ -124,7 +124,7 @@ func TestCreateJobSubmission(t *testing.T) {
 		Namespace:   tCtx.GetNamespaceName(),
 		Clustername: actualCluster.Name,
 	}
-	jobList, jobListStatus, err := tCtx.GetRayApiServerClient().ListRayJobsCluster(&listJobRequest)
+	jobList, jobListStatus, err := tCtx.GetRayAPIServerClient().ListRayJobsCluster(&listJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobListStatus, "No RPC status expected")
 	require.NotNil(t, jobList, "List of Job details is expected")
@@ -135,13 +135,13 @@ func TestCreateJobSubmission(t *testing.T) {
 		Clustername:  actualCluster.Name,
 		Submissionid: "1234567", // Not valid submission ID
 	}
-	_, jobLogStatus, err := tCtx.GetRayApiServerClient().GetRayJobLog(&logJobRequest)
+	_, jobLogStatus, err := tCtx.GetRayAPIServerClient().GetRayJobLog(&logJobRequest)
 	require.Error(t, err, "An error is expected")
 	require.NotNil(t, jobLogStatus, "A not nill RPC status is required")
 
 	// Set the correct submission ID and resubmit
 	logJobRequest.Submissionid = jobSubmission.SubmissionId
-	jobLog, jobLogStatus, err := tCtx.GetRayApiServerClient().GetRayJobLog(&logJobRequest)
+	jobLog, jobLogStatus, err := tCtx.GetRayAPIServerClient().GetRayJobLog(&logJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobLogStatus, "No RPC status expected")
 	require.NotNil(t, jobLog, "Job log is expected")
@@ -152,12 +152,12 @@ func TestCreateJobSubmission(t *testing.T) {
 		Clustername:  actualCluster.Name,
 		Submissionid: "1234567", // Not valid submission ID
 	}
-	jobStopStatus, err := tCtx.GetRayApiServerClient().StopRayJob(&stopJobRequest)
+	jobStopStatus, err := tCtx.GetRayAPIServerClient().StopRayJob(&stopJobRequest)
 	require.Error(t, err, "An error is expected")
 	require.NotNil(t, jobStopStatus, "A not nill RPC status is required")
 	// Set the correct submission ID and resubmit
 	stopJobRequest.Submissionid = jobSubmission.SubmissionId
-	jobStopStatus, err = tCtx.GetRayApiServerClient().StopRayJob(&stopJobRequest)
+	jobStopStatus, err = tCtx.GetRayAPIServerClient().StopRayJob(&stopJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobStopStatus, "No RPC status expected")
 
@@ -167,7 +167,7 @@ func TestCreateJobSubmission(t *testing.T) {
 		Clustername:  actualCluster.Name,
 		Submissionid: jobSubmission.SubmissionId,
 	}
-	jobDeleteStatus, err := tCtx.GetRayApiServerClient().DeleteRayJobCluster(&deleteJobRequest)
+	jobDeleteStatus, err := tCtx.GetRayAPIServerClient().DeleteRayJobCluster(&deleteJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, jobDeleteStatus, "No RPC status expected")
 }
