@@ -165,7 +165,8 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	}
 }
 
-// Test if default ports is applied and can be overwritten by config
+// Test that default ports are applied when none are specified. The metrics
+// port is always added if not explicitly set.
 func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 	type testCase struct {
 		name         string
