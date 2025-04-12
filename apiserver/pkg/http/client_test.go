@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -48,5 +49,6 @@ func TestUnmarshalHttpResponseFails(t *testing.T) {
 	resp, status, err := client.ListClusters(req)
 	require.Nil(t, status)
 	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "failed to unmarshal"), err.Error())
 	require.Nil(t, resp)
 }
