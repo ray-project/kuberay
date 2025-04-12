@@ -353,8 +353,8 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testJobs := []*api.CreateRayJobRequest{}
 	testJobNum := 10
+	testJobs := make([]*api.CreateRayJobRequest, 0, testJobNum)
 	for i := 0; i < testJobNum; i++ {
 		tCtx.currentName = fmt.Sprintf("job%d", i)
 		tCtx.configMapName = fmt.Sprintf("job%d-cm", i)
