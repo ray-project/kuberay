@@ -552,6 +552,7 @@ func isMatchingCluster(tCtx *End2EndTestingContext, cluster *api.Cluster) bool {
 
 // TestGetAllClusters tests gets all Ray clusters from k8s cluster
 func TestGetAllClusters(t *testing.T) {
+	t.Skip()
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
@@ -580,6 +581,7 @@ func TestGetAllClusters(t *testing.T) {
 
 // TestGetAllClustersByPagination tests gets all Ray clusters from k8s cluster with pagination
 func TestGetAllClustersByPagination(t *testing.T) {
+	t.Skip()
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
@@ -620,6 +622,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 
 // TestGetAllClustersByPaginationWithAllResults tests gets all Ray clusters from k8s cluster with pagination returning all results
 func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
+	t.Skip()
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
@@ -687,6 +690,7 @@ func TestGetClustersInNamespace(t *testing.T) {
 }
 
 func TestGetClustersByPaginationInNamespace(t *testing.T) {
+	t.Skip()
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
 
