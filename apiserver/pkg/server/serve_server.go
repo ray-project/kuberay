@@ -101,7 +101,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services: model.FromCrdToAPIServices(services, serviceEventMap),
 	}, nil
 }
 
@@ -120,7 +120,7 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAl
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListAllRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services: model.FromCrdToAPIServices(services, serviceEventMap),
 	}, nil
 }
 

@@ -116,7 +116,7 @@ func TestCreateTemplate(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualTemplate, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateComputeTemplate(tc.Input)
+			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -179,7 +179,7 @@ func TestDeleteTemplate(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualRPCStatus, err := tCtx.GetRayApiServerClient().DeleteComputeTemplate(tc.Input)
+			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -202,7 +202,7 @@ func TestGetAllComputeTemplates(t *testing.T) {
 		tCtx.DeleteComputeTemplate(t)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().GetAllComputeTemplates()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetAllComputeTemplates()
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
@@ -228,7 +228,7 @@ func TestGetTemplatesInNamespace(t *testing.T) {
 		tCtx.DeleteComputeTemplate(t)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().GetAllComputeTemplatesInNamespace(
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetAllComputeTemplatesInNamespace(
 		&api.ListComputeTemplatesRequest{
 			Namespace: tCtx.GetNamespaceName(),
 		})
@@ -296,7 +296,7 @@ func TestGetTemplateByNameInNamespace(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualTemplate, actualRPCStatus, err := tCtx.GetRayApiServerClient().GetComputeTemplate(tc.Input)
+			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")

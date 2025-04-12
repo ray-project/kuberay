@@ -74,7 +74,7 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 	}
 
 	return &api.ListRayJobsResponse{
-		Jobs: model.FromCrdToApiJobs(jobs),
+		Jobs: model.FromCrdToAPIJobs(jobs),
 	}, nil
 }
 
@@ -86,7 +86,7 @@ func (s *RayJobServer) ListAllRayJobs(ctx context.Context, _ *api.ListAllRayJobs
 	}
 
 	return &api.ListAllRayJobsResponse{
-		Jobs: model.FromCrdToApiJobs(jobs),
+		Jobs: model.FromCrdToAPIJobs(jobs),
 	}, nil
 }
 

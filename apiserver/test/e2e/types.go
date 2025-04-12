@@ -227,7 +227,7 @@ func (e2etc *End2EndTestingContext) GetRayVersion() string {
 	return e2etc.rayVersion
 }
 
-func (e2etc *End2EndTestingContext) GetRayApiServerClient() *kuberayHTTP.KuberayAPIServerClient {
+func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
 	return e2etc.kuberayAPIServerClient
 }
 

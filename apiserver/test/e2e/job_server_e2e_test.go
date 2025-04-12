@@ -214,7 +214,7 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualJob, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(tc.Input)
+			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -273,7 +273,7 @@ func TestDeleteJob(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualRPCStatus, err := tCtx.GetRayApiServerClient().DeleteRayJob(tc.Input)
+			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteRayJob(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -299,7 +299,7 @@ func TestGetAllJobs(t *testing.T) {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListAllRayJobs()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayJobs()
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
@@ -327,7 +327,7 @@ func TestGetJobsInNamespace(t *testing.T) {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 		Namespace: tCtx.GetNamespaceName(),
 	})
 	require.NoError(t, err, "No error expected")
@@ -398,7 +398,7 @@ func TestGetJob(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualJob, actualRPCStatus, err := tCtx.GetRayApiServerClient().GetRayJob(tc.Input)
+			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetRayJob(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -485,7 +485,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 	// Execute tests sequentially
 	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
-			actualJob, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(tc.Input)
+			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -563,7 +563,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 		Namespace: tCtx.GetNamespaceName(),
 	}
 
-	actualJob, actualRPCStatus, err := tCtx.GetRayApiServerClient().CreateRayJob(testJobRequest)
+	actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(testJobRequest)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
