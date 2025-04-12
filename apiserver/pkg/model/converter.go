@@ -446,12 +446,12 @@ func FromKubeToAPIComputeTemplates(configMaps []*corev1.ConfigMap) []*api.Comput
 func FromCrdToAPIJobs(jobs []*rayv1api.RayJob) []*api.RayJob {
 	apiJobs := make([]*api.RayJob, 0)
 	for _, job := range jobs {
-		apiJobs = append(apiJobs, FromCrdToApiJob(job))
+		apiJobs = append(apiJobs, FromCrdToAPIJob(job))
 	}
 	return apiJobs
 }
 
-func FromCrdToApiJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
+func FromCrdToAPIJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 	defer func() {
 		err := recover()
 		if err != nil {
@@ -529,12 +529,12 @@ func FromCrdToAPIServices(
 ) []*api.RayService {
 	apiServices := make([]*api.RayService, 0)
 	for _, service := range services {
-		apiServices = append(apiServices, FromCrdToApiService(service, serviceEventsMap[service.Name]))
+		apiServices = append(apiServices, FromCrdToAPIService(service, serviceEventsMap[service.Name]))
 	}
 	return apiServices
 }
 
-func FromCrdToApiService(service *rayv1api.RayService, events []corev1.Event) *api.RayService {
+func FromCrdToAPIService(service *rayv1api.RayService, events []corev1.Event) *api.RayService {
 	defer func() {
 		err := recover()
 		if err != nil {

@@ -41,7 +41,7 @@ func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJ
 		return nil, util.Wrap(err, "Create Job failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds a specific Job by job name.
@@ -59,7 +59,7 @@ func (s *RayJobServer) GetRayJob(ctx context.Context, request *api.GetRayJobRequ
 		return nil, util.Wrap(err, "Get cluster failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds all Jobs in a given namespace.
