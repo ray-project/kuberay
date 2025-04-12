@@ -84,7 +84,7 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 	}
 	computeTemplate := &api.ComputeTemplate{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 
 	return computeTemplate, nil, nil
@@ -112,7 +112,7 @@ func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTem
 	}
 	computeTemplate := &api.ComputeTemplate{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return computeTemplate, nil, nil
 }
@@ -133,7 +133,7 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllCompute
 	}
 	response := &api.ListAllComputeTemplatesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -154,7 +154,7 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *ap
 	}
 	response := &api.ListComputeTemplatesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -182,7 +182,7 @@ func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterReque
 	}
 	cluster := &api.Cluster{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return cluster, nil, nil
 }
@@ -209,7 +209,7 @@ func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*
 	}
 	cluster := &api.Cluster{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return cluster, nil, nil
 }
@@ -235,7 +235,7 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 	}
 	response := &api.ListClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -261,7 +261,7 @@ func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersR
 	}
 	response := &api.ListAllClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -288,7 +288,7 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 	}
 	rayJob := &api.RayJob{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return rayJob, nil, nil
 }
@@ -309,7 +309,7 @@ func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*ap
 	}
 	rayJob := &api.RayJob{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return rayJob, nil, nil
 }
@@ -330,7 +330,7 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 	}
 	response := &api.ListRayJobsResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -351,7 +351,7 @@ func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse
 	}
 	response := &api.ListAllRayJobsResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -384,7 +384,7 @@ func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServic
 	}
 	rayService := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return rayService, nil, nil
 }
@@ -411,7 +411,7 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 	}
 	rayService := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return rayService, nil, nil
 }
@@ -432,7 +432,7 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 	}
 	response := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -453,7 +453,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	}
 	response := &api.ListRayServicesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -474,7 +474,7 @@ func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServices
 	}
 	response := &api.ListAllRayServicesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -507,7 +507,7 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 	}
 	submission := &api.SubmitRayJobReply{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, submission); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return submission, nil, nil
 }
@@ -528,7 +528,7 @@ func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRe
 	}
 	response := &api.JobSubmissionInfo{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -549,7 +549,7 @@ func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (
 	}
 	response := &api.GetJobLogReply{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
@@ -570,7 +570,7 @@ func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetail
 	}
 	response := &api.ListJobSubmissionInfo{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
+		return nil, status, nil
 	}
 	return response, nil, nil
 }
