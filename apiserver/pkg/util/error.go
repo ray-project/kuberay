@@ -57,12 +57,13 @@ func HasCustomCode(err error, code CustomCode) bool {
 	if err == nil {
 		return false
 	}
-	switch e := err.(type) {
-	case *CustomError:
-		return e.code == code
-	default:
-		return false
+
+	var customErr *CustomError
+	if errors.As(err, &customErr) {
+		return customErr.code == code
 	}
+
+	return false
 }
 
 type UserError struct {
@@ -96,12 +97,12 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(apiError.Code))
+				codes.Code(apiError.Code)) //nolint:gosec // safe because apiError.Code is validated
 		}
 		return newUserError(
 			errors.Wrapf(err, internalMessage),
 			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-			codes.Code(apiError.Code))
+			codes.Code(apiError.Code)) //nolint:gosec // safe because apiError.Code is validated
 	}
 
 	return newUserError(
@@ -145,7 +146,7 @@ func NewNotFoundError(err error, externalMessageFormat string,
 func NewResourceNotFoundError(resourceType string, resourceName string) *UserError {
 	externalMessage := fmt.Sprintf("%s %s not found.", resourceType, resourceName)
 	return newUserError(
-		errors.New(fmt.Sprintf("ResourceNotFoundError: %v", externalMessage)),
+		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
@@ -153,7 +154,7 @@ func NewResourceNotFoundError(resourceType string, resourceName string) *UserErr
 func NewResourcesNotFoundError(resourceTypesFormat string, resourceNames ...interface{}) *UserError {
 	externalMessage := fmt.Sprintf("%s not found.", fmt.Sprintf(resourceTypesFormat, resourceNames...))
 	return newUserError(
-		errors.New(fmt.Sprintf("ResourceNotFoundError: %v", externalMessage)),
+		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
 		externalMessage,
 		codes.NotFound)
 }
