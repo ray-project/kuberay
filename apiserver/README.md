@@ -195,3 +195,7 @@ Kuberay API server has support for Swagger UI. The swagger page can be reached a
 * [localhost:31888/swagger-ui](localhost:31888/swagger-ui) for local kind deployments
 * [localhost:8888/swagger-ui](localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
 * `<host name>:31888/swagger-ui` for nodeport deployments
+
+## HHTP definition endpoints
+
+apiserver supports HTTP requests, for detailed specification checkout [full spec doc](HttpRequestSpec.md).
