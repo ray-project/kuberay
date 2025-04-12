@@ -144,7 +144,17 @@ func startHttpProxy() {
 	topMux.HandleFunc("/healthz", serveHealth)
 	serveSwaggerUI(topMux)
 
-	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
+	// Create a custom HTTP server with timeouts.
+	srv := &http.Server{
+		Addr:         *httpPortFlag,
+		Handler:      topMux,
+		ReadTimeout:  0, // No timeout
+		WriteTimeout: 0, // No timeout
+		IdleTimeout:  0, // No timeout
+	}
+
+	// Start the server.
+	if err := srv.ListenAndServe(); err != nil {
 		klog.Fatal(err)
 	}
 
