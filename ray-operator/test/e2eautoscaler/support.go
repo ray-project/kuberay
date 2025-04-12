@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -98,10 +99,10 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithName("ray-head").
 				WithImage(GetRayImage()).
 				WithPorts(
-					corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
-					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
-					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
-					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+					corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
+					corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
+					corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
+					corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 				).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
@@ -122,10 +123,10 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 				WithName("ray-head").
 				WithImage(GetRayImage()).
 				WithPorts(
-					corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
-					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
-					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
-					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+					corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
+					corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
+					corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
+					corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 				).
 				WithEnv(corev1ac.EnvVar().WithName("RAY_enable_autoscaler_v2").WithValue("1")).
 				WithResources(corev1ac.ResourceRequirements().
