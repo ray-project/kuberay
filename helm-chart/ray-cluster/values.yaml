@@ -169,6 +169,8 @@ worker:
       memory: "1G"
   annotations: {}
   nodeSelector: {}
+  # Optional: In case you need to configure which runtime class should the worker group use.
+  runtimeClassName: ""
   tolerations: []
   affinity: {}
   # Pod security context.
@@ -247,6 +249,8 @@ additionalWorkerGroups:
         memory: "1G"
     annotations: {}
     nodeSelector: {}
+    # Optional: In case you need to configure which runtime class should the worker group use.
+    runtimeClassName: ""
     tolerations: []
     affinity: {}
     # Pod security context.
