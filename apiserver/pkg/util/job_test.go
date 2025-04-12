@@ -121,5 +121,5 @@ func TestBuildRayJob(t *testing.T) {
 
 	// Test request without cluster creation with submitter bad parameters
 	_, err = NewRayJob(apiJobExistingClusterSubmitterBadParams, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Error(t, err)
+	require.Error(t, err)
 }

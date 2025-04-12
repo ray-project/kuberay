@@ -27,7 +27,7 @@ var apiServiceV2 = &api.RayService{
 
 func TestBuildService(t *testing.T) {
 	_, err := NewRayService(apiServiceNoServe, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Error(t, err)
+	require.Error(t, err)
 	if err.Error() != "serve configuration is not defined" {
 		t.Errorf("wrong error returned")
 	}
