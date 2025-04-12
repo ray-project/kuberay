@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "ray-cluster.labels" . | nindent 4 }}
   {{ with .Values.annotations }}
-  annotations: 
+  annotations:
     {{- toYaml . | nindent 4 }}
   {{ end }}
 spec:
@@ -17,7 +17,7 @@ spec:
   enableInTreeAutoscaling: {{ . }}
   {{- end }}
   {{- with .Values.head.autoscalerOptions }}
-  autoscalerOptions: 
+  autoscalerOptions:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   headGroupSpec:
