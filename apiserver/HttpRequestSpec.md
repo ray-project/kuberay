@@ -1,12 +1,16 @@
-## Full HTTP definition endpoints
+# Full HTTP definition endpoints
 
-### Compute Template
+## Compute Template
 
-For the purpose to simplify the setting of resources, the Kuberay API server abstracts the resource of the pods template resource to the `compute template`. You can define the resources in the `compute template` and then choose the appropriate template for your `head` and `workergroup` when you are creating the objects of `RayCluster`, `RayJobs` or `RayService`.
+For the purpose to simplify the setting of resources, the Kuberay API server abstracts the resource of the pods
+template resource to the `compute template`. You can define the resources in the `compute template` and then choose the
+appropriate template for your `head` and `workergroup` when you are creating the objects of `RayCluster`, `RayJobs` or
+`RayService`.
 
-The full definition of the compute template resource can be found in [config.proto](../proto/config.proto) or the Kuberay API server swagger doc.
+The full definition of the compute template resource can be found in [config.proto](../proto/config.proto) or the
+Kuberay API server swagger doc.
 
-#### Create compute templates in a given namespace
+### Create compute templates in a given namespace
 
 ```text
 POST {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates
@@ -40,7 +44,7 @@ Examples (please make sure that `ray-system` namespace exists before running thi
   }
   ```
 
-#### List all compute templates in a given namespace
+### List all compute templates in a given namespace
 
 ```text
 GET {{baseUrl}}/apis/v1/namespaces/<namespace>/compute_templates
@@ -799,11 +803,13 @@ Examples:
 
 </details>
 
-The above example creates a new Ray cluster, executes a job on it and optionally deletes a cluster. As an alternative, the same command allows creating a new job on the existing cluster by referencing it in the payload.
+The above example creates a new Ray cluster, executes a job on it and optionally deletes a cluster. As an alternative,
+the same command allows creating a new job on the existing cluster by referencing it in the payload.
 
 Examples:
 
-Start from creating Ray cluster (We assume here that the [template](test/cluster/template/simple) and [configmap](test/job/code.yaml) are already created).
+Start from creating Ray cluster (We assume here that the [template](test/cluster/template/simple) and
+[configmap](test/job/code.yaml) are already created).
 
 * Request
 
@@ -1012,7 +1018,8 @@ test_counter got 5
 2023-10-18 03:20:03,304 SUCC cli.py:62 -- ------------------------------
 ```
 
-Additionally here, we can specify configuration for the job submitter, allowing to specify image, memory and cpu limits for it.
+Additionally here, we can specify configuration for the job submitter, allowing to specify image, memory and cpu limits
+for it.
 
 Make sure that you delete previous job before running this one:
 
