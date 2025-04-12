@@ -37,15 +37,6 @@ spec:
                 requests:
                   cpu: 1
                   memory: 4Gi
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265 # Ray dashboard
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-                - containerPort: 8000
-                  name: serve
     workerGroupSpecs:
       # the pod replicas in this group typed worker
       - replicas: 1
