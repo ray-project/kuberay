@@ -354,13 +354,14 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 		tCtx.DeleteComputeTemplate(t)
 	})
 	testJobs := []*api.CreateRayJobRequest{}
-	for i := 0; i < 10; i++ {
+	testJobNum := 10
+	for i := 0; i < testJobNum; i++ {
 		tCtx.currentName = fmt.Sprintf("job%d", i)
 		testJobs = append(testJobs, createTestJob(t, tCtx))
 	}
 
 	t.Cleanup(func() {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < testJobNum; i++ {
 			tCtx.DeleteRayJobByName(t, testJobs[i].Job.Name)
 		}
 	})
@@ -368,7 +369,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	// Test pagination with limit 1
 	t.Run("Test pagination return part of the result jobs", func(t *testing.T) {
 		continueToken := ""
-		for i := 0; i < 10; i++ {
+		for i := 0; i < testJobNum; i++ {
 			response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				Limit:     1,
@@ -389,13 +390,13 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	t.Run("Test pagination return all jobs", func(t *testing.T) {
 		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
-			Limit:     10,
+			Limit:     int64(testJobNum),
 			Continue:  "",
 		})
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
-		require.Equal(t, len(response.Jobs), 10)
+		require.Equal(t, len(response.Jobs), testJobNum)
 		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
 	})
 
@@ -406,7 +407,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRpcStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
-		require.Equal(t, len(response.Jobs), 10)
+		require.Equal(t, len(response.Jobs), testJobNum)
 		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
 	})
 }
