@@ -110,7 +110,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Greater(t, len(job.Spec.RuntimeEnvYAML), 1)
 	assert.NotNil(t, job.Spec.ClusterSelector)
 	assert.Nil(t, job.Spec.RayClusterSpec)
-	assert.Equal(t, float32(2), job.Spec.EntrypointNumCpus)
+	assert.InEpsilon(t, float32(2), job.Spec.EntrypointNumCpus, 1e-9 /*epsilon*/)
 	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
 	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
