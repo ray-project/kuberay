@@ -154,8 +154,6 @@ endif
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
 	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
-	$(ENGINE) pull rayproject/ray:latest
-	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
 
 ##@ Docker Build
 docker-image: test ## Build image for the api server.
