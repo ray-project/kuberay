@@ -69,14 +69,15 @@ var (
 								Ports: []corev1.ContainerPort{
 									{
 										ContainerPort: 6379,
-										Name:          "gcs",
+										Name:          utils.GcsServerPortName,
 									},
 									{
 										ContainerPort: 8265,
+										Name:          utils.DashboardPortName,
 									},
 									{
 										ContainerPort: 8000,
-										Name:          "serve",
+										Name:          utils.ServingPortName,
 									},
 								},
 								Command: []string{"python"},
@@ -150,15 +151,66 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	}
 
 	ports := svc.Spec.Ports
+
 	expectedResult = utils.DefaultServiceAppProtocol
 	for _, port := range ports {
 		if *port.AppProtocol != utils.DefaultServiceAppProtocol {
 			t.Fatalf("Expected `%v` but got `%v`", expectedResult, *port.AppProtocol)
 		}
 	}
+
 	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
 	if svc.Spec.ClusterIP != corev1.ClusterIPNone {
 		t.Fatalf("Expected `%v` but got `%v`", corev1.ClusterIPNone, svc.Spec.ClusterIP)
+	}
+}
+
+// Test that default ports are applied when none are specified. The metrics
+// port is always added if not explicitly set.
+func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
+	type testCase struct {
+		name         string
+		expectResult map[string]int32
+		ports        []corev1.ContainerPort
+	}
+
+	testCases := []testCase{
+		{
+			name:         "No ports are specified by the user.",
+			ports:        []corev1.ContainerPort{},
+			expectResult: getDefaultPorts(),
+		},
+		{
+			name: "Only a random port is specified by the user.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "random",
+					ContainerPort: 1234,
+				},
+			},
+			expectResult: map[string]int32{
+				"random": 1234,
+				// metrics port will always be there
+				utils.MetricsPortName: utils.DefaultMetricsPort,
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cluster := instanceWithWrongSvc.DeepCopy()
+			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
+			svc, err := BuildServiceForHeadPod(context.Background(), *cluster, nil, nil)
+
+			require.NoError(t, err)
+			ports := svc.Spec.Ports
+
+			svcPorts := make(map[string]int32)
+			for _, port := range ports {
+				svcPorts[port.Name] = port.Port
+			}
+
+			assert.Equal(t, testCase.expectResult, svcPorts)
+		})
 	}
 }
 
@@ -575,7 +627,7 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 							{
 								Name: "ray-head",
 								Ports: []corev1.ContainerPort{
-									{ContainerPort: 6379, Name: "gcs"},
+									{ContainerPort: 6379, Name: utils.GcsServerPortName},
 								},
 							},
 						},
