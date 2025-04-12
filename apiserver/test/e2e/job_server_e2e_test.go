@@ -357,6 +357,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	testJobNum := 10
 	for i := 0; i < testJobNum; i++ {
 		tCtx.currentName = fmt.Sprintf("job%d", i)
+		tCtx.configMapName = fmt.Sprintf("job%d-cm", i)
 		testJobs = append(testJobs, createTestJob(t, tCtx))
 	}
 
@@ -573,7 +574,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	}, tCtx.currentName) // set the name of the config map to the current name
+	})
 	t.Cleanup(func() {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
