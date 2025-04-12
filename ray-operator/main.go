@@ -28,13 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	kuberaymetrics "github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
@@ -234,10 +234,10 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	var rayClusterMetricCollector *kuberaymetrics.RayClusterMetricCollector
+	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
 	if config.EnableMetrics {
-		rayClusterMetricCollector = kuberaymetrics.NewRayClusterMetricCollector()
-		metrics.Registry.MustRegister(rayClusterMetricCollector)
+		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
+		ctrlmetrics.Registry.MustRegister(rayClusterMetricCollector)
 	}
 
 	ctx := ctrl.SetupSignalHandler()
