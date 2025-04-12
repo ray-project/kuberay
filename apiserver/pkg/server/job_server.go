@@ -128,9 +128,5 @@ func ValidateCreateJobRequest(request *api.CreateRayJobRequest) error {
 		return nil
 	}
 
-	if err := ValidateClusterSpec(request.Job.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Job.ClusterSpec)
 }
