@@ -171,7 +171,6 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 		name         string
 		expectResult map[string]int32
 		ports        []corev1.ContainerPort
-		expectError  bool
 	}
 
 	testCases := []testCase{
@@ -179,7 +178,6 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 			name:         "No ports are specified by the user.",
 			ports:        []corev1.ContainerPort{},
 			expectResult: getDefaultPorts(),
-			expectError:  false,
 		},
 		{
 			name: "Only a random port is specified by the user.",
@@ -194,7 +192,6 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 				// metrics port will always be there
 				utils.MetricsPortName: utils.DefaultMetricsPort,
 			},
-			expectError: false,
 		},
 	}
 	for _, testCase := range testCases {
@@ -202,19 +199,16 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 			cluster := instanceWithWrongSvc.DeepCopy()
 			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
 			svc, err := BuildServiceForHeadPod(context.Background(), *cluster, nil, nil)
-			if testCase.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				ports := svc.Spec.Ports
 
-				svcPorts := make(map[string]int32)
-				for _, port := range ports {
-					svcPorts[port.Name] = port.Port
-				}
+			require.NoError(t, err)
+			ports := svc.Spec.Ports
 
-				assert.Equal(t, testCase.expectResult, svcPorts)
+			svcPorts := make(map[string]int32)
+			for _, port := range ports {
+				svcPorts[port.Name] = port.Port
 			}
+
+			assert.Equal(t, testCase.expectResult, svcPorts)
 		})
 	}
 }
