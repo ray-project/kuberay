@@ -1,4 +1,4 @@
-## Full HHTP definition endpoints
+## Full HTTP definition endpoints
 
 ### Compute Template
 
