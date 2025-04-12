@@ -68,13 +68,14 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 		return nil, util.NewInvalidInputError("job namespace is empty. Please specify a valid value.")
 	}
 
-	jobs, err := s.resourceManager.ListJobs(ctx, request.Namespace)
+	jobs, continueToken, err := s.resourceManager.ListJobs(ctx, request.Namespace, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")
 	}
 
 	return &api.ListRayJobsResponse{
-		Jobs: model.FromCrdToAPIJobs(jobs),
+		Jobs:     model.FromCrdToAPIJobs(jobs),
+		Continue: continueToken,
 	}, nil
 }
 
