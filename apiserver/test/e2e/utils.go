@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"io"
@@ -18,7 +19,7 @@ var files embed.FS
 // CreateHttpRequest instantiates a http request for the  specified endpoint and host
 func CreateHttpRequest(method string, host string, endPoint string, body io.Reader) (*http.Request, error) {
 	url := host + endPoint
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(context.TODO(), method, url, body)
 	if err != nil {
 		return nil, err
 	}
