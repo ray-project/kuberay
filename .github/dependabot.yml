@@ -1,7 +1,7 @@
 version: 2
 updates:
  
-  # Maintain dependencies for go
+  # Maintain go dependencies for sub-projects
   - package-ecosystem: "gomod"
     directories:
       - "/experimental"
@@ -10,4 +10,4 @@ updates:
       - "/kubectl-plugin"
       - "/proto"
     schedule:
-      interval: "daily"
+      interval: "weekly"
