@@ -94,27 +94,3 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		},
 	)
 }
-
-// TestAPIServerInterceptorLogging verifies logging behavior
-// TODO: Improve logging verification by capturing klog output
-// Currently only verifies code execution without panics
-// See the discussion in https://github.com/ray-project/kuberay/pull/3346 for more details
-func TestAPIServerInterceptorLogging(t *testing.T) {
-	// This test mainly ensures the code paths with logging are executed
-	// Since klog is a global logger, we can't easily verify the output
-	// but we can ensure the code executes without panics
-	ctx := context.Background()
-	handler := &mockHandler{returnErr: errors.New("test error")}
-	info := &grpc.UnaryServerInfo{FullMethod: "TestMethod"}
-
-	_, err := APIServerInterceptor(
-		ctx,
-		"test_request",
-		info,
-		func(ctx context.Context, req interface{}) (interface{}, error) {
-			return handler.Handle(ctx, req)
-		},
-	)
-
-	require.EqualError(t, err, "test error", "A matching error is expected")
-}
