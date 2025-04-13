@@ -25,7 +25,6 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			Annotations: buildRayJobAnnotations(apiJob),
 		},
 		Spec: rayv1api.RayJobSpec{
-			ActiveDeadlineSeconds:    &apiJob.ActiveDeadlineSeconds,
 			Entrypoint:               apiJob.Entrypoint,
 			Metadata:                 apiJob.Metadata,
 			RuntimeEnvYAML:           apiJob.RuntimeEnv,
@@ -96,6 +95,9 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 	if apiJob.EntrypointResources != "" {
 		// Entry point resources
 		rayJob.Spec.EntrypointResources = apiJob.EntrypointResources
+	}
+	if apiJob.ActiveDeadlineSeconds > 0 {
+		rayJob.Spec.ActiveDeadlineSeconds = &apiJob.ActiveDeadlineSeconds
 	}
 
 	return &RayJob{rayJob}, nil
