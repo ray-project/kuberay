@@ -371,45 +371,45 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	t.Run("Test pagination return part of the result jobs", func(t *testing.T) {
 		continueToken := ""
 		for i := 0; i < testJobNum; i++ {
-			response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
+			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				Limit:     1,
 				Continue:  continueToken,
 			})
 			require.NoError(t, err, "No error expected")
-			require.Nil(t, actualRpcStatus, "No RPC status expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
 			require.NotNil(t, response, "A response is expected")
 			require.Len(t, response.Jobs, 1)
 			require.Equal(t, response.Jobs[0].Namespace, tCtx.GetNamespaceName())
 			require.Equal(t, response.Jobs[0].Name, testJobs[i].Job.Name)
 			continueToken = response.Continue
 		}
-		require.Equal(t, continueToken, "") // Continue token should be empty because this is the last page
+		require.Equal(t, "", continueToken) // Continue token should be empty because this is the last page
 	})
 
 	// Test pagination return all jobs
 	t.Run("Test pagination return all jobs", func(t *testing.T) {
-		response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
 			Limit:     int64(testJobNum),
 			Continue:  "",
 		})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Equal(t, len(response.Jobs), testJobNum)
-		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
+		require.Equal(t, "", response.Continue) // Continue token should be empty because this is the last page
 	})
 
 	t.Run("Test no pagination", func(t *testing.T) {
-		response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
 		})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Equal(t, len(response.Jobs), testJobNum)
-		require.Equal(t, response.Continue, "") // Continue token should be empty because this is the last page
+		require.Equal(t, "", response.Continue) // Continue token should be empty because this is the last page
 	})
 }
 
