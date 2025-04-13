@@ -389,7 +389,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 
 	// Test pagination return all jobs
 	t.Run("Test pagination return all jobs", func(t *testing.T) {
-		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+		response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
 			Limit:     int64(testJobNum),
 			Continue:  "",
@@ -402,7 +402,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	})
 
 	t.Run("Test no pagination", func(t *testing.T) {
-		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+		response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 			Namespace: tCtx.GetNamespaceName(),
 		})
 		require.NoError(t, err, "No error expected")
