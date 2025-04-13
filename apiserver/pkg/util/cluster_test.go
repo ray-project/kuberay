@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -597,6 +598,96 @@ func TestBuildHeadPodTemplate(t *testing.T) {
 	require.NoError(t, err)
 	if len(podSpec.Spec.Containers[0].Ports) != 6 {
 		t.Errorf("failed build ports")
+	}
+}
+
+func TestNewComputeTemplate(t *testing.T) {
+	configMap, err := NewComputeTemplate(&templateWorker)
+	if err != nil {
+		t.Errorf("failed to build compute template: %v", err)
+	}
+
+	assert.Equal(t, "", configMap.Data["name"])
+	assert.Equal(t, "", configMap.Data["namespace"])
+	assert.Equal(t, "2", configMap.Data["cpu"])
+	assert.Equal(t, "8", configMap.Data["memory"])
+	assert.Equal(t, "4", configMap.Data["gpu"])
+
+	var ext map[string]uint32
+	err = json.Unmarshal([]byte(configMap.Data["extended_resources"]), &ext)
+	if err != nil {
+		t.Errorf("failed to unmarshall ExtendedResources: %v", err)
+	}
+	assert.Equal(t, uint32(32), ext["vpc.amazonaws.com/efa"])
+
+	var tolerations []*api.PodToleration
+	err = json.Unmarshal([]byte(configMap.Data["tolerations"]), &tolerations)
+	if err != nil {
+		t.Errorf("failed to unmarshall tolerations: %v", err)
+	}
+	assert.Equal(t, expectedToleration.Key, tolerations[0].Key)
+	assert.Equal(t, string(expectedToleration.Operator), tolerations[0].Operator)
+	assert.Equal(t, string(expectedToleration.Effect), tolerations[0].Effect)
+}
+
+func TestGetNodeHostIP(t *testing.T) {
+	internalIP := "10.0.0.1"
+	externalIP := "12.34.56.78"
+	invalidIP := "invalid-ip-address"
+
+	tests := []struct {
+		name        string
+		addresses   []corev1.NodeAddress
+		expectIP    string
+		expectError string
+	}{
+		{
+			name: "InternalOnly",
+			addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeInternalIP, Address: internalIP},
+			},
+			expectIP: internalIP,
+		},
+		{
+			name: "ExternalOnly",
+			addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeExternalIP, Address: externalIP},
+			},
+			expectIP: externalIP,
+		},
+		{
+			name: "InternalAndExternal",
+			addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeExternalIP, Address: externalIP},
+				{Type: corev1.NodeInternalIP, Address: internalIP},
+			},
+			expectIP: internalIP,
+		},
+		{
+			name: "NoValidIP",
+			addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeHostName, Address: invalidIP},
+			},
+			expectError: "host IP unknown; known addresses: [{Hostname invalid-ip-address}]",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			node := &corev1.Node{
+				Status: corev1.NodeStatus{
+					Addresses: tc.addresses,
+				},
+			}
+			ip, err := GetNodeHostIP(node)
+
+			if tc.expectError != "" {
+				assert.EqualError(t, err, tc.expectError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectIP, ip.String())
+			}
+		})
 	}
 }
 
