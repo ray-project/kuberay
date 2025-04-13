@@ -71,8 +71,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 			if tt.expectedError == nil {
 				require.NoError(t, err)
 			} else {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError.Error(), err.Error())
+				require.EqualError(t, err, tt.expectedError.Error(), "A matching error is expected")
 			}
 		})
 	}
@@ -97,6 +96,9 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 }
 
 // TestAPIServerInterceptorLogging verifies logging behavior
+// TODO: Improve logging verification by capturing klog output
+// Currently only verifies code execution without panics
+// See the discussion in https://github.com/ray-project/kuberay/pull/3346 for more details
 func TestAPIServerInterceptorLogging(t *testing.T) {
 	// This test mainly ensures the code paths with logging are executed
 	// Since klog is a global logger, we can't easily verify the output
@@ -114,6 +116,5 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 		},
 	)
 
-	assert.Error(t, err)
-	assert.Equal(t, "test error", err.Error())
+	require.EqualError(t, err, "test error", "A matching error is expected")
 }
