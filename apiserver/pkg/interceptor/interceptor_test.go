@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
@@ -68,7 +69,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 
 			// Verify error
 			if tt.expectedError == nil {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedError.Error(), err.Error())
