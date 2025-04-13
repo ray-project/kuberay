@@ -1345,11 +1345,11 @@ func TestUpdateEndpoints(t *testing.T) {
 	}
 
 	expected := map[string]string{
-		"client":     "10001",
-		"dashboard":  "8265",
-		"metrics":    "8080",
-		"gcs-server": "6379",
-		"serve":      "8000",
+		utils.ClientPortName:    strconv.Itoa(utils.DefaultClientPort),
+		utils.DashboardPortName: strconv.Itoa(utils.DefaultDashboardPort),
+		utils.MetricsPortName:   strconv.Itoa(utils.DefaultMetricsPort),
+		utils.GcsServerPortName: strconv.Itoa(utils.DefaultGcsServerPort),
+		utils.ServingPortName:   strconv.Itoa(utils.DefaultServingPort),
 	}
 	assert.Equal(t, expected, testRayCluster.Status.Endpoints, "RayCluster status endpoints not updated")
 }
@@ -1642,10 +1642,10 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 		MaxWorkerReplicas:       10,
 		LastUpdateTime:          &timeNow,
 		Endpoints: map[string]string{
-			"client":    "10001",
-			"dashboard": "8265",
-			"gcs":       "6379",
-			"metrics":   "8080",
+			utils.ClientPortName:    strconv.Itoa(utils.DefaultClientPort),
+			utils.DashboardPortName: strconv.Itoa(utils.DefaultDashboardPort),
+			utils.GcsServerPortName: strconv.Itoa(utils.DefaultGcsServerPort),
+			utils.MetricsPortName:   strconv.Itoa(utils.DefaultMetricsPort),
 		},
 		Head: rayv1.HeadInfo{
 			PodIP:     "10.244.0.6",
