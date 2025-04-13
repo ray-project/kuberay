@@ -19,6 +19,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -95,9 +96,10 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	HeadSidecarContainers   []corev1.Container
-	WorkerSidecarContainers []corev1.Container
-	IsOpenShift             bool
+	RayClusterMetricCollector *metrics.RayClusterMetricCollector
+	HeadSidecarContainers     []corev1.Container
+	WorkerSidecarContainers   []corev1.Container
+	IsOpenShift               bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
