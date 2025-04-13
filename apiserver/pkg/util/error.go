@@ -89,76 +89,6 @@ func NewUserErrorWithSingleMessage(err error, message string) *UserError {
 	return NewUserError(err, message, message)
 }
 
-// Util function to convert HTTP status code to gRPC status code.
-func convertHttpStatusToUserError(httpStatusCode int) codes.Code {
-	switch httpStatusCode {
-	// Success and redirect responses
-	case 200, // OK
-		201, // Created
-		204, // No Content
-		206, // Partial Content
-		302, // Found
-		307, // Temporary Redirect
-		308: // Permanent Redirect
-		return codes.OK
-
-	// OUT_OF_RANGE indicates requested range is out of scope.
-	case 416: // Requested Range Not Satisfiable
-		return codes.OutOfRange
-
-	// INVALID_ARGUMENT indicates a problem with how the request is constructed.
-	case 400, // Bad Request
-		411, // Length Required
-		413: // Payload Too Large
-		return codes.InvalidArgument
-
-	// UNAUTHENTICATED indicates an authentication issue.
-	case 401: // Unauthorized
-		return codes.Unauthenticated
-
-	// PERMISSION_DENIED indicates an authorization issue.
-	case 403: // Forbidden
-		return codes.PermissionDenied
-
-	// NOT_FOUND indicates that the requested resource does not exist.
-	case 404, // Not Found
-		410: // Gone
-		return codes.NotFound
-
-	// FAILED_PRECONDITION indicates that the request failed because some
-	// of the underlying assumptions were not satisfied. The request
-	// shouldn't be retried unless the external context has changed.
-	case 303, // See Other
-		304, // Not Modified
-		409, // Conflict
-		412: // Precondition Failed
-		return codes.FailedPrecondition
-
-	// UNAVAILABLE indicates a problem that can go away if the request
-	// is just retried without any modification. 308 return codes are intended
-	// for write requests that can be retried. See the documentation and the
-	// official library:
-	// https://cloud.google.com/storage/docs/json_api/v1/how-tos/resumable-upload
-	// https://github.com/google/apitools/blob/master/apitools/base/py/transfer.py
-	case 429, // Too Many Requests
-		503, // Service Unavailable
-		504: // Gateway Timeout
-		return codes.Unavailable
-
-	// INTERNAL indicates server encountered an unexpected condition that
-	// prevented it from fulfilling the request.
-	case 500: // Internal Server Error
-		return codes.Internal
-
-	// Unknown or all other errors
-	case 502: // Bad Gateway
-	default:
-		return codes.Unknown
-	}
-
-	return codes.Unknown
-}
-
 func NewUserError(err error, internalMessage string, externalMessage string) *UserError {
 	// Note apiError.Response is of type github.com/go-openapi/runtime/client
 	var apiError *runtime.APIError
@@ -167,8 +97,12 @@ func NewUserError(err error, internalMessage string, externalMessage string) *Us
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
 				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				convertHttpStatusToUserError(apiError.Code))
+				codes.Code(apiError.Code))
 		}
+		return newUserError(
+			errors.Wrapf(err, internalMessage),
+			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
+			codes.Code(apiError.Code))
 	}
 
 	return newUserError(
