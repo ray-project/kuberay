@@ -25,6 +25,7 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 			Annotations: buildRayJobAnnotations(apiJob),
 		},
 		Spec: rayv1api.RayJobSpec{
+			ActiveDeadlineSeconds:    &apiJob.ActiveDeadlineSeconds,
 			Entrypoint:               apiJob.Entrypoint,
 			Metadata:                 apiJob.Metadata,
 			RuntimeEnvYAML:           apiJob.RuntimeEnv,
