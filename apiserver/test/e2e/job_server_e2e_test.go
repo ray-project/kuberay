@@ -371,7 +371,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	t.Run("Test pagination return part of the result jobs", func(t *testing.T) {
 		continueToken := ""
 		for i := 0; i < testJobNum; i++ {
-			response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayJobs(&api.ListRayJobsRequest{
+			response, actualRpcStatus, err := tCtx.GetRayAPIServerClient().ListRayJobs(&api.ListRayJobsRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				Limit:     1,
 				Continue:  continueToken,
