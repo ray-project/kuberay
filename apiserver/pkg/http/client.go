@@ -30,7 +30,7 @@ type KuberayAPIServerClientError struct {
 }
 
 func (krce *KuberayAPIServerClientError) Error() string {
-	return fmt.Sprintf("kuberay api server request failed with HTTP status (%d)", krce.HTTPStatusCode)
+	return fmt.Sprintf("kuberay api server request failed with HTTP status (%d: %s)", krce.HTTPStatusCode, http.StatusText(krce.HTTPStatusCode))
 }
 
 func IsNotFoundError(err error) bool {
@@ -75,7 +75,7 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 		return nil, nil, fmt.Errorf("failed to marshal api.ComputeTemplate to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("POST", createURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -104,7 +104,7 @@ func (krc *KuberayAPIServerClient) DeleteComputeTemplate(request *api.DeleteComp
 // Finds a specific compute template by its name and namespace.
 func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -125,7 +125,7 @@ func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTem
 // GetAllComputeTemplates finds all compute templates in all namespaces.
 func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllComputeTemplatesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/compute_templates"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -146,7 +146,7 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllCompute
 // GetAllComputeTemplatesInNamespace Finds all compute templates in a given namespace.
 func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *api.ListComputeTemplatesRequest) (*api.ListComputeTemplatesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -173,7 +173,7 @@ func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterReque
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("POST", createURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -201,7 +201,7 @@ func (krc *KuberayAPIServerClient) DeleteCluster(request *api.DeleteClusterReque
 // GetCluster finds a specific Cluster by ID.
 func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*api.Cluster, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters/" + request.Name
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -222,7 +222,7 @@ func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*
 // ListCluster finds all clusters in a given namespace.
 func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest) (*api.ListClustersResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -248,7 +248,7 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 // ListAllClusters finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/clusters"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -279,7 +279,7 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("POST", createURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -301,7 +301,7 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 // GetRayJob finds a specific job by its name and namespace.
 func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*api.RayJob, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs/" + request.Name
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -322,7 +322,7 @@ func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*ap
 // Finds all job in a given namespace.
 func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) (*api.ListRayJobsResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -348,7 +348,7 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 // ListAllRayJobs Finds all job in all namespaces.
 func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/jobs"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -380,7 +380,7 @@ func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServic
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("POST", createURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -407,7 +407,7 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("PUT", updateURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("PUT", updateURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", updateURL, err)
 	}
@@ -429,7 +429,7 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 // Find a specific ray serve by name and namespace.
 func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -450,7 +450,7 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -471,7 +471,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 // Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
 func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/services"
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -503,7 +503,7 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, bytes.NewReader(bytez))
+	httpRequest, err := http.NewRequest("POST", createURL, bytes.NewReader(bytez))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -525,7 +525,7 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 // GetRayJobDetails. Get details about specific job on a given cluster.
 func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRequest) (*api.JobSubmissionInfo, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -546,7 +546,7 @@ func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRe
 // GetRayJobLog. Get log for a specific job on a given cluster.
 func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (*api.GetJobLogReply, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/log/" + request.Submissionid
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -567,7 +567,7 @@ func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (
 // ListRayJobsCluster. List Ray jobs on a given cluster.
 func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetailsRequest) (*api.ListJobSubmissionInfo, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername
-	httpRequest, err := krc.createHttpRequest("GET", getURL, nil)
+	httpRequest, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
@@ -589,7 +589,7 @@ func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetail
 func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionRequest) (*rpcStatus.Status, error) {
 	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
 
-	httpRequest, err := krc.createHttpRequest("POST", createURL, nil)
+	httpRequest, err := http.NewRequest("POST", createURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request for url '%s': %w", createURL, err)
 	}
@@ -611,7 +611,7 @@ func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJob
 }
 
 func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status, error) {
-	httpRequest, err := krc.createHttpRequest("DELETE", deleteURL, nil)
+	httpRequest, err := http.NewRequest("DELETE", deleteURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request for url '%s': %w", deleteURL, err)
 	}
@@ -653,12 +653,4 @@ func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.S
 		return nil, fmt.Errorf("failed to unmarshal status object: %w", err)
 	}
 	return status, nil
-}
-
-func (krc *KuberayAPIServerClient) createHttpRequest(method string, endPoint string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, endPoint, body)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
 }

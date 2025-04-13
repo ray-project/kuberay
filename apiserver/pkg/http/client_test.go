@@ -52,3 +52,10 @@ func TestUnmarshalHttpResponseFails(t *testing.T) {
 	require.True(t, strings.Contains(err.Error(), "failed to unmarshal"), err.Error())
 	require.Nil(t, resp)
 }
+
+func TestAPIServerClientError(t *testing.T) {
+	httpErr := KuberayAPIServerClientError{
+		HTTPStatusCode: 500,
+	}
+	require.Equal(t, httpErr.Error(), "kuberay api server request failed with HTTP status (500: Internal Server Error)")
+}
