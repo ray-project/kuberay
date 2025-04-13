@@ -8,6 +8,7 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/koordinator"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 )
@@ -16,6 +17,7 @@ func TestGetSchedulerFactory(t *testing.T) {
 	DefaultFactory := &schedulerinterface.DefaultBatchSchedulerFactory{}
 	VolcanoFactory := &volcano.VolcanoBatchSchedulerFactory{}
 	YuniKornFactory := &yunikorn.YuniKornSchedulerFactory{}
+	koordFactory := &koordinator.KoordinatorSchedulerFactory{}
 
 	type args struct {
 		rayConfigs v1alpha1.Configuration
@@ -73,6 +75,15 @@ func TestGetSchedulerFactory(t *testing.T) {
 				},
 			},
 			want: reflect.TypeOf(YuniKornFactory),
+		},
+		{
+			name: "enableBatchScheduler set, batchScheduler set to koordinator",
+			args: args{
+				rayConfigs: v1alpha1.Configuration{
+					BatchScheduler: koordinator.GetPluginName(),
+				},
+			},
+			want: reflect.TypeOf(koordFactory),
 		},
 		{
 			name: "enableBatchScheduler not set, batchScheduler set to volcano",
