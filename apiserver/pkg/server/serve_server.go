@@ -95,7 +95,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	}
 
 	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	fmt.Fprintf(file, "serve server next token = %s\n", nextPageToken)
 	/////////////// debug
 

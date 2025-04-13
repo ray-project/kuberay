@@ -345,7 +345,7 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pa
 	})
 
 	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	fmt.Fprintf(file, "at resource manager ray service list = %+v\n", rayServiceList)
 	/////////////// debug
 

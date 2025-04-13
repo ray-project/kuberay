@@ -279,13 +279,13 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 
 	pageToken := ""
 	for ii := 0; ii < serviceCount; ii++ {
-		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayServices(&api.ListRayServicesRequest{
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
 			Namespace: tCtx.GetNamespaceName(),
 			PageToken: pageToken,
 			PageSize:  1,
 		})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Services, "A list of compute templates is required")
 		require.Equal(t, 1, len(response.Services))
@@ -417,8 +417,8 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	waitForRunningService(t, tCtx, actualService.Name)
 
 	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	fmt.Fprintf(file, "actual service = %+v, rpc status = %+v\n", actualService, actualRpcStatus)
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	fmt.Fprintf(file, "actual service = %+v, rpc status = %+v\n", actualService, actualRPCStatus)
 	/////////////// debug
 
 	return testServiceRequest

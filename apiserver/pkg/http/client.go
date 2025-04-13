@@ -459,7 +459,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	httpRequest.Header.Add("Accept", "application/json")
 
 	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	fmt.Fprintf(file, "raw query = %s\n", httpRequest.URL.RawQuery)
 	/////////////// debug
 
@@ -473,7 +473,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	}
 
 	/////////////// debug
-	file2, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file2, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	fmt.Fprintf(file2, "http client response = %+v\n", response)
 	/////////////// debug
 
