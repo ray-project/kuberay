@@ -161,7 +161,8 @@ func convertHttpStatusToUserError(httpStatusCode int) codes.Code {
 
 func NewUserError(err error, internalMessage string, externalMessage string) *UserError {
 	// Note apiError.Response is of type github.com/go-openapi/runtime/client
-	if apiError, ok := err.(*runtime.APIError); ok {
+	var apiError *runtime.APIError
+	if errors.As(err, &apiError) {
 		if apiError.Code == API_CODE_NOT_FOUND {
 			return newUserError(
 				errors.Wrapf(err, internalMessage),
