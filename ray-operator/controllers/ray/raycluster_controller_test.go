@@ -42,6 +42,11 @@ import (
 )
 
 func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
+	const (
+		minReplicas int32 = 0
+		maxReplicas int32 = 4
+		replicas    int32 = 3
+	)
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -63,9 +68,9 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:       ptr.To[int32](3),
-					MinReplicas:    ptr.To[int32](0),
-					MaxReplicas:    ptr.To[int32](4),
+					Replicas:       ptr.To(replicas),
+					MinReplicas:    ptr.To(minReplicas),
+					MaxReplicas:    ptr.To(maxReplicas),
 					GroupName:      "small-group",
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
@@ -898,6 +903,11 @@ var _ = Context("Inside the default namespace", func() {
 	})
 
 	Describe("RayCluster with a multi-host worker group", Ordered, func() {
+		const (
+			minReplicas int32 = 0
+			maxReplicas int32 = 4
+			replicas    int32 = 3
+		)
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
@@ -929,9 +939,25 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3 * int(numOfHosts)
+			desiredWorkerPods := replicas * numOfHosts
+			minWorkerPods := minReplicas * numOfHosts
+			maxWorkerPods := maxReplicas * numOfHosts
+
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+
+			Eventually(func() bool {
+				// "Replica" in status fields (e.g., DesiredWorkerReplicas) refers to the number of pods.
+				// The name is preserved for compatibility, but it semantically means pod count.
+				status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+				if status.DesiredWorkerReplicas != desiredWorkerPods ||
+					status.MinWorkerReplicas != minWorkerPods ||
+					status.MaxWorkerReplicas != maxWorkerPods {
+					return false
+				}
+				return true
+			}, time.Second*5, time.Millisecond*500).Should(BeTrue())
 		})
 
 		It("Simulate Ray Autoscaler scales down", func() {

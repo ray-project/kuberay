@@ -708,8 +708,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
-		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
-		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
+		numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, worker))
+		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", numExpectedWorkerPods, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
 		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName).ToListOptions()...); err != nil {
@@ -791,10 +791,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if worker.NumOfHosts <= 0 {
 			worker.NumOfHosts = 1
 		}
-		numExpectedPods := int(workerReplicas * worker.NumOfHosts)
-		diff := numExpectedPods - len(runningPods.Items)
+		diff := numExpectedWorkerPods - len(runningPods.Items)
 
-		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
+		logger.Info("reconcilePods", "workerReplicas", numExpectedWorkerPods, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
 			// pods need to be added
