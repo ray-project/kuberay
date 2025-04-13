@@ -5,6 +5,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var apiJobNewCluster = &api.RayJob{
@@ -76,7 +77,7 @@ var apiJobExistingClusterSubmitterBadParams = &api.RayJob{
 func TestBuildRayJob(t *testing.T) {
 	// Test request with cluster creation
 	job, err := NewRayJob(apiJobNewCluster, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test", job.ObjectMeta.Name)
 	assert.Equal(t, "test", job.ObjectMeta.Namespace)
 	assert.Len(t, job.ObjectMeta.Labels, 4)
@@ -89,7 +90,7 @@ func TestBuildRayJob(t *testing.T) {
 
 	// Test request without cluster creation
 	job, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test", job.ObjectMeta.Name)
 	assert.Equal(t, "test", job.ObjectMeta.Namespace)
 	assert.Len(t, job.ObjectMeta.Labels, 4)
@@ -101,7 +102,7 @@ func TestBuildRayJob(t *testing.T) {
 
 	// Test request without cluster creation with submitter
 	job, err = NewRayJob(apiJobExistingClusterSubmitter, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test", job.ObjectMeta.Name)
 	assert.Equal(t, "test", job.ObjectMeta.Namespace)
 	assert.Len(t, job.ObjectMeta.Labels, 4)
@@ -109,7 +110,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Greater(t, len(job.Spec.RuntimeEnvYAML), 1)
 	assert.NotNil(t, job.Spec.ClusterSelector)
 	assert.Nil(t, job.Spec.RayClusterSpec)
-	assert.Equal(t, float32(2), job.Spec.EntrypointNumCpus)
+	assert.InEpsilon(t, float32(2), job.Spec.EntrypointNumCpus, 1e-9 /*epsilon*/)
 	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
 	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)
@@ -120,5 +121,5 @@ func TestBuildRayJob(t *testing.T) {
 
 	// Test request without cluster creation with submitter bad parameters
 	_, err = NewRayJob(apiJobExistingClusterSubmitterBadParams, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Error(t, err)
+	require.Error(t, err)
 }

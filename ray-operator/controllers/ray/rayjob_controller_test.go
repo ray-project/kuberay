@@ -77,16 +77,16 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 									},
 									Ports: []corev1.ContainerPort{
 										{
-											Name:          "gcs-server",
-											ContainerPort: 6379,
+											Name:          utils.GcsServerPortName,
+											ContainerPort: utils.DefaultGcsServerPort,
 										},
 										{
-											Name:          "dashboard",
-											ContainerPort: 8265,
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
 										},
 										{
-											Name:          "client",
-											ContainerPort: 10001,
+											Name:          utils.ClientPortName,
+											ContainerPort: utils.DefaultClientPort,
 										},
 									},
 								},

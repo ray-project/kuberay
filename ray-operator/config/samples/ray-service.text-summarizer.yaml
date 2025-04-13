@@ -24,15 +24,6 @@ spec:
           containers:
           - name: ray-head
             image: rayproject/ray-ml:2.41.0.deprecated
-            ports:
-            - containerPort: 6379
-              name: gcs
-            - containerPort: 8265
-              name: dashboard
-            - containerPort: 10001
-              name: client
-            - containerPort: 8000
-              name: serve
             volumeMounts:
               - mountPath: /tmp/ray
                 name: ray-logs

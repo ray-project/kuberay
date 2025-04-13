@@ -139,16 +139,16 @@ func TestCreateServiceV2(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualService, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateRayService(tc.Input)
+			actualService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayService(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
 				waitForRunningService(t, tCtx, actualService.Name)
 				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
@@ -198,14 +198,14 @@ func TestDeleteService(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualRpcStatus, err := tCtx.GetRayApiServerClient().DeleteRayService(tc.Input)
+			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteRayService(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				waitForDeletedService(t, tCtx, testServiceRequest.Service.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
@@ -224,9 +224,9 @@ func TestGetAllServices(t *testing.T) {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
 
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllRayServices()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices()
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Services, "A list of services is required")
 	require.Equal(t, testServiceRequest.Service.Name, response.Services[0].Name)
@@ -246,11 +246,11 @@ func TestGetServicesInNamespace(t *testing.T) {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
 
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListRayServices(&api.ListRayServicesRequest{
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
 		Namespace: tCtx.GetNamespaceName(),
 	})
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Services, "A list of compute templates is required")
 	require.Equal(t, testServiceRequest.Service.Name, response.Services[0].Name)
@@ -355,15 +355,15 @@ func TestGetService(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualService, actualRpcStatus, err := tCtx.GetRayApiServerClient().GetRayService(tc.Input)
+			actualService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetRayService(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.Equal(t, tc.Input.Name, actualService.Name)
 				require.Equal(t, tCtx.GetNamespaceName(), actualService.Namespace)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
@@ -410,9 +410,9 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 		},
 		Namespace: tCtx.GetNamespaceName(),
 	}
-	actualService, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateRayService(testServiceRequest)
+	actualService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayService(testServiceRequest)
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
 	waitForRunningService(t, tCtx, actualService.Name)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -433,16 +432,16 @@ func TestCreateClusterEndpoint(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().CreateCluster(tc.Input)
+			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualCluster, "A cluster is expected")
 				waitForRunningCluster(t, tCtx, actualCluster.Name)
 				tCtx.DeleteRayCluster(t, actualCluster.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
@@ -504,14 +503,14 @@ func TestDeleteCluster(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualRpcStatus, err := tCtx.GetRayApiServerClient().DeleteCluster(tc.Input)
+			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				waitForDeletedCluster(t, tCtx, tc.Input.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
@@ -519,30 +518,24 @@ func TestDeleteCluster(t *testing.T) {
 
 func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*End2EndTestingContext {
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	var wg sync.WaitGroup
-	wg.Add(numberOfNamespaces)
 	for i := 0; i < numberOfNamespaces; i++ {
-		go func(i int) {
-			defer wg.Done()
-			tCtx, err := NewEnd2EndTestingContext(t)
-			assert.NoError(t, err, "No error expected when creating testing context")
+		tCtx, err := NewEnd2EndTestingContext(t)
+		require.NoError(t, err, "No error expected when creating testing context")
 
-			tCtx.CreateComputeTemplate(t)
-			t.Cleanup(func() {
-				tCtx.DeleteComputeTemplate(t)
-			})
-			actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
-				"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
-				"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-			})
-			t.Cleanup(func() {
-				tCtx.DeleteRayCluster(t, actualCluster.Name)
-				tCtx.DeleteConfigMap(t, configMapName)
-			})
-			tCtxs[i] = tCtx
-		}(i)
+		tCtx.CreateComputeTemplate(t)
+		t.Cleanup(func() {
+			tCtx.DeleteComputeTemplate(t)
+		})
+		actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+		})
+		t.Cleanup(func() {
+			tCtx.DeleteRayCluster(t, actualCluster.Name)
+			tCtx.DeleteConfigMap(t, configMapName)
+		})
+		tCtxs[i] = tCtx
 	}
-	wg.Wait()
 	return tCtxs
 }
 
@@ -555,9 +548,9 @@ func TestGetAllClusters(t *testing.T) {
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{})
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{})
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.Empty(t, response.Continue, "No continue token is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
@@ -587,12 +580,12 @@ func TestGetAllClustersByPagination(t *testing.T) {
 	continueToken := ""
 	for i := 0; i < numberOfNamespaces; i++ {
 		limit := 1
-		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 			Limit:    int64(limit),
 			Continue: continueToken,
 		})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		if i != numberOfNamespaces-1 {
 			require.NotEmpty(t, response.Continue, "A continue token is expected")
@@ -623,11 +616,11 @@ func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	numberOfNamespaces := 3
 	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
 	tCtx := tCtxs[0]
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListAllClusters(&api.ListAllClustersRequest{
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 		Limit: 10,
 	})
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.Empty(t, response.Continue, "No continue token is expected")
 	require.NotEmpty(t, response.Clusters, "A list of clusters is required")
@@ -666,12 +659,12 @@ func TestGetClustersInNamespace(t *testing.T) {
 		tCtx.DeleteConfigMap(t, configMapName)
 	})
 
-	response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListClusters(
 		&api.ListClustersRequest{
 			Namespace: tCtx.GetNamespaceName(),
 		})
 	require.NoError(t, err, "No error expected")
-	require.Nil(t, actualRpcStatus, "No RPC status expected")
+	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Clusters, "A list of compute templates is required")
 	gotCluster := false
@@ -711,14 +704,14 @@ func TestGetClustersByPaginationInNamespace(t *testing.T) {
 
 	continueToken := ""
 	for i := 1; i <= 2; i++ {
-		response, actualRpcStatus, err := tCtx.GetRayApiServerClient().ListClusters(
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListClusters(
 			&api.ListClustersRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				Limit:     1,
 				Continue:  continueToken,
 			})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Len(t, response.Clusters, 1)
 		require.Equal(t, response.Clusters[0].Name, fmt.Sprintf("cluster%d", i))
@@ -788,15 +781,15 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualCluster, actualRpcStatus, err := tCtx.GetRayApiServerClient().GetCluster(tc.Input)
+			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetCluster(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
-				require.Nil(t, actualRpcStatus, "No RPC status expected")
+				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.Equal(t, tCtx.GetRayClusterName(), actualCluster.Name)
 				require.Equal(t, tCtx.GetNamespaceName(), actualCluster.Namespace)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRpcStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}

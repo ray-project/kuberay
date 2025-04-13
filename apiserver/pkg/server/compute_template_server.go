@@ -71,7 +71,7 @@ func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, reques
 	}, nil
 }
 
-func (s *ComputeTemplateServer) ListAllComputeTemplates(ctx context.Context, request *api.ListAllComputeTemplatesRequest) (*api.ListAllComputeTemplatesResponse, error) {
+func (s *ComputeTemplateServer) ListAllComputeTemplates(ctx context.Context, _ *api.ListAllComputeTemplatesRequest) (*api.ListAllComputeTemplatesResponse, error) {
 	runtimes, err := s.resourceManager.ListAllComputeTemplates(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "List all compute templates from all namespaces failed.")

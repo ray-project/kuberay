@@ -95,7 +95,7 @@ test: fmt vet fumpt imports ## Run all unit tests.
 
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
-	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4 -run TestGetServicesInNamespaceWithPagination
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
 local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
@@ -154,8 +154,6 @@ endif
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
 	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
-	$(ENGINE) pull rayproject/ray:latest
-	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
 
 ##@ Docker Build
 docker-image: test ## Build image for the api server.

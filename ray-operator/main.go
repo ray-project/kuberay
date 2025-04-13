@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
@@ -135,10 +136,6 @@ func main() {
 		config.EnableMetrics = enableMetrics
 	}
 
-	if config.EnableMetrics {
-		metrics.Register()
-	}
-
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
 	exitOnError(err, "failed to create log encoder for stdout")
 	opts.Encoder = stdoutEncoder
@@ -237,11 +234,19 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:   config.HeadSidecarContainers,
-		WorkerSidecarContainers: config.WorkerSidecarContainers,
+	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
+	if config.EnableMetrics {
+		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
+		ctrlmetrics.Registry.MustRegister(rayClusterMetricCollector)
 	}
+
 	ctx := ctrl.SetupSignalHandler()
+	rayClusterOptions := ray.RayClusterReconcilerOptions{
+		HeadSidecarContainers:     config.HeadSidecarContainers,
+		WorkerSidecarContainers:   config.WorkerSidecarContainers,
+		IsOpenShift:               utils.GetClusterType(),
+		RayClusterMetricCollector: rayClusterMetricCollector,
+	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),

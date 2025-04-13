@@ -46,7 +46,7 @@ func (s *RayServiceServer) CreateRayService(ctx context.Context, request *api.Cr
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", rayService.Namespace, rayService.Name, err)
 	}
-	return model.FromCrdToApiService(rayService, events), nil
+	return model.FromCrdToAPIService(rayService, events), nil
 }
 
 func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.UpdateRayServiceRequest) (*api.RayService, error) {
@@ -63,7 +63,7 @@ func (s *RayServiceServer) UpdateRayService(ctx context.Context, request *api.Up
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", rayService.Namespace, rayService.Name, err)
 	}
-	return model.FromCrdToApiService(rayService, events), nil
+	return model.FromCrdToAPIService(rayService, events), nil
 }
 
 func (s *RayServiceServer) GetRayService(ctx context.Context, request *api.GetRayServiceRequest) (*api.RayService, error) {
@@ -82,7 +82,7 @@ func (s *RayServiceServer) GetRayService(ctx context.Context, request *api.GetRa
 	if err != nil {
 		klog.Warningf("failed to get rayService's event, service: %s/%s, err: %v", service.Namespace, service.Name, err)
 	}
-	return model.FromCrdToApiService(service, events), nil
+	return model.FromCrdToAPIService(service, events), nil
 }
 
 func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, error) {
@@ -109,12 +109,12 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services:      model.FromCrdToApiServices(services, serviceEventMap),
+		Services:      model.FromCrdToAPIServices(services, serviceEventMap),
 		NextPageToken: nextPageToken,
 	}, nil
 }
 
-func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
+func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
 	services, err := s.resourceManager.ListAllServices(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
@@ -129,7 +129,7 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListAllRayServicesResponse{
-		Services: model.FromCrdToApiServices(services, serviceEventMap),
+		Services: model.FromCrdToAPIServices(services, serviceEventMap),
 	}, nil
 }
 
@@ -172,11 +172,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Service.ClusterSpec)
 }
 
 func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
@@ -203,9 +199,5 @@ func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
 	}
 
-	if err := ValidateClusterSpec(request.Service.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Service.ClusterSpec)
 }

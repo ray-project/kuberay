@@ -134,7 +134,6 @@ func TestRayCreateClusterValidate(t *testing.T) {
 func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
-	cmd := NewCreateClusterCommand(cmdFactory, testStreams)
 
 	tests := map[string]struct {
 		expectError string
@@ -177,6 +176,7 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
+			cmd := NewCreateClusterCommand(cmdFactory, testStreams)
 			cmd.SetArgs(tc.args)
 			// Parse the flags before checking for incompatible flags
 			if err := cmd.Flags().Parse(tc.args); err != nil {
