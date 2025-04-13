@@ -1,0 +1,13 @@
+version: 2
+updates:
+ 
+  # Maintain dependencies for go
+  - package-ecosystem: "gomod"
+    directories:
+      - "/experimental"
+      - "/ray-operator"
+      - "/apiserver"
+      - "/kubectl-plugin"
+      - "/proto"
+    schedule:
+      interval: "daily"
