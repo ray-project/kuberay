@@ -118,7 +118,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
+	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
 	time.Sleep(20 * time.Second)
@@ -145,7 +145,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, rayv1api.JobStatusSucceeded)
+	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// Sleep for a while to ensure that the worker pod is deleted
 	time.Sleep(100 * time.Second)
