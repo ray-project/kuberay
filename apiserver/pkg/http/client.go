@@ -21,6 +21,13 @@ type KuberayAPIServerClient struct {
 	marshaler   *protojson.MarshalOptions
 	unmarshaler *protojson.UnmarshalOptions
 	baseURL     string
+
+	// TODO(hjiang): here we use function to allow customized http request handling logic in unit test, worth revisiting if there're better ways;
+	// for example, (1) wrap an interface to process request; (2) inject round-trip logic into http client.
+	// See https://github.com/ray-project/kuberay/pull/3334/files#r2041183495 for details.
+	//
+	// Store http request handling function for unit test purpose.
+	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 }
 
 type KuberayAPIServerClientError struct {
@@ -42,7 +49,7 @@ func IsNotFoundError(err error) bool {
 }
 
 func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *KuberayAPIServerClient {
-	return &KuberayAPIServerClient{
+	client := &KuberayAPIServerClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
 		marshaler: &protojson.MarshalOptions{
@@ -60,6 +67,8 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 			Resolver:       nil,
 		},
 	}
+	client.executeHttpRequest = client.executeRequest
+	return client
 }
 
 // CreateComputeTemplate creates a new compute template.
@@ -79,13 +88,13 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return nil, status, err
 	}
 	computeTemplate := &api.ComputeTemplate{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
 	return computeTemplate, nil, nil
@@ -107,13 +116,13 @@ func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTem
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	computeTemplate := &api.ComputeTemplate{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return computeTemplate, nil, nil
 }
@@ -128,13 +137,13 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllCompute
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListAllComputeTemplatesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -149,13 +158,13 @@ func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *ap
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListComputeTemplatesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -177,13 +186,13 @@ func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterReque
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return nil, status, err
 	}
 	cluster := &api.Cluster{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return cluster, nil, nil
 }
@@ -204,13 +213,13 @@ func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	cluster := &api.Cluster{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return cluster, nil, nil
 }
@@ -230,13 +239,13 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -256,13 +265,13 @@ func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersR
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListAllClustersResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -283,13 +292,13 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return nil, status, err
 	}
 	rayJob := &api.RayJob{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayJob, nil, nil
 }
@@ -304,13 +313,13 @@ func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*ap
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	rayJob := &api.RayJob{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayJob, nil, nil
 }
@@ -330,13 +339,13 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListRayJobsResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -351,13 +360,13 @@ func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListAllRayJobsResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -384,13 +393,13 @@ func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServic
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return nil, status, err
 	}
 	rayService := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayService, nil, nil
 }
@@ -411,13 +420,13 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, updateURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, updateURL)
 	if err != nil {
 		return nil, status, err
 	}
 	rayService := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayService, nil, nil
 }
@@ -432,13 +441,13 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.RayService{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -453,13 +462,13 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListRayServicesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -474,13 +483,13 @@ func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServices
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListAllRayServicesResponse{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -507,13 +516,13 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, createURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return nil, status, err
 	}
 	submission := &api.SubmitRayJobReply{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, submission); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return submission, nil, nil
 }
@@ -528,13 +537,13 @@ func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRe
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.JobSubmissionInfo{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -549,13 +558,13 @@ func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.GetJobLogReply{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -570,13 +579,13 @@ func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetail
 
 	httpRequest.Header.Add("Accept", "application/json")
 
-	bodyBytes, status, err := krc.executeRequest(httpRequest, getURL)
+	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
 	if err != nil {
 		return nil, status, err
 	}
 	response := &api.ListJobSubmissionInfo{}
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
-		return nil, status, nil
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return response, nil, nil
 }
@@ -593,7 +602,7 @@ func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionR
 	httpRequest.Header.Add("Accept", "application/json")
 	httpRequest.Header.Add("Content-Type", "application/json")
 
-	_, status, err := krc.executeRequest(httpRequest, createURL)
+	_, status, err := krc.executeHttpRequest(httpRequest, createURL)
 	if err != nil {
 		return status, err
 	}
@@ -612,7 +621,7 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 		return nil, fmt.Errorf("failed to create http request for url '%s': %w", deleteURL, err)
 	}
 	httpRequest.Header.Add("Accept", "application/json")
-	_, status, err := krc.executeRequest(httpRequest, deleteURL)
+	_, status, err := krc.executeHttpRequest(httpRequest, deleteURL)
 	return status, err
 }
 
