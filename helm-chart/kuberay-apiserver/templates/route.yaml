@@ -1,9 +1,8 @@
 {{- if .Values.route.enabled -}}
-{{- $fullName := include "kuberay-apiserver.fullname" . -}}
-kind: Route
 apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
-  name: {{ $fullName }}
+  name: {{ include "kuberay-apiserver.fullname" . }}
   labels:
     {{- include "kuberay-apiserver.labels" . | nindent 4 }}
   {{- with .Values.route.annotations }}
