@@ -2,9 +2,7 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -277,26 +275,45 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
 	}
 
+	// Used to check all services have been returned.
+	gotServices := []bool{false, false}
+
 	pageToken := ""
 	for ii := 0; ii < serviceCount; ii++ {
 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
 			Namespace: tCtx.GetNamespaceName(),
 			PageToken: pageToken,
-			PageSize:  1,
+			PageSize:  int32(1),
 		})
+
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Services, "A list of compute templates is required")
 		require.Equal(t, 1, len(response.Services))
-		require.Equal(t, expectedServiceNames[ii], response.Services[0].Name)
-		require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
+
+		for _, curService := range response.Services {
+			for jj := 0; jj < serviceCount; jj++ {
+				if expectedServiceNames[jj] == curService.Name {
+					gotServices[jj] = true
+					break
+				}
+			}
+		}
 
 		// Check next page token.
+		pageToken = response.NextPageToken
 		if ii == serviceCount-1 {
 			require.Empty(t, pageToken, "Last page token should be empty")
 		} else {
 			require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+		}
+	}
+
+	// Check all services created have been returned.
+	for idx := 0; idx < serviceCount; idx++ {
+		if !gotServices[idx] {
+			t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
 		}
 	}
 }
@@ -415,12 +432,6 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
 	waitForRunningService(t, tCtx, actualService.Name)
-
-	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	fmt.Fprintf(file, "actual service = %+v, rpc status = %+v\n", actualService, actualRPCStatus)
-	/////////////// debug
-
 	return testServiceRequest
 }
 

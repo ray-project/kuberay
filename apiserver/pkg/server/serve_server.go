@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
@@ -93,11 +91,6 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	if err != nil {
 		return nil, util.Wrap(err, "failed to list rayservice.")
 	}
-
-	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	fmt.Fprintf(file, "serve server next token = %s\n", nextPageToken)
-	/////////////// debug
 
 	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {

@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -343,16 +342,10 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pa
 		Limit:         int64(pageSize),
 		Continue:      pageToken,
 	})
-
-	/////////////// debug
-	file, _ := os.OpenFile("/tmp/debug-resource", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	fmt.Fprintf(file, "at resource manager ray service list = %+v\n", rayServiceList)
-	/////////////// debug
-
 	if err != nil {
 		return nil, "" /*nextPageToken*/, util.Wrap(err, fmt.Sprintf("List RayService failed in %s with next page token %s and page limit %d", namespace, pageToken, pageSize))
 	}
-	rayServices := make([]*rayv1api.RayService, 0, len(rayServiceList.Items))
+	rayServices := make([]*rayv1api.RayService, 0)
 	for _, service := range rayServiceList.Items {
 		rayServices = append(rayServices, &service)
 	}
