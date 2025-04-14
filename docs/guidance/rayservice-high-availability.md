@@ -8,7 +8,7 @@ RayService provides high availability (HA) to ensure services continue serving r
 ### Step 1: Create a Kubernetes cluster with Kind
 
 ```sh
-kind create cluster --image=kindest/node:v1.30.8
+kind create cluster --image=kindest/node:v1.26.0
 ```
 
 ### Step 2: Install the KubeRay operator

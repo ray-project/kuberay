@@ -17,8 +17,8 @@ namespace: default
 
 images:
 - name: kuberay/operator
-  newName: quay.io/kuberay/operator
-  newTag: nightly
+  newName: quay.io/kryanbeane/kuberay-operator
+  newTag: v1.3.2
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
