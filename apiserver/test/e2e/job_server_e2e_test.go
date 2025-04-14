@@ -300,7 +300,7 @@ func TestGetAllJobs(t *testing.T) {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayJobs()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{})
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
@@ -313,6 +313,59 @@ func TestGetAllJobs(t *testing.T) {
 		}
 	}
 	require.True(t, foundName)
+}
+
+func TestGetAllJobsWithPagination(t *testing.T) {
+	const numberOfNamespaces = 3
+	testContexts := make([]*End2EndTestingContext, 0, numberOfNamespaces)
+	testJobRequests := make([]*api.CreateRayJobRequest, 0, numberOfNamespaces)
+
+	for ii := 0; ii < numberOfNamespaces; ii++ {
+		tCtx, err := NewEnd2EndTestingContext(t)
+		require.NoError(t, err, "No error expected when creating testing context")
+
+		tCtx.CreateComputeTemplate(t)
+		t.Cleanup(func() {
+			tCtx.DeleteComputeTemplate(t)
+		})
+		testContexts = append(testContexts, tCtx)
+		testJobRequests = append(testJobRequests, createTestJob(t, tCtx))
+	}
+
+	// Used to check all jobs have been returned.
+	gotJob := []bool{false, false, false}
+
+	continueToken := ""
+	for idx := 0; idx < numberOfNamespaces; idx++ {
+		response, actualRpcStatus, err := testContexts[idx].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+			Limit:    int64(1),
+			Continue: continueToken,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		if idx != numberOfNamespaces-1 {
+			require.NotEmpty(t, response.Continue, "A continue token is expected")
+		} else {
+			require.Empty(t, response.Continue, "No continue token is expected")
+		}
+		require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+		require.Len(t, response.Jobs, 1, "Number of jobs returned is not as expected")
+		for _, curJob := range response.Jobs {
+			for ii := 0; ii < numberOfNamespaces; ii++ {
+				if testContexts[ii].GetCurrentName() == curJob.Name && testContexts[ii].GetNamespaceName() == curJob.Namespace {
+					gotJob[ii] = true
+					break
+				}
+			}
+		}
+		continueToken = response.Continue
+	}
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotJob[i] {
+			t.Errorf("ListAllClusters did not return expected clusters %s", testContexts[i].GetRayClusterName())
+		}
+	}
 }
 
 func TestGetJobsInNamespace(t *testing.T) {

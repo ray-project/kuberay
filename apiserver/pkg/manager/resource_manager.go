@@ -236,34 +236,6 @@ func (r *ResourceManager) ListJobs(ctx context.Context, namespace string, contin
 	return result, rayJobList.Continue, nil
 }
 
-func (r *ResourceManager) ListAllJobs(ctx context.Context) ([]*rayv1api.RayJob, error) {
-	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
-	}
-
-	var result []*rayv1api.RayJob
-	labelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			util.KubernetesManagedByLabelKey: util.ComponentName,
-		},
-	}
-	for _, namespace := range namespaces.Items {
-		rayJobList, err := r.getRayJobClient(namespace.Name).List(ctx, metav1.ListOptions{
-			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
-		})
-		if err != nil {
-			return nil, util.Wrap(err, fmt.Sprintf("List RayCluster failed in %s", namespace.Name))
-		}
-
-		length := len(rayJobList.Items)
-		for i := 0; i < length; i++ {
-			result = append(result, &rayJobList.Items[i])
-		}
-	}
-	return result, nil
-}
-
 func (r *ResourceManager) DeleteJob(ctx context.Context, jobName string, namespace string) error {
 	client := r.getRayJobClient(namespace)
 	job, err := getJobByName(ctx, client, jobName)
