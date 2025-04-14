@@ -12,46 +12,6 @@ import (
 	k8metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type CustomCode uint32
-
-type CustomError struct {
-	error error
-	code  CustomCode
-}
-
-func NewCustomError(err error, code CustomCode, format string, a ...interface{}) *CustomError {
-	message := fmt.Sprintf(format, a...)
-	return &CustomError{
-		error: errors.Wrapf(err, "CustomError (code: %v): %v", code, message),
-		code:  code,
-	}
-}
-
-func NewCustomErrorf(code CustomCode, format string, a ...interface{}) *CustomError {
-	message := fmt.Sprintf(format, a...)
-	return &CustomError{
-		error: errors.Errorf("CustomError (code: %v): %v", code, message),
-		code:  code,
-	}
-}
-
-func (e *CustomError) Error() string {
-	return e.error.Error()
-}
-
-func HasCustomCode(err error, code CustomCode) bool {
-	if err == nil {
-		return false
-	}
-
-	var customErr *CustomError
-	if errors.As(err, &customErr) {
-		return customErr.code == code
-	}
-
-	return false
-}
-
 type UserError struct {
 	// Error for internal debugging.
 	internalError error
