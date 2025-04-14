@@ -62,7 +62,7 @@ make clean
 
 ```bash
 # Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.24.0
+kind create cluster --image=kindest/node:v1.30.8
 
 # Step 2: Modify KubeRay source code
 # For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
@@ -109,8 +109,8 @@ cd ..
 > Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
 
 ```bash
-# Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.24.0
+# Step 1: Create a Kind cluster ()
+kind create cluster --image=kindest/node:v1.30.8
 
 # Step 2: Install CRDs
 make -C ray-operator install

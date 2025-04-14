@@ -47,7 +47,7 @@ You can test clusterloader2 configs using Kind.
 First create a kind cluster:
 
 ```sh
-kind create cluster --image=kindest/node:v1.27.3
+kind create cluster --image=kindest/node:v1.30.8
 ```
 
 Install KubeRay;
