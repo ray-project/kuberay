@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
+
 	"github.com/stretchr/testify/require"
 )
 
