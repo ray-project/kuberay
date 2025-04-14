@@ -1,13 +1,18 @@
 package interceptor
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	klog "k8s.io/klog/v2"
 )
 
 // mockHandler simulates a gRPC handler for testing
@@ -95,7 +100,93 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 	)
 }
 
-// TODO: Add proper logging verification tests using one of these approaches:
-// 1. Hijack logging output via klog.SetOutput
-// 2. Redirect stdout/stderr content
-// See https://github.com/ray-project/kuberay/pull/3346#discussion_r2041099261 for details
+// TestAPIServerInterceptorLogging verifies that the interceptor logs start, finish, and warning messages.
+func TestAPIServerInterceptorLogging(t *testing.T) {
+	tests := []struct {
+		name           string
+		handlerErr     error
+		expectedLogs   []string
+		unexpectedLogs []string
+	}{
+		{
+			name:       "successful execution - info logs",
+			handlerErr: nil,
+			expectedLogs: []string{
+				"TestLoggingMethod handler starting",
+				"TestLoggingMethod handler finished",
+			},
+			unexpectedLogs: []string{
+				"handler error",
+			},
+		},
+		{
+			name:       "error execution - warning logs",
+			handlerErr: errors.New("handler error"),
+			expectedLogs: []string{
+				"TestLoggingMethod handler starting",
+				"handler error",
+				"TestLoggingMethod handler finished",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Redirect stderr to capture klog output
+			originalStderr := os.Stderr
+			r, w, _ := os.Pipe()
+			os.Stderr = w
+
+			// Restore stderr after the test
+			defer func() {
+				os.Stderr = originalStderr
+				klog.Flush()
+			}()
+
+			ctx := context.Background()
+			handler := &mockHandler{returnErr: tt.handlerErr}
+			info := &grpc.UnaryServerInfo{FullMethod: "TestLoggingMethod"}
+
+			_, err := APIServerInterceptor(
+				ctx,
+				"test_request",
+				info,
+				func(receivedCtx context.Context, req interface{}) (interface{}, error) {
+					return handler.Handle(receivedCtx, req)
+				},
+			)
+
+			if tt.handlerErr != nil {
+				require.EqualError(t, tt.handlerErr, err.Error(), "A matching error is expected")
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Close the write end of the pipe and read the captured output
+			w.Close()
+			var buf bytes.Buffer
+			_, _ = io.Copy(&buf, r)
+			logOutput := buf.String()
+
+			for _, expectedLog := range tt.expectedLogs {
+				assert.True(t,
+					strings.Contains(logOutput, expectedLog),
+					"Log output should contain '%s'\nGot logs:\n%s",
+					expectedLog,
+					logOutput,
+				)
+			}
+
+			for _, unexpectedLog := range tt.unexpectedLogs {
+				assert.False(t,
+					strings.Contains(logOutput, unexpectedLog),
+					"Log output should not contain '%s'\nGot logs:\n%s",
+					unexpectedLog,
+					logOutput,
+				)
+			}
+
+			assert.True(t, handler.called, "handler should have been called")
+		})
+	}
+}
