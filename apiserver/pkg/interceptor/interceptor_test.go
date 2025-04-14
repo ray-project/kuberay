@@ -94,3 +94,8 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		},
 	)
 }
+
+// TODO: Add proper logging verification tests using one of these approaches:
+// 1. Hijack logging output via klog.SetOutput
+// 2. Redirect stdout/stderr content
+// See https://github.com/ray-project/kuberay/pull/3346#discussion_r2041099261 for details
