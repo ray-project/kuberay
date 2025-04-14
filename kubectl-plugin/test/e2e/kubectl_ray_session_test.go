@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -96,7 +97,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 				return err
 			}
 			if string(output) == oldPodName {
-				return err
+				return fmt.Errorf("head pod has not changed (still %q), or is empty", oldPodName)
 			}
 			cmd = exec.Command("kubectl", "get", "--namespace", namespace, "pod", newPodName)
 			return cmd.Run()
