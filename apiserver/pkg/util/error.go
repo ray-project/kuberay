@@ -14,19 +14,6 @@ import (
 
 type CustomCode uint32
 
-const (
-	CUSTOM_CODE_TRANSIENT CustomCode = 0
-	CUSTOM_CODE_PERMANENT CustomCode = 1
-	CUSTOM_CODE_NOT_FOUND CustomCode = 2
-	CUSTOM_CODE_GENERIC   CustomCode = 3
-)
-
-type APICode int
-
-const (
-	API_CODE_NOT_FOUND = 404
-)
-
 type CustomError struct {
 	error error
 	code  CustomCode
