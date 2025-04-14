@@ -7,16 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/exp/slices"
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	api "github.com/ray-project/kuberay/proto/go_client"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
-	api "github.com/ray-project/kuberay/proto/go_client"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestCreateJobWithDisposableClusters(t *testing.T) {
@@ -572,6 +570,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 }
 
 func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues []rayv1api.JobStatus) *api.CreateRayJobRequest {
+	// expectedJobStatuses is a slice of job statuses that we expect the job to be in
 	// create config map and register a cleanup hook upon success
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
@@ -643,7 +642,8 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues
 }
 
 func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
-	// wait for the job to be in a JobStatusSucceeded state for 3 minutes
+	// expectedJobStatuses is a slice of job statuses that we expect the job to be in
+	// wait for the job to be in any of the expectedJobStatuses state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
