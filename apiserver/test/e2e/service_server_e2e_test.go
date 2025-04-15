@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -143,7 +144,7 @@ func TestCreateServiceV2(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
-				waitForRunningService(t, tCtx, actualService.Name)
+				waitForRayService(t, tCtx, actualService.Name, []rayv1api.ServiceStatus{rayv1api.NotRunning, rayv1api.Running})
 				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -161,7 +162,7 @@ func TestDeleteService(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx)
+	testServiceRequest := createTestServiceV2(t, tCtx, []rayv1api.ServiceStatus{rayv1api.NotRunning, rayv1api.Running})
 
 	tests := []GenericEnd2EndTest[*api.DeleteRayServiceRequest]{
 		{
@@ -218,7 +219,7 @@ func TestGetAllServices(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx)
+	testServiceRequest := createTestServiceV2(t, tCtx, []rayv1api.ServiceStatus{rayv1api.NotRunning, rayv1api.Running})
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -240,7 +241,7 @@ func TestGetServicesInNamespace(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx)
+	testServiceRequest := createTestServiceV2(t, tCtx, []rayv1api.ServiceStatus{rayv1api.NotRunning, rayv1api.Running})
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -264,7 +265,7 @@ func TestGetService(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx)
+	testServiceRequest := createTestServiceV2(t, tCtx, []rayv1api.ServiceStatus{rayv1api.NotRunning, rayv1api.Running})
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -324,7 +325,8 @@ func TestGetService(t *testing.T) {
 	}
 }
 
-func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayServiceRequest {
+func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext, expectedServiceStatues []rayv1api.ServiceStatus) *api.CreateRayServiceRequest {
+	// expectedServiceStatues is a slice of service statuses that we expect the service to be in
 	clusterSpec := &api.ClusterSpec{
 		HeadGroupSpec: &api.HeadGroupSpec{
 			ComputeTemplate: tCtx.GetComputeTemplateName(),
@@ -369,12 +371,13 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
-	waitForRunningService(t, tCtx, actualService.Name)
+	waitForRayService(t, tCtx, actualService.Name, expectedServiceStatues)
 
 	return testServiceRequest
 }
 
-func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
+func waitForRayService(t *testing.T, tCtx *End2EndTestingContext, serviceName string, expectedServiceStatues []rayv1api.ServiceStatus) {
+	// expectedServiceStatues is a slice of service statuses that we expect the service to be in
 	// wait for the service to be in a running state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
@@ -383,7 +386,7 @@ func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 			return true, err
 		}
 		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return rayService.Status.ServiceStatus == rayv1api.Running, nil
+		return slices.Contains(expectedServiceStatues, rayService.Status.ServiceStatus), nil
 	})
 	require.NoErrorf(t, err, "No error expected when getting ray service: '%s', err %v", serviceName, err)
 }
