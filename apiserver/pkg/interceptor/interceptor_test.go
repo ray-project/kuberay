@@ -139,8 +139,8 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 
 			// Restore stderr after the test
 			defer func() {
-				os.Stderr = originalStderr
 				klog.Flush()
+				os.Stderr = originalStderr
 			}()
 
 			ctx := context.Background()
@@ -165,7 +165,7 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 			// Close the write end of the pipe and read the captured output
 			w.Close()
 			var buf bytes.Buffer
-			_, _ = io.Copy(&buf, r)
+			io.Copy(&buf, r)
 			logOutput := buf.String()
 
 			for _, expectedLog := range tt.expectedLogs {
