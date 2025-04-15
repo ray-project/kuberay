@@ -321,7 +321,7 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 	const numberOfNamespaces = 3
 	testContexts := make([]*End2EndTestingContext, 0, numberOfNamespaces)
 
-	for ii := 0; ii < numberOfNamespaces; ii++ {
+	for idx := 0; idx < numberOfNamespaces; idx++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
 
