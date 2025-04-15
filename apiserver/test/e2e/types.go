@@ -12,12 +12,13 @@ import (
 	petnames "github.com/dustinkirkland/golang-petname"
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
