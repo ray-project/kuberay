@@ -87,5 +87,5 @@
     # Run e2e tests and print KubeRay api server logs if tests fail
     - echo "--- START:Running e2e apiserver (nightly operator) tests"
     - set -o pipefail
-    - E2E_API_SERVER_URL="http://docker:31888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk || (kubectl logs --tail -1 -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system && exit 1)
+    - E2E_API_SERVER_URL="http://docker:31888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system > /artifact-mount/kuberay-apiserver-logs.txt && exit 1)
     - echo "--- END:Apiserver e2e (nightly operator) tests finished"
