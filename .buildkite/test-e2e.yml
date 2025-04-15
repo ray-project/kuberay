@@ -86,7 +86,6 @@
     - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
     # Run e2e tests and print KubeRay api server logs if tests fail
     - echo "--- START:Running e2e apiserver (nightly operator) tests"
-    - if [ -n "${KUBERAY_TEST_RAY_IMAGE}"]; then echo "Using Ray Image ${KUBERAY_TEST_RAY_IMAGE}"; fi
     - set -o pipefail
     - E2E_API_SERVER_URL="http://docker:31888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk || (kubectl logs --tail -1 -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system && exit 1)
     - echo "--- END:Apiserver e2e (nightly operator) tests finished"
