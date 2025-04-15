@@ -319,7 +319,6 @@ func TestGetAllJobs(t *testing.T) {
 func TestGetAllJobsWithPagination(t *testing.T) {
 	const numberOfNamespaces = 3
 	testContexts := make([]*End2EndTestingContext, 0, numberOfNamespaces)
-	testJobRequests := make([]*api.CreateRayJobRequest, 0, numberOfNamespaces)
 
 	for ii := 0; ii < numberOfNamespaces; ii++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
@@ -330,7 +329,7 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 			tCtx.DeleteComputeTemplate(t)
 		})
 		testContexts = append(testContexts, tCtx)
-		testJobRequests = append(testJobRequests, createTestJob(t, tCtx))
+		createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded})
 	}
 
 	// Used to check all jobs have been returned.
@@ -338,12 +337,12 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 
 	continueToken := ""
 	for idx := 0; idx < numberOfNamespaces; idx++ {
-		response, actualRpcStatus, err := testContexts[idx].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+		response, actualRPCStatus, err := testContexts[idx].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
 			Limit:    int64(1),
 			Continue: continueToken,
 		})
 		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRpcStatus, "No RPC status expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		if idx != numberOfNamespaces-1 {
 			require.NotEmpty(t, response.Continue, "A continue token is expected")
