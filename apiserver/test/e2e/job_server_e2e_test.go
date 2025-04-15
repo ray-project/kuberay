@@ -337,15 +337,15 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 	gotJob := []bool{false, false, false}
 
 	continueToken := ""
-	for idx := 0; idx < numberOfNamespaces; idx++ {
-		response, actualRPCStatus, err := testContexts[idx].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+	for i := 0; i < numberOfNamespaces; i++ {
+		response, actualRPCStatus, err := testContexts[i].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
 			Limit:    int64(1),
 			Continue: continueToken,
 		})
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
-		if idx != numberOfNamespaces-1 {
+		if i != numberOfNamespaces-1 {
 			require.NotEmpty(t, response.Continue, "A continue token is expected")
 		} else {
 			require.Empty(t, response.Continue, "No continue token is expected")
@@ -353,9 +353,9 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 		require.NotEmpty(t, response.Jobs, "A list of jobs is required")
 		require.Len(t, response.Jobs, 1, "Number of jobs returned is not as expected")
 		for _, curJob := range response.Jobs {
-			for i := 0; i < numberOfNamespaces; i++ {
-				if testContexts[i].GetCurrentName() == curJob.Name && testContexts[i].GetNamespaceName() == curJob.Namespace {
-					gotJob[i] = true
+			for j := 0; j < numberOfNamespaces; j++ {
+				if testContexts[j].GetCurrentName() == curJob.Name && testContexts[j].GetNamespaceName() == curJob.Namespace {
+					gotJob[j] = true
 					break
 				}
 			}
