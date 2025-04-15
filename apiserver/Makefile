@@ -136,7 +136,7 @@ security-proxy-image: ## Build the security proxy image to be loaded in your kin
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
 # Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
-# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
+# If you are using a Kind cluster for development, you can run `make load-operator-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
 	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
 
