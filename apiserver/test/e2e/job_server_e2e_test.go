@@ -306,6 +306,7 @@ func TestGetAllJobs(t *testing.T) {
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+	require.Empty(t, response.Continue, "No continue token is expected")
 	foundName := false
 	for _, job := range response.Jobs {
 		if testJobRequest.Job.Name == job.Name && tCtx.GetNamespaceName() == job.Namespace {
@@ -352,9 +353,9 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 		require.NotEmpty(t, response.Jobs, "A list of jobs is required")
 		require.Len(t, response.Jobs, 1, "Number of jobs returned is not as expected")
 		for _, curJob := range response.Jobs {
-			for ii := 0; ii < numberOfNamespaces; ii++ {
-				if testContexts[ii].GetCurrentName() == curJob.Name && testContexts[ii].GetNamespaceName() == curJob.Namespace {
-					gotJob[ii] = true
+			for i := 0; i < numberOfNamespaces; i++ {
+				if testContexts[i].GetCurrentName() == curJob.Name && testContexts[i].GetNamespaceName() == curJob.Namespace {
+					gotJob[i] = true
 					break
 				}
 			}
@@ -363,7 +364,7 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 	}
 	for i := 0; i < numberOfNamespaces; i++ {
 		if !gotJob[i] {
-			t.Errorf("ListAllClusters did not return expected clusters %s", testContexts[i].GetRayClusterName())
+			t.Errorf("ListAllJobs did not return expected jobs %s", testContexts[i].GetCurrentName())
 		}
 	}
 }
