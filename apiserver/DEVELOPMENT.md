@@ -66,7 +66,7 @@ make test
 
 There are two `make` targets provide execute the end to end test (integration between Kuberay API server and Kuberay Operator):
 
-* `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads.
+* `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads. Make sure the apiserver is running (see [Build](#build)) before running this command, or the tests will fail.
 * `make local-e2e-test` creates a local kind cluster, builds the Kuberay operator and API server images from the current branch and deploys the operator and API server into the kind cluster. It shuts down the kind cluster upon successful execution of the end to end test. If the tests fail the cluster will be left running and will have to manually be shutdown by executing the `make clean-cluster`
 
 The `e2e` test targets use two variables to control what version of Ray images to use in the end to end tests:
