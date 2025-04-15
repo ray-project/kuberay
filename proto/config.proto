@@ -205,7 +205,7 @@ message DeleteImageTemplateRequest {
   string namespace = 2;
 }
 
-// ImageTemplate can be used by worker group and workspce.
+// ImageTemplate can be used by worker group and workspace.
 // They can be distinguish by different entrypoints
 message ImageTemplate {
   // The ID of the image template
