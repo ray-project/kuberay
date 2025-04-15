@@ -377,8 +377,8 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext, expectedServ
 }
 
 func waitForRayService(t *testing.T, tCtx *End2EndTestingContext, serviceName string, expectedServiceStatues []rayv1api.ServiceStatus) {
-	// expectedServiceStatues is a slice of service statuses that we expect the service to be in
-	// wait for the service to be in a running state for 3 minutes
+	// `expectedServiceStatues` is a slice of service statuses that we expect the service to be in
+	// wait for the service to be in any of the `expectedServiceStatues` state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
 		rayService, err := tCtx.GetRayServiceByName(serviceName)
