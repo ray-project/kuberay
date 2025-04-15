@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,21 +16,21 @@ import (
 
 // mockHandler simulates a gRPC handler for testing
 type mockHandler struct {
-	called    bool
 	returnErr error
+	called    bool
 }
 
-func (h *mockHandler) Handle(ctx context.Context, req interface{}) (interface{}, error) {
+func (h *mockHandler) Handle(_ context.Context, _ interface{}) (interface{}, error) {
 	h.called = true
 	return "test_response", h.returnErr
 }
 
 func TestAPIServerInterceptor(t *testing.T) {
 	tests := []struct {
-		name          string
-		handler       *mockHandler
 		expectedResp  interface{}
 		expectedError error
+		handler       *mockHandler
+		name          string
 	}{
 		{
 			name:          "successful handler execution",
@@ -84,7 +83,9 @@ func TestAPIServerInterceptor(t *testing.T) {
 
 // TestAPIServerInterceptorContextPassing ensures context is properly passed through
 func TestAPIServerInterceptorContextPassing(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "test_key", "test_value")
+	type testContextKey string
+	const key testContextKey = "test_key"
+	ctx := context.WithValue(context.Background(), key, "test_value")
 	handler := &mockHandler{}
 	info := &grpc.UnaryServerInfo{FullMethod: "TestMethod"}
 
@@ -94,7 +95,7 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		info,
 		func(receivedCtx context.Context, req interface{}) (interface{}, error) {
 			// Verify context value is passed through
-			assert.Equal(t, "test_value", receivedCtx.Value("test_key"))
+			assert.Equal(t, "test_value", receivedCtx.Value(testContextKey("test_key")))
 			return handler.Handle(receivedCtx, req)
 		},
 	)
@@ -165,12 +166,13 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 			// Close the write end of the pipe and read the captured output
 			w.Close()
 			var buf bytes.Buffer
-			io.Copy(&buf, r)
+			_, err = io.Copy(&buf, r)
+			require.NoError(t, err)
 			logOutput := buf.String()
 
 			for _, expectedLog := range tt.expectedLogs {
-				assert.True(t,
-					strings.Contains(logOutput, expectedLog),
+				assert.Contains(t,
+					logOutput, expectedLog,
 					"Log output should contain '%s'\nGot logs:\n%s",
 					expectedLog,
 					logOutput,
@@ -178,8 +180,8 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 			}
 
 			for _, unexpectedLog := range tt.unexpectedLogs {
-				assert.False(t,
-					strings.Contains(logOutput, unexpectedLog),
+				assert.NotContains(t,
+					logOutput, unexpectedLog,
 					"Log output should not contain '%s'\nGot logs:\n%s",
 					unexpectedLog,
 					logOutput,
