@@ -2,7 +2,6 @@ package yunikorn
 
 import (
 	"encoding/json"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -33,11 +32,11 @@ func newTaskGroups() *TaskGroups {
 	}
 }
 
-func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
+func newTaskGroupsFromCluster(cluster *v1.RayCluster) *TaskGroups {
 	taskGroups := newTaskGroups()
 
 	// head group
-	headGroupSpec := app.Spec.HeadGroupSpec
+	headGroupSpec := cluster.Spec.HeadGroupSpec
 	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
 	taskGroups.addTaskGroup(
 		TaskGroup{
@@ -50,7 +49,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 		})
 
 	// worker groups
-	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
+	for _, workerGroupSpec := range cluster.Spec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
 		minWorkers := workerGroupSpec.MinReplicas
 		taskGroups.addTaskGroup(
@@ -63,6 +62,72 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 				Affinity:     workerGroupSpec.Template.Spec.Affinity,
 			})
 	}
+
+	return taskGroups
+}
+
+func newTaskGroupsFromJob(app *v1.RayJob) *TaskGroups {
+	taskGroups := newTaskGroups()
+
+	// head group
+	headGroupSpec := app.Spec.RayClusterSpec.HeadGroupSpec
+	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RayNodeHeadGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(headPodMinResource),
+			NodeSelector: headGroupSpec.Template.Spec.NodeSelector,
+			Tolerations:  headGroupSpec.Template.Spec.Tolerations,
+			Affinity:     headGroupSpec.Template.Spec.Affinity,
+		})
+
+	// worker groups
+	for _, workerGroupSpec := range app.Spec.RayClusterSpec.WorkerGroupSpecs {
+		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
+		minWorkers := workerGroupSpec.MinReplicas
+		taskGroups.addTaskGroup(
+			TaskGroup{
+				Name:         workerGroupSpec.GroupName,
+				MinMember:    *minWorkers,
+				MinResource:  utils.ConvertResourceListToMapString(workerMinResource),
+				NodeSelector: workerGroupSpec.Template.Spec.NodeSelector,
+				Tolerations:  workerGroupSpec.Template.Spec.Tolerations,
+				Affinity:     workerGroupSpec.Template.Spec.Affinity,
+			})
+	}
+
+	jobSubmitterSpec := app.Spec.SubmitterPodTemplate
+	if jobSubmitterSpec == nil {
+		jobSubmitterSpec = &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("200Mi"),
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	jobSubmitterMinResource := utils.CalculatePodResource(jobSubmitterSpec.Spec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RaySubmitterGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(jobSubmitterMinResource),
+			NodeSelector: jobSubmitterSpec.Spec.NodeSelector,
+			Tolerations:  jobSubmitterSpec.Spec.Tolerations,
+			Affinity:     jobSubmitterSpec.Spec.Affinity,
+		})
 
 	return taskGroups
 }
