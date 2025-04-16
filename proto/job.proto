@@ -96,11 +96,18 @@ message ListRayJobsResponse {
 }
 
 message ListAllRayJobsRequest {
-  // TODO: support pagination later
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListAllRayJobs call or can be omitted when fetching the first page.
+  string continue = 1;
+  // The maximum number of jobs to return for the requested page.
+  // For backward compatibility, the default value is 0 which returns all jobs without pagination.
+  int64 limit = 2;
 }
 
 message ListAllRayJobsResponse {
   repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The continue token for the next page of jobs. If it is empty, it means this is the last page.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteRayJobRequest {

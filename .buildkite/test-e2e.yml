@@ -68,3 +68,24 @@
     - echo "--- START:Running e2e Operator upgrade (v1.2.2 to v1.3.0 operator) tests"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.3.0 go test -timeout 30m -v ./test/e2eupgrade | awk -f ../.buildkite/format.awk || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay && exit 1)
     - echo "--- END:e2e Operator upgrade (v1.2.2 to v1.3.0 operator) tests finished"
+
+- label: 'Test Apiserver E2E (nightly operator)'
+  instance_size: large
+  image: golang:1.23
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-e2e-apiserver.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - bash ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Build and start apiserver
+    - pushd ../apiserver
+    - KIND_CLUSTER_NAME=kind KIND=kind make install
+    - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
+    # Run e2e tests and print KubeRay api server logs if tests fail
+    - echo "--- START:Running e2e apiserver (nightly operator) tests"
+    - set -o pipefail
+    - E2E_API_SERVER_URL="http://docker:31888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system > /artifact-mount/kuberay-apiserver-logs.txt && exit 1)
+    - echo "--- END:Apiserver e2e (nightly operator) tests finished"

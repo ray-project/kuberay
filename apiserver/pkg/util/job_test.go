@@ -88,7 +88,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Len(t, job.Spec.Metadata, 1)
 	assert.Nil(t, job.Spec.ClusterSelector)
 	assert.NotNil(t, job.Spec.RayClusterSpec)
-	assert.Equal(t, int(*job.Spec.ActiveDeadlineSeconds), 120)
+	assert.Equal(t, 120, int(*job.Spec.ActiveDeadlineSeconds))
 
 	// Test request without cluster creation
 	job, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
@@ -112,7 +112,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Greater(t, len(job.Spec.RuntimeEnvYAML), 1)
 	assert.NotNil(t, job.Spec.ClusterSelector)
 	assert.Nil(t, job.Spec.RayClusterSpec)
-	assert.Equal(t, float32(2), job.Spec.EntrypointNumCpus)
+	assert.InEpsilon(t, float32(2), job.Spec.EntrypointNumCpus, 1e-9 /*epsilon*/)
 	assert.NotNil(t, job.Spec.SubmitterPodTemplate)
 	assert.Equal(t, "ray-job-submitter", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Name)
 	assert.Equal(t, "image", job.Spec.SubmitterPodTemplate.Spec.Containers[0].Image)

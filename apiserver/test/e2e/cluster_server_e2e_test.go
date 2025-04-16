@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
 
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // TestCreateClusterEndpoint sequentially iterates over the create cluster endpoint
@@ -519,30 +518,24 @@ func TestDeleteCluster(t *testing.T) {
 
 func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*End2EndTestingContext {
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	var wg sync.WaitGroup
-	wg.Add(numberOfNamespaces)
 	for i := 0; i < numberOfNamespaces; i++ {
-		go func(i int) {
-			defer wg.Done()
-			tCtx, err := NewEnd2EndTestingContext(t)
-			require.NoError(t, err, "No error expected when creating testing context")
+		tCtx, err := NewEnd2EndTestingContext(t)
+		require.NoError(t, err, "No error expected when creating testing context")
 
-			tCtx.CreateComputeTemplate(t)
-			t.Cleanup(func() {
-				tCtx.DeleteComputeTemplate(t)
-			})
-			actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
-				"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
-				"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-			})
-			t.Cleanup(func() {
-				tCtx.DeleteRayCluster(t, actualCluster.Name)
-				tCtx.DeleteConfigMap(t, configMapName)
-			})
-			tCtxs[i] = tCtx
-		}(i)
+		tCtx.CreateComputeTemplate(t)
+		t.Cleanup(func() {
+			tCtx.DeleteComputeTemplate(t)
+		})
+		actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+		})
+		t.Cleanup(func() {
+			tCtx.DeleteRayCluster(t, actualCluster.Name)
+			tCtx.DeleteConfigMap(t, configMapName)
+		})
+		tCtxs[i] = tCtx
 	}
-	wg.Wait()
 	return tCtxs
 }
 

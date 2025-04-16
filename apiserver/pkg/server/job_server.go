@@ -41,7 +41,7 @@ func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJ
 		return nil, util.Wrap(err, "Create Job failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds a specific Job by job name.
@@ -59,7 +59,7 @@ func (s *RayJobServer) GetRayJob(ctx context.Context, request *api.GetRayJobRequ
 		return nil, util.Wrap(err, "Get cluster failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds all Jobs in a given namespace.
@@ -80,14 +80,16 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 }
 
 // Finds all Jobs in all namespaces.
-func (s *RayJobServer) ListAllRayJobs(ctx context.Context, _ *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
-	jobs, err := s.resourceManager.ListAllJobs(ctx)
+func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
+	// Leave the namespace empty to list all jobs in all namespaces.
+	jobs, continueToken, err := s.resourceManager.ListJobs(ctx, "" /*namespace*/, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")
 	}
 
 	return &api.ListAllRayJobsResponse{
-		Jobs: model.FromCrdToAPIJobs(jobs),
+		Jobs:     model.FromCrdToAPIJobs(jobs),
+		Continue: continueToken,
 	}, nil
 }
 

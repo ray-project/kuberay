@@ -211,7 +211,7 @@ type ListRayServicesRequest struct {
 
 	// Required. The namespace of the ray services to be retrieved.
 	Namespace string `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	// A page token to request the next page of results. The token is acquried
+	// A page token to request the next page of results. The token is acquired
 	// from the nextPageToken field of the response from the previous
 	// ListRayServices call or can be omitted when fetching the first page.
 	PageToken string `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
@@ -345,7 +345,7 @@ type ListAllRayServicesRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// A page token to request the next page of results. The token is acquried
+	// A page token to request the next page of results. The token is acquired
 	// from the nextPageToken field of the response from the previous
 	// ListRayServices call or can be omitted when fetching the first page.
 	PageToken string `protobuf:"bytes,1,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
