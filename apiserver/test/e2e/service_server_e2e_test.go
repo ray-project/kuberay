@@ -291,7 +291,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Services, "A list of compute templates is required")
-		require.Equal(t, 1, len(response.Services))
+		require.Len(t, response.Services, 1)
 
 		for _, curService := range response.Services {
 			for jj := 0; jj < serviceCount; jj++ {
