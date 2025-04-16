@@ -335,7 +335,6 @@ func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayS
 	}
 
 	for _, namespace := range namespaces.Items {
-		// TODO(tinaxfwu): Implement list all services with pagination support.
 		servicesByNamespace, _, err := r.ListServices(ctx, namespace.Name, "" /*pageToken*/, 0 /*pageSize*/)
 		if err != nil {
 			return nil, util.Wrap(err, "List All Rayservices failed")
