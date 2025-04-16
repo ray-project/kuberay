@@ -16,12 +16,25 @@ func TestPopulateComputeTemplate(t *testing.T) {
 	require.NoError(t, err, "No error expected when creating testing context")
 
 	tCtx.CreateComputeTemplate(t)
+	tCtx.CreateComputeTemplateCustomName(t, "worker-1")
+	tCtx.CreateComputeTemplateCustomName(t, "worker-2")
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
+		tCtx.DeleteComputeTemplateCustomName(t, "worker-1")
+		tCtx.DeleteComputeTemplateCustomName(t, "worker-2")
 	})
 	clusterSpec := &api.ClusterSpec{
 		HeadGroupSpec: &api.HeadGroupSpec{
 			ComputeTemplate: tCtx.GetComputeTemplateName(),
+		},
+
+		WorkerGroupSpec: []*api.WorkerGroupSpec{
+			{
+				ComputeTemplate: "worker-1",
+			},
+			{
+				ComputeTemplate: "worker-2",
+			},
 		},
 	}
 
@@ -33,6 +46,8 @@ func TestPopulateComputeTemplate(t *testing.T) {
 
 	// Assertions
 	require.NoError(t, err)
-	assert.Len(t, computeTemplates, 1)
+	assert.Len(t, computeTemplates, 3)
 	assert.Contains(t, computeTemplates, tCtx.GetComputeTemplateName())
+	assert.Contains(t, computeTemplates, "worker-1")
+	assert.Contains(t, computeTemplates, "worker-2")
 }
