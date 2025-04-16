@@ -149,7 +149,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 			"nvidia.com/gpu":  resource.MustParse("1"),
 		})
 
-	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
+	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the pod
 	rayPod := createPod("ray-pod", "default")
 	yk.populateTaskGroupsAnnotationToPod(ctx, rayClusterWithGangScheduling, rayPod)
 
@@ -192,8 +192,8 @@ func createRayClusterWithLabels(name string, namespace string, labels map[string
 	return rayCluster
 }
 
-func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
-	// app.Spec.HeadGroupSpec.Template.Spec.Containers
+func addHeadPodSpec(rayCluster *rayv1.RayCluster, resource v1.ResourceList) {
+	// rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers
 	headContainers := []v1.Container{
 		{
 			Name:  "head-pod",
@@ -205,10 +205,10 @@ func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
 		},
 	}
 
-	app.Spec.HeadGroupSpec.Template.Spec.Containers = headContainers
+	rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = headContainers
 }
 
-func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
+func addWorkerPodSpec(rayCluster *rayv1.RayCluster, workerGroupName string,
 	replicas int32, minReplicas int32, maxReplicas int32, resources v1.ResourceList,
 ) {
 	workerContainers := []v1.Container{
@@ -222,7 +222,7 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 		},
 	}
 
-	app.Spec.WorkerGroupSpecs = append(app.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+	rayCluster.Spec.WorkerGroupSpecs = append(rayCluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		GroupName:   workerGroupName,
 		Replicas:    &replicas,
 		MinReplicas: &minReplicas,
