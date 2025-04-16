@@ -377,27 +377,25 @@ func TestGetAllJobsWithPagination(t *testing.T) {
 		gotJob := []bool{false, false, false}
 
 		continueToken := ""
-		for i := 0; i < numberOfNamespaces; i++ {
-			response, actualRPCStatus, err := testContexts[i].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
-				Limit:    numberOfNamespaces + 1,
-				Continue: continueToken,
-			})
-			require.NoError(t, err, "No error expected")
-			require.Nil(t, actualRPCStatus, "No RPC status expected")
-			require.NotNil(t, response, "A response is expected")
-			require.Empty(t, response.Continue, "No continue token is expected")
-			require.NotEmpty(t, response.Jobs, "A list of jobs is required")
-			require.Len(t, response.Jobs, numberOfNamespaces, "Number of jobs returned is not as expected")
-			for _, curJob := range response.Jobs {
-				for j := 0; j < numberOfNamespaces; j++ {
-					if testContexts[j].GetCurrentName() == curJob.Name && testContexts[j].GetNamespaceName() == curJob.Namespace {
-						gotJob[j] = true
-						break
-					}
+		response, actualRPCStatus, err := testContexts[0].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+			Limit:    numberOfNamespaces + 1,
+			Continue: continueToken,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Empty(t, response.Continue, "No continue token is expected")
+		require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+		require.Len(t, response.Jobs, numberOfNamespaces, "Number of jobs returned is not as expected")
+		for _, curJob := range response.Jobs {
+			for j := 0; j < numberOfNamespaces; j++ {
+				if testContexts[j].GetCurrentName() == curJob.Name && testContexts[j].GetNamespaceName() == curJob.Namespace {
+					gotJob[j] = true
+					break
 				}
 			}
-			continueToken = response.Continue
 		}
+
 		for i := 0; i < numberOfNamespaces; i++ {
 			if !gotJob[i] {
 				t.Errorf("ListAllJobs did not return expected jobs %s", testContexts[i].GetCurrentName())
