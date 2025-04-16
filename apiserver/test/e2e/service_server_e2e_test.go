@@ -276,23 +276,69 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
 	}
 
-	// Used to check all services have been returned.
-	gotServices := []bool{false, false}
+	// Test pagination with limit 1, which is less than the total number of services.
+	t.Run("Test pagination return part of the result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
 
-	pageToken := ""
-	for ii := 0; ii < serviceCount; ii++ {
+		pageToken := ""
+		for ii := 0; ii < serviceCount; ii++ {
+			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				PageToken: pageToken,
+				PageSize:  int32(1),
+			})
+
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			require.NotEmpty(t, response.Services, "A list of service is required")
+			require.Len(t, response.Services, 1)
+
+			for _, curService := range response.Services {
+				for jj := 0; jj < serviceCount; jj++ {
+					if expectedServiceNames[jj] == curService.Name {
+						gotServices[jj] = true
+						break
+					}
+				}
+			}
+
+			// Check next page token.
+			pageToken = response.NextPageToken
+			if ii == serviceCount-1 {
+				require.Empty(t, pageToken, "Last page token should be empty")
+			} else {
+				require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+			}
+		}
+
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
+		}
+	})
+
+	// Test pagination with limit 3, which is larger than the total number of services.
+	t.Run("Test pagination return all result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
+
+		pageToken := ""
 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
 			Namespace: tCtx.GetNamespaceName(),
 			PageToken: pageToken,
-			PageSize:  int32(1),
+			PageSize:  serviceCount + 1,
 		})
 
 		require.NoError(t, err, "No error expected")
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
-		require.NotEmpty(t, response.Services, "A list of compute templates is required")
-		require.Len(t, response.Services, 1)
-
+		require.NotEmpty(t, response.Services, "A list of services is required")
+		require.Len(t, response.Services, serviceCount)
+		require.Empty(t, pageToken, "Page token should be empty")
 		for _, curService := range response.Services {
 			for jj := 0; jj < serviceCount; jj++ {
 				if expectedServiceNames[jj] == curService.Name {
@@ -302,21 +348,13 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 			}
 		}
 
-		// Check next page token.
-		pageToken = response.NextPageToken
-		if ii == serviceCount-1 {
-			require.Empty(t, pageToken, "Last page token should be empty")
-		} else {
-			require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
 		}
-	}
-
-	// Check all services created have been returned.
-	for idx := 0; idx < serviceCount; idx++ {
-		if !gotServices[idx] {
-			t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
-		}
-	}
+	})
 }
 
 func TestGetService(t *testing.T) {
