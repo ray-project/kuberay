@@ -12,6 +12,8 @@ import (
 type JobStatus string
 
 // https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
+//
+// NOTICE: [AllJobStatuses] should be kept in sync with all job statuses below.
 const (
 	JobStatusNew       JobStatus = ""
 	JobStatusPending   JobStatus = "PENDING"
@@ -20,6 +22,15 @@ const (
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
 )
+
+var AllJobStatuses = []JobStatus{
+	JobStatusNew,
+	JobStatusPending,
+	JobStatusRunning,
+	JobStatusStopped,
+	JobStatusSucceeded,
+	JobStatusFailed,
+}
 
 // This function should be synchronized with the function `is_terminal()` in Ray Job.
 func IsJobTerminal(status JobStatus) bool {
