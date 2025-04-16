@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -384,8 +385,9 @@ func waitForRayService(t *testing.T, tCtx *End2EndTestingContext, serviceName st
 		if err != nil {
 			return true, err
 		}
-		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.Conditions[0].Status, serviceName)
-		return slices.Contains(expectedServiceConditionStatus, rayService.Status.Conditions[0].Status), nil
+		condition := meta.FindStatusCondition(rayService.Status.Conditions, "Ready")
+		t.Logf("Found status of '%s' for ray service '%s'", condition.Status, serviceName)
+		return slices.Contains(expectedServiceConditionStatus, condition.Status), nil
 	})
 	require.NoErrorf(t, err, "No error expected when getting ray service: '%s', err %v", serviceName, err)
 }
