@@ -1,0 +1,10 @@
+image:
+  repository: kuberay/apiserver
+  tag: local
+  pullPolicy: Never
+
+security:
+  proxy:
+    repository: kuberay/security-proxy
+    tag: local
+    pullPolicy: Never
