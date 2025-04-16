@@ -45,6 +45,15 @@ const (
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
+var AllJobStatuses = []JobStatus{
+	JobStatusNew,
+	JobStatusPending,
+	JobStatusRunning,
+	JobStatusStopped,
+	JobStatusSucceeded,
+	JobStatusFailed,
+}
+
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
 type JobFailedReason string
 
