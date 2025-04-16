@@ -735,9 +735,9 @@ func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string,
 	// wait for the job to be in any of the expectedJobStatuses state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
-		if err00 != nil {
-			return true, err00
+		rayJob, err := tCtx.GetRayJobByName(rayJobName)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found ray job with state '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
 		return slices.Contains(expectedJobStatuses, rayJob.Status.JobStatus), nil
@@ -749,13 +749,13 @@ func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName str
 	// wait for the job to be deleted
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(jobName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayjobs.ray.io \""+jobName+"\" not found") {
+		rayJob, err := tCtx.GetRayJobByName(jobName)
+		if err != nil &&
+			assert.EqualError(t, err, "rayjobs.ray.io \""+jobName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, jobName)
-		return false, err00
+		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s', err %v", jobName, err)
 }

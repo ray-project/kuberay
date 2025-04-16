@@ -336,9 +336,9 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	// wait for the cluster to be in a running state for 3 minutes
 	// if is not in that state, return an error
 	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(actualCluster.Name)
-		if err00 != nil {
-			return true, err00
+		rayCluster, err := e2etc.GetRayClusterByName(actualCluster.Name)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
 		return rayCluster.Status.State == rayv1api.Ready, nil
@@ -357,8 +357,8 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
 	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(clusterName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
+		rayCluster, err := e2etc.GetRayClusterByName(clusterName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
 			return true, nil
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
@@ -378,8 +378,8 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
 	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := e2etc.GetRayServiceByName(serviceName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
+		rayService, err := e2etc.GetRayServiceByName(serviceName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
 			return true, nil
 		}
 		t.Logf("Found service state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
@@ -399,8 +399,8 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
 	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := e2etc.GetRayJobByName(rayJobName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
+		rayJob, err := e2etc.GetRayJobByName(rayJobName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
 			return true, nil
 		}
 		t.Logf("Found job state of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, rayJobName)
