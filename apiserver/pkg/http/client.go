@@ -350,13 +350,17 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 }
 
 // ListAllRayJobs Finds all job in all namespaces.
-func (krc *KuberayAPIServerClient) ListAllRayJobs() (*api.ListAllRayJobsResponse, *rpcStatus.Status, error) {
+func (krc *KuberayAPIServerClient) ListAllRayJobs(request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/jobs"
 	httpRequest, err := http.NewRequestWithContext(context.TODO(), "GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
 
+	q := httpRequest.URL.Query()
+	q.Set("limit", strconv.FormatInt(request.Limit, 10))
+	q.Set("continue", request.Continue)
+	httpRequest.URL.RawQuery = q.Encode()
 	httpRequest.Header.Add("Accept", "application/json")
 
 	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)

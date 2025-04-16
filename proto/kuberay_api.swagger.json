@@ -563,6 +563,23 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "continue",
+            "description": "A continue token to request the next page of results. The token is acquired\nfrom the previous ListAllRayJobs call or can be omitted when fetching the first page.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "description": "The maximum number of jobs to return for the requested page.\nFor backward compatibility, the default value is 0 which returns all jobs without pagination.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
         "tags": [
           "RayJobService"
         ]
@@ -1799,6 +1816,11 @@
           "items": {
             "$ref": "#/definitions/protoRayJob"
           },
+          "readOnly": true
+        },
+        "continue": {
+          "type": "string",
+          "description": "The continue token for the next page of jobs. If it is empty, it means this is the last page.",
           "readOnly": true
         }
       }
