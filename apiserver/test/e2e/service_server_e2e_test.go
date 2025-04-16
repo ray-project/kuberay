@@ -3,17 +3,14 @@ package e2e
 import (
 	"context"
 	"net/http"
-	"slices"
 	"testing"
 	"time"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -144,7 +141,6 @@ func TestCreateServiceV2(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
-				waitForRayService(t, tCtx, actualService.Name, []metav1.ConditionStatus{metav1.ConditionFalse, metav1.ConditionTrue})
 				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -162,7 +158,7 @@ func TestDeleteService(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx, []metav1.ConditionStatus{metav1.ConditionFalse, metav1.ConditionTrue})
+	testServiceRequest := createTestServiceV2(t, tCtx)
 
 	tests := []GenericEnd2EndTest[*api.DeleteRayServiceRequest]{
 		{
@@ -219,7 +215,7 @@ func TestGetAllServices(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx, []metav1.ConditionStatus{metav1.ConditionFalse, metav1.ConditionTrue})
+	testServiceRequest := createTestServiceV2(t, tCtx)
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -241,7 +237,7 @@ func TestGetServicesInNamespace(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx, []metav1.ConditionStatus{metav1.ConditionFalse, metav1.ConditionTrue})
+	testServiceRequest := createTestServiceV2(t, tCtx)
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -265,7 +261,7 @@ func TestGetService(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testServiceRequest := createTestServiceV2(t, tCtx, []metav1.ConditionStatus{metav1.ConditionFalse, metav1.ConditionTrue})
+	testServiceRequest := createTestServiceV2(t, tCtx)
 	t.Cleanup(func() {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
@@ -325,8 +321,7 @@ func TestGetService(t *testing.T) {
 	}
 }
 
-func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext, expectedServiceConditionStatus []metav1.ConditionStatus) *api.CreateRayServiceRequest {
-	// expectedServiceStatues is a slice of service statuses that we expect the service to be in
+func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayServiceRequest {
 	clusterSpec := &api.ClusterSpec{
 		HeadGroupSpec: &api.HeadGroupSpec{
 			ComputeTemplate: tCtx.GetComputeTemplateName(),
@@ -371,25 +366,8 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext, expectedServ
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
-	waitForRayService(t, tCtx, actualService.Name, expectedServiceConditionStatus)
 
 	return testServiceRequest
-}
-
-func waitForRayService(t *testing.T, tCtx *End2EndTestingContext, serviceName string, expectedServiceConditionStatus []metav1.ConditionStatus) {
-	// `expectedServiceStatues` is a slice of service statuses that we expect the service to be in
-	// wait for the service to be in any of the `expectedServiceStatues` state for 3 minutes
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err := tCtx.GetRayServiceByName(serviceName)
-		if err != nil {
-			return true, err
-		}
-		condition := meta.FindStatusCondition(rayService.Status.Conditions, "Ready")
-		t.Logf("Found status of '%s' for ray service '%s'", condition.Status, serviceName)
-		return slices.Contains(expectedServiceConditionStatus, condition.Status), nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray service: '%s', err %v", serviceName, err)
 }
 
 func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
