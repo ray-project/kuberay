@@ -33,7 +33,6 @@ func TestPopulateComputeTemplate(t *testing.T) {
 
 	// Assertions
 	require.NoError(t, err)
-	// assert.NoError(t, err)
 	assert.Len(t, computeTemplates, 1)
 	assert.Contains(t, computeTemplates, tCtx.GetComputeTemplateName())
 }
