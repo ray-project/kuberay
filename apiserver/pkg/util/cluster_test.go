@@ -637,9 +637,9 @@ func TestGetNodeHostIP(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		addresses   []corev1.NodeAddress
 		expectIP    string
 		expectError string
+		addresses   []corev1.NodeAddress
 	}{
 		{
 			name: "InternalOnly",
@@ -684,7 +684,7 @@ func TestGetNodeHostIP(t *testing.T) {
 			if tc.expectError != "" {
 				assert.EqualError(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectIP, ip.String())
 			}
 		})

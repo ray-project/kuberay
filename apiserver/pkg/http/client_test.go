@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -12,7 +11,7 @@ import (
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/)
-	client.executeHttpRequest = func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
+	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		resp := &api.ListClustersResponse{
 			Clusters: []*api.Cluster{
 				{
@@ -32,7 +31,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 	require.Nil(t, status)
 	require.NotNil(t, resp)
 	require.NotNil(t, resp.Clusters)
-	require.Equal(t, 1, len(resp.Clusters))
+	require.Len(t, resp.Clusters, 1)
 	require.Equal(t, "test-cluster", resp.Clusters[0].Name)
 	require.Equal(t, "test-namespace", resp.Clusters[0].Namespace)
 }
@@ -40,7 +39,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/)
-	client.executeHttpRequest = func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
+	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		// Intentionall returning a bad response.
 		return []byte("helloworld"), nil, nil
 	}
@@ -49,7 +48,7 @@ func TestUnmarshalHttpResponseFails(t *testing.T) {
 	resp, status, err := client.ListClusters(req)
 	require.Nil(t, status)
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "failed to unmarshal"), err.Error())
+	require.Contains(t, err.Error(), "failed to unmarshal", err.Error())
 	require.Nil(t, resp)
 }
 
