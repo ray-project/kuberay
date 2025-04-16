@@ -71,7 +71,7 @@ func main() {
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
 func startRPCServer(resourceManager *manager.ResourceManager) {
-	klog.Info("Starting gRPC server")
+	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)
 	if err != nil {
@@ -109,7 +109,7 @@ func startRPCServer(resourceManager *manager.ResourceManager) {
 }
 
 func startHttpProxy() {
-	klog.Info("Starting Http Proxy")
+	klog.Infof("Starting Http Proxy at port %s", *httpPortFlag)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
