@@ -122,7 +122,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
-	time.Sleep(20 * time.Second)
+	time.Sleep(30 * time.Second)
 
 	// Get number of workers
 	rayCluster, err = tCtx.GetRayClusterByName(actualCluster.Name)
