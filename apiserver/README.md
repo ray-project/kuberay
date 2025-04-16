@@ -3,9 +3,8 @@
 
 The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
 
-## Note
+## Introduction
 
-```text
 The KubeRay APIServer is an optional component. It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally by some organizations to back user interfaces for KubeRay resource management.
 
 The KubeRay APIServer is community-managed and is not officially endorsed by the Ray maintainers. At this time, the only officially supported methods for
@@ -16,9 +15,37 @@ managing KubeRay resources are:
 
 KubeRay APIServer maintainer contacts (GitHub handles):
 @Jeffwan @scarlet25151
-```
 
 ## Installation
+
+### Start a local apiserver
+
+You could build and start apiserver from scratch on your local environment in one simple command. It will deploy all the necessities to a local kind cluster.
+
+```sh
+make start-local-apiserver
+```
+
+apiserver supports HTTP request, so you could easily check whether it's started successfully by by issuing two simple curl requests.
+
+```sh
+# Create complete template.
+curl --silent -X 'POST' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
+    -H 'accept: application/json' \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "name": "default-template",
+        "namespace": "ray-system",
+        "cpu": 2,
+        "memory": 4
+      }'
+
+# Check whether compute template is created successfully.
+curl --silent -X 'GET' \
+    'http://localhost:31888/apis/v1/namespaces/ray-system/compute_templates' \
+    -H 'accept: application/json'
+```
 
 ### Helm
 
@@ -30,7 +57,7 @@ helm version
 
 ### Install KubeRay Operator
 
-* Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+- Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
 
   ```sh
     # Install the KubeRay helm repo
@@ -52,7 +79,7 @@ Please note that examples show here will only work with the nightly builds of th
 to the api server that would allow Kuberay Serve endpoints to work properly
 ```
 
-* Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
+- Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
 
   ```sh
   # Install the KubeRay helm repo
@@ -68,7 +95,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
   # kuberay-operator-7456c6b69b-t6pt7                1/1     Running   0          172m
   ```
 
-* Install the nightly version
+- Install the nightly version
 
   ```sh
   # Step1: Clone KubeRay repository
@@ -80,7 +107,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
   helm install kuberay-apiserver .
   ```
 
-* Install the current (working branch) version
+- Install the current (working branch) version
 
   ```sh
   # Step1: Clone KubeRay repository
@@ -118,9 +145,9 @@ kubectl get pods
 
 After the deployment we may use the `{{baseUrl}}` to access the service. See [swagger support section](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
 
-* (default) for nodeport access, use port `31888` for connection
+- (default) for nodeport access, use port `31888` for connection
 
-* for ingress access, you will need to create your own ingress
+- for ingress access, you will need to create your own ingress
 
 The requests parameters detail can be seen in [KubeRay swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger), this document only presents basic examples.
 
@@ -192,9 +219,9 @@ The following steps allow you to validate that the KubeRay API Server components
 
 Kuberay API server has support for Swagger UI. The swagger page can be reached at:
 
-* [localhost:31888/swagger-ui](localhost:31888/swagger-ui) for local kind deployments
-* [localhost:8888/swagger-ui](localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
-* `<host name>:31888/swagger-ui` for nodeport deployments
+- [localhost:31888/swagger-ui](localhost:31888/swagger-ui) for local kind deployments
+- [localhost:8888/swagger-ui](localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
+- `<host name>:31888/swagger-ui` for nodeport deployments
 
 ## HTTP definition endpoints
 
