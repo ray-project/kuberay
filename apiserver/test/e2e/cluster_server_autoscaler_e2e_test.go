@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // TestCreateClusterAutoscalerEndpoint sequentially iterates over the create cluster endpoint
@@ -122,13 +124,15 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
-	time.Sleep(30 * time.Second)
-
-	// Get number of workers
-	rayCluster, err = tCtx.GetRayClusterByName(actualCluster.Name)
+	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+		rayCluster, err00 := tCtx.GetRayClusterByName(actualCluster.Name)
+		if err00 != nil {
+			return true, err00
+		}
+		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
+		return rayCluster.Status.AvailableWorkerReplicas == 1, nil
+	})
 	require.NoError(t, err, "No error expected")
-	require.Equal(t, int32(1), rayCluster.Status.AvailableWorkerReplicas)
-
 	// Delete actor
 	deleteActorRequest := api.CreateRayJobRequest{
 		Namespace: tCtx.GetNamespaceName(),
@@ -148,11 +152,13 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NotNil(t, actualJob, "A job is expected")
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
-	// Sleep for a while to ensure that the worker pod is deleted
-	time.Sleep(100 * time.Second)
-
-	// Get number of workers
-	rayCluster, err = tCtx.GetRayClusterByName(actualCluster.Name)
+	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+		rayCluster, err00 := tCtx.GetRayClusterByName(actualCluster.Name)
+		if err00 != nil {
+			return true, err00
+		}
+		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
+		return rayCluster.Status.AvailableWorkerReplicas == 0, nil
+	})
 	require.NoError(t, err, "No error expected")
-	require.Equal(t, int32(0), rayCluster.Status.AvailableWorkerReplicas)
 }
