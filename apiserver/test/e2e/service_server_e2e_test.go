@@ -367,7 +367,16 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
 
+	// Check if the service was created successfully
+	checkRayServiceCreatedSuccessfully(t, tCtx, actualService.Name)
+
 	return testServiceRequest
+}
+
+func checkRayServiceCreatedSuccessfully(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
+	rayService, err := tCtx.GetRayServiceByName(serviceName)
+	require.NoError(t, err, "No error expected")
+	require.NotNil(t, rayService, "A service is expected")
 }
 
 func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
