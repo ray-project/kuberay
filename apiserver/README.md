@@ -20,7 +20,7 @@ KubeRay APIServer maintainer contacts (GitHub handles):
 
 ### Start a local apiserver
 
-You could build and start apiserver from scratch on local environment in one simple command.
+You could build and start apiserver from scratch on your local environment in one simple command. It will deploy all the necessities to a local kind cluster.
 
 ```sh
 make start-local-apiserver
