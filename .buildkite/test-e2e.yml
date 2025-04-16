@@ -54,7 +54,7 @@
 
 - label: 'Test E2E Operator Version Upgrade (v1.3.0)'
   instance_size: large
-  image: golang:1.22
+  image: golang:1.23
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
