@@ -124,9 +124,9 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 
 	// worker pod should be created as part of job execution
 	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(actualCluster.Name)
-		if err00 != nil {
-			return true, err00
+		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
 		return rayCluster.Status.AvailableWorkerReplicas == 1, nil
@@ -152,9 +152,9 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(actualCluster.Name)
-		if err00 != nil {
-			return true, err00
+		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
 		return rayCluster.Status.AvailableWorkerReplicas == 0, nil

@@ -378,9 +378,9 @@ func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 	// wait for the service to be in a running state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
-		if err00 != nil {
-			return true, err00
+		rayService, err := tCtx.GetRayServiceByName(serviceName)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
 		return rayService.Status.ServiceStatus == rayv1api.Running, nil
@@ -392,13 +392,13 @@ func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 	// wait for the service to be deleted
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayservices.ray.io \""+serviceName+"\" not found") {
+		rayService, err := tCtx.GetRayServiceByName(serviceName)
+		if err != nil &&
+			assert.EqualError(t, err, "rayservices.ray.io \""+serviceName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, err00
+		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray service: '%s', err %v", serviceName, err)
 }
