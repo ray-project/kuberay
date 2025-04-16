@@ -20,14 +20,13 @@ type KuberayAPIServerClient struct {
 	httpClient  *http.Client
 	marshaler   *protojson.MarshalOptions
 	unmarshaler *protojson.UnmarshalOptions
-	baseURL     string
-
 	// TODO(hjiang): here we use function to allow customized http request handling logic in unit test, worth revisiting if there're better ways;
 	// for example, (1) wrap an interface to process request; (2) inject round-trip logic into http client.
 	// See https://github.com/ray-project/kuberay/pull/3334/files#r2041183495 for details.
 	//
 	// Store http request handling function for unit test purpose.
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
+	baseURL            string
 }
 
 type KuberayAPIServerClientError struct {

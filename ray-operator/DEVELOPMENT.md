@@ -122,9 +122,17 @@ make -C ray-operator build
 ./ray-operator/bin/manager -leader-election-namespace default -use-kubernetes-proxy
 ```
 
-## Running the tests
+## Tests
 
-The unit tests can be run by executing the following command:
+### Kind of tests
+
+* Unit tests: These are run locally and do not require a Kubernetes cluster. The filenames follow the pattern `*_controller_unit_test.go` and use the standard Go testing framework.
+* Env tests: These use the `envtest` package to start a local Kubernetes API server and etcd, without kubelet, controller-manager, or other components. You don't need to start a Kubernetes cluster beforehand. They are written using the Ginkgo framework. Since only the KubeRay operator is present, resource states like pod status must be manually updated. Filenames follow the pattern `*_controller_test.go`. See [Kubebuilder Envtest](https://book.kubebuilder.io/reference/envtest.html) for more details.
+* E2E tests: These run on a real Kubernetes cluster to test the KubeRay operator with actual resources. A running Kubernetes cluster and an installed KubeRay operator are required. These tests are located in the `test/` directory and use the standard Go testing framework.
+
+### Running the tests
+
+The unit tests and env tests can be run by executing the following command:
 
 ```bash
 make test
@@ -191,6 +199,10 @@ Note you can set the `KUBERAY_TEST_OUTPUT_DIR` environment to specify the test o
 If not set, it defaults to a temporary directory that's removed once the tests execution completes.
 
 Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
+
+### Tips
+
+* For Ginkgo tests, you can use [focused specs](https://onsi.github.io/ginkgo/#focused-specs) to run a specific test for debugging purpose.
 
 ## Manually test new image in running cluster
 

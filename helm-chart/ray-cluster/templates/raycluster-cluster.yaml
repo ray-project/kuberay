@@ -4,6 +4,7 @@ metadata:
   labels:
 {{ include "ray-cluster.labels" . | indent 4 }}
   name: {{ include "ray-cluster.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   {{ if .Values.annotations }}
   annotations: {{ toYaml .Values.annotations | nindent 4 }}
   {{ end }}
@@ -92,7 +93,7 @@ spec:
         {{ if .Values.head.volumes }}
         volumes: {{- toYaml .Values.head.volumes | nindent 10 }}
         {{- end }}
-        {{- if .Values.head.topologySpreadConstraints.enabled }}
+        {{- if .Values.head.topologySpreadConstraints }}
         topologySpreadConstraints: {{- toYaml .Values.head.topologySpreadConstraints | nindent 10 }}
         {{- end }}
         affinity: {{- toYaml .Values.head.affinity | nindent 10 }}
@@ -307,6 +308,10 @@ spec:
         {{- end }}
         tolerations: {{- toYaml .Values.worker.tolerations | nindent 10 }}
         nodeSelector: {{- toYaml .Values.worker.nodeSelector | nindent 10 }}
+        {{- with .Values.worker.topologySpreadConstraints }}
+        topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         {{- with .Values.worker.podSecurityContext}}
         securityContext:
         {{- toYaml . | nindent 10 }}
