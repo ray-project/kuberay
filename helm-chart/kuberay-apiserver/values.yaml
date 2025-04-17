@@ -4,6 +4,8 @@
 
 replicaCount: 1
 
+labels: {}
+
 name: "kuberay-apiserver"
 image:
   repository: quay.io/kuberay/apiserver
