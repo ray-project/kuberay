@@ -3,34 +3,22 @@ package session
 import (
 	"context"
 	"fmt"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/shirou/gopsutil/v4/process"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"strings"
 )
 
 type KillAllSessionsOptions struct {
-	cmdFactory     cmdutil.Factory
-	ioStreams      *genericiooptions.IOStreams
-	currentContext string
-	ResourceType   util.ResourceType
-	ResourceName   string
-	namespace      string
-	Verbose        bool
+	Verbose bool
 }
 
-func NewKillAllSessionOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *KillAllSessionsOptions {
-	return &KillAllSessionsOptions{
-		cmdFactory: cmdFactory,
-		ioStreams:  &streams,
-	}
+func NewKillAllSessionOptions() *KillAllSessionsOptions {
+	return &KillAllSessionsOptions{}
 }
 
-func NewKillAllSessionsCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
-	options := NewKillAllSessionOptions(cmdFactory, streams)
+func NewKillAllSessionsCommand() *cobra.Command {
+	options := NewKillAllSessionOptions()
 
 	cmd := &cobra.Command{
 		Use:     "kill-all",
@@ -43,18 +31,16 @@ func NewKillAllSessionsCommand(cmdFactory cmdutil.Factory, streams genericioopti
 			}
 			return nil
 		},
-		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return options.KillAll(cmd.Context(), cmdFactory)
+			return options.KillAll(cmd.Context())
 		},
 	}
 
 	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
-
 	return cmd
 }
 
-func (options *KillAllSessionsOptions) KillAll(ctx context.Context, factory cmdutil.Factory) error {
+func (options *KillAllSessionsOptions) KillAll(ctx context.Context) error {
 	procs, err := process.Processes()
 	if err != nil {
 		return fmt.Errorf("failed to get processes: %w", err)
