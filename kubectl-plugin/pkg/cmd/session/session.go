@@ -102,7 +102,7 @@ func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOSt
 	}
 
 	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
-
+	cmd.AddCommand(NewKillAllSessionsCommand(cmdFactory, streams))
 	return cmd
 }
 
