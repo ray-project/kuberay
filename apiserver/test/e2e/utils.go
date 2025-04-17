@@ -66,7 +66,7 @@ func ReadFileAsString(t *testing.T, fileName string) string {
 
 func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, clusterName string, expectedConditions []rayv1api.RayClusterConditionType) {
 	if len(expectedConditions) == 0 {
-		t.Logf("No expected conditions provided, skipping wait")
+		// no expected conditions provided, skip the wait
 		return
 	}
 	// wait for the cluster to be in one of the expected conditions for 3 minutes
