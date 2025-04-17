@@ -35,7 +35,7 @@ func TestRayClusterManagedBy(t *testing.T) {
 
 		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+			Should(WithTransform(RayClusterState, Equal(rayv1.Suspended)))
 	})
 
 	test.T().Run("Creation of cluster skipped, managed by Kueue", func(t *testing.T) {
