@@ -53,7 +53,7 @@ func (options *KillAllSessionsOptions) KillAll(ctx context.Context) error {
 		cmdline, err := p.CmdlineWithContext(ctx)
 		if err == nil {
 			if strings.Contains(cmdline, targetCmd) && !strings.Contains(cmdline, selfCmd) {
-				fmt.Printf("Killing process %d: %s\n", p.Pid, cmdline)
+				fmt.Printf("Killing process with PID %d: %s\n", p.Pid, cmdline)
 				if err := p.Kill(); err != nil {
 					return fmt.Errorf("failed to kill process %d: %w", p.Pid, err)
 				}
