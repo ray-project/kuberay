@@ -83,7 +83,6 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 		return "", err
 	}
 
-	log.Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
 	servicePorts := headSvc.Spec.Ports
 	port := int32(-1)
 
