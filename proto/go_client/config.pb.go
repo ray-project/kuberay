@@ -915,7 +915,7 @@ func (x *DeleteImageTemplateRequest) GetNamespace() string {
 	return ""
 }
 
-// ImageTemplate can be used by worker group and workspce.
+// ImageTemplate can be used by worker group and workspace.
 // They can be distinguish by different entrypoints
 type ImageTemplate struct {
 	state         protoimpl.MessageState
