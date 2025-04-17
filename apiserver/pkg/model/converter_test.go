@@ -206,6 +206,7 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 				{
 					Name:  "ray-worker",
 					Image: "blublinsky1/ray310:2.5.0",
+					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -541,6 +542,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
 	}
+	if groupSpec.ImagePullPolicy != "Always" {
+		t.Errorf("failed to convert image pull policy")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -566,6 +570,11 @@ func TestAutoscalerOptions(t *testing.T) {
 	assert.Len(t, options.Envs.Values, 1)
 	assert.Len(t, options.Envs.ValuesFrom, 2)
 	assert.Len(t, options.Volumes, 2)
+}
+
+func TestNilAutoscalerOptions(t *testing.T) {
+	options := convertAutoscalingOptions(nil)
+	assert.Nil(t, options)
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
