@@ -34,7 +34,6 @@ resources:
   # resources, such as Minikube. If you do whelm to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
   limits:
-    cpu: 100m
     # Anecdotally, managing 500 Ray pods requires roughly 500MB memory.
     # Monitor memory usage and adjust as needed.
     memory: 512Mi
