@@ -38,7 +38,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 
 	// head group
 	headGroupSpec := app.Spec.HeadGroupSpec
-	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
+	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec, 1)
 	taskGroups.addTaskGroup(
 		TaskGroup{
 			Name:         utils.RayNodeHeadGroupLabelValue,
@@ -51,7 +51,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 
 	// worker groups
 	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
-		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
+		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec, workerGroupSpec.NumOfHosts)
 		minWorkers := workerGroupSpec.MinReplicas
 		taskGroups.addTaskGroup(
 			TaskGroup{
