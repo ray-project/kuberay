@@ -58,7 +58,7 @@ func (r *ResourceManager) getKubernetesNamespaceClient() clientv1.NamespaceInter
 // clusters
 func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Cluster) (*rayv1api.RayCluster, error) {
 	// populate cluster map
-	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiCluster.ClusterSpec, apiCluster.Namespace)
+	computeTemplateDict, err := r.PopulateComputeTemplate(ctx, apiCluster.ClusterSpec, apiCluster.Namespace)
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiCluster.Namespace, apiCluster.Name)
 	}
@@ -82,7 +82,7 @@ func (r *ResourceManager) CreateCluster(ctx context.Context, apiCluster *api.Clu
 }
 
 // Compute template
-func (r *ResourceManager) populateComputeTemplate(ctx context.Context, clusterSpec *api.ClusterSpec, nameSpace string) (map[string]*api.ComputeTemplate, error) {
+func (r *ResourceManager) PopulateComputeTemplate(ctx context.Context, clusterSpec *api.ClusterSpec, nameSpace string) (map[string]*api.ComputeTemplate, error) {
 	dict := map[string]*api.ComputeTemplate{}
 	// populate head compute template
 	name := clusterSpec.HeadGroupSpec.ComputeTemplate
@@ -160,7 +160,7 @@ func (r *ResourceManager) CreateJob(ctx context.Context, apiJob *api.RayJob) (*r
 
 	// populate cluster map
 	if apiJob.ClusterSpec != nil {
-		computeTemplateMap, err = r.populateComputeTemplate(ctx, apiJob.ClusterSpec, apiJob.Namespace)
+		computeTemplateMap, err = r.PopulateComputeTemplate(ctx, apiJob.ClusterSpec, apiJob.Namespace)
 		if err != nil {
 			return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiJob.Namespace, apiJob.JobId)
 		}
@@ -227,7 +227,7 @@ func (r *ResourceManager) DeleteJob(ctx context.Context, jobName string, namespa
 
 func (r *ResourceManager) CreateService(ctx context.Context, apiService *api.RayService) (*rayv1api.RayService, error) {
 	// populate cluster map
-	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
+	computeTemplateDict, err := r.PopulateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
 	}
@@ -254,7 +254,7 @@ func (r *ResourceManager) UpdateRayService(ctx context.Context, apiService *api.
 		return nil, util.Wrap(err, fmt.Sprintf("Update service fail, no service named: %s ", name))
 	}
 	// populate cluster map
-	computeTemplateDict, err := r.populateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
+	computeTemplateDict, err := r.PopulateComputeTemplate(ctx, apiService.ClusterSpec, apiService.Namespace)
 	if err != nil {
 		return nil, util.NewInternalServerError(err, "Failed to populate compute template for (%s/%s)", apiService.Namespace, apiService.Name)
 	}
