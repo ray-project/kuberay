@@ -3,10 +3,27 @@ package session
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/shirou/gopsutil/v4/process"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"strings"
+	"k8s.io/kubectl/pkg/util/templates"
+)
+
+const (
+	RaySessionCommand        = "kubectl-ray session"
+	RaySessionKillAllCommand = "kubectl-ray session kill-all"
+)
+
+var (
+	sessionKillAllLong = templates.LongDesc(`
+		Kill all Ray session processes started by kubectl-ray session command.
+	`)
+
+	sessionKillAllExample = templates.Examples(`
+		kubectl ray session kill-all
+	`)
 )
 
 type KillAllSessionsOptions struct {
@@ -22,16 +39,16 @@ func NewKillAllSessionsCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "kill-all",
-		Short:   "Forward local ports to the Ray resources.",
-		Long:    sessionLong,
-		Example: sessionExample,
+		Short:   "Kill all Ray sessions",
+		Long:    sessionKillAllLong,
+		Example: sessionKillAllExample,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return cmdutil.UsageErrorf(cmd, "accepts 0 arg, received %d\n%s", len(args), cmd.Use)
 			}
 			return nil
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return options.KillAll(cmd.Context())
 		},
 	}
@@ -46,17 +63,18 @@ func (options *KillAllSessionsOptions) KillAll(ctx context.Context) error {
 		return fmt.Errorf("failed to get processes: %w", err)
 	}
 
-	targetCmd := "kubectl-ray session"
-	selfCmd := "kubectl-ray session kill-all"
-
 	for _, p := range procs {
 		cmdline, err := p.CmdlineWithContext(ctx)
-		if err == nil {
-			if strings.Contains(cmdline, targetCmd) && !strings.Contains(cmdline, selfCmd) {
+		if err != nil {
+			// Skip the process if we can't get its command line. It might be permission issue.
+			continue
+		}
+		if strings.Contains(cmdline, RaySessionCommand) && !strings.Contains(cmdline, RaySessionKillAllCommand) {
+			if options.Verbose {
 				fmt.Printf("Killing process with PID %d: %s\n", p.Pid, cmdline)
-				if err := p.Kill(); err != nil {
-					return fmt.Errorf("failed to kill process %d: %w", p.Pid, err)
-				}
+			}
+			if err := p.Kill(); err != nil {
+				return fmt.Errorf("failed to kill process %d: %w", p.Pid, err)
 			}
 		}
 	}
