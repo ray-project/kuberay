@@ -39,14 +39,14 @@ service ComputeTemplateService {
     };
   }
 
-  // Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all compute templates in a given namespace.
   rpc ListComputeTemplates(ListComputeTemplatesRequest) returns (ListComputeTemplatesResponse) {
     option (google.api.http) = {
       get: "/apis/v1/namespaces/{namespace}/compute_templates"
     };
   }
 
-  // Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.
+  // Finds all compute templates in all namespaces.
   rpc ListAllComputeTemplates(ListAllComputeTemplatesRequest) returns (ListAllComputeTemplatesResponse) {
     option (google.api.http) = {
       get: "/apis/v1/compute_templates"
@@ -149,7 +149,7 @@ service ImageTemplateService {
     };
   }
 
-  // Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.
+  // Not Implemented. Finds all ImageTemplates.
   rpc ListImageTemplates(ListImageTemplatesRequest) returns (ListImageTemplatesResponse) {
     option (google.api.http) = {
       get: "/apis/v1/namespaces/{namespace}/image_templates"
