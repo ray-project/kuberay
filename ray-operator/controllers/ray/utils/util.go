@@ -454,11 +454,11 @@ func CalculatePodResource(podSpec corev1.PodSpec, numOfHosts int32) corev1.Resou
 		}
 		for name, quantity := range container.Resources.Limits {
 			if _, ok := containerResource[name]; !ok {
-				quantity.Mul(int64(numOfHosts))
 				containerResource[name] = quantity
 			}
 		}
 		for name, quantity := range containerResource {
+			quantity.Mul(int64(numOfHosts))
 			if totalQuantity, ok := podResource[name]; ok {
 				totalQuantity.Add(quantity)
 				podResource[name] = totalQuantity
