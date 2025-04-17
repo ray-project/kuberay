@@ -67,14 +67,14 @@ service ClusterService {
     };
   }
 
-  // Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in a given namespace.
   rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/clusters"
     };
   }
 
-  // Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in all namespaces.
   rpc ListAllClusters(ListAllClustersRequest) returns (ListAllClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/clusters"

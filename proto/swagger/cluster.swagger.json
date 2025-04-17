@@ -21,7 +21,7 @@
   "paths": {
     "/apis/v1/clusters": {
       "get": {
-        "summary": "Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all Clusters in all namespaces.",
         "operationId": "ClusterService_ListAllClusters",
         "responses": {
           "200": {
@@ -61,7 +61,7 @@
     },
     "/apis/v1/namespaces/{namespace}/clusters": {
       "get": {
-        "summary": "Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all Clusters in a given namespace.",
         "operationId": "ClusterService_ListCluster",
         "responses": {
           "200": {
