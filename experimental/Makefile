@@ -57,7 +57,7 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt ## Run the linter.
-	$(GOLANGCI_LINT) run  --timeout=3m --no-config
+	$(GOLANGCI_LINT) run --timeout=3m --no-config
 
 build: fmt vet fumpt lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver-proxy cmd/main.go
@@ -85,7 +85,7 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 ## Tool Versions
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.54.1
+GOLANGCI_LINT_VERSION ?= v2.1.2
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 

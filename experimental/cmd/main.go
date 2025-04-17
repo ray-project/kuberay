@@ -63,7 +63,7 @@ func main() {
 			if err != nil {
 				klog.Fatal("cannot dial server: ", err)
 			}
-			defer cc.Close()
+			defer cc.Close() // nolint:errcheck
 			klog.Info("connecting to GRPC server ", cc.Target())
 
 			// set up listener
