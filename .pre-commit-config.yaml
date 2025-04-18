@@ -40,7 +40,7 @@ repos:
       - id: golangci-lint
         name: golangci-lint
         entry: ./scripts/lint.sh
-        types: [ go ]
+        types: [go]
         language: golang
         require_serial: true
         always_run: true
@@ -74,3 +74,14 @@ repos:
         args:
           - --ignore=.github/pull_request_template.md
           - --disable=MD033
+
+  - repo: https://github.com/norwoodj/helm-docs
+    rev: v1.14.2
+    hooks:
+      - id: helm-docs-built
+        args:
+          # Make the tool search for charts only under the `helm-chart` directory
+          - --chart-search-root=helm-chart
+          - --chart-to-generate=helm-chart/kuberay-operator
+          - --template-files=README.md.gotmpl
+          - --sort-values-order=file
