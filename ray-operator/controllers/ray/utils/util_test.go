@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -982,3 +983,245 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 		})
 	}
 }
+func TestCalculatePodResource(t *testing.T) {
+	tests := []struct {
+		name       string
+		podSpec    corev1.PodSpec
+		numOfHosts int32
+		expected   corev1.ResourceList
+	}{
+		{
+			name: "Single container with requests and limits",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: "container1",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("128Mi"),
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+						},
+					},
+				},
+			},
+			numOfHosts: 2,
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+		},
+		{
+			name: "Multiple containers with overlapping resources",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("128Mi"),
+							},
+						},
+					},
+					{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+						},
+					},
+				},
+			},
+			numOfHosts: 3,
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4.5"),
+				corev1.ResourceMemory: resource.MustParse("1152Mi"),
+			},
+		},
+		{
+			name: "No resources specified",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Resources: corev1.ResourceRequirements{},
+					},
+				},
+			},
+			numOfHosts: 1,
+			expected:   corev1.ResourceList{},
+		},
+		{
+			name: "Container with only limits",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("2"),
+								corev1.ResourceMemory: resource.MustParse("512Mi"),
+							},
+						},
+					},
+				},
+			},
+			numOfHosts: 4,
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("8"),
+				corev1.ResourceMemory: resource.MustParse("2048Mi"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CalculatePodResource(tt.podSpec, tt.numOfHosts)
+			assert.Equal(t, tt.expected.Cpu().String(), result.Cpu().String())
+			assert.Equal(t, tt.expected.Memory().String(), result.Memory().String())
+		})
+	}
+}
+func TestCalculateDesiredResources(t *testing.T) {
+	tests := []struct {
+		name     string
+		cluster  *rayv1.RayCluster
+		expected corev1.ResourceList
+	}{
+		{
+			name: "Single head pod with no worker groups",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+		{
+			name: "Head pod with one worker group",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							NumOfHosts: 2,
+							Replicas:   ptr.To[int32](3),
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("256Mi"),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("6.5"),
+				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+			},
+		},
+		{
+			name: "Head pod with suspended worker group",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							NumOfHosts: 2,
+							Replicas:   ptr.To[int32](3),
+							Suspend:    ptr.To(true),
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("256Mi"),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CalculateDesiredResources(tt.cluster)
+			assert.Equal(t, tt.expected.Cpu().String(), result.Cpu().String())
+			assert.Equal(t, tt.expected.Memory().String(), result.Memory().String())
+		})
+	}
+}
+
