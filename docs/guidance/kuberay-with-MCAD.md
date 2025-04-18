@@ -49,7 +49,7 @@ Creating a KinD cluster should take less than 1 minute. Expect the output simila
 using podman due to KIND_EXPERIMENTAL_PROVIDER
 enabling experimental podman provider
 Creating cluster "kind" ...
- ✓ Ensuring node image (kindest/node:v1.26.3) 🖼
+ ✓ Ensuring node image (kindest/node:v1.26.0) 🖼
  ✓ Preparing nodes 📦
  ✓ Writing configuration 📜
  ✓ Starting control-plane 🕹️
