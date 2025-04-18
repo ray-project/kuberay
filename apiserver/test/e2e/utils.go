@@ -11,14 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/stretchr/testify/require"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 //go:embed resources/*.py
@@ -64,6 +61,8 @@ func ReadFileAsString(t *testing.T, fileName string) string {
 	return string(file)
 }
 
+// waitForClusterConditions waits for the cluster to be in one of the expected conditions
+// if no expected conditions are provided, it skips the wait
 func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, clusterName string, expectedConditions []rayv1api.RayClusterConditionType) {
 	if len(expectedConditions) == 0 {
 		// no expected conditions provided, skip the wait
@@ -72,9 +71,9 @@ func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 	// wait for the cluster to be in one of the expected conditions for 3 minutes
 	// if it is not in one of those conditions, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil {
-			return true, err00
+		rayCluster, err := tCtx.GetRayClusterByName(clusterName)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Waiting for ray cluster '%s' to be in one of the expected conditions %s", clusterName, expectedConditions)
 		for _, condition := range expectedConditions {
@@ -94,15 +93,13 @@ func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 
 func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	// wait for the cluster to be deleted
-	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
+		_, err = tCtx.GetRayClusterByName(clusterName)
+		if err != nil && strings.Contains(err.Error(), "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
 			return true, nil
 		}
-		t.Logf("Found status of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return false, err00
+		t.Logf("Found ray cluster '%s'", clusterName)
+		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s', err %v", clusterName, err)
 }
