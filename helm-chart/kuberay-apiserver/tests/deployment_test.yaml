@@ -24,7 +24,7 @@ tests:
           path: spec.replicas
           value: 0
 
-  - it: SHould use the specified image if `image.repository` and `image.tag` are set
+  - it: Should use the specified image if `image.repository` and `image.tag` are set
     set:
       image:
         repository: test-repository/test-image
@@ -43,7 +43,7 @@ tests:
           path: spec.template.spec.containers[?(@.name=="kuberay-apiserver-container")].imagePullPolicy
           value: Always
 
-  - it: SHould use the specified image if `security.proxy.repository` and `security.proxy.tag` are set
+  - it: Should use the specified image if `security.proxy.repository` and `security.proxy.tag` are set
     set:
       security:
         proxy:
