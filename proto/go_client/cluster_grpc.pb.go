@@ -23,9 +23,9 @@ type ClusterServiceClient interface {
 	CreateCluster(ctx context.Context, in *CreateClusterRequest, opts ...grpc.CallOption) (*Cluster, error)
 	// Finds a specific Cluster by ID.
 	GetCluster(ctx context.Context, in *GetClusterRequest, opts ...grpc.CallOption) (*Cluster, error)
-	// Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in a given namespace.
 	ListCluster(ctx context.Context, in *ListClustersRequest, opts ...grpc.CallOption) (*ListClustersResponse, error)
-	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in all namespaces.
 	ListAllClusters(ctx context.Context, in *ListAllClustersRequest, opts ...grpc.CallOption) (*ListAllClustersResponse, error)
 	// Deletes an cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before
@@ -94,9 +94,9 @@ type ClusterServiceServer interface {
 	CreateCluster(context.Context, *CreateClusterRequest) (*Cluster, error)
 	// Finds a specific Cluster by ID.
 	GetCluster(context.Context, *GetClusterRequest) (*Cluster, error)
-	// Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in a given namespace.
 	ListCluster(context.Context, *ListClustersRequest) (*ListClustersResponse, error)
-	// Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+	// Finds all Clusters in all namespaces.
 	ListAllClusters(context.Context, *ListAllClustersRequest) (*ListAllClustersResponse, error)
 	// Deletes an cluster without deleting the cluster's runs and jobs. To
 	// avoid unexpected behaviors, delete an cluster's runs and jobs before

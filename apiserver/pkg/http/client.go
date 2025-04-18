@@ -249,7 +249,7 @@ func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest
 	return response, nil, nil
 }
 
-// ListAllClusters finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+// ListAllClusters finds all Clusters in all namespaces.
 func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/clusters"
 	httpRequest, err := http.NewRequestWithContext(context.TODO(), "GET", getURL, nil)
@@ -455,7 +455,7 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 	return response, nil, nil
 }
 
-// Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
+// Finds all ray services in a given namespace.
 func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services"
 	httpRequest, err := http.NewRequestWithContext(context.TODO(), "GET", getURL, nil)
@@ -481,7 +481,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	return response, nil, nil
 }
 
-// Finds all ray services in a given namespace. Supports pagination, and sorting on certain fields.
+// Finds all ray services in a given namespace.
 func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/services"
 	httpRequest, err := http.NewRequestWithContext(context.TODO(), "GET", getURL, nil)

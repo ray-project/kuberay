@@ -24,7 +24,7 @@
   "paths": {
     "/apis/v1/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in all namespaces.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
         "responses": {
           "200": {
@@ -88,7 +88,7 @@
     },
     "/apis/v1/namespaces/{namespace}/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in a given namespace.",
         "operationId": "ComputeTemplateService_ListComputeTemplates",
         "responses": {
           "200": {
@@ -235,7 +235,7 @@
     },
     "/apis/v1/namespaces/{namespace}/image_templates": {
       "get": {
-        "summary": "Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
+        "summary": "Not Implemented. Finds all ImageTemplates.",
         "operationId": "ImageTemplateService_ListImageTemplates",
         "responses": {
           "200": {
@@ -479,7 +479,7 @@
           "title": "Output. The result image generated"
         }
       },
-      "title": "ImageTemplate can be used by worker group and workspce.\nThey can be distinguish by different entrypoints"
+      "title": "ImageTemplate can be used by worker group and workspace.\nThey can be distinguish by different entrypoints"
     },
     "protoListAllComputeTemplatesResponse": {
       "type": "object",

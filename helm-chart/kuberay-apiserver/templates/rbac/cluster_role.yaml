@@ -1,41 +1,12 @@
 {{- if .Values.rbacEnable }}
+{{- if not .Values.singleNamespaceInstall }}
 apiVersion: rbac.authorization.k8s.io/v1
-{{- if .Values.singleNamespaceInstall }}
-kind: Role
-{{- else }}
 kind: ClusterRole
-{{- end }}
 metadata:
+  name: {{ .Values.name }}
   labels:
     app.kubernetes.io/name: {{ .Values.name }}
-  name: {{ .Values.name }}
 rules:
-- apiGroups:
-  - ray.io
-  resources:
-  - rayclusters
-  - rayjobs
-  - rayservices
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -49,4 +20,31 @@ rules:
   verbs:
   - get
   - list
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ray.io
+  resources:
+  - rayclusters
+  - rayjobs
+  - rayservices
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+{{- end }}
 {{- end }}

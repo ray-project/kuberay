@@ -47,7 +47,7 @@
           },
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -248,7 +248,7 @@
         "parameters": [
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"

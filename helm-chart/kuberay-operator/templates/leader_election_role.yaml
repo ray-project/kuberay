@@ -2,8 +2,10 @@
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  labels: {{ include "kuberay-operator.labels" . | nindent 4 }}
-  name: {{ include "kuberay-operator.fullname" . }}-leader-election
+  name: {{ include "kuberay-operator.leaderElectionRole.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""

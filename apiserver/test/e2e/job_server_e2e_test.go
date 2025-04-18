@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -583,7 +583,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 		map[string]string{
 			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-		})
+		}, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster.Name)
 		tCtx.DeleteConfigMap(t, configMapName)
@@ -659,7 +659,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 }
 
 func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues []rayv1api.JobStatus) *api.CreateRayJobRequest {
-	// expectedJobStatuses is a slice of job statuses that we expect the job to be in
+	// `expectedJobStatues` is a slice of job statuses that we expect the job to be in
 	// create config map and register a cleanup hook upon success
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
@@ -731,13 +731,13 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues
 }
 
 func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
-	// expectedJobStatuses is a slice of job statuses that we expect the job to be in
-	// wait for the job to be in any of the expectedJobStatuses state for 3 minutes
+	// `expectedJobStatuses` is a slice of job statuses that we expect the job to be in
+	// wait for the job to be in any of the `expectedJobStatuses` state for 3 minutes
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
-		if err00 != nil {
-			return true, err00
+		rayJob, err := tCtx.GetRayJobByName(rayJobName)
+		if err != nil {
+			return true, err
 		}
 		t.Logf("Found ray job with state '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
 		return slices.Contains(expectedJobStatuses, rayJob.Status.JobStatus), nil
@@ -749,13 +749,13 @@ func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName str
 	// wait for the job to be deleted
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(jobName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayjobs.ray.io \""+jobName+"\" not found") {
+		rayJob, err := tCtx.GetRayJobByName(jobName)
+		if err != nil &&
+			assert.EqualError(t, err, "rayjobs.ray.io \""+jobName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, jobName)
-		return false, err00
+		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s', err %v", jobName, err)
 }

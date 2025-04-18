@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kuberay-operator.fullname" . }}
+  name: {{ include "kuberay-operator.deployment.name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
