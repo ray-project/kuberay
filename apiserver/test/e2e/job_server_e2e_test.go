@@ -583,7 +583,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 		map[string]string{
 			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-		})
+		}, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster.Name)
 		tCtx.DeleteConfigMap(t, configMapName)
