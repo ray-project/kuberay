@@ -71,13 +71,30 @@ func (options *KillAllSessionsOptions) KillAll(ctx context.Context) error {
 		}
 		if strings.Contains(cmdline, RaySessionCommand) && !strings.Contains(cmdline, RaySessionKillAllCommand) {
 			if options.Verbose {
-				fmt.Printf("Killing process with PID %d: %s\n", p.Pid, cmdline)
+				fmt.Printf("Found ray session: %s\n", cmdline)
+			}
+			// Since ray session spawn child processes to run the actual commands,
+			// we need to kill all child processes first.
+			children, err := p.ChildrenWithContext(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get children of process %d: %w", p.Pid, err)
+			}
+			for _, child := range children {
+				if options.Verbose {
+					fmt.Printf("Killing subprocess with PID %d\n", child.Pid)
+				}
+				if err := child.Kill(); err != nil {
+					return fmt.Errorf("failed to kill child process %d: %w", child.Pid, err)
+				}
+			}
+			// Then kill the parent process.
+			if options.Verbose {
+				fmt.Printf("Killing process with PID %d\n", p.Pid)
 			}
 			if err := p.Kill(); err != nil {
 				return fmt.Errorf("failed to kill process %d: %w", p.Pid, err)
 			}
 		}
 	}
-
 	return nil
 }
