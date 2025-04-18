@@ -64,21 +64,21 @@ jobs:
         env:
           BRANCH: ${{ steps.get_branch.outputs.BRANCH }}
         run: |
-          changed=$(ct list-changed --target-branch $BRANCH)
+          changed=$(ct list-changed --target-branch $BRANCH --chart-dirs ${{ env.CHART_DIR }} | grep ${{ matrix.chart }})
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Helm unittest plugin
-        # if: steps.list-changed.outputs.changed == 'true'
+        if: steps.list-changed.outputs.changed == 'true'
         run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --version 0.8.1
 
       - name: Run Helm unittest
-        # if: steps.list-changed.outputs.changed == 'true'
+        if: steps.list-changed.outputs.changed == 'true'
         run: helm unittest ${{ env.CHART_DIR }}/${{ matrix.chart }} --file "tests/**/*_test.yaml" --strict --debug
 
       - name: Run chart-testing (lint)
-        # if: steps.list-changed.outputs.changed == 'true'
+        if: steps.list-changed.outputs.changed == 'true'
         env:
           BRANCH: ${{ steps.get_branch.outputs.BRANCH }}
         run: |
@@ -88,48 +88,48 @@ jobs:
           ct lint --charts ${{ env.CHART_DIR }}/${{ matrix.chart }} --validate-maintainers=false
 
       - name: Create kind cluster
-        # if: steps.list-changed.outputs.changed == 'true'
+        if: steps.list-changed.outputs.changed == 'true'
         uses: helm/kind-action@v1.12.0
         with:
           cluster_name: kind
 
       - name: Build Docker image (kuberay-operator)
-        if: matrix.chart == 'kuberay-operator'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-operator'
         run: |
           cd ray-operator && make docker-image -e IMG=kuberay/operator:local
 
       - name: Build Docker image (kuberay-apiserver)
-        if: matrix.chart == 'kuberay-apiserver'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-apiserver'
         run: |
           cd apiserver && make docker-image -e IMG=kuberay/apiserver:local
 
       - name: Build Docker image (security-proxy)
-        if: matrix.chart == 'kuberay-apiserver'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-apiserver'
         run: |
           cd experimental && make docker-image -e IMG=kuberay/security-proxy:local
 
       - name: Load image to kind cluster (kuberay-operator)
-        if: matrix.chart == 'kuberay-operator'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-operator'
         run: |
           kind load docker-image kuberay/operator:local
 
       - name: Load image to kind cluster (kuberay-apiserver)
-        if: matrix.chart == 'kuberay-apiserver'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-apiserver'
         run: |
           kind load docker-image kuberay/apiserver:local
 
       - name: Load image to kind cluster (security-proxy)
-        if: matrix.chart == 'kuberay-apiserver'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-apiserver'
         run: |
           kind load docker-image kuberay/security-proxy:local
 
       - name: Install Custom Resource Definitions to kind cluster
-        if: matrix.chart == 'ray-cluster'
+        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'ray-cluster'
         working-directory: helm-chart/kuberay-operator
         run: kubectl create -f crds
 
       - name: Run chart-testing
-        # if: steps.list-changed.outputs.changed == 'true'
+        if: steps.list-changed.outputs.changed == 'true'
         env:
           BRANCH: ${{ steps.get_branch.outputs.BRANCH }}
         run: |
