@@ -983,12 +983,13 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 		})
 	}
 }
+
 func TestCalculatePodResource(t *testing.T) {
 	tests := []struct {
-		name       string
 		podSpec    corev1.PodSpec
-		numOfHosts int32
 		expected   corev1.ResourceList
+		name       string
+		numOfHosts int32
 	}{
 		{
 			name: "Single container with requests and limits",
@@ -1085,11 +1086,12 @@ func TestCalculatePodResource(t *testing.T) {
 		})
 	}
 }
+
 func TestCalculateDesiredResources(t *testing.T) {
 	tests := []struct {
-		name     string
 		cluster  *rayv1.RayCluster
 		expected corev1.ResourceList
+		name     string
 	}{
 		{
 			name: "Single head pod with no worker groups",
@@ -1225,3 +1227,142 @@ func TestCalculateDesiredResources(t *testing.T) {
 	}
 }
 
+func TestCalculateMinResources(t *testing.T) {
+	tests := []struct {
+		cluster  *rayv1.RayCluster
+		expected corev1.ResourceList
+		name     string
+	}{
+		{
+			name: "Single head pod with no worker groups",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+		{
+			name: "Head pod with one worker group",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							NumOfHosts:  2,
+							MinReplicas: ptr.To[int32](3),
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("256Mi"),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("6.5"),
+				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+			},
+		},
+		{
+			name: "Head pod with suspended worker group",
+			cluster: &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Resources: corev1.ResourceRequirements{
+											Requests: corev1.ResourceList{
+												corev1.ResourceCPU:    resource.MustParse("500m"),
+												corev1.ResourceMemory: resource.MustParse("128Mi"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							NumOfHosts:  2,
+							MinReplicas: ptr.To[int32](3),
+							Suspend:     ptr.To(true),
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("256Mi"),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("6.5"),
+				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CalculateMinResources(tt.cluster)
+			assert.Equal(t, tt.expected.Cpu().String(), result.Cpu().String())
+			assert.Equal(t, tt.expected.Memory().String(), result.Memory().String())
+		})
+	}
+}
