@@ -204,8 +204,8 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-worker",
-					Image: "blublinsky1/ray310:2.5.0",
+					Name:            "ray-worker",
+					Image:           "blublinsky1/ray310:2.5.0",
 					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
@@ -575,6 +575,16 @@ func TestAutoscalerOptions(t *testing.T) {
 func TestNilAutoscalerOptions(t *testing.T) {
 	options := convertAutoscalingOptions(nil)
 	assert.Nil(t, options)
+}
+
+func TestFromCrdToAPIClusters(t *testing.T) {
+	clusters := []*rayv1api.RayCluster{&ClusterSpecTest}
+	clusterEventsMap := map[string][]corev1.Event{}
+	cluster := FromCrdToAPIClusters(clusters, clusterEventsMap)[0]
+	if len(cluster.Annotations) != 1 {
+		t.Errorf("failed to convert cluster's annotations")
+	}
+	assert.Equal(t, "nginx", cluster.Annotations["kubernetes.io/ingress.class"])
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
