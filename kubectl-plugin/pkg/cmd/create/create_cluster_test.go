@@ -7,18 +7,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/utils/ptr"
 
-	kubefake "k8s.io/client-go/kubernetes/fake"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
