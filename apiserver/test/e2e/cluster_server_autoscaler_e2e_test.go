@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	api "github.com/ray-project/kuberay/proto/go_client"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
-	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // TestCreateClusterAutoscalerEndpoint sequentially iterates over the create cluster endpoint

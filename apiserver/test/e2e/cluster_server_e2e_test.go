@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/stretchr/testify/require"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )

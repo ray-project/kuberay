@@ -3,13 +3,12 @@ package util
 import (
 	"fmt"
 
-	klog "k8s.io/klog/v2"
-
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	k8metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	klog "k8s.io/klog/v2"
 )
 
 type UserError struct {

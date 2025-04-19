@@ -6,12 +6,13 @@ import (
 	"sort"
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 var sizelimit = resource.MustParse("100Gi")

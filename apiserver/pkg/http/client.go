@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"strconv"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	klog "k8s.io/klog/v2"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 type KuberayAPIServerClient struct {

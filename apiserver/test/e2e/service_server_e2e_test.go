@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 // TestServiceServerV2 sequentially iterates over the endpoints of the service endpoints using

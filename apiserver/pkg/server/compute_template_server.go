@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type ComputeTemplateServerOptions struct {

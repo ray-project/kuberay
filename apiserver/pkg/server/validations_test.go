@@ -3,10 +3,11 @@ package server_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"github.com/stretchr/testify/require"
 )
 
 func TestValidateClusterSpec(t *testing.T) {

@@ -3,10 +3,10 @@ package util
 import (
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 var apiServiceNoServe = &api.RayService{
