@@ -629,6 +629,15 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	}
 }
 
+func TestFromKubeToAPIComputeTemplates(t *testing.T) {
+	configMaps := []*corev1.ConfigMap{&configMapWithoutTolerations}
+	template := FromKubeToAPIComputeTemplates(configMaps)[0]
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(t, "", template.GpuAccelerator, "GPU accelerator mismatch")
+}
+
 func TestPopulateTemplate(t *testing.T) {
 	template := FromKubeToAPIComputeTemplate(&configMapWithoutTolerations)
 	if len(template.Tolerations) != 0 {
