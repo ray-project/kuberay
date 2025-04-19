@@ -3,18 +3,21 @@ package session
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
+	"github.com/shirou/gopsutil/v4/process"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 )
 
 type appPort struct {
@@ -30,9 +33,13 @@ type SessionOptions struct {
 	ResourceName   string
 	namespace      string
 	Verbose        bool
+	killAll        bool
 }
 
-const reconnectDelay = 3 * time.Second
+const (
+	reconnectDelay    = 3 * time.Second
+	raySessionCommand = "kubectl-ray session"
+)
 
 var (
 	dashboardPort = appPort{
@@ -68,6 +75,9 @@ var (
 
 		# Forward local ports to the Ray cluster used for the RayService resource
 		kubectl ray session rayservice/my-rayservice
+
+        # Kill all existing Ray sessions started by kubectl-ray session command
+		kubectl ray session --kill-all
 	`)
 )
 
@@ -87,8 +97,8 @@ func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOSt
 		Long:    sessionLong,
 		Example: sessionExample,
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			if len(args) > 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts at most 1 arg, received %d\n%s", len(args), cmd.Use)
 			}
 			return nil
 		},
@@ -102,11 +112,22 @@ func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOSt
 	}
 
 	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
-	cmd.AddCommand(NewKillAllSessionsCommand())
+	cmd.Flags().BoolVarP(&options.killAll, "kill-all", "", false, "kill all existing Ray sessions started by kubectl-ray session command")
 	return cmd
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
+	if options.killAll {
+		if len(args) > 0 {
+			return cmdutil.UsageErrorf(cmd, "accepts no args when killAll flag is set")
+		}
+		return nil
+	}
+
+	if len(args) == 0 {
+		return cmdutil.UsageErrorf(cmd, "killAll flag is not set, but no args provided")
+	}
+
 	namespace, err := cmd.Flags().GetString("namespace")
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
@@ -153,6 +174,16 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 }
 
 func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+	if options.killAll {
+		if options.Verbose {
+			fmt.Println("killAll flag is set, killing all existing Ray sessions...")
+		}
+		if err := killAllRaySessions(ctx, options.Verbose); err != nil {
+			return fmt.Errorf("failed to kill all ray sessions: %w", err)
+		}
+		return nil
+	}
+
 	k8sClient, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -214,5 +245,47 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	}()
 
 	wg.Wait()
+	return nil
+}
+
+func killAllRaySessions(ctx context.Context, verbose bool) error {
+	procs, err := process.Processes()
+	if err != nil {
+		return fmt.Errorf("failed to get processes: %w", err)
+	}
+
+	for _, p := range procs {
+		cmdline, err := p.CmdlineWithContext(ctx)
+		if err != nil {
+			// Skip the process if we can't get its command line. It might be permission issue.
+			continue
+		}
+		if strings.Contains(cmdline, raySessionCommand) && int(p.Pid) != os.Getpid() {
+			if verbose {
+				fmt.Printf("Found ray session: %s\n", cmdline)
+			}
+			// Since ray session spawn child processes to run the actual commands,
+			// we need to kill all child processes first.
+			children, err := p.ChildrenWithContext(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get children of process %d: %w", p.Pid, err)
+			}
+			for _, child := range children {
+				if verbose {
+					fmt.Printf("Killing subprocess with PID %d\n", child.Pid)
+				}
+				if err := child.Kill(); err != nil {
+					return fmt.Errorf("failed to kill child process %d: %w", child.Pid, err)
+				}
+			}
+			// Then kill the parent process.
+			if verbose {
+				fmt.Printf("Killing process with PID %d\n", p.Pid)
+			}
+			if err := p.Kill(); err != nil {
+				return fmt.Errorf("failed to kill process %d: %w", p.Pid, err)
+			}
+		}
+	}
 	return nil
 }
