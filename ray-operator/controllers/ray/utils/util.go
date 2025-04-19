@@ -343,7 +343,7 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
-	return workerReplicas
+	return workerReplicas * workerGroupSpec.NumOfHosts
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
@@ -363,7 +363,7 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MinReplicas
+		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -376,7 +376,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MaxReplicas
+		count += (*nodeGroup.MaxReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -416,13 +416,13 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
-	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec, 1)
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		podResource := CalculatePodResource(nodeGroup.Template.Spec, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)
 		}
@@ -432,10 +432,10 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
-	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec, 1)
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		podResource := CalculatePodResource(nodeGroup.Template.Spec, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)
 		}
@@ -445,7 +445,7 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 
 // CalculatePodResource returns the total resources of a pod.
 // Request values take precedence over limit values.
-func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
+func CalculatePodResource(podSpec corev1.PodSpec, numOfHosts int32) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
 		containerResource := container.Resources.Requests
@@ -458,6 +458,7 @@ func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 			}
 		}
 		for name, quantity := range containerResource {
+			quantity.Mul(int64(numOfHosts))
 			if totalQuantity, ok := podResource[name]; ok {
 				totalQuantity.Add(quantity)
 				podResource[name] = totalQuantity

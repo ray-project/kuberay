@@ -141,9 +141,12 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	// worker pod:
 	//   cpu: 2
 	//   memory: 10Gi
+	//   numOfHosts: 1
+	//   minReplicas: 1
+	//   maxReplicas: 2
 	//   nvidia.com/gpu: 1
 	addWorkerPodSpec(rayClusterWithGangScheduling,
-		"worker-group-1", 1, 1, 2, v1.ResourceList{
+		"worker-group-1", 1, 1, 1, 2, v1.ResourceList{
 			v1.ResourceCPU:    resource.MustParse("2"),
 			v1.ResourceMemory: resource.MustParse("10Gi"),
 			"nvidia.com/gpu":  resource.MustParse("1"),
@@ -209,7 +212,7 @@ func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
 }
 
 func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
-	replicas int32, minReplicas int32, maxReplicas int32, resources v1.ResourceList,
+	replicas, numOfHosts, minReplicas, maxReplicas int32, resources v1.ResourceList,
 ) {
 	workerContainers := []v1.Container{
 		{
@@ -225,6 +228,7 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 	app.Spec.WorkerGroupSpecs = append(app.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		GroupName:   workerGroupName,
 		Replicas:    &replicas,
+		NumOfHosts:  numOfHosts,
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
 		Template: v1.PodTemplateSpec{

@@ -47,6 +47,12 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const (
+	minReplicas int32 = 0
+	maxReplicas int32 = 4
+	replicas    int32 = 3
+)
+
 func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -69,9 +75,9 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:       ptr.To[int32](3),
-					MinReplicas:    ptr.To[int32](0),
-					MaxReplicas:    ptr.To[int32](4),
+					Replicas:       ptr.To(replicas),
+					MinReplicas:    ptr.To(minReplicas),
+					MaxReplicas:    ptr.To(maxReplicas),
 					GroupName:      "small-group",
 					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
@@ -935,9 +941,28 @@ var _ = Context("Inside the default namespace", func() {
 
 		It("Check the number of worker Pods", func() {
 			numWorkerPods := 3 * int(numOfHosts)
+			desiredWorkerReplicas := replicas * numOfHosts
+			minWorkerReplicas := minReplicas * numOfHosts
+			maxWorkerReplicas := maxReplicas * numOfHosts
+
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+
+			// Check the replica count of each host.
+			Eventually(func() (bool, error) {
+				status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+				if status.DesiredWorkerReplicas != desiredWorkerReplicas {
+					return false, nil
+				}
+				if status.MinWorkerReplicas != minWorkerReplicas {
+					return false, nil
+				}
+				if status.MaxWorkerReplicas != maxWorkerReplicas {
+					return false, nil
+				}
+				return true, nil
+			}, time.Second*5, time.Millisecond*500).Should(BeTrue(), "Expected RayCluster status fields to match expected values")
 		})
 
 		It("Simulate Ray Autoscaler scales down", func() {

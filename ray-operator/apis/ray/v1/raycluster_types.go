@@ -224,16 +224,20 @@ type RayClusterStatus struct {
 	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
 	// +optional
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
-	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
+	// AvailableWorkerReplicas indicates how many replicas are available in the cluster.
+	// This reflects the number of Pods that are running and available to serve workloads.
 	// +optional
 	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
 	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.
+	// Based on the replicas field in the RayCluster spec and calculated as replicas * numOfHosts (default = 1).
 	// +optional
 	DesiredWorkerReplicas int32 `json:"desiredWorkerReplicas,omitempty"`
 	// MinWorkerReplicas indicates sum of minimum replicas of each node group.
+	// This is derived from minReplicas * numOfHosts (default = 1).
 	// +optional
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
 	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
+	// This is derived from maxReplicas * numOfHosts (default = 1).
 	// +optional
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
