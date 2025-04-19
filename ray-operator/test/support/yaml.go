@@ -5,7 +5,6 @@ import (
 	"os/exec"
 
 	"github.com/stretchr/testify/require"
-
 	"k8s.io/apimachinery/pkg/runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"

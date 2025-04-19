@@ -4,7 +4,6 @@ import (
 	"embed"
 
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
