@@ -2,6 +2,8 @@ package interceptor
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"google.golang.org/grpc"
 	klog "k8s.io/klog/v2"
@@ -18,4 +20,41 @@ func APIServerInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	}
 	klog.Infof("%v handler finished", info.FullMethod)
 	return
+}
+
+func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req interface{},
+		_ *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		// Create a context with timeout
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		// Channel to capture execution result
+		done := make(chan struct{})
+		var (
+			resp interface{}
+			err  error
+		)
+
+		go func() {
+			resp, err = handler(ctx, req)
+			close(done)
+		}()
+
+		select {
+		case <-ctx.Done():
+			// Raise error if time out
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("grpc server timed out")
+			}
+			return nil, ctx.Err()
+		case <-done:
+			// Handler finished
+			return resp, err
+		}
+	}
 }
