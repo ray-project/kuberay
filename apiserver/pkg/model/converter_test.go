@@ -670,7 +670,7 @@ func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
 }
 
-func TestFromCrdToAPIJob(t *testing.T) {
+func TestFromCrdToAPIJobs(t *testing.T) {
 	jobs := []*rayv1api.RayJob{&JobNewClusterTest}
 	job := FromCrdToAPIJobs(jobs)[0]
 	assert.Equal(t, "test", job.Name)
