@@ -140,6 +140,10 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		logger.Info("Read request instance not found error!")
+		// Clear the related metrics
+		if r.options.RayClusterMetricCollector != nil {
+			r.options.RayClusterMetricCollector.DeleteRayClusterProvisionedDuration(request.Name, request.Namespace)
+		}
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -1612,7 +1616,22 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	}
+	collectRayClusterMetrics(r.options.RayClusterMetricCollector, newInstance.Name, newInstance.Namespace, newInstance.Status, originalRayClusterInstance.Status, originalRayClusterInstance.CreationTimestamp.Time)
+
 	return inconsistent, err
+}
+
+// Utility function to record the RayCluster metrics
+func collectRayClusterMetrics(collector *metrics.RayClusterMetricCollector, name, namespace string, newClusterStatus, oldClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	if collector == nil {
+		return
+	}
+
+	// Record `kuberay_cluster_provisioned_duration_seconds` metric if just provisioned
+	if meta.IsStatusConditionTrue(newClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		!meta.IsStatusConditionTrue(oldClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		collector.ObserveRayClusterProvisionedDuration(name, namespace, time.Since(creationTimestamp).Seconds())
+	}
 }
 
 // sumGPUs sums the GPUs in the given resource list.
