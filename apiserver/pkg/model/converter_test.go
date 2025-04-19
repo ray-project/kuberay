@@ -580,11 +580,14 @@ func TestNilAutoscalerOptions(t *testing.T) {
 func TestFromCrdToAPIClusters(t *testing.T) {
 	clusters := []*rayv1api.RayCluster{&ClusterSpecTest}
 	clusterEventsMap := map[string][]corev1.Event{}
-	cluster := FromCrdToAPIClusters(clusters, clusterEventsMap)[0]
-	if len(cluster.Annotations) != 1 {
+	apiClusters := FromCrdToAPIClusters(clusters, clusterEventsMap)
+	assert.Len(t, apiClusters, 1)
+
+	apiCluster := apiClusters[0]
+	if len(apiCluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
-	assert.Equal(t, "nginx", cluster.Annotations["kubernetes.io/ingress.class"])
+	assert.Equal(t, "nginx", apiCluster.Annotations["kubernetes.io/ingress.class"])
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
@@ -631,7 +634,10 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 
 func TestFromKubeToAPIComputeTemplates(t *testing.T) {
 	configMaps := []*corev1.ConfigMap{&configMapWithoutTolerations}
-	template := FromKubeToAPIComputeTemplates(configMaps)[0]
+	templates := FromKubeToAPIComputeTemplates(configMaps)
+	assert.Len(t, templates, 1)
+
+	template := templates[0]
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
 	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
 	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
@@ -672,12 +678,15 @@ func tolerationToString(toleration *api.PodToleration) string {
 
 func TestFromCrdToAPIJobs(t *testing.T) {
 	jobs := []*rayv1api.RayJob{&JobNewClusterTest}
-	job := FromCrdToAPIJobs(jobs)[0]
-	assert.Equal(t, "test", job.Name)
-	assert.Equal(t, "test", job.Namespace)
-	assert.Equal(t, "user", job.User)
-	assert.Equal(t, "python /home/ray/samples/sample_code.py", job.Entrypoint)
-	assert.Equal(t, "123", job.Metadata["job_submission_id"])
+	apiJobs := FromCrdToAPIJobs(jobs)
+	assert.Len(t, apiJobs, 1)
+
+	apiJob := apiJobs[0]
+	assert.Equal(t, "test", apiJob.Name)
+	assert.Equal(t, "test", apiJob.Namespace)
+	assert.Equal(t, "user", apiJob.User)
+	assert.Equal(t, "python /home/ray/samples/sample_code.py", apiJob.Entrypoint)
+	assert.Equal(t, "123", apiJob.Metadata["job_submission_id"])
 }
 
 func TestPopulateJob(t *testing.T) {
