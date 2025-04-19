@@ -140,6 +140,10 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		logger.Info("Read request instance not found error!")
+		// Clear the related metrics
+		if r.options.RayClusterMetricCollector != nil {
+			r.options.RayClusterMetricCollector.DeleteRayClusterProvisionedDuration(request.Name, request.Namespace)
+		}
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}

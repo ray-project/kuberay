@@ -14,7 +14,7 @@ func NewRayClusterMetricCollector() *RayClusterMetricCollector {
 		rayClusterProvisionedDuration: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_cluster_provisioned_duration_seconds",
-				Help: "The unix timestamp, in seconds, when the RayCluster custom resource condition RayClusterProvisioned is set to true.",
+				Help: "The time, in seconds, from when a RayCluster is created until the custom resource condition `RayClusterProvisioned` is set to true",
 			},
 			[]string{"name", "namespace"},
 		),
@@ -35,4 +35,8 @@ func (c *RayClusterMetricCollector) Collect(ch chan<- prometheus.Metric) {
 // ObserveRayClusterProvisionedDuration observes the duration of RayCluster from creation to provisioned
 func (c *RayClusterMetricCollector) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
 	c.rayClusterProvisionedDuration.WithLabelValues(name, namespace).Set(duration)
+}
+
+func (c *RayClusterMetricCollector) DeleteRayClusterProvisionedDuration(name, namespace string) {
+	c.rayClusterProvisionedDuration.DeleteLabelValues(name, namespace)
 }
