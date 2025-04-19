@@ -55,6 +55,7 @@ linters-settings:
       - fieldalignment
   lll:
     line-length: 120
+
 linters:
   enable:
     - asciicheck
