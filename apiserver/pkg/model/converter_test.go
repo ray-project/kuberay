@@ -204,8 +204,9 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-worker",
-					Image: "blublinsky1/ray310:2.5.0",
+					Name:            "ray-worker",
+					Image:           "blublinsky1/ray310:2.5.0",
+					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -541,6 +542,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
 	}
+	if groupSpec.ImagePullPolicy != "Always" {
+		t.Errorf("failed to convert image pull policy")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -566,6 +570,24 @@ func TestAutoscalerOptions(t *testing.T) {
 	assert.Len(t, options.Envs.Values, 1)
 	assert.Len(t, options.Envs.ValuesFrom, 2)
 	assert.Len(t, options.Volumes, 2)
+}
+
+func TestNilAutoscalerOptions(t *testing.T) {
+	options := convertAutoscalingOptions(nil)
+	assert.Nil(t, options)
+}
+
+func TestFromCrdToAPIClusters(t *testing.T) {
+	clusters := []*rayv1api.RayCluster{&ClusterSpecTest}
+	clusterEventsMap := map[string][]corev1.Event{}
+	apiClusters := FromCrdToAPIClusters(clusters, clusterEventsMap)
+	assert.Len(t, apiClusters, 1)
+
+	apiCluster := apiClusters[0]
+	if len(apiCluster.Annotations) != 1 {
+		t.Errorf("failed to convert cluster's annotations")
+	}
+	assert.Equal(t, "nginx", apiCluster.Annotations["kubernetes.io/ingress.class"])
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
@@ -610,6 +632,18 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	}
 }
 
+func TestFromKubeToAPIComputeTemplates(t *testing.T) {
+	configMaps := []*corev1.ConfigMap{&configMapWithoutTolerations}
+	templates := FromKubeToAPIComputeTemplates(configMaps)
+	assert.Len(t, templates, 1)
+
+	template := templates[0]
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(t, "", template.GpuAccelerator, "GPU accelerator mismatch")
+}
+
 func TestPopulateTemplate(t *testing.T) {
 	template := FromKubeToAPIComputeTemplate(&configMapWithoutTolerations)
 	if len(template.Tolerations) != 0 {
@@ -640,6 +674,19 @@ func TestPopulateTemplate(t *testing.T) {
 
 func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
+}
+
+func TestFromCrdToAPIJobs(t *testing.T) {
+	jobs := []*rayv1api.RayJob{&JobNewClusterTest}
+	apiJobs := FromCrdToAPIJobs(jobs)
+	assert.Len(t, apiJobs, 1)
+
+	apiJob := apiJobs[0]
+	assert.Equal(t, "test", apiJob.Name)
+	assert.Equal(t, "test", apiJob.Namespace)
+	assert.Equal(t, "user", apiJob.User)
+	assert.Equal(t, "python /home/ray/samples/sample_code.py", apiJob.Entrypoint)
+	assert.Equal(t, "123", apiJob.Metadata["job_submission_id"])
 }
 
 func TestPopulateJob(t *testing.T) {

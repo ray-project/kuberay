@@ -89,7 +89,7 @@ func contains(s []string, str string) bool {
 }
 
 func FromCrdToAPIClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
-	apiClusters := make([]*api.Cluster, 0)
+	apiClusters := make([]*api.Cluster, 0, len(clusters))
 	for _, cluster := range clusters {
 		apiClusters = append(apiClusters, FromCrdToAPICluster(cluster, clusterEventsMap[cluster.Name]))
 	}
@@ -436,7 +436,7 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 }
 
 func FromKubeToAPIComputeTemplates(configMaps []*corev1.ConfigMap) []*api.ComputeTemplate {
-	apiComputeTemplates := make([]*api.ComputeTemplate, 0)
+	apiComputeTemplates := make([]*api.ComputeTemplate, 0, len(configMaps))
 	for _, configMap := range configMaps {
 		apiComputeTemplates = append(apiComputeTemplates, FromKubeToAPIComputeTemplate(configMap))
 	}
@@ -444,7 +444,7 @@ func FromKubeToAPIComputeTemplates(configMaps []*corev1.ConfigMap) []*api.Comput
 }
 
 func FromCrdToAPIJobs(jobs []*rayv1api.RayJob) []*api.RayJob {
-	apiJobs := make([]*api.RayJob, 0)
+	apiJobs := make([]*api.RayJob, 0, len(jobs))
 	for _, job := range jobs {
 		apiJobs = append(apiJobs, FromCrdToAPIJob(job))
 	}
