@@ -670,6 +670,16 @@ func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
 }
 
+func TestFromCrdToAPIJob(t *testing.T) {
+	jobs := []*rayv1api.RayJob{&JobNewClusterTest}
+	job := FromCrdToAPIJobs(jobs)[0]
+	assert.Equal(t, "test", job.Name)
+	assert.Equal(t, "test", job.Namespace)
+	assert.Equal(t, "user", job.User)
+	assert.Equal(t, "python /home/ray/samples/sample_code.py", job.Entrypoint)
+	assert.Equal(t, "123", job.Metadata["job_submission_id"])
+}
+
 func TestPopulateJob(t *testing.T) {
 	job := FromCrdToAPIJob(&JobNewClusterTest)
 	fmt.Printf("jobWithCluster = %#v\n", job)
