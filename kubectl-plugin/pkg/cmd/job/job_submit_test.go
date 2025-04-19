@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"

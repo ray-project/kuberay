@@ -3,12 +3,13 @@ package kubectlraydelete
 import (
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 )
 
 func TestComplete(t *testing.T) {

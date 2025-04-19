@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 func NewGetCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {

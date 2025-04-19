@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +27,8 @@ import (
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 )
 
 // Mocked NewSPDYExecutor

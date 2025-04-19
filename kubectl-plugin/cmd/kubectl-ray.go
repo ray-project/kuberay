@@ -3,9 +3,10 @@ package main
 import (
 	"os"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd"
 	flag "github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd"
 )
 
 func main() {
