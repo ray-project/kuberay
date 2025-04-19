@@ -87,10 +87,11 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
 	}
-	services, err := s.resourceManager.ListServices(ctx, request.Namespace)
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, request.Namespace, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "failed to list rayservice.")
 	}
+
 	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
@@ -101,7 +102,8 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services: model.FromCrdToAPIServices(services, serviceEventMap),
+		Services:      model.FromCrdToAPIServices(services, serviceEventMap),
+		NextPageToken: nextPageToken,
 	}, nil
 }
 

@@ -253,6 +253,107 @@ func TestGetServicesInNamespace(t *testing.T) {
 	require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
 }
 
+func TestGetServicesInNamespaceWithPagination(t *testing.T) {
+	const serviceCount = 2
+	expectedServiceNames := make([]string, 0, serviceCount)
+
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	for ii := 0; ii < serviceCount; ii++ {
+		testServiceRequest := createTestServiceV2(t, tCtx)
+		t.Cleanup(func() {
+			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
+		})
+		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
+	}
+
+	// Test pagination with limit 1, which is less than the total number of services.
+	t.Run("Test pagination return part of the result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
+
+		pageToken := ""
+		for ii := 0; ii < serviceCount; ii++ {
+			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				PageToken: pageToken,
+				PageSize:  int32(1),
+			})
+
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			require.NotEmpty(t, response.Services, "A list of service is required")
+			require.Len(t, response.Services, 1)
+
+			for _, curService := range response.Services {
+				for jj := 0; jj < serviceCount; jj++ {
+					if expectedServiceNames[jj] == curService.Name {
+						gotServices[jj] = true
+						break
+					}
+				}
+			}
+
+			// Check next page token.
+			pageToken = response.NextPageToken
+			if ii == serviceCount-1 {
+				require.Empty(t, pageToken, "Last page token should be empty")
+			} else {
+				require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+			}
+		}
+
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
+		}
+	})
+
+	// Test pagination with limit 3, which is larger than the total number of services.
+	t.Run("Test pagination return all result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
+
+		pageToken := ""
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
+			Namespace: tCtx.GetNamespaceName(),
+			PageToken: pageToken,
+			PageSize:  serviceCount + 1,
+		})
+
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.NotEmpty(t, response.Services, "A list of services is required")
+		require.Len(t, response.Services, serviceCount)
+		require.Empty(t, pageToken, "Page token should be empty")
+		for _, curService := range response.Services {
+			for jj := 0; jj < serviceCount; jj++ {
+				if expectedServiceNames[jj] == curService.Name {
+					gotServices[jj] = true
+					break
+				}
+			}
+		}
+
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
+		}
+	})
+}
+
 func TestGetService(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -366,9 +467,7 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
-
 	checkRayServiceCreatedSuccessfully(t, tCtx, actualService.Name)
-
 	return testServiceRequest
 }
 
