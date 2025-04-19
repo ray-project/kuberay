@@ -186,6 +186,8 @@ const (
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue = "headgroup"
 
+	RaySubmitterGroupLabelValue = "submitter-group"
+
 	// KUBERAY_VERSION is the build version of KubeRay.
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable
 	// as well as the user-agent. This constant is updated before release.
