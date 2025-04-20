@@ -58,7 +58,6 @@ func TestPopulateComputeTemplate(t *testing.T) {
 
 	// mock controller
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	// mock client manager
 	mockClientManager := NewMockClientManagerInterface(ctrl)
