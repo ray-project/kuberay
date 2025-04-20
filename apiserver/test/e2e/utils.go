@@ -23,9 +23,10 @@ import (
 var files embed.FS
 
 var (
-	TestTimeoutShort  = 1 * time.Minute
-	TestTimeoutMedium = 3 * time.Minute
-	TestTimeoutLong   = 5 * time.Minute
+	TestTimeoutShort    = 1 * time.Minute
+	TestTimeoutMedium   = 3 * time.Minute
+	TestTimeoutLong     = 5 * time.Minute
+	TestPollingInterval = 500 * time.Millisecond
 )
 
 // CreateHttpRequest instantiates a http request for the  specified endpoint and host
@@ -92,7 +93,7 @@ func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 			}
 		}
 		return false
-	}, TestTimeoutMedium).Should(gomega.BeTrue())
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
 func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
@@ -109,7 +110,7 @@ func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 		}
 		t.Logf("Found ray cluster '%s'", clusterName)
 		return false
-	}, TestTimeoutMedium).Should(gomega.BeTrue())
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
 func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
@@ -126,7 +127,7 @@ func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string,
 		}
 		t.Logf("Waiting for ray job '%s' to be in one of the expected conditions %s", rayJobName, expectedJobStatuses)
 		return slices.Contains(expectedJobStatuses, rayJob.Status.JobStatus)
-	}, TestTimeoutMedium).Should(gomega.BeTrue())
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
 func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
@@ -141,7 +142,7 @@ func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName str
 		}
 		t.Logf("Find rayJob with status %v", rayJob.Status.JobStatus)
 		return nil
-	}, TestTimeoutMedium).Should(gomega.MatchError("rayjobs.ray.io \"" + jobName + "\" not found"))
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayjobs.ray.io \"" + jobName + "\" not found"))
 
 	t.Logf("Ray job %s successfully deleted", jobName)
 }
@@ -156,7 +157,7 @@ func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceNam
 		}
 		t.Logf("Find rayService with status %v", rayService.Status)
 		return nil
-	}, TestTimeoutMedium).Should(gomega.MatchError("rayservices.ray.io \"" + serviceName + "\" not found"))
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayservices.ray.io \"" + serviceName + "\" not found"))
 
 	t.Logf("Service %s successfully deleted", serviceName)
 }

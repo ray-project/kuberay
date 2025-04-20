@@ -131,7 +131,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
 		return rayCluster.Status.AvailableWorkerReplicas
-	}, TestTimeoutMedium).Should(gomega.Equal(int32(1)))
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.Equal(int32(1)))
 	// Delete actor
 	deleteActorRequest := api.CreateRayJobRequest{
 		Namespace: tCtx.GetNamespaceName(),
@@ -158,6 +158,6 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
 		return rayCluster.Status.AvailableWorkerReplicas
-	}, TestTimeoutMedium).Should(gomega.Equal(int32(0)))
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.Equal(int32(0)))
 	require.NoError(t, err, "No error expected")
 }
