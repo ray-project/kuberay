@@ -5,7 +5,9 @@ Images for the various KubeRay components are published at the following locatio
 1. [Quay.io](https://quay.io/organization/kuberay)
 2. [DockerHub](https://hub.docker.com/u/kuberay)
 
-We recommend using Quay.io as the primary source for images as there are image-pull restrictions on DockerHub. DockerHub allows you to pull only 100 images per 6 hour window. Refer to [DockerHub rate limiting](https://docs.docker.com/docker-hub/download-rate-limit/) for more details.
+We recommend using Quay.io as the primary source for images as there are image-pull restrictions on
+DockerHub. DockerHub allows you to pull only 100 images per 6 hour window. Refer to [DockerHub rate
+limiting] for more details.
 
 ## Stable versions
 
@@ -19,3 +21,5 @@ The first seven characters of the git SHA specify images built from specific com
 ## Nightly images
 
 The nightly tag specifies images built from the most recent master (e.g. `quay.io/kuberay/operator:nightly`).
+
+[DockerHub rate limiting]: https://docs.docker.com/docker-hub/download-rate-limit/

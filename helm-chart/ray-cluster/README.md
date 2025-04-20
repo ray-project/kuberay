@@ -1,11 +1,16 @@
 # RayCluster
 
-RayCluster is a custom resource definition (CRD). **KubeRay operator** will listen to the resource events about RayCluster and create related Kubernetes resources (e.g. Pod & Service). Hence, **KubeRay operator** installation and **CRD** registration are required for this guide.
+RayCluster is a custom resource definition (CRD). **KubeRay operator** will listen to the resource
+events about RayCluster and create related Kubernetes resources (e.g. Pod & Service). Hence,
+**KubeRay operator** installation and **CRD** registration are required for this guide.
 
 ## Prerequisites
-See [kuberay-operator/README.md](https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md) for more details.
+
+See [kuberay-operator/README.md] for more details.
+
 * Helm
-* Install custom resource definition and KubeRay operator (covered by the following end-to-end example.)
+* Install custom resource definition and KubeRay operator (covered by the following end-to-end
+  example.)
 
 ## End-to-end example
 
@@ -51,3 +56,5 @@ helm uninstall raycluster
 # NAME                                READY   STATUS    RESTARTS   AGE
 # kuberay-operator-6fcbb94f64-gkpc9   1/1     Running   0          9m57s
 ```
+
+[kuberay-operator/README.md]: https://github.com/ray-project/kuberay/blob/master/helm-chart/kuberay-operator/README.md

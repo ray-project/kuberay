@@ -151,7 +151,8 @@ password.
 "num-cpu": "0"
 ```
 
-Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus: 0` ensures that no application code runs on a head node.
+Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus:
+0` ensures that no application code runs on a head node.
 
 The following environment variable have to be added here:
 

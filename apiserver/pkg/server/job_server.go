@@ -22,9 +22,9 @@ func NewRayJobServer(resourceManager *manager.ResourceManager, options *JobServe
 }
 
 type RayJobServer struct {
+	api.UnimplementedRayJobServiceServer
 	resourceManager *manager.ResourceManager
 	options         *JobServerOptions
-	api.UnimplementedRayJobServiceServer
 }
 
 // Creates a new Ray Job.
@@ -41,7 +41,7 @@ func (s *RayJobServer) CreateRayJob(ctx context.Context, request *api.CreateRayJ
 		return nil, util.Wrap(err, "Create Job failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds a specific Job by job name.
@@ -59,7 +59,7 @@ func (s *RayJobServer) GetRayJob(ctx context.Context, request *api.GetRayJobRequ
 		return nil, util.Wrap(err, "Get cluster failed.")
 	}
 
-	return model.FromCrdToApiJob(job), nil
+	return model.FromCrdToAPIJob(job), nil
 }
 
 // Finds all Jobs in a given namespace.
@@ -68,25 +68,28 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 		return nil, util.NewInvalidInputError("job namespace is empty. Please specify a valid value.")
 	}
 
-	jobs, err := s.resourceManager.ListJobs(ctx, request.Namespace)
+	jobs, continueToken, err := s.resourceManager.ListJobs(ctx, request.Namespace, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")
 	}
 
 	return &api.ListRayJobsResponse{
-		Jobs: model.FromCrdToApiJobs(jobs),
+		Jobs:     model.FromCrdToAPIJobs(jobs),
+		Continue: continueToken,
 	}, nil
 }
 
 // Finds all Jobs in all namespaces.
 func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
-	jobs, err := s.resourceManager.ListAllJobs(ctx)
+	// Leave the namespace empty to list all jobs in all namespaces.
+	jobs, continueToken, err := s.resourceManager.ListJobs(ctx, "" /*namespace*/, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")
 	}
 
 	return &api.ListAllRayJobsResponse{
-		Jobs: model.FromCrdToApiJobs(jobs),
+		Jobs:     model.FromCrdToAPIJobs(jobs),
+		Continue: continueToken,
 	}, nil
 }
 
@@ -128,9 +131,5 @@ func ValidateCreateJobRequest(request *api.CreateRayJobRequest) error {
 		return nil
 	}
 
-	if err := ValidateClusterSpec(request.Job.ClusterSpec); err != nil {
-		return err
-	}
-
-	return nil
+	return ValidateClusterSpec(request.Job.ClusterSpec)
 }

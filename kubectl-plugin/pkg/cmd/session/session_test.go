@@ -1,23 +1,37 @@
 package session
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func TestComplete(t *testing.T) {
-	cmd := &cobra.Command{Use: "session"}
+func TestCompleteFoo(t *testing.T) {
+	kubeConfigWithCurrentContext, err := createTempKubeConfigFile(t, "old-context")
+	require.NoError(t, err)
+
+	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(&genericclioptions.ConfigFlags{
+		KubeConfig: &kubeConfigWithCurrentContext,
+	})
 
 	tests := []struct {
 		name                 string
 		namespace            string
+		context              string
 		expectedResourceType util.ResourceType
 		expectedNamespace    string
 		expectedName         string
+		expectedContext      string
 		args                 []string
 		hasErr               bool
 	}{
@@ -28,33 +42,48 @@ func TestComplete(t *testing.T) {
 			expectedResourceType: util.RayCluster,
 			expectedNamespace:    "default",
 			expectedName:         "test-raycluster",
+			expectedContext:      "old-context",
 			hasErr:               false,
 		},
 		{
-			name:                 "valid raycluster with namespace",
+			name:                 "valid RayCluster with namespace",
 			namespace:            "test-namespace",
 			args:                 []string{"raycluster/test-raycluster"},
 			expectedResourceType: util.RayCluster,
 			expectedNamespace:    "test-namespace",
 			expectedName:         "test-raycluster",
+			expectedContext:      "old-context",
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayjob without namespace",
+			name:                 "valid RayCluster with context",
+			namespace:            "test-namespace",
+			context:              "new-context",
+			args:                 []string{"raycluster/test-raycluster"},
+			expectedResourceType: util.RayCluster,
+			expectedNamespace:    "test-namespace",
+			expectedName:         "test-raycluster",
+			expectedContext:      "new-context",
+			hasErr:               false,
+		},
+		{
+			name:                 "valid RayJob without namespace",
 			namespace:            "",
 			args:                 []string{"rayjob/test-rayjob"},
 			expectedResourceType: util.RayJob,
 			expectedNamespace:    "default",
 			expectedName:         "test-rayjob",
+			expectedContext:      "old-context",
 			hasErr:               false,
 		},
 		{
-			name:                 "valid rayservice without namespace",
+			name:                 "valid RayService without namespace",
 			namespace:            "",
 			args:                 []string{"rayservice/test-rayservice"},
 			expectedResourceType: util.RayService,
 			expectedNamespace:    "default",
 			expectedName:         "test-rayservice",
+			expectedContext:      "old-context",
 			hasErr:               false,
 		},
 		{
@@ -64,17 +93,8 @@ func TestComplete(t *testing.T) {
 			expectedResourceType: util.RayCluster,
 			expectedNamespace:    "default",
 			expectedName:         "test-resource",
+			expectedContext:      "old-context",
 			hasErr:               false,
-		},
-		{
-			name:   "invalid args (no args)",
-			args:   []string{},
-			hasErr: true,
-		},
-		{
-			name:   "invalid args (too many args)",
-			args:   []string{"raycluster/test-raycluster", "extra-arg"},
-			hasErr: true,
 		},
 		{
 			name:   "invalid args (no resource type)",
@@ -95,18 +115,53 @@ func TestComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
-			fakeSessionOptions := NewSessionOptions(testStreams)
-			fakeSessionOptions.configFlags.Namespace = &tc.namespace
+			fakeSessionOptions := NewSessionOptions(cmdFactory, testStreams)
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVarP(&fakeSessionOptions.namespace, "namespace", "n", tc.namespace, "")
+			cmd.Flags().StringVarP(&fakeSessionOptions.currentContext, "context", "c", tc.context, "")
+
 			err := fakeSessionOptions.Complete(cmd, tc.args)
+
 			if tc.hasErr {
-				assert.NotNil(t, err)
+				require.Error(t, err)
 			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, tc.expectedNamespace, fakeSessionOptions.Namespace)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedNamespace, fakeSessionOptions.namespace)
+				assert.Equal(t, tc.expectedContext, fakeSessionOptions.currentContext)
 				assert.Equal(t, tc.expectedResourceType, fakeSessionOptions.ResourceType)
 				assert.Equal(t, tc.expectedName, fakeSessionOptions.ResourceName)
 			}
 		})
 	}
+}
+
+// createTempKubeConfigFile creates a temporary kubeconfig file with the given current context.
+func createTempKubeConfigFile(t *testing.T, currentContext string) (string, error) {
+	tmpDir := t.TempDir()
+
+	// Set up fake config for kubeconfig
+	config := &api.Config{
+		Clusters: map[string]*api.Cluster{
+			"test-cluster": {
+				Server:                "https://fake-kubernetes-cluster.example.com",
+				InsecureSkipTLSVerify: true, // For testing purposes
+			},
+		},
+		Contexts: map[string]*api.Context{
+			"my-fake-context": {
+				Cluster:  "my-fake-cluster",
+				AuthInfo: "my-fake-user",
+			},
+		},
+		CurrentContext: currentContext,
+		AuthInfos: map[string]*api.AuthInfo{
+			"my-fake-user": {
+				Token: "", // Empty for testing without authentication
+			},
+		},
+	}
+
+	fakeFile := filepath.Join(tmpDir, ".kubeconfig")
+
+	return fakeFile, clientcmd.WriteToFile(*config, fakeFile)
 }

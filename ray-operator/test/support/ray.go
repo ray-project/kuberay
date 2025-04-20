@@ -2,10 +2,11 @@ package support
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -70,7 +71,7 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
-	return cluster.Status.State //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	return cluster.Status.State
 }
 
 func StatusCondition(condType rayv1.RayClusterConditionType) func(*rayv1.RayCluster) metav1.Condition {
@@ -98,7 +99,11 @@ func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
 	if !ok {
 		return false, errors.New("<actual> should be a metav1.Condition")
 	}
-	return a.Reason == c.expected.Reason && a.Status == c.expected.Status, nil
+	messageMatch := true
+	if c.expected.Message != "" {
+		messageMatch = strings.Contains(a.Message, c.expected.Message)
+	}
+	return a.Reason == c.expected.Reason && a.Status == c.expected.Status && messageMatch, nil
 }
 
 func (c *ConditionMatcher) FailureMessage(actual interface{}) (message string) {
@@ -113,6 +118,10 @@ func (c *ConditionMatcher) NegatedFailureMessage(actual interface{}) (message st
 
 func MatchCondition(status metav1.ConditionStatus, reason string) types.GomegaMatcher {
 	return &ConditionMatcher{expected: metav1.Condition{Status: status, Reason: reason}}
+}
+
+func MatchConditionContainsMessage(status metav1.ConditionStatus, reason string, message string) types.GomegaMatcher {
+	return &ConditionMatcher{expected: metav1.Condition{Status: status, Reason: reason, Message: message}}
 }
 
 func RayClusterDesiredWorkerReplicas(cluster *rayv1.RayCluster) int32 {
@@ -173,7 +182,7 @@ func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.P
 		t.Ctx(),
 		common.RayClusterGroupPodsAssociationOptions(rayCluster, group).ToMetaV1ListOptions(),
 	)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	return pods.Items
 }
 
@@ -192,7 +201,7 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 }
 
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
-	return service.Status.ServiceStatus //nolint:staticcheck // `ServiceStatus` is deprecated
+	return service.Status.ServiceStatus
 }
 
 func IsRayServiceReady(service *rayv1.RayService) bool {

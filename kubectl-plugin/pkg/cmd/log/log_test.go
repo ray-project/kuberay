@@ -15,6 +15,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -23,10 +24,9 @@ import (
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
@@ -114,58 +114,46 @@ func (dre *FakeRemoteExecutor) CreateExecutor(_ *rest.Config, url *url.URL) (rem
 }
 
 func TestRayClusterLogComplete(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 	cmd := &cobra.Command{Use: "log"}
+	cmd.Flags().StringP("namespace", "n", "", "")
 
 	tests := []struct {
 		name                 string
-		nodeType             string
+		nodeType             nodeTypeEnum
 		expectedResourceType util.ResourceType
 		expectedResourceName string
-		expectedNodeType     string
 		args                 []string
 		hasErr               bool
 	}{
 		{
-			name:                 "valide request with raycluster with empty nodetype input",
+			name:                 "valid request with RayCluster",
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
-			expectedNodeType:     "all",
 			args:                 []string{"test-raycluster"},
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with raycluster",
+			name:                 "valid request with RayCluster",
 			expectedResourceType: util.RayCluster,
 			expectedResourceName: "test-raycluster",
 			args:                 []string{"rayCluster/test-raycluster"},
-			expectedNodeType:     "all",
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with rayservice",
+			name:                 "valid request with RayService",
 			expectedResourceType: util.RayService,
-			expectedResourceName: "test-rayService",
-			args:                 []string{"rayService/test-rayService"},
-			expectedNodeType:     "all",
+			expectedResourceName: "test-rayservice",
+			args:                 []string{"rayservice/test-rayservice"},
 			hasErr:               false,
 		},
 		{
-			name:                 "valide request with rayjob",
+			name:                 "valid request with RayJob",
 			expectedResourceType: util.RayJob,
 			expectedResourceName: "test-rayJob",
 			args:                 []string{"rayJob/test-rayJob"},
-			expectedNodeType:     "all",
 			hasErr:               false,
-		},
-		{
-			name:   "invalid args (no args)",
-			args:   []string{},
-			hasErr: true,
-		},
-		{
-			name:   "invalid args (too many args)",
-			args:   []string{"raycluster/test-raycluster", "extra-arg"},
-			hasErr: true,
 		},
 		{
 			name:   "invalid args (no resource type)",
@@ -186,16 +174,15 @@ func TestRayClusterLogComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+			fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
+			fakeClusterLogOptions.nodeType = tc.nodeType
 			err := fakeClusterLogOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
-				assert.NotNil(t, err)
+				require.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectedResourceType, fakeClusterLogOptions.ResourceType)
 				assert.Equal(t, tc.expectedResourceName, fakeClusterLogOptions.ResourceName)
-				assert.Equal(t, tc.expectedNodeType, fakeClusterLogOptions.nodeType)
 			}
 		})
 	}
@@ -203,51 +190,11 @@ func TestRayClusterLogComplete(t *testing.T) {
 
 func TestRayClusterLogValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	testNS, testContext, testBT, testImpersonate := "test-namespace", "test-contet", "test-bearer-token", "test-person"
-
-	// Fake directory for kubeconfig
-	fakeDir, err := os.MkdirTemp("", "fake-config")
-	assert.Nil(t, err)
-	defer os.RemoveAll(fakeDir)
-
-	// Set up fake config for kubeconfig
-	config := &api.Config{
-		Clusters: map[string]*api.Cluster{
-			"test-cluster": {
-				Server:                "https://fake-kubernetes-cluster.example.com",
-				InsecureSkipTLSVerify: true, // For testing purposes
-			},
-		},
-		Contexts: map[string]*api.Context{
-			"my-fake-context": {
-				Cluster:  "my-fake-cluster",
-				AuthInfo: "my-fake-user",
-			},
-		},
-		CurrentContext: "my-fake-context",
-		AuthInfos: map[string]*api.AuthInfo{
-			"my-fake-user": {
-				Token: "", // Empty for testing without authentication
-			},
-		},
-	}
-
-	fakeFile := filepath.Join(fakeDir, ".kubeconfig")
-
-	if err := clientcmd.WriteToFile(*config, fakeFile); err != nil {
-		t.Fatalf("Failed to write kubeconfig to temp file: %v", err)
-	}
-
-	// Initialize the fake config flag with the fake kubeconfig and values
-	fakeConfigFlags := &genericclioptions.ConfigFlags{
-		Namespace:        &testNS,
-		Context:          &testContext,
-		KubeConfig:       &fakeFile,
-		BearerToken:      &testBT,
-		Impersonate:      &testImpersonate,
-		ImpersonateGroup: &[]string{"fake-group"},
-	}
+	tempDir := t.TempDir()
+	tempFile, err := os.CreateTemp(tempDir, "temp-file")
+	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -256,22 +203,10 @@ func TestRayClusterLogValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "Test validation when no context is set",
-			opts: &ClusterLogOptions{
-				configFlags:  genericclioptions.NewConfigFlags(false),
-				outputDir:    fakeDir,
-				ResourceName: "fake-cluster",
-				nodeType:     "head",
-				ioStreams:    &testStreams,
-			},
-			expectError: "no context is currently set, use \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
 			name: "Test validation when node type is `random-string`",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    fakeDir,
+				cmdFactory:   cmdFactory,
+				outputDir:    tempDir,
 				ResourceName: "fake-cluster",
 				nodeType:     "random-string",
 				ioStreams:    &testStreams,
@@ -281,11 +216,10 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Successful validation call",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    fakeDir,
+				cmdFactory:   cmdFactory,
+				outputDir:    tempDir,
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "",
@@ -293,11 +227,10 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Validate output directory when no out-dir is set.",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
+				cmdFactory:   cmdFactory,
 				outputDir:    "",
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "",
@@ -305,11 +238,10 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Failed validation call with output directory not exist",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
+				cmdFactory:   cmdFactory,
 				outputDir:    "randomPath-here",
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
 			expectError: "Directory does not exist. Failed with: stat randomPath-here: no such file or directory",
@@ -317,14 +249,13 @@ func TestRayClusterLogValidate(t *testing.T) {
 		{
 			name: "Failed validation call with output directory is file",
 			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:  fakeConfigFlags,
-				outputDir:    fakeFile,
+				cmdFactory:   cmdFactory,
+				outputDir:    tempFile.Name(),
 				ResourceName: "fake-cluster",
-				nodeType:     "head",
+				nodeType:     headNodeType,
 				ioStreams:    &testStreams,
 			},
-			expectError: "Path is Not a directory. Please input a directory and try again",
+			expectError: "Path is not a directory. Please input a directory and try again",
 		},
 	}
 
@@ -332,12 +263,12 @@ func TestRayClusterLogValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.opts.Validate()
 			if tc.expectError != "" {
-				assert.Equal(t, tc.expectError, err.Error())
+				require.EqualError(t, err, tc.expectError)
 			} else {
 				if tc.opts.outputDir == "" {
 					assert.Equal(t, tc.opts.ResourceName, tc.opts.outputDir)
 				}
-				assert.True(t, err == nil)
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -348,12 +279,13 @@ func TestRayClusterLogRun(t *testing.T) {
 	defer tf.Cleanup()
 
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+	fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
 	// Uses the mocked executor
 	fakeClusterLogOptions.Executor = &FakeRemoteExecutor{}
 	fakeClusterLogOptions.ResourceName = "test-cluster"
@@ -446,12 +378,12 @@ func TestRayClusterLogRun(t *testing.T) {
 	}
 
 	err = fakeClusterLogOptions.Run(context.Background(), tf)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check that the two directories are there
 	entries, err := os.ReadDir(fakeDir)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(entries))
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
 
 	assert.Equal(t, "test-cluster-kuberay-head-1", entries[0].Name())
 	assert.Equal(t, "test-cluster-kuberay-head-2", entries[1].Name())
@@ -460,30 +392,31 @@ func TestRayClusterLogRun(t *testing.T) {
 	for ind, entry := range entries {
 		currPath := filepath.Join(fakeDir, entry.Name())
 		currDir, err := os.ReadDir(currPath)
-		assert.Nil(t, err)
-		assert.Equal(t, 1, len(currDir))
+		require.NoError(t, err)
+		assert.Len(t, currDir, 1)
 		openfile, err := os.Open(filepath.Join(currPath, "stdout.log"))
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, fakeLogs[ind], string(actualContent))
 	}
 }
 
 func TestDownloadRayLogFiles(t *testing.T) {
 	fakeDir, err := os.MkdirTemp("", "fake-directory")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+	fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
 	fakeClusterLogOptions.ResourceName = "test-cluster"
 	fakeClusterLogOptions.outputDir = fakeDir
 
 	// create fake tar files to test
 	fakeTar, err := createFakeTarFile()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Ray head needed for calling the downloadRayLogFiles command
 	rayHead := v1.Pod{
@@ -512,17 +445,17 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
 
 	err = fakeClusterLogOptions.downloadRayLogFiles(context.Background(), executor, rayHead)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	entries, err := os.ReadDir(fakeDir)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, len(entries))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
 
 	// Assert the files
 	assert.True(t, entries[0].IsDir())
 	files, err := os.ReadDir(filepath.Join(fakeDir, entries[0].Name()))
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(files))
+	require.NoError(t, err)
+	assert.Len(t, files, 2)
 
 	expectedfileoutput := []struct {
 		Name string
@@ -535,14 +468,14 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	// Goes through and check the temp directory with the downloaded files
 	for ind, file := range files {
 		fileInfo, err := file.Info()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		curr := expectedfileoutput[ind]
 
 		assert.Equal(t, curr.Name, fileInfo.Name())
 		openfile, err := os.Open(filepath.Join(fakeDir, entries[0].Name(), file.Name()))
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		actualContent, err := io.ReadAll(openfile)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -131,7 +131,7 @@ func TestGetSchedulerFactory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := getSchedulerFactory(tt.args.rayConfigs)
 			if len(tt.expectedErrMsg) > 0 {
-				assert.Errorf(t, err, tt.expectedErrMsg)
+				require.Errorf(t, err, tt.expectedErrMsg)
 				return
 			}
 

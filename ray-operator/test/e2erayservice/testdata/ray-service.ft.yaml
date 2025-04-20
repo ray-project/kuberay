@@ -3,8 +3,6 @@ apiVersion: ray.io/v1
 kind: RayService
 metadata:
   name: test-rayservice
-  annotations:
-    ray.io/ft-enabled: "true"
 spec:
   excludeHeadPodFromServeSvc: true
   serveConfigV2: |
@@ -22,25 +20,28 @@ spec:
             ray_actor_options:
               num_cpus: 1
   rayClusterConfig:
-    rayVersion: "2.9.0"
+    rayVersion: "2.41.0"
+    gcsFaultToleranceOptions:
+      # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
+      # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
+      # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
+      # [Example]:
+      # externalStorageNamespace: "my-raycluster-storage"
+      redisAddress: "redis:6379"
+      redisPassword:
+        valueFrom:
+          secretKeyRef:
+            name: redis-password-secret
+            key: password
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
-        redis-password: $REDIS_PASSWORD
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.40.0
+              image: rayproject/ray:2.41.0
               env:
-                - name: RAY_REDIS_ADDRESS
-                  value: redis:6379
-                # This environment variable is used in the `rayStartParams` above.
-                - name: REDIS_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: redis-password-secret
-                      key: password
                 - name: RAY_gcs_rpc_server_reconnect_timeout_s
                   value: "20"
               resources:
@@ -50,15 +51,6 @@ spec:
                 limits:
                   cpu: 500m
                   memory: 2G
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-                - containerPort: 8000
-                  name: serve
     workerGroupSpecs:
       - replicas: 1
         minReplicas: 1
@@ -70,7 +62,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.40.0
+                image: rayproject/ray:2.41.0
                 resources:
                   requests:
                     cpu: 300m

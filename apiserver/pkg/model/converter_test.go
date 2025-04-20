@@ -557,55 +557,55 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 
 func TestAutoscalerOptions(t *testing.T) {
 	options := convertAutoscalingOptions(autoscalerOptions)
-	assert.Equal(t, options.IdleTimeoutSeconds, int32(60))
-	assert.Equal(t, options.UpscalingMode, "Default")
-	assert.Equal(t, options.Image, "Some Image")
-	assert.Equal(t, options.ImagePullPolicy, "Always")
-	assert.Equal(t, options.Cpu, "500m")
-	assert.Equal(t, options.Memory, "512Mi")
-	assert.Equal(t, len(options.Envs.Values), 1)
-	assert.Equal(t, len(options.Envs.ValuesFrom), 2)
-	assert.Equal(t, len(options.Volumes), 2)
+	assert.Equal(t, int32(60), options.IdleTimeoutSeconds)
+	assert.Equal(t, "Default", options.UpscalingMode)
+	assert.Equal(t, "Some Image", options.Image)
+	assert.Equal(t, "Always", options.ImagePullPolicy)
+	assert.Equal(t, "500m", options.Cpu)
+	assert.Equal(t, "512Mi", options.Memory)
+	assert.Len(t, options.Envs.Values, 1)
+	assert.Len(t, options.Envs.ValuesFrom, 2)
+	assert.Len(t, options.Volumes, 2)
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
-	cluster := FromCrdToApiCluster(&ClusterSpecTest, []corev1.Event{})
+	cluster := FromCrdToAPICluster(&ClusterSpecTest, []corev1.Event{})
 	if len(cluster.Annotations) != 1 {
 		t.Errorf("failed to convert cluster's annotations")
 	}
-	assert.Equal(t, cluster.ClusterSpec.EnableInTreeAutoscaling, false)
+	assert.False(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions != nil {
 		t.Errorf("unexpected autoscaler annotations")
 	}
-	cluster = FromCrdToApiCluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
-	assert.Equal(t, cluster.ClusterSpec.EnableInTreeAutoscaling, true)
+	cluster = FromCrdToAPICluster(&ClusterSpecAutoscalerTest, []corev1.Event{})
+	assert.True(t, cluster.ClusterSpec.EnableInTreeAutoscaling)
 	if cluster.ClusterSpec.AutoscalerOptions == nil {
 		t.Errorf("autoscaler annotations not found")
 	}
-	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.IdleTimeoutSeconds, int32(60))
-	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.UpscalingMode, "Default")
-	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy, "Always")
-	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Cpu, "500m")
-	assert.Equal(t, cluster.ClusterSpec.AutoscalerOptions.Memory, "512Mi")
-	assert.Equal(t, len(cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom), 4)
+	assert.Equal(t, int32(60), cluster.ClusterSpec.AutoscalerOptions.IdleTimeoutSeconds)
+	assert.Equal(t, "Default", cluster.ClusterSpec.AutoscalerOptions.UpscalingMode)
+	assert.Equal(t, "Always", cluster.ClusterSpec.AutoscalerOptions.ImagePullPolicy)
+	assert.Equal(t, "500m", cluster.ClusterSpec.AutoscalerOptions.Cpu)
+	assert.Equal(t, "512Mi", cluster.ClusterSpec.AutoscalerOptions.Memory)
+	assert.Len(t, cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom, 4)
 	for name, value := range cluster.ClusterSpec.HeadGroupSpec.Environment.ValuesFrom {
 		switch name {
 		case "REDIS_PASSWORD":
-			assert.Equal(t, value.Source.String(), "SECRET")
-			assert.Equal(t, value.Name, "redis-password-secret")
-			assert.Equal(t, value.Key, "password")
+			assert.Equal(t, "SECRET", value.Source.String())
+			assert.Equal(t, "redis-password-secret", value.Name)
+			assert.Equal(t, "password", value.Key)
 		case "CONFIGMAP":
-			assert.Equal(t, value.Source.String(), "CONFIGMAP")
-			assert.Equal(t, value.Name, "special-config")
-			assert.Equal(t, value.Key, "special.how")
+			assert.Equal(t, "CONFIGMAP", value.Source.String())
+			assert.Equal(t, "special-config", value.Name)
+			assert.Equal(t, "special.how", value.Key)
 		case "ResourceFieldRef":
-			assert.Equal(t, value.Source.String(), "RESOURCEFIELD")
-			assert.Equal(t, value.Name, "my-container")
-			assert.Equal(t, value.Key, "resource")
+			assert.Equal(t, "RESOURCEFIELD", value.Source.String())
+			assert.Equal(t, "my-container", value.Name)
+			assert.Equal(t, "resource", value.Key)
 		default:
-			assert.Equal(t, value.Source.String(), "FIELD")
-			assert.Equal(t, value.Name, "")
-			assert.Equal(t, value.Key, "path")
+			assert.Equal(t, "FIELD", value.Source.String())
+			assert.Equal(t, "", value.Name)
+			assert.Equal(t, "path", value.Key)
 		}
 	}
 }
@@ -639,15 +639,11 @@ func TestPopulateTemplate(t *testing.T) {
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
-	return "Key: " + toleration.Key + " Operator: " + string(
-		toleration.Operator,
-	) + " Effect: " + string(
-		toleration.Effect,
-	)
+	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
 }
 
 func TestPopulateJob(t *testing.T) {
-	job := FromCrdToApiJob(&JobNewClusterTest)
+	job := FromCrdToAPIJob(&JobNewClusterTest)
 	fmt.Printf("jobWithCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -656,7 +652,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Nil(t, job.ClusterSelector)
 	assert.NotNil(t, job.ClusterSpec)
 
-	job = FromCrdToApiJob(&JobExistingClusterTest)
+	job = FromCrdToAPIJob(&JobExistingClusterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -665,7 +661,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.NotNil(t, job.ClusterSelector)
 	assert.Nil(t, job.ClusterSpec)
 
-	job = FromCrdToApiJob(&JobExistingClusterSubmitterTest)
+	job = FromCrdToAPIJob(&JobExistingClusterSubmitterTest)
 	fmt.Printf("jobReferenceCluster = %#v\n", job)
 	assert.Equal(t, "test", job.Name)
 	assert.Equal(t, "test", job.Namespace)
@@ -676,7 +672,7 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "image", job.JobSubmitter.Image)
 	assert.Equal(t, "2", job.JobSubmitter.Cpu)
 
-	job = FromCrdToApiJob(&JobWithOutputTest)
+	job = FromCrdToAPIJob(&JobWithOutputTest)
 	fmt.Printf("jobWithOutput = %#v\n", job)
 	assert.Equal(t, time.Date(2024, 0o7, 25, 0, 0, 0, 0, time.UTC), job.StartTime.AsTime())
 	assert.Nil(t, job.EndTime)

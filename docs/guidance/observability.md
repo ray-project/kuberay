@@ -3,6 +3,7 @@
 ## RayCluster Status
 
 ### State
+
 In the RayCluster resource definition, we use `State` to represent the current status of the Ray cluster.
 
 For now, there are three types of the status exposed by the RayCluster's status.state: `ready`, `unhealthy` and `failed`.
@@ -28,7 +29,9 @@ curl --request GET '<baseUrl>/apis/v1alpha2/namespaces/<namespace>/clusters/<ray
 ```
 
 ### Endpoint
-If you use the nodeport as service to expose the raycluster endpoint, like dashboard or redis, there are `endpoints` field in the status to record the service endpoints.
+
+If you use the nodeport as service to expose the raycluster endpoint, like dashboard or redis, there
+are `endpoints` field in the status to record the service endpoints.
 
 you can directly use the ports in the `endpoints` to connect to the related service.
 

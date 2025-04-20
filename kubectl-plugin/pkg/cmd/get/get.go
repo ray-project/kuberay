@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-func NewGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewGetCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "get",
 		Short:        "Display one or many Ray resources.",
@@ -23,6 +25,17 @@ func NewGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewGetClusterCommand(streams))
+	cmd.AddCommand(NewGetClusterCommand(cmdFactory, streams))
+	cmd.AddCommand(NewGetWorkerGroupCommand(cmdFactory, streams))
+	cmd.AddCommand(NewGetNodesCommand(cmdFactory, streams))
 	return cmd
+}
+
+// joinLabelMap joins a map of K8s label key-val entries into a label selector string
+func joinLabelMap(labelMap map[string]string) string {
+	var labels []string
+	for k, v := range labelMap {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(labels, ",")
 }

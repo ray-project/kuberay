@@ -1,10 +1,7 @@
 name: release-kubectl-plugin
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Desired release version tag (e.g. v1.1.0-rc.1).'
-        required: true
+
 jobs:
   release-kubectl-plugin:
     runs-on: ubuntu-latest
@@ -12,14 +9,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
-          fetch-tags: 'true'
-      - name: Show tag
-        run: git show-ref --head --dereference | grep "$(git rev-parse HEAD)"
+          fetch-depth: 0
+      - name: Error if not a tag
+        uses: actions/github-script@v7
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+        with:
+          script: core.setFailed('This action can only be run on tags')
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

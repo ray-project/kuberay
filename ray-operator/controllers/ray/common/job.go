@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
-	"github.com/google/shlex"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/yaml"
@@ -60,7 +59,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	address := rayJobInstance.Status.DashboardURL
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
-	entrypoint := rayJobInstance.Spec.Entrypoint
+	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
 	entrypointNumCpus := rayJobInstance.Spec.EntrypointNumCpus
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
@@ -73,18 +72,15 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	// `ray job submit` alone doesn't handle duplicated submission gracefully. See https://github.com/ray-project/kuberay/issues/2154.
 	// In order to deal with that, we use `ray job status` first to check if the jobId has been submitted.
 	// If the jobId has been submitted, we use `ray job logs` to follow the logs.
-	// Otherwise, we submit the job normally with `ray job submit`. The full shell command looks like this:
-	//   if ray job status --address http://$RAY_ADDRESS $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1 ;
-	//   then ray job logs --address http://RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID ;
-	//   else ray job submit --address http://RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID -- ... ;
-	//   fi
+	// Otherwise, we submit the job with `ray job submit --no-wait` + `ray job logs`. The full shell command looks like this:
+	//   if ! ray job status --address http://$RAY_ADDRESS $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1 ;
+	//   then ray job submit --address http://$RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID --no-wait -- ... ;
+	//   fi ; ray job logs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
 	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
-	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
-	k8sJobCommand := append([]string{"if"}, jobStatusCommand...)
+	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address, "--no-wait"}
+	k8sJobCommand := append([]string{"if", "!"}, jobStatusCommand...)
 	k8sJobCommand = append(k8sJobCommand, ";", "then")
-	k8sJobCommand = append(k8sJobCommand, jobFollowCommand...)
-	k8sJobCommand = append(k8sJobCommand, ";", "else")
 	k8sJobCommand = append(k8sJobCommand, jobSubmitCommand...)
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
@@ -120,15 +116,8 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	k8sJobCommand = append(k8sJobCommand, "--")
-
-	commandSlice, err := shlex.Split(entrypoint)
-	if err != nil {
-		return nil, err
-	}
-	k8sJobCommand = append(k8sJobCommand, commandSlice...)
-
-	k8sJobCommand = append(k8sJobCommand, ";", "fi")
+	k8sJobCommand = append(k8sJobCommand, "--", entrypoint, ";", "fi", ";")
+	k8sJobCommand = append(k8sJobCommand, jobFollowCommand...)
 
 	return k8sJobCommand, nil
 }

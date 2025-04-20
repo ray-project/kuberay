@@ -18,9 +18,6 @@ func TestRayJob(t *testing.T) {
 			name: "ray-job.custom-head-svc.yaml",
 		},
 		{
-			name: "ray-job.modin.yaml",
-		},
-		{
 			name: "ray-job.resources.yaml",
 		},
 		{
@@ -35,6 +32,7 @@ func TestRayJob(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
+			g.ConfigureWithT(WithRayJobResourceLogger(test))
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
@@ -53,7 +51,7 @@ func TestRayJob(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayJob).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
+			LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be ready", namespace.Name, rayJob.Status.RayClusterName)
 			g.Eventually(RayCluster(test, namespace.Name, rayJob.Status.RayClusterName), TestTimeoutMedium).
 				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)

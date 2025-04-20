@@ -4,11 +4,12 @@ import (
 	"embed"
 	"strings"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -19,7 +20,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	return file
 }
 
@@ -125,10 +126,10 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				WithName("ray-head").
 				WithImage(GetRayImage()).
 				WithPorts(
-					corev1ac.ContainerPort().WithName("gcs").WithContainerPort(6379),
-					corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
-					corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
-					corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+					corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
+					corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
+					corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
+					corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 				).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
@@ -192,7 +193,7 @@ func deployRedis(t Test, namespace string, password string) func() string {
 			WithSpec(corev1ac.PodSpec().WithContainers(redisContainer)),
 		TestApplyOptions,
 	)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
 		t.Ctx(),
@@ -205,7 +206,7 @@ func deployRedis(t Test, namespace string, password string) func() string {
 			),
 		TestApplyOptions,
 	)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 
 	return func() string {
 		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)

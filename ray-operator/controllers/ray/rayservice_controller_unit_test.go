@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,17 +48,17 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	}
 
 	hash1, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	*cluster.Spec.WorkerGroupSpecs[0].Replicas++
 	hash2, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
 
 	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
 	cluster.Spec.RayVersion = "2.100.0"
 	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
 }
 
@@ -98,7 +100,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.Running //nolint:staticcheck // `ServiceStatus` is deprecated
+	newStatus.ServiceStatus = rayv1.Running
 	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus
@@ -155,7 +157,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Test 1: There is no head pod. `isHeadPodRunningAndReady` should return false.
 	// In addition, an error should be returned if the number of head pods is not 1.
 	isReady, err := r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.False(t, isReady)
 
 	// Test 2: There is one head pod, but the pod is not running and ready.
@@ -164,7 +166,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.False(t, isReady)
 
 	// Test 3: There is one head pod, and the pod is running and ready.
@@ -183,7 +185,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	fakeClient = clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	r.Client = fakeClient
 	isReady, err = r.isHeadPodRunningAndReady(ctx, &cluster)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.True(t, isReady)
 }
 
@@ -236,12 +238,12 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	ctx := context.TODO()
 	// Create a head service.
 	_, err := r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.Nil(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList := corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.Nil(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	require.NoError(t, err, "Fail to get service list")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	oldSvc := svcList.Items[0].DeepCopy()
 
 	// Test 1: When the service for the RayCluster already exists, it should not be updated.
@@ -252,23 +254,23 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 		},
 	}
 	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.Nil(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.Nil(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	require.NoError(t, err, "Fail to get service list")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	assert.True(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 
 	// Test 2: When the RayCluster switches, the service should be updated.
 	cluster.Name = "new-cluster"
 	_, err = r.reconcileServices(ctx, &rayService, &cluster, utils.HeadService)
-	assert.Nil(t, err, "Fail to reconcile service")
+	require.NoError(t, err, "Fail to reconcile service")
 
 	svcList = corev1.ServiceList{}
 	err = fakeClient.List(ctx, &svcList, client.InNamespace(namespace))
-	assert.Nil(t, err, "Fail to get service list")
-	assert.Equal(t, 1, len(svcList.Items), "Service list should have one item")
+	require.NoError(t, err, "Fail to get service list")
+	assert.Len(t, svcList.Items, 1, "Service list should have one item")
 	assert.False(t, reflect.DeepEqual(*oldSvc, svcList.Items[0]))
 }
 
@@ -289,7 +291,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	}
 
 	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
-	assert.Nil(t, err, "Fail to generate head service name")
+	require.NoError(t, err, "Fail to generate head service name")
 	headSvc := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      headSvcName,
@@ -318,7 +320,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	}
 
 	url, err := utils.FetchHeadServiceURL(ctx, r.Client, &cluster, utils.DashboardPortName)
-	assert.Nil(t, err, "Fail to fetch head service url")
+	require.NoError(t, err, "Fail to fetch head service url")
 	assert.Equal(t, fmt.Sprintf("test-cluster-head-svc.%s.svc.cluster.local:%d", namespace, dashboardPort), url, "Head service url is not correct")
 }
 
@@ -340,22 +342,24 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 		ApplicationStatus = "ApplicationStatus"
 	)
 
-	tests := map[string]struct {
+	tests := []struct {
 		rayServiceStatus map[string]string
 		applications     map[string]rayv1.AppStatus
+		name             string
 		expectedReady    bool
 	}{
 		// Test 1: There is no pre-existing RayServiceStatus in the RayService CR. Create a new Ray Serve application, and the application is still deploying.
-		"Create a new Ray Serve application": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOYING,
 			},
 			applications:  map[string]rayv1.AppStatus{},
+			name:          "Create a new Ray Serve application",
 			expectedReady: false,
 		},
 		// Test 2: The Ray Serve application finishes the deployment process and becomes "RUNNING".
-		"Finishes the deployment process and becomes RUNNING": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.HEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.RUNNING,
@@ -365,10 +369,11 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.RUNNING,
 				},
 			},
+			name:          "Finishes the deployment process and becomes RUNNING",
 			expectedReady: true,
 		},
 		// Test 3: Both the current Ray Serve application and RayService status are unhealthy.
-		"Both the current Ray Serve application and RayService status are unhealthy": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UNHEALTHY,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.UNHEALTHY,
@@ -378,10 +383,11 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.UNHEALTHY,
 				},
 			},
+			name:          "Both the current Ray Serve application and RayService status are unhealthy",
 			expectedReady: false,
 		},
 		// Test 4: Both the current Ray Serve application and RayService status are DEPLOY_FAILED.
-		"Both the current Ray Serve application and RayService status are DEPLOY_FAILED": {
+		{
 			rayServiceStatus: map[string]string{
 				DeploymentStatus:  rayv1.DeploymentStatusEnum.UPDATING,
 				ApplicationStatus: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
@@ -391,18 +397,20 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 					Status: rayv1.ApplicationStatusEnum.DEPLOY_FAILED,
 				},
 			},
+			name:          "Both the current Ray Serve application and RayService status are DEPLOY_FAILED",
 			expectedReady: false,
 		},
 		// Test 5: If the Ray Serve application is not found, the RayCluster is not ready to serve requests.
-		"Ray Serve application is not found": {
+		{
 			rayServiceStatus: map[string]string{},
 			applications:     map[string]rayv1.AppStatus{},
+			name:             "Ray Serve application is not found",
 			expectedReady:    false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			var dashboardClient utils.RayDashboardClientInterface
 			if len(tc.rayServiceStatus) != 0 {
 				dashboardClient = initFakeDashboardClient(serveAppName, tc.rayServiceStatus[DeploymentStatus], tc.rayServiceStatus[ApplicationStatus])
@@ -410,7 +418,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 				dashboardClient = &utils.FakeRayDashboardClient{}
 			}
 			isReady, _, err := getAndCheckServeStatus(ctx, dashboardClient)
-			assert.Nil(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tc.expectedReady, isReady)
 		})
 	}
@@ -480,7 +488,7 @@ func TestReconcileRayCluster_CreatePendingCluster(t *testing.T) {
 	}
 
 	activeRayCluster, pendingRayCluster, err := r.reconcileRayCluster(ctx, &rayService)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, activeRayCluster)
 	assert.Equal(t, "pending-cluster", pendingRayCluster.Name)
 }
@@ -504,7 +512,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	activeClusterTemplate := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-cluster",
@@ -557,14 +565,14 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 			}
 
 			activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
-			assert.Nil(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, cluster.Name, activeCluster.Name)
 			assert.Nil(t, pendingCluster)
 
 			if test.updateKubeRayVersion {
 				assert.Equal(t, utils.KUBERAY_VERSION, activeCluster.Annotations[utils.KubeRayVersion])
 			}
-			assert.Equal(t, expectedWorkerGroupCount, len(activeCluster.Spec.WorkerGroupSpecs))
+			assert.Len(t, activeCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 		})
 	}
 }
@@ -588,7 +596,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-cluster",
@@ -616,10 +624,10 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	}
 
 	activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, activeCluster)
 	assert.Equal(t, cluster.Name, pendingCluster.Name)
-	assert.Equal(t, expectedWorkerGroupCount, len(pendingCluster.Spec.WorkerGroupSpecs))
+	assert.Len(t, pendingCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 }
 
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
@@ -636,35 +644,40 @@ func initFakeRayHttpProxyClient(isHealthy bool) utils.RayHttpProxyClientInterfac
 }
 
 func TestLabelHeadPodForServeStatus(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name                       string
 		expectServeResult          string
 		excludeHeadPodFromServeSvc bool
 		isHealthy                  bool
 	}{
-		"Ray serve application is running, excludeHeadPodFromServeSvc is true": {
-			"false",
-			true,
-			true,
+		{
+			name:                       "Ray serve application is running, excludeHeadPodFromServeSvc is true",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: true,
+			isHealthy:                  true,
 		},
-		"Ray serve application is running, excludeHeadPodFromServeSvc is false": {
-			"true",
-			false,
-			true,
+		{
+			name:                       "Ray serve application is running, excludeHeadPodFromServeSvc is false",
+			expectServeResult:          "true",
+			excludeHeadPodFromServeSvc: false,
+			isHealthy:                  true,
 		},
-		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true": {
-			"false",
-			true,
-			false,
+		{
+			name:                       "Ray serve application is unhealthy, excludeHeadPodFromServeSvc is true",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: true,
+			isHealthy:                  false,
 		},
-		"Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false": {
-			"false",
-			false,
-			false,
+		{
+			name:                       "Ray serve application is unhealthy, excludeHeadPodFromServeSvc is false",
+			expectServeResult:          "false",
+			excludeHeadPodFromServeSvc: false,
+			isHealthy:                  false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(newScheme)
 
@@ -708,12 +721,12 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 				},
 			}
 
-			err := r.updateHeadPodServeLabel(ctx, &cluster, tc.excludeHeadPodFromServeSvc)
-			assert.NoError(t, err)
+			err := r.updateHeadPodServeLabel(ctx, &rayv1.RayService{}, &cluster, tc.excludeHeadPodFromServeSvc)
+			require.NoError(t, err)
 			// Get latest headPod status
 			headPod, err = common.GetRayClusterHeadPod(ctx, r, &cluster)
 			assert.Equal(t, headPod.Labels[utils.RayClusterServingServiceLabelKey], tc.expectServeResult)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -728,6 +741,24 @@ func TestCalculateConditions(t *testing.T) {
 		expectedReason          string
 		rayServiceInstance      rayv1.RayService
 	}{
+		{
+			name:                    "initial RayServiceReady",
+			rayServiceInstance:      rayv1.RayService{},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializing),
+		},
+		{
+			name:                    "initial RayServiceInitializing",
+			rayServiceInstance:      rayv1.RayService{},
+			conditionType:           rayv1.UpgradeInProgress,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializing),
+		},
 		{
 			name: "Ready condition remains false unchanged",
 			rayServiceInstance: rayv1.RayService{
@@ -841,7 +872,6 @@ func TestCalculateConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initConditions(&tt.rayServiceInstance)
 			meta.SetStatusCondition(&tt.rayServiceInstance.Status.Conditions, metav1.Condition{
 				Type:   string(tt.conditionType),
 				Status: tt.originalConditionStatus,
@@ -936,7 +966,7 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			rayService.Namespace = "test-namespace"
 			clusterName := "test-cluster"
 			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme.Scheme)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Check ObjectMeta of the RayCluster
 			assert.Equal(t, rayCluster.ObjectMeta.Name, clusterName)
@@ -949,8 +979,8 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			// Check annotations for metadata
 			assert.NotEmpty(t, rayCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey])
 			expectedNumWorkerGroups := strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs))
-			assert.Equal(t, rayCluster.Annotations[utils.NumWorkerGroupsKey], expectedNumWorkerGroups)
-			assert.Equal(t, rayCluster.Annotations[utils.KubeRayVersion], utils.KUBERAY_VERSION)
+			assert.Equal(t, expectedNumWorkerGroups, rayCluster.Annotations[utils.NumWorkerGroupsKey])
+			assert.Equal(t, utils.KUBERAY_VERSION, rayCluster.Annotations[utils.KubeRayVersion])
 
 			// Check whether the RayService's labels are copied to the RayCluster
 			for key, value := range rayService.Labels {
@@ -1046,7 +1076,7 @@ func TestIsClusterSpecHashEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			service := rayService.DeepCopy()
 			hash, err := generateHashWithoutReplicasAndWorkersToDelete(service.Spec.RayClusterSpec)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			cluster := rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -1085,7 +1115,7 @@ func TestShouldPrepareNewCluster_PrepareNewCluster(t *testing.T) {
 		},
 	}
 
-	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, nil)
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, nil, false)
 	assert.True(t, shouldPrepareNewCluster)
 }
 
@@ -1109,7 +1139,7 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 	}
 
 	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      activeClusterName,
@@ -1124,6 +1154,128 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 
 	// Update cluster spec in RayService to trigger a zero downtime upgrade.
 	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
-	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil)
+	shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, activeCluster, nil, false)
 	assert.True(t, shouldPrepareNewCluster)
+}
+
+func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
+	// A new cluster will not be created if the K8s services are pointing to the pending cluster.
+	ctx := context.TODO()
+	namespace := "test-namespace"
+	pendingClusterName := "pending-cluster"
+
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				RayVersion: "old-version",
+			},
+		},
+	}
+
+	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	require.NoError(t, err)
+	pendingCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pendingClusterName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+			},
+		},
+	}
+	rayService.Spec.RayClusterSpec.RayVersion = "new-version"
+
+	t.Run("override the pending cluster if it is not serving", func(t *testing.T) {
+		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, false)
+		assert.True(t, shouldPrepareNewCluster)
+	})
+
+	t.Run("do not override the pending cluster if it is serving", func(t *testing.T) {
+		shouldPrepareNewCluster := shouldPrepareNewCluster(ctx, &rayService, nil, pendingCluster, true)
+		assert.False(t, shouldPrepareNewCluster)
+	})
+}
+
+func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
+	tests := []struct {
+		name                     string
+		upgradeStrategy          *rayv1.RayServiceUpgradeStrategy
+		enableZeroDowntimeEnvVar string // "true" or "false" or "" (not set)
+		expected                 bool
+	}{
+		{
+			// The most common case.
+			name:                     "both upgrade strategy and env var are not set",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is not set, but env var is set to true",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is not set, but env var is set to false",
+			upgradeStrategy:          nil,
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster, and env var is not set",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to NewCluster, and env var is set to false",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 true,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is not set",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is set to true",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "true",
+			expected:                 false,
+		},
+		{
+			name:                     "upgrade strategy is set to None, and env var is set to false",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			enableZeroDowntimeEnvVar: "false",
+			expected:                 false,
+		},
+	}
+
+	ctx := context.TODO()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				os.Unsetenv(ENABLE_ZERO_DOWNTIME)
+			}()
+
+			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
+			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
+			assert.Equal(t, tt.expected, isEnabled)
+		})
+	}
 }

@@ -25,7 +25,7 @@ func TestRayJobRecovery(t *testing.T) {
 	jobsAC := newConfigMap(namespace.Name, files(test, "long_running_counter.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	test.T().Logf("Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
+	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
 	test.T().Run("RayJob should recover after pod deletion", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
@@ -41,14 +41,14 @@ env_vars:
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
-		test.T().Logf("Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		test.T().Logf("Waiting for RayJob %s/%s to start running", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to start running", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
-		test.T().Logf("Find RayJob %s/%s running", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Find RayJob %s/%s running", rayJob.Namespace, rayJob.Name)
 		// wait for the job to run a bit
-		test.T().Logf("Sleep RayJob %s/%s 15 seconds", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Sleep RayJob %s/%s 15 seconds", rayJob.Namespace, rayJob.Name)
 		time.Sleep(15 * time.Second)
 
 		// get the running jobpods
@@ -60,14 +60,14 @@ env_vars:
 		// remove the running jobpods
 		propagationPolicy := metav1.DeletePropagationBackground
 		for _, pod := range jobpods.Items {
-			test.T().Logf("Delete Pod %s from namespace  %s", pod.Name, rayJob.Namespace)
+			LogWithTimestamp(test.T(), "Delete Pod %s from namespace  %s", pod.Name, rayJob.Namespace)
 			err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), pod.Name, metav1.DeleteOptions{
 				PropagationPolicy: &propagationPolicy,
 			})
 			g.Expect(err).NotTo(HaveOccurred())
 		}
 
-		test.T().Logf("Waiting for new pod to be created and running for RayJob %s/%s", namespace.Name, rayJob.Name)
+		LogWithTimestamp(test.T(), "Waiting for new pod to be created and running for RayJob %s/%s", namespace.Name, rayJob.Name)
 		g.Eventually(func() ([]corev1.Pod, error) {
 			pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(
 				test.Ctx(),
@@ -86,7 +86,7 @@ env_vars:
 								continue
 							}
 						}
-						test.T().Logf("Found new running pod %s/%s", pod.Namespace, pod.Name)
+						LogWithTimestamp(test.T(), "Found new running pod %s/%s", pod.Namespace, pod.Name)
 						return true
 					}
 				}

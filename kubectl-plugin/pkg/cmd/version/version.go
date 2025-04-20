@@ -1,7 +1,11 @@
 package version
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
+	"runtime/debug"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/spf13/cobra"
@@ -12,41 +16,72 @@ import (
 var Version = "development"
 
 type VersionOptions struct {
-	configFlags *genericclioptions.ConfigFlags
-	ioStreams   *genericclioptions.IOStreams
+	cmdFactory cmdutil.Factory
+	ioStreams  *genericclioptions.IOStreams
 }
 
-func NewVersionOptions(streams genericclioptions.IOStreams) *VersionOptions {
+func NewVersionOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *VersionOptions {
 	return &VersionOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   &streams,
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewVersionCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewVersionOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewVersionCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewVersionOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "Output the version of the Ray kubectl plugin and KubeRay operator",
+		Use:          "version",
+		Short:        "Output the version of the Ray kubectl plugin and KubeRay operator",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Println("kubectl ray plugin version:", Version)
-
-			kubeClient, err := client.NewClient(cmdFactory)
+			// running cmd.Execute or cmd.ExecuteE sets the context, which will be done by root
+			k8sClient, err := client.NewClient(cmdFactory)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
 			}
-
-			operatorVersion, err := kubeClient.GetKubeRayOperatorVersion(cmd.Context())
-			if err != nil {
-				fmt.Println("Warning: KubeRay operator installation cannot be found - did you install it with the name \"kuberay-operator\"?")
-			} else {
-				fmt.Println("KubeRay operator version:", operatorVersion)
-			}
-			return nil
+			return options.Run(cmd.Context(), k8sClient, debug.ReadBuildInfo, os.Stdout)
 		},
 	}
 
 	return cmd
+}
+
+func (options *VersionOptions) Run(ctx context.Context, k8sClient client.Client, readBuildInfo func() (*debug.BuildInfo, bool), writer io.Writer) error {
+	if Version == "development" {
+		commit, buildTime, err := commitAndBuildTime(readBuildInfo)
+		if err == nil {
+			Version = fmt.Sprintf("development (%s, built %s)", commit[:7], buildTime)
+		}
+
+	}
+	fmt.Fprintln(writer, "kubectl ray plugin version:", Version)
+
+	operatorVersion, err := k8sClient.GetKubeRayOperatorVersion(ctx)
+	if err != nil {
+		wrappedError := fmt.Errorf(`warning: KubeRay operator installation cannot be found: %w. Did you install it with the name "kuberay-operator"?`, err)
+		fmt.Fprintln(writer, wrappedError)
+	} else {
+		fmt.Fprintln(writer, "KubeRay operator version:", operatorVersion)
+	}
+	return nil
+}
+
+func commitAndBuildTime(readBuildInfo func() (*debug.BuildInfo, bool)) (commit, buildtime string, err error) {
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return "", "", fmt.Errorf("no debug build info")
+	}
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			commit = setting.Value
+		case "vcs.time":
+			buildtime = setting.Value
+		}
+	}
+	if commit == "" || buildtime == "" {
+		return "", "", fmt.Errorf("missing revision or build time from build info")
+	}
+	return
 }

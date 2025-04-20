@@ -8,14 +8,14 @@ spec:
     pip:
       - modin[all]==0.31.0
   rayClusterSpec:
-    rayVersion: "2.31.0"
+    rayVersion: "2.41.0"
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.31.0
+              image: rayproject/ray:2.41.0
               ports:
                 - containerPort: 6379
                   name: gcs-server

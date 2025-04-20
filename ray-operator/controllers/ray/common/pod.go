@@ -74,7 +74,7 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
 	// Configure environment variables, annotations, and rayStartParams for GCS fault tolerance.
 	// Note that both `podTemplate` and `instance` will be modified.
-	ftEnabled := utils.IsGCSFaultToleranceEnabled(instance)
+	ftEnabled := utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations)
 	if podTemplate.Annotations == nil {
 		podTemplate.Annotations = make(map[string]string)
 	}
@@ -165,7 +165,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
-	podTemplate.GenerateName = podName
+	podTemplate.Name = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
@@ -179,7 +179,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	initTemplateAnnotations(instance, &podTemplate)
 
 	// if in-tree autoscaling is enabled, then autoscaler container should be injected into head pod.
-	if utils.IsAutoscalingEnabled(&instance) {
+	if utils.IsAutoscalingEnabled(&instance.Spec) {
 		// The default autoscaler is not compatible with Kubernetes. As a result, we disable
 		// the monitor process by default and inject a KubeRay autoscaler side container into the head pod.
 		headSpec.RayStartParams["no-monitor"] = "true"

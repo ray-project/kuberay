@@ -29,6 +29,12 @@ func TestRayCluster(t *testing.T) {
 			name: "ray-cluster.custom-head-service.yaml",
 		},
 		{
+			name: "ray-cluster.deprecate-gcs-ft.yaml",
+		},
+		{
+			name: "ray-cluster.persistent-redis.yaml",
+		},
+		{
 			name: "ray-cluster.embed-grafana.yaml",
 		},
 		{
@@ -39,9 +45,6 @@ func TestRayCluster(t *testing.T) {
 		},
 		{
 			name: "ray-cluster.head-command.yaml",
-		},
-		{
-			name: "ray-cluster.heterogeneous.yaml",
 		},
 		{
 			name: "ray-cluster.overwrite-command.yaml",
@@ -67,6 +70,7 @@ func TestRayCluster(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
+			g.ConfigureWithT(WithRayClusterResourceLogger(test))
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
@@ -77,7 +81,7 @@ func TestRayCluster(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayCluster).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
+			LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be ready", namespace.Name, rayCluster.Name)
 			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 				Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).

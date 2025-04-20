@@ -1,4 +1,6 @@
+<!-- markdownlint-disable MD013 -->
 # RayService high availability
+
 RayService provides high availability (HA) to ensure services continue serving requests without failure during scaling up, scaling down, and upgrading the RayService configuration (zero-downtime upgrade).
 
 ## Quickstart
@@ -10,9 +12,11 @@ kind create cluster --image=kindest/node:v1.24.0
 ```
 
 ### Step 2: Install the KubeRay operator
+
 Follow the instructions in [this document](/helm-chart/kuberay-operator/README.md) to install the latest stable KubeRay operator, or follow the instructions in [DEVELOPMENT.md](/ray-operator/DEVELOPMENT.md) to install the nightly KubeRay operator.
 
 ### Step 3: Create a RayService and a locust cluster
+
 ```sh
 # Path: kuberay/
 kubectl apply -f ./ray-operator/config/samples/ray-service.high-availability-locust.yaml
@@ -22,12 +26,15 @@ kubectl get pod
 # locust-cluster-head-6clr5                   1/1     Running   0          38s
 # rayservice-ha-raycluster-pfh8b-head-58xkr   2/2     Running   0          36s
 ```
+
 The [ray-service.high-availability-locust.yaml](/ray-operator/config/samples/ray-service.high-availability-locust.yaml) has several Kubernetes objects:
+
 - A RayService with serve autoscaling and Pod autoscaling enabled.
 - A RayCluster functioning as locust cluster to simulate users sending requests.
 - A configmap with a locustfile sets user request levels: starts low, spikes, then drops.
 
 ### Step 4: Use Locust cluster to simulate users sending requests
+
 ```sh
 # Open a new terminal and log into the locust cluster.
 kubectl exec -it $(kubectl get pods -o=name | grep locust-cluster-head) -- bash
@@ -64,18 +71,22 @@ watch -n 1 "kubectl get pod"
 # rayservice-ha-raycluster-pfh8b-worker-worker-nt98j   0/1     Terminating   0          109s
 # rayservice-ha-raycluster-pfh8b-worker-worker-rd22n   1/1     Running       0          2m29s
 ```
+
 Let's describe how KubeRay and Ray ensure high availability during scaling, using the example provided.
 
 In the above example, the RayService configuration is as follows:
+
 - Every node can have at most one serve replica.
 - The initial number of serve replicas is set to zero.
 - The head node will not be scheduled for any workloads to follow best practices.
 
 With the above settings, when serve replicas scale up:
+
 1. KubeRay creates a new worker Pod. Since no serve replicas are currently running, the readiness probe for the new Pod fails. As a result, the endpoint is not added to the serve service.
 2. Ray then schedules a new serve replica to the newly created worker Pod. Once the serve replica is running, the readiness probe passes, and the endpoint is added to the serve service.
 
 When serve replicas scale down:
+
 1. The proxy actor in the worker Pod that is scaling down changes its stage to `draining`. The readiness probe fails immediately, and the endpoint starts to be removed from the serve service. However, this process takes some time, so incoming requests are still redirected to this worker Pod for a short period.
 2. During the draining stage, the proxy actor can still redirect incoming requests. The proxy actor is only removed and changes to the `drained` stage when the following conditions are met:
     - There are no ongoing requests.
@@ -87,7 +98,9 @@ When serve replicas scale down:
   > Note, the default value of `RAY_SERVE_PROXY_MIN_DRAINING_PERIOD_S` is 30s. You may change it to fit with your k8s cluster.
 
 ### Step 6: Verify high availability during upgrade
+
 The locust cluster will continue sending requests for 600s. Before the 600s is up, upgrade the RayService configuration by adding a new environment variable. This will trigger a rolling update. You can verify the high availability by observing the Ray Pod and the failure rate in the locust terminal.
+
 ```sh
 kubectl patch rayservice rayservice-ha --type='json' -p='[
   {
@@ -116,14 +129,18 @@ watch -n 1 "kubectl get pod"
 # rayservice-ha-raycluster-pfh8b-head-58xkr            2/2     Terminating   0          5m57s
 # rayservice-ha-raycluster-pfh8b-worker-worker-rd22n   1/1     Terminating   0          4m48s
 ```
+
 When a new configuration is applied, the Kuberay operator always creates a new RayCluster with the new configuration and then removes the old RayCluster.
 Here are the details of the rolling update:
+
 1. KubeRay creates a new RayCluster with the new configuration. At this time, all requests are still being served by the old RayCluster.
 2. After the new RayCluster and the server app on it are ready, KubeRay updates the serve service to redirect the traffic to the new RayCluster. At this point, traffic is being served by both the old and new RayCluster as it takes time to update the k8s service.
 3. After the serve service is fully updated, KubeRay removes the old RayCluster. The traffic is now fully served by the new RayCluster.
 
 ### Step 7: Examine the locust results
+
 In your locust terminal, You will see the failed rate is 0.00%.
+
 ```sh
       # fails |
 |-------------|
@@ -133,6 +150,7 @@ In your locust terminal, You will see the failed rate is 0.00%.
 ```
 
 ### Step 8: Clean up
+
 ```sh
 kubectl delete -f ./ray-operator/config/samples/ray-service.high-availability-locust.yaml
 kind delete cluster

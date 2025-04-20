@@ -83,6 +83,7 @@ linters:
     - unparam
     - unused
     - wastedassign
+    - testifylint
   disable-all: true
 issues:
   max-issues-per-linter: 0

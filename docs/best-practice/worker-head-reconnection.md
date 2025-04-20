@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Explanation and Best Practice for workers-head Reconnection
 
 ## Problem
@@ -11,7 +12,7 @@ It was an issue that only happened with old version In the Kuberay version under
 
 When the head pod was deleted, it will be recreated with a new IP by KubeRay controller，and the GCS server address is changed accordingly. The Raylets of all workers will try to get GCS address from Redis in `ReconnectGcsServer`, but the redis_clients always use the previous head IP, so they will always fail to get new GCS address. The Raylets will not exit until max retries are reached. There are two configurations determining this long delay:
 
-```
+```text
 /// The interval at which the gcs rpc client will check if gcs rpc server is ready.
 RAY_CONFIG(int64_t, ping_gcs_rpc_server_interval_milliseconds, 1000)
 
@@ -24,6 +25,7 @@ https://github.com/ray-project/ray/blob/98be9fb5e08befbd6cac3ffbcaa477c5117b0eef
 It retries 600 times and each interval is 1s, resulting in total 600s timeout, i.e. 10 min. So immediately after 10-min wait for retries, each client exits and gets restarted while connecting to the new head IP. This issue exists in stable ray versions under 1.9.1. This has been reduced to 60s in recent commit under Kuberay 0.3.0.
 
 ## Solution
+
 We recommend using the latest version of KubeRay. After version 0.5.0, the GCS Fault-Tolerance feature is now in beta and can help resolve this reconnection issue.
 
 ## Best Practice

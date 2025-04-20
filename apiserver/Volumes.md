@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # Volumes support for Ray cluster by the API server
 
 API server allows to specify multiple types of volumes mounted to the Ray pods (nodes). These include:

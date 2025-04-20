@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -19,34 +21,44 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 	return nil
 }
 
+func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayClusterNameLength {
+		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayCluster name should be a valid DNS1035 label: %v", errs)
+	}
+	return nil
+}
+
 // Validation for invalid Ray Cluster configurations.
-func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
-	if len(instance.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+	for _, workerGroup := range spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 	}
 
-	if instance.Annotations[RayFTEnabledAnnotationKey] != "" && instance.Spec.GcsFaultToleranceOptions != nil {
+	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
 		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
 			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", RayFTEnabledAnnotationKey)
 	}
 
-	if !IsGCSFaultToleranceEnabled(*instance) {
-		if EnvVarExists(RAY_REDIS_ADDRESS, instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
+	if !IsGCSFaultToleranceEnabled(spec, annotations) {
+		if EnvVarExists(RAY_REDIS_ADDRESS, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
 			return fmt.Errorf("%s is set which implicitly enables GCS fault tolerance, "+
 				"but GcsFaultToleranceOptions is not set. Please set GcsFaultToleranceOptions "+
 				"to enable GCS fault tolerance", RAY_REDIS_ADDRESS)
 		}
 	}
 
-	headContainer := instance.Spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
-	if instance.Spec.GcsFaultToleranceOptions != nil {
-		if redisPassword := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
+	headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+	if spec.GcsFaultToleranceOptions != nil {
+		if redisPassword := spec.HeadGroupSpec.RayStartParams["redis-password"]; redisPassword != "" {
 			return fmt.Errorf("cannot set `redis-password` in rayStartParams when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisPassword instead")
 		}
@@ -61,26 +73,26 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.RedisAddress instead")
 		}
 
-		if instance.Annotations[RayExternalStorageNSAnnotationKey] != "" {
+		if annotations[RayExternalStorageNSAnnotationKey] != "" {
 			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
 		}
 	}
-	if instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
+	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
 		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
 			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}
 
 	if !features.Enabled(features.RayJobDeletionPolicy) {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
 			}
 		}
 	}
 
-	if IsAutoscalingEnabled(instance) {
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+	if IsAutoscalingEnabled(spec) {
+		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
 				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
@@ -93,6 +105,16 @@ func ValidateRayClusterSpec(instance *rayv1.RayCluster) error {
 func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusWaiting && rayJob.Spec.SubmissionMode != rayv1.InteractiveMode {
 		return fmt.Errorf("invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode")
+	}
+	return nil
+}
+
+func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayJobNameLength {
+		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayJob name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }
@@ -112,6 +134,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+
+	if rayJob.Spec.RayClusterSpec != nil {
+		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
+			return err
+		}
+	}
+
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
 	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
@@ -138,7 +167,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 			}
 		}
 
-		if policy == rayv1.DeleteWorkersDeletionPolicy && IsAutoscalingEnabled(rayJob) {
+		if policy == rayv1.DeleteWorkersDeletionPolicy && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
 			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
 			return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 		}
@@ -150,7 +179,21 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	return nil
 }
 
+func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
+	if len(metadata.Name) > MaxRayServiceNameLength {
+		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
+	}
+	return nil
+}
+
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
+		return err
+	}
+
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}

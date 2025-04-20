@@ -54,6 +54,14 @@ all: build
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+##@ Deployment
+
+.PHONY: start-local-apiserver ## Build and start apiserver from scratch.
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run
+
+.PHONY: clean-local-apiserver ## Clear local apiserver.
+clear-local-apiserver: clean-cluster
+
 ##@ Development
 
 .PHONY:
@@ -75,9 +83,9 @@ imports: goimports ## Run goimports against code.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	# exclude the SA1019 check which checks the usage of deprecated fields.
-	$(GOLANGCI_LINT) run  --timeout=3m --exclude='SA1019' --no-config
+	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
 
-build: fmt vet fumpt imports lint ## Build api server binary.
+build: fmt vet fumpt imports ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
@@ -90,12 +98,12 @@ build-swagger: go-bindata
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports lint  ## Run all unit tests.
-	go test ./pkg/... ./cmd/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
+test: fmt vet fumpt imports ## Run all unit tests.
+	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
 
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
-	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -count=1 -parallel 4
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
 local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
@@ -128,7 +136,7 @@ security-proxy-image: ## Build the security proxy image to be loaded in your kin
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
 # Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
-# If you are using a Kind cluster for development, you can run `make load-image` to load the newly built image into the Kind cluster.
+# If you are using a Kind cluster for development, you can run `make load-operator-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
 	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
 
@@ -154,8 +162,6 @@ endif
 load-ray-test-image: ## Load the ray test images
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
 	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
-	$(ENGINE) pull rayproject/ray:latest
-	$(KIND) load docker-image rayproject/ray:latest -n $(KIND_CLUSTER_NAME)
 
 ##@ Docker Build
 docker-image: test ## Build image for the api server.
@@ -213,7 +219,7 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 KUSTOMIZE_VERSION ?= v5.4.3
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.54.1
+GOLANGCI_LINT_VERSION ?= v1.64.8
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 

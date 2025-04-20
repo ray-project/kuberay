@@ -2,60 +2,49 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# -- String to partially override release name.
+nameOverride: kuberay-operator
+
+# -- String to fully override release name.
+fullnameOverride: kuberay-operator
+
+# -- String to override component name.
+componentOverride: kuberay-operator
+
 image:
+  # -- Image repository.
   repository: quay.io/kuberay/operator
+
+  # -- Image tag.
   tag: nightly
+
+  # -- Image pull policy.
   pullPolicy: IfNotPresent
 
-nameOverride: "kuberay-operator"
-fullnameOverride: "kuberay-operator"
+# -- Extra labels.
+labels: {}
+
+# -- Extra annotations.
+annotations: {}
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Specifies whether a service account should be created.
   create: true
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: "kuberay-operator"
-
-service:
-  type: ClusterIP
-  port: 8080
-
-resources:
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do whelm to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  limits:
-    cpu: 100m
-    # Anecdotally, managing 500 Ray pods requires roughly 500MB memory.
-    # Monitor memory usage and adjust as needed.
-    memory: 512Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 512Mi
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template.
+  name: kuberay-operator
 
 logging:
-  # Log encoder to use for stdout (one of 'json' or 'console', default is 'json')
-  stdoutEncoder: ""
-  # Log encoder to use for file logging (one of 'json' or 'console', default is 'json')
-  fileEncoder: ""
-  # Directory for kuberay-operator log file
+  # -- Log encoder to use for stdout (one of `json` or `console`).
+  stdoutEncoder: json
+  # -- Log encoder to use for file logging (one of `json` or `console`).
+  fileEncoder: json
+  # -- Directory for kuberay-operator log file.
   baseDir: ""
-  # File name for kuberay-operator log file
+  # -- File name for kuberay-operator log file.
   fileName: ""
-  # EmptyDir volume size limit for kuberay-operator log file
+  # -- EmptyDir volume size limit for kuberay-operator log file.
   sizeLimit: ""
-
-livenessProbe:
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  failureThreshold: 5
-
-readinessProbe:
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  failureThreshold: 5
 
 # Enable customized Kubernetes scheduler integration. If enabled, Ray workloads will be scheduled
 # by the customized scheduler.
@@ -87,40 +76,30 @@ batchScheduler:
   name: ""
 
 featureGates:
-  - name: RayClusterStatusConditions
-    enabled: true
-  - name: RayJobDeletionPolicy
-    enabled: false
+- name: RayClusterStatusConditions
+  enabled: true
+- name: RayJobDeletionPolicy
+  enabled: false
 
-# Path to the operator binary
+# Configurations for KubeRay operator metrics.
+metrics:
+  # -- Whether KubeRay operator should emit control plane metrics.
+  enabled: true
+
+# -- Path to the operator binary
 operatorComand: /manager
-
-# Set up `securityContext` to improve Pod security.
-# See https://github.com/ray-project/kuberay/blob/master/docs/guidance/pod-security.md for further guidance.
-podSecurityContext: {}
-
-# Set up `securityContext` to improve container security.
-securityContext:
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  capabilities:
-    drop:
-    - ALL
-  runAsNonRoot: true
-  seccompProfile:
-    type: RuntimeDefault
 
 # if userKubernetesProxy is set to true, the KubeRay operator will be configured with the --use-kubernetes-proxy flag.
 # Using this option to configure kuberay-operator to comunitcate to Ray head pods by proxying through the Kubernetes API Server.
 # useKubernetesProxy: true
 
-# If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
+# -- If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true
 
-# If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
+# -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
 
-# When crNamespacedRbacEnable is set to true, the KubeRay operator will create a Role for RayCluster preparation (e.g., Pods, Services)
+# -- When crNamespacedRbacEnable is set to true, the KubeRay operator will create a Role for RayCluster preparation (e.g., Pods, Services)
 # and a corresponding RoleBinding for each namespace listed in the "watchNamespace" parameter. Please note that even if crNamespacedRbacEnable
 # is set to false, the Role and RoleBinding for leader election will still be created.
 #
@@ -129,7 +108,7 @@ rbacEnable: true
 # (2) In most cases, it should be set to true, unless you are using a Kubernetes cluster managed by GitOps tools such as ArgoCD.
 crNamespacedRbacEnable: true
 
-# When singleNamespaceInstall is true:
+# -- When singleNamespaceInstall is true:
 # - Install namespaced RBAC resources such as Role and RoleBinding instead of cluster-scoped ones like ClusterRole and ClusterRoleBinding so that
 #   the chart can be installed by users with permissions restricted to a single namespace.
 #   (Please note that this excludes the CRDs, which can only be installed at the cluster scope.)
@@ -142,7 +121,8 @@ singleNamespaceInstall: false
 #   - n1
 #   - n2
 
-# Environment variables
+# -- Environment variables.
+
 env:
 # If not set or set to true, kuberay auto injects an init container waiting for ray GCS.
 # If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
@@ -180,3 +160,46 @@ env:
 # If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
 #   value: "false"
+
+# -- Resource requests and limits for containers.
+resources:
+  limits:
+    cpu: 100m
+    # Anecdotally, managing 500 Ray pods requires roughly 500MB memory.
+    # Monitor memory usage and adjust as needed.
+    memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 512Mi
+
+# @Ignore -- Pod liveness probe configuration.
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 5
+
+# @Ignore -- Pod readiness probe configuration.
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 5
+
+# -- Set up `securityContext` to improve Pod security.
+podSecurityContext: {}
+
+# @ignore -- Set up `securityContext` to improve container security.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Service port.
+  port: 8080

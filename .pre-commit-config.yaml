@@ -2,6 +2,9 @@
 # See https://pre-commit.com/hooks.html for more hooks
 exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
 
+default_language_version:
+  golang: 1.23.2
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -27,50 +30,58 @@ repos:
     hooks:
       - id: gitleaks
 
-  - repo: local
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
     hooks:
-      - id: check-golangci-lint-version
-        name: golangci-lint version check
-        entry: bash -c 'version="1.60.3"; [ "$(golangci-lint --version | awk "/version/ {print \$4}" | sed "s/^v//")" = "$version" ] || { echo "golangci-lint version is not $version"; exit 1; }'
-        language: system
-        always_run: true
-        fail_fast: true
-        pass_filenames: false
+      - id: shellcheck
 
   - repo: local
     hooks:
-      - id: golangci-lint-ray-operator
-        name: golangci-lint (ray-operator)
-        entry: bash -c 'cd ray-operator && golangci-lint run --fix --exclude-files _generated.go --timeout 10m0s; status=$?; cd ..; exit $status'
-        types: [ go ]
+      - id: golangci-lint
+        name: golangci-lint
+        entry: ./scripts/lint.sh
+        types: [go]
         language: golang
         require_serial: true
-        files: ^ray-operator/
-
-  - repo: local
-    hooks:
-      - id: golangci-lint-kubectl-plugin
-        name: golangci-lint (kubectl-plugin)
-        entry: bash -c 'cd kubectl-plugin && golangci-lint run --fix --timeout 10m0s; status=$?; cd ..; exit $status'
-        types: [ go ]
-        language: golang
-        require_serial: true
-        files: ^kubectl-plugin/
-
-  - repo: local
-    hooks:
-      - id: check-kubeconform-version
-        name: kubeconform version check
-        entry: bash -c 'version="0.6.7"; [ "$(kubeconform -v | awk -F"v" "{print \$2}")" = "$version" ] || { echo "kubeconform version is not $version"; exit 1; }'
-        language: system
         always_run: true
-        fail_fast: true
         pass_filenames: false
-
-  - repo: local
-    hooks:
+        additional_dependencies:
+          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - id: generate-crd-schema
+        name: generate CRD schemas for use of kubeconform
+        entry: ./scripts/generate-crd-schema.sh
+        language: python
+        require_serial: true
+        always_run: true
+        pass_filenames: false
+        additional_dependencies:
+          - PyYAML==6.0.1
       - id: validate-helm-charts
         name: validate helm charts with kubeconform
         entry: bash scripts/validate-helm.sh
-        language: system
+        language: golang
+        require_serial: true
+        always_run: true
         pass_filenames: false
+        additional_dependencies:
+          - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.44.0
+    hooks:
+      - id: markdownlint-fix
+        name: Markdown linting
+        args:
+          - --ignore=.github/pull_request_template.md
+          - --disable=MD033
+
+  - repo: https://github.com/norwoodj/helm-docs
+    rev: v1.14.2
+    hooks:
+      - id: helm-docs-built
+        args:
+          # Make the tool search for charts only under the `helm-chart` directory
+          - --chart-search-root=helm-chart
+          - --chart-to-generate=helm-chart/kuberay-operator
+          - --template-files=README.md.gotmpl
+          - --sort-values-order=file

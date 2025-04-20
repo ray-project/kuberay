@@ -40,8 +40,9 @@ const (
 
 type SubmitJobOptions struct {
 	ioStreams          *genericiooptions.IOStreams
-	configFlags        *genericclioptions.ConfigFlags
+	cmdFactory         cmdutil.Factory
 	RayJob             *rayv1.RayJob
+	namespace          string
 	submissionID       string
 	entryPoint         string
 	fileName           string
@@ -60,8 +61,10 @@ type SubmitJobOptions struct {
 	image              string
 	headCPU            string
 	headMemory         string
+	headGPU            string
 	workerCPU          string
 	workerMemory       string
+	workerGPU          string
 	entryPointCPU      float32
 	entryPointGPU      float32
 	entryPointMemory   int
@@ -72,49 +75,48 @@ type SubmitJobOptions struct {
 
 var (
 	jobSubmitLong = templates.LongDesc(`
-		Submit ray job to ray cluster as one would using ray CLI e.g. 'ray job submit ENTRYPOINT'. Command supports all options that 'ray job submit' supports, except '--address'.
-		If RayCluster is already setup, use 'kubectl ray session' instead.
+		Submit Ray job to Ray cluster as one would using Ray CLI e.g. 'ray job submit ENTRYPOINT'. Command supports all options that 'ray job submit' supports, except '--address'.
+		If Ray cluster is already setup, use 'kubectl ray session' instead.
 
-		If no rayjob yaml file is specified, the command will create a default rayjob for the user.
+		If no RayJob YAML file is specified, the command will create a default RayJob for the user.
 
-		Command will apply RayJob CR and also submit the ray job. RayJob CR is required.
+		Command will apply RayJob CR and also submit the Ray job. RayJob CR is required.
 	`)
 
-	jobSubmitExample = templates.Examples(`
-		# Submit ray job with working-directory
+	jobSubmitExample = templates.Examples(fmt.Sprintf(`
+		# Submit Ray job with working-directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ -- python my_script.py
 
-		# Submit ray job with runtime Env file and working directory
+		# Submit Ray job with runtime Env file and working directory
 		kubectl ray job submit -f rayjob.yaml --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
 
-		# Submit ray job with runtime Env file assuming runtime-env has working_dir set
+		# Submit Ray job with runtime Env file assuming runtime-env has working_dir set
 		kubectl ray job submit -f rayjob.yaml --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 
-		# Submit generated ray job with default values and with runtime Env file and working directory
+		# Submit generated Ray job with default values and with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
 
-		# Generate ray job with specifications and submit ray job with runtime Env file and working directory
-		kubectl ray job submit --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+		# Generate Ray job with specifications and submit Ray job with runtime Env file and working directory
+		kubectl ray job submit --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --head-gpu 1 --worker-replicas 3 --worker-cpu 1 --work-gpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 
-		# Generate ray job with specifications and print out the generated rayjob in yaml format
-		kubectl ray job submit --dry-run --name rayjob-sample --ray-version 2.39.0 --image rayproject/ray:2.39.0 --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
-	`)
+		# Generate Ray job with specifications and print out the generated RayJob YAML
+		kubectl ray job submit --dry-run --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
+	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))
 )
 
-func NewJobSubmitOptions(streams genericiooptions.IOStreams) *SubmitJobOptions {
+func NewJobSubmitOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SubmitJobOptions {
 	return &SubmitJobOptions{
-		ioStreams:   &streams,
-		configFlags: genericclioptions.NewConfigFlags(true),
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewJobSubmitOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewJobSubmitOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:     "submit [OPTIONS] -f/--filename RAYJOB_YAML -- ENTRYPOINT",
-		Short:   "Submit ray job to ray cluster",
+		Short:   "Submit Ray job to Ray cluster",
 		Long:    jobSubmitLong,
 		Example: jobSubmitExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -123,7 +125,7 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 			}
 			options.entryPoint = strings.Join(args[entryPointStart:], " ")
-			if err := options.Complete(); err != nil {
+			if err := options.Complete(cmd); err != nil {
 				return err
 			}
 			if err := options.Validate(); err != nil {
@@ -133,38 +135,44 @@ func NewJobSubmitCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&options.fileName, "filename", "f", options.fileName, "Path and name of the Ray Job YAML file")
-	cmd.Flags().StringVar(&options.submissionID, "submission-id", options.submissionID, "ID to specify for the ray job. If not provided, one will be generated")
+	cmd.Flags().StringVar(&options.submissionID, "submission-id", options.submissionID, "ID to specify for the Ray job. If not provided, one will be generated")
 	cmd.Flags().StringVar(&options.runtimeEnv, "runtime-env", options.runtimeEnv, "Path and name to the runtime env YAML file.")
 	cmd.Flags().StringVar(&options.workingDir, "working-dir", options.workingDir, "Directory containing files that your job will run in")
 	cmd.Flags().StringVar(&options.headers, "headers", options.headers, "Used to pass headers through http/s to Ray Cluster. Must be JSON formatting")
-	cmd.Flags().StringVar(&options.runtimeEnvJson, "runtime-env-json", options.runtimeEnvJson, "JSON-serialized runtime_env dictionary. Precedence over ray job CR.")
-	cmd.Flags().StringVar(&options.verify, "verify", options.verify, "Boolean indication to verify the server’s TLS certificate or a path to a file or directory of trusted certificates.")
+	cmd.Flags().StringVar(&options.runtimeEnvJson, "runtime-env-json", options.runtimeEnvJson, "JSON-serialized runtime_env dictionary. Precedence over Ray job CR.")
+	cmd.Flags().StringVar(&options.verify, "verify", options.verify, "Boolean indication to verify the server's TLS certificate or a path to a file or directory of trusted certificates.")
 	cmd.Flags().StringVar(&options.entryPointResource, "entrypoint-resources", options.entryPointResource, "JSON-serialized dictionary mapping resource name to resource quantity")
 	cmd.Flags().StringVar(&options.metadataJson, "metadata-json", options.metadataJson, "JSON-serialized dictionary of metadata to attach to the job.")
 	cmd.Flags().StringVar(&options.logStyle, "log-style", options.logStyle, "Specific to 'ray job submit'. Options are 'auto | record | pretty'")
 	cmd.Flags().StringVar(&options.logColor, "log-color", options.logColor, "Specific to 'ray job submit'. Options are 'auto | false | true'")
-	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", options.entryPointCPU, "Number of CPU reserved for the for the entrypoint command")
-	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", options.entryPointGPU, "Number of GPU reserved for the for the entrypoint command")
+	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", options.entryPointCPU, "Number of CPUs reserved for the for the entrypoint command")
+	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", options.entryPointGPU, "Number of GPUs reserved for the for the entrypoint command")
 	cmd.Flags().IntVar(&options.entryPointMemory, "entrypoint-memory", options.entryPointMemory, "Amount of memory reserved for the entrypoint command")
 	cmd.Flags().BoolVar(&options.noWait, "no-wait", options.noWait, "If present, will not stream logs and wait for job to finish")
 
-	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Name of the ray job that will be generated")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", "2.39.0", "Ray Version to use in the Ray Cluster yaml.")
-	cmd.Flags().StringVar(&options.image, "image", "rayproject/ray:2.39.0", "Ray image to use in the Ray Cluster yaml")
-	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "Number of CPU for the ray head")
-	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "Amount of memory to use for the ray head")
-	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "Number of the worker group replicas")
-	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "Number of CPU for the ray worker")
-	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "Amount of memory to use for the ray worker")
-	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "Will not apply the generated cluster and will print out the generated yaml. Only works when filename is not provided")
+	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
+	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
+	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
+	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
+	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
+	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
+	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *SubmitJobOptions) Complete() error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	if len(options.runtimeEnv) > 0 {
@@ -178,15 +186,6 @@ func (options *SubmitJobOptions) Complete() error {
 }
 
 func (options *SubmitJobOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if len(config.CurrentContext) == 0 {
-		return fmt.Errorf("no context is currently set, use %q to select a new one", "kubectl config use-context <context>")
-	}
-
 	if len(options.runtimeEnv) > 0 {
 		info, err := os.Stat(options.runtimeEnv)
 		if os.IsNotExist(err) {
@@ -212,7 +211,7 @@ func (options *SubmitJobOptions) Validate() error {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("Ray Job file does not exist. Failed with: %w", err)
 		} else if err != nil {
-			return fmt.Errorf("Error occurred when checking ray job file: %w", err)
+			return fmt.Errorf("Error occurred when checking Ray job file: %w", err)
 		} else if !info.Mode().IsRegular() {
 			return fmt.Errorf("Filename given is not a regular file. Failed with: %w", err)
 		}
@@ -228,7 +227,7 @@ func (options *SubmitJobOptions) Validate() error {
 		}
 
 		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
-		if options.runtimeEnv == "" && options.runtimeEnvJson == "" {
+		if options.runtimeEnv == "" && options.runtimeEnvJson == "" && runtimeEnvYaml != "" {
 			runtimeJson, err := yaml.YAMLToJSON([]byte(runtimeEnvYaml))
 			if err != nil {
 				return fmt.Errorf("Failed to convert runtime env to json: %w", err)
@@ -236,7 +235,7 @@ func (options *SubmitJobOptions) Validate() error {
 			options.runtimeEnvJson = string(runtimeJson)
 		}
 	} else if strings.TrimSpace(options.rayjobName) == "" {
-		return fmt.Errorf("Must set either yaml file (--filename) or set ray job name (--name)")
+		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
 	}
 
 	if options.workingDir == "" {
@@ -245,6 +244,22 @@ func (options *SubmitJobOptions) Validate() error {
 
 	// Changed working dir clean to here instead of complete since calling Clean on empty string return "." and it would be dificult to determine if that is actually user input or not.
 	options.workingDir = filepath.Clean(options.workingDir)
+
+	resourceFields := map[string]string{
+		"head-cpu":      options.headCPU,
+		"head-gpu":      options.headGPU,
+		"head-memory":   options.headMemory,
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+
+	for name, value := range resourceFields {
+		if err := util.ValidateResourceQuantity(value, name); err != nil {
+			return fmt.Errorf("%w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -255,19 +270,32 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 
 	if options.fileName == "" {
-		// Genarate the ray job.
+		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
 			RayJobName:     options.rayjobName,
-			Namespace:      *options.configFlags.Namespace,
+			Namespace:      options.namespace,
 			SubmissionMode: "InteractiveMode",
-			RayClusterSpecObject: generation.RayClusterSpecObject{
-				RayVersion:     options.rayVersion,
-				Image:          options.image,
-				HeadCPU:        options.headCPU,
-				HeadMemory:     options.headMemory,
-				WorkerCPU:      options.workerCPU,
-				WorkerMemory:   options.workerMemory,
-				WorkerReplicas: options.workerReplicas,
+			// Prior to kuberay 1.2.2, the entry point is required. To maintain
+			// backwards compatibility with 1.2.x, we submit the entry point
+			// here, even though it will be ignored.
+			// See https://github.com/ray-project/kuberay/issues/3126.
+			Entrypoint: options.entryPoint,
+			RayClusterConfig: generation.RayClusterConfig{
+				RayVersion: &options.rayVersion,
+				Image:      &options.image,
+				Head: &generation.Head{
+					CPU:    &options.headCPU,
+					Memory: &options.headMemory,
+					GPU:    &options.headGPU,
+				},
+				WorkerGroups: []generation.WorkerGroup{
+					{
+						CPU:      &options.workerCPU,
+						Memory:   &options.workerMemory,
+						GPU:      &options.workerGPU,
+						Replicas: options.workerReplicas,
+					},
+				},
 			},
 		}
 		rayJobApplyConfig := rayJobObject.GenerateRayJobApplyConfig()
@@ -276,7 +304,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		if options.dryRun {
 			resultYaml, err := generation.ConvertRayJobApplyConfigToYaml(rayJobApplyConfig)
 			if err != nil {
-				return fmt.Errorf("Failed to convert rayjob into yaml format: %w", err)
+				return fmt.Errorf("Failed to convert RayJob into yaml format: %w", err)
 			}
 
 			fmt.Printf("%s\n", resultYaml)
@@ -284,14 +312,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 
 		// Apply the generated yaml
-		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: "ray-kubectl-plugin"})
+		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(options.namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
 		if err != nil {
-			return fmt.Errorf("Failed to apply generated yaml: %w", err)
+			return fmt.Errorf("Failed to apply generated YAML: %w", err)
 		}
 		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -301,7 +329,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?
 		for len(options.RayJob.Status.RayClusterName) == 0 {
-			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("Failed to get Ray Job status")
 			}
@@ -320,30 +348,29 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	fmt.Printf("Checking Cluster Status for cluster %s...\n", options.cluster)
 	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= clusterTimeout {
 		time.Sleep(2 * time.Second)
-		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.cluster, v1.GetOptions{})
+		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to get cluster information with error: %w", err)
 		}
 		clusterReady = isRayClusterReady(currCluster)
 		if !clusterReady {
-			err = fmt.Errorf("Cluster is not ready: %w", err)
-			fmt.Println(err)
+			fmt.Println("Cluster is not ready")
 		}
 		currTime = time.Now()
 	}
 
 	if !clusterReady {
 		fmt.Printf("Deleting RayJob...\n")
-		err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+		err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
 		if err != nil {
-			return fmt.Errorf("Failed to clean up ray job after time out.: %w", err)
+			return fmt.Errorf("Failed to clean up Ray job after time out.: %w", err)
 		}
 		fmt.Printf("Cleaned Up RayJob: %s\n", options.RayJob.GetName())
 
 		return fmt.Errorf("Timed out waiting for cluster")
 	}
 
-	svcName, err := k8sClients.GetRayHeadSvcName(ctx, *options.configFlags.Namespace, util.RayCluster, options.cluster)
+	svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
 	if err != nil {
 		return fmt.Errorf("Failed to find service name: %w", err)
 	}
@@ -412,7 +439,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 
 	go func() {
-		fmt.Printf("Running ray submit job command...\n")
+		fmt.Printf("Running Ray submit job command...\n")
 		err := cmd.Start()
 		if err != nil {
 			log.Fatalf("error occurred while running command %s: %v", fmt.Sprint(raySubmitCmd), err)
@@ -434,7 +461,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			// Running under assumption that scanner does not break up ray job name
 			if currStdToken != "" && rayJobID == "" && strings.Contains(currStdToken, "raysubmit") {
 				regexExp := regexp.MustCompile(`'([^']*raysubmit[^']*)'`)
-				// Search for rayjob name. Returns at least two string, first one has single quotes and second string does not have single quotes
+				// Search for RayJob name. Returns at least two string, first one has single quotes and second string does not have single quotes
 				match := regexExp.FindStringSubmatch(currStdToken)
 				if len(match) > 1 {
 					rayJobIDChan <- match[1]
@@ -466,23 +493,22 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if rayJobID == "" {
 		rayJobID = <-rayJobIDChan
 	}
-	// Add annotation to RayJob with the correct ray job id and update the CR
-	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+	// Add annotation to RayJob with the correct Ray job ID and update the CR
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to get latest version of Ray Job")
+		return fmt.Errorf("Failed to get latest version of Ray job: %w", err)
 	}
-
 	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.RayClient().RayV1().RayJobs(*options.configFlags.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
-		return fmt.Errorf("Error occurred when trying to add job ID to rayJob: %w", err)
+		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
 
-	// Wait for ray job submit to finish.
+	// Wait for Ray job submit to finish.
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf("Error occurred with ray job submit: %w", err)
+		return fmt.Errorf("Error occurred with Ray job submit: %w", err)
 	}
 	return nil
 }
@@ -543,7 +569,7 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	return raySubmitCmd, nil
 }
 
-// Decode rayjob yaml if we decide to submit job using kube client
+// Decode RayJob YAML if we decide to submit job using kube client
 func decodeRayJobYaml(rayJobFilePath string) (*rayv1.RayJob, error) {
 	decodedRayJob := &rayv1.RayJob{}
 
@@ -573,8 +599,7 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 		return "", err
 	}
 
-	workingDir := runtimeEnvYaml["working_dir"].(string)
-	if workingDir != "" {
+	if workingDir, ok := runtimeEnvYaml["working_dir"].(string); ok {
 		return workingDir, nil
 	}
 
@@ -582,5 +607,5 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 }
 
 func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
-	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready //nolint:staticcheck // Still need to check State even though it is deprecated
+	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready
 }

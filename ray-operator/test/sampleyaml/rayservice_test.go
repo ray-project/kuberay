@@ -32,6 +32,7 @@ func TestRayService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
+			g.ConfigureWithT(WithRayServiceResourceLogger(test))
 
 			yamlFilePath := path.Join(GetSampleYAMLDir(test), tt.name)
 			namespace := test.NewTestNamespace()
@@ -42,7 +43,7 @@ func TestRayService(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(rayService).NotTo(BeNil())
 
-			test.T().Logf("Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be running", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 				Should(WithTransform(RayServiceStatus, Equal(rayv1.Running)))
 			// Get the latest rayService

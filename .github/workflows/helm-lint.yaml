@@ -3,9 +3,12 @@ name: Lint and Test Charts
 on:
   push:
     branches:
-    - master
+      - master
+      - release-*
   pull_request:
-    branches: [ master ]
+    branches:
+      - master
+      - release-*
 
 jobs:
   lint-test-helm-3-4:
@@ -24,6 +27,18 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: 3.7
+
+      - name: Install Helm unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --version 0.8.1
+
+      - name: Run Helm unittest (kuberay-apiserver)
+        run: helm unittest helm-chart/kuberay-apiserver --file "tests/**/*_test.yaml" --strict --debug
+
+      - name: Run Helm unittest (kuberay-operator)
+        run: helm unittest helm-chart/kuberay-operator --file "tests/**/*_test.yaml" --strict --debug
+
+      - name: Run Helm unittest (ray-cluster)
+        run: helm unittest helm-chart/ray-cluster --file "tests/**/*_test.yaml" --strict --debug
 
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.3.0
@@ -50,6 +65,18 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: 3.7
+
+      - name: Install Helm unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --version 0.8.1
+
+      - name: Run Helm unittest (kuberay-apiserver)
+        run: helm unittest helm-chart/kuberay-apiserver --file "tests/**/*_test.yaml" --strict --debug
+
+      - name: Run Helm unittest (kuberay-operator)
+        run: helm unittest helm-chart/kuberay-operator --file "tests/**/*_test.yaml" --strict --debug
+
+      - name: Run Helm unittest (ray-cluster)
+        run: helm unittest helm-chart/ray-cluster --file "tests/**/*_test.yaml" --strict --debug
 
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.3.0

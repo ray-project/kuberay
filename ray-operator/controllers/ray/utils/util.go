@@ -12,24 +12,20 @@ import (
 	"strings"
 	"unicode"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/util/json"
-
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
-	RayClusterSuffix    = "-raycluster-"
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
@@ -165,10 +161,10 @@ func CheckRouteName(ctx context.Context, s string, n string) string {
 	return CheckName(s)
 }
 
-// PodGenerateName returns the value that should be used for a Pod's generateName
+// PodName returns the value that should be used for a Pod's Name or GenerateName
 // based on the RayCluster name and node type (head or worker).
-func PodGenerateName(prefix string, nodeType rayv1.RayNodeType) string {
-	maxPrefixLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+func PodName(prefix string, nodeType rayv1.RayNodeType, isGenerateName bool) string {
+	maxPrefixLength := 50 // 63 - ( 8 + 5 ) // 8 char are consumed at the end with "-worker-" + 5 generated.
 
 	var podPrefix string
 	if len(prefix) <= maxPrefixLength {
@@ -177,7 +173,11 @@ func PodGenerateName(prefix string, nodeType rayv1.RayNodeType) string {
 		podPrefix = prefix[:maxPrefixLength]
 	}
 
-	return strings.ToLower(podPrefix + DashSymbol + string(nodeType) + DashSymbol)
+	result := strings.ToLower(podPrefix + DashSymbol + string(nodeType))
+	if isGenerateName {
+		result += DashSymbol
+	}
+	return result
 }
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
@@ -203,6 +203,11 @@ func CheckName(s string) string {
 	}
 
 	return s
+}
+
+// TrimJobName uses CheckLabel to trim Kubernetes job to constrains
+func TrimJobName(jobName string) string {
+	return CheckLabel(jobName)
 }
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
@@ -254,9 +259,9 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
 	case RayServiceCRD:
-		return CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")), nil
+		return fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"), nil
 	case RayClusterCRD:
-		headSvcName := CheckName(fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"))
+		headSvcName := fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")
 		if clusterSpec.HeadGroupSpec.HeadService != nil && clusterSpec.HeadGroupSpec.HeadService.Name != "" {
 			headSvcName = clusterSpec.HeadGroupSpec.HeadService.Name
 		}
@@ -285,7 +290,7 @@ func ExtractRayIPFromFQDN(fqdnRayIP string) string {
 
 // GenerateServeServiceName generates name for serve service.
 func GenerateServeServiceName(serviceName string) string {
-	return CheckName(fmt.Sprintf("%s-%s-%s", serviceName, ServeName, "svc"))
+	return fmt.Sprintf("%s-%s-%s", serviceName, ServeName, "svc")
 }
 
 // GenerateServeServiceLabel generates label value for serve service selector.
@@ -305,7 +310,7 @@ func GenerateRouteName(clusterName string) string {
 
 // GenerateRayClusterName generates a ray cluster name from ray service name
 func GenerateRayClusterName(serviceName string) string {
-	return fmt.Sprintf("%s%s%s", serviceName, RayClusterSuffix, rand.String(5))
+	return fmt.Sprintf("%s-%s", serviceName, rand.String(5))
 }
 
 // GenerateRayJobId generates a ray job id for submission
@@ -621,23 +626,15 @@ func ManagedByExternalController(controllerName *string) *string {
 	return nil
 }
 
-func IsAutoscalingEnabled[T *rayv1.RayCluster | *rayv1.RayJob | *rayv1.RayService](obj T) bool {
-	switch obj := (interface{})(obj).(type) {
-	case *rayv1.RayCluster:
-		return obj.Spec.EnableInTreeAutoscaling != nil && *obj.Spec.EnableInTreeAutoscaling
-	case *rayv1.RayJob:
-		return obj.Spec.RayClusterSpec != nil && obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
-	case *rayv1.RayService:
-		return obj.Spec.RayClusterSpec.EnableInTreeAutoscaling != nil && *obj.Spec.RayClusterSpec.EnableInTreeAutoscaling
-	default:
-		panic(fmt.Sprintf("unsupported type: %T", obj))
-	}
+func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.EnableInTreeAutoscaling != nil &&
+		*spec.EnableInTreeAutoscaling
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.
-func IsGCSFaultToleranceEnabled(instance rayv1.RayCluster) bool {
-	v, ok := instance.Annotations[RayFTEnabledAnnotationKey]
-	return (ok && strings.ToLower(v) == "true") || instance.Spec.GcsFaultToleranceOptions != nil
+func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
+	v, ok := annotations[RayFTEnabledAnnotationKey]
+	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
@@ -646,4 +643,36 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 		return ""
 	}
 	return svc.Spec.Selector[RayClusterLabelKey]
+}
+
+// Check where we are running. We are trying to distinguish here whether
+// this is vanilla kubernetes cluster or Openshift
+func GetClusterType() bool {
+	if os.Getenv(USE_INGRESS_ON_OPENSHIFT) == "true" {
+		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
+		return false
+	}
+
+	// The discovery package is used to discover APIs supported by a Kubernetes API server.
+	config, err := ctrl.GetConfig()
+	if err != nil || config == nil {
+		return false
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil || discoveryClient == nil {
+		return false
+	}
+
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		return false
+	}
+
+	for _, group := range apiGroupList.Groups {
+		if strings.HasSuffix(group.Name, ".openshift.io") {
+			return true
+		}
+	}
+	return false
 }

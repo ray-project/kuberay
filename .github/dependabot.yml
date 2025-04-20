@@ -1,0 +1,17 @@
+version: 2
+updates:
+
+  # Maintain go dependencies for sub-projects
+  - package-ecosystem: "gomod"
+    directories:
+      - "/experimental"
+      - "/ray-operator"
+      - "/apiserver"
+      - "/kubectl-plugin"
+      - "/proto"
+    schedule:
+      interval: "weekly"
+    groups:
+      kubernetes:
+        patterns:
+          - "k8s.io/*"

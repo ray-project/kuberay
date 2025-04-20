@@ -15,7 +15,7 @@ spec:
       - pytorch-lightning==1.6.5
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
-    rayVersion: '2.9.0'
+    rayVersion: '2.41.0'
     headGroupSpec:
       rayStartParams:
         dashboard-host: '0.0.0.0'
@@ -27,7 +27,7 @@ spec:
             effect: "NoSchedule"
           containers:
             - name: ray-head
-              image: rayproject/ray-ml:2.9.0-gpu
+              image: rayproject/ray-ml:2.41.0.021baf-py311
               ports:
                 - containerPort: 6379
                   name: gcs-server

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -51,11 +52,13 @@ func TestStatus(t *testing.T) {
 }
 
 func TestCheckAllPodsRunning(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		pods     corev1.PodList
 		expected bool
 	}{
-		"should return true if all Pods are running": {
+		{
+			name: "should return true if all Pods are running",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodRunning),
@@ -64,13 +67,15 @@ func TestCheckAllPodsRunning(t *testing.T) {
 			},
 			expected: true,
 		},
-		"should return false if there are no Pods": {
+		{
+			name: "should return false if there are no Pods",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{},
 			},
 			expected: false,
 		},
-		"should return false if any Pods don't have .status.phase Running": {
+		{
+			name: "should return false if any Pods don't have .status.phase Running",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodPending),
@@ -79,7 +84,8 @@ func TestCheckAllPodsRunning(t *testing.T) {
 			},
 			expected: false,
 		},
-		"should return false if any Pods have a .status.condition of type: Ready that's not status: True": {
+		{
+			name: "should return false if any Pods have a .status.condition of type: Ready that's not status: True",
 			pods: corev1.PodList{
 				Items: []corev1.Pod{
 					*createSomePodWithPhase(corev1.PodRunning),
@@ -90,14 +96,14 @@ func TestCheckAllPodsRunning(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, CheckAllPodsRunning(context.Background(), tc.pods))
 		})
 	}
 }
 
-func TestPodGenerateName(t *testing.T) {
+func TestPodName(t *testing.T) {
 	tests := []struct {
 		name     string
 		prefix   string
@@ -108,7 +114,7 @@ func TestPodGenerateName(t *testing.T) {
 			name:     "short cluster name, head pod",
 			prefix:   "ray-cluster-01",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-01-head-",
+			expected: "ray-cluster-01-head",
 		},
 		{
 			name:     "short cluster name, worker pod",
@@ -120,7 +126,7 @@ func TestPodGenerateName(t *testing.T) {
 			name:     "long cluster name, head pod",
 			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
+			expected: "ray-cluster-00000000000000000000000111111111222222-head",
 		},
 		{
 			name:     "long cluster name, worker pod",
@@ -132,11 +138,12 @@ func TestPodGenerateName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			str := PodGenerateName(test.prefix, test.nodeType)
+			isPodNameGenerated := test.nodeType == rayv1.WorkerNode // HeadPod name is now fixed
+			str := PodName(test.prefix, test.nodeType, isPodNameGenerated)
 			if str != test.expected {
 				t.Logf("expected: %q", test.expected)
 				t.Logf("actual: %q", str)
-				t.Error("PodGenerateName returned an unexpected string")
+				t.Error("PodName returned an unexpected string")
 			}
 
 			// 63 (max pod name length) - 5 random hexadecimal characters from generateName
@@ -291,11 +298,13 @@ func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.Pod
 }
 
 func TestGetHeadGroupServiceAccountName(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name  string
 		input *rayv1.RayCluster
 		want  string
 	}{
-		"Ray cluster with head group service account": {
+		{
+			name: "Ray cluster with head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -313,7 +322,8 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 			},
 			want: "my-service-account",
 		},
-		"Ray cluster without head group service account": {
+		{
+			name: "Ray cluster without head group service account",
 			input: &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "raycluster-sample",
@@ -331,8 +341,8 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			got := GetHeadGroupServiceAccountName(tc.input)
 			if got != tc.want {
 				t.Fatalf("got %s, want %s", got, tc.want)
@@ -404,10 +414,10 @@ func TestCalculateAvailableReplicas(t *testing.T) {
 	}
 
 	availableCount := CalculateAvailableReplicas(podList)
-	assert.Equal(t, availableCount, int32(1), "expect 1 available replica")
+	assert.Equal(t, int32(1), availableCount, "expect 1 available replica")
 
 	readyCount := CalculateReadyReplicas(podList)
-	assert.Equal(t, readyCount, int32(1), "expect 1 ready replica")
+	assert.Equal(t, int32(1), readyCount, "expect 1 ready replica")
 }
 
 func TestFindContainerPort(t *testing.T) {
@@ -445,8 +455,8 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	// Test 1: `HeadService.Name` is empty.
 	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayv1.RayClusterSpec{}, "raycluster-sample")
 	expectedGeneratedSvcName := "raycluster-sample-head-svc"
-	assert.Nil(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Test 2: `HeadService.Name` is not empty.
 	clusterSpecWithHeadService := rayv1.RayClusterSpec{
@@ -460,24 +470,24 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	}
 
 	headSvcName, err = GenerateHeadServiceName(RayClusterCRD, *clusterSpecWithHeadService.DeepCopy(), "raycluster-sample")
-	assert.Nil(t, err)
-	assert.Equal(t, headSvcName, "my-head-svc")
+	require.NoError(t, err)
+	assert.Equal(t, "my-head-svc", headSvcName)
 
 	// [RayService]
 	// Test 3: `HeadService.Name` is empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1.RayClusterSpec{}, "rayservice-sample")
 	expectedGeneratedSvcName = "rayservice-sample-head-svc"
-	assert.Nil(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Test 4: `HeadService.Name` is not empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, *clusterSpecWithHeadService.DeepCopy(), "rayservice-sample")
-	assert.Nil(t, err)
-	assert.Equal(t, headSvcName, expectedGeneratedSvcName)
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Invalid CRD type
 	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
@@ -519,7 +529,7 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
 	workerGroupSpec.Suspend = &suspend
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), int32(0))
+	assert.Zero(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec))
 }
 
 func TestCalculateMinReplicas(t *testing.T) {
@@ -541,7 +551,7 @@ func TestCalculateMinReplicas(t *testing.T) {
 	for i := range rayCluster.Spec.WorkerGroupSpecs {
 		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
 	}
-	assert.Equal(t, CalculateMinReplicas(rayCluster), int32(0))
+	assert.Zero(t, CalculateMinReplicas(rayCluster))
 }
 
 func TestCalculateMaxReplicas(t *testing.T) {
@@ -563,50 +573,54 @@ func TestCalculateMaxReplicas(t *testing.T) {
 	for i := range rayCluster.Spec.WorkerGroupSpecs {
 		rayCluster.Spec.WorkerGroupSpecs[i].Suspend = &suspend
 	}
-	assert.Equal(t, CalculateMaxReplicas(rayCluster), int32(0))
+	assert.Zero(t, CalculateMaxReplicas(rayCluster))
 }
 
 func TestCalculateDesiredReplicas(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
 		group1Replicas    *int32
 		group1MinReplicas *int32
 		group1MaxReplicas *int32
 		group2Replicas    *int32
 		group2MinReplicas *int32
 		group2MaxReplicas *int32
+		name              string
 		answer            int32
 	}{
-		"Both groups' Replicas are nil": {
+		{
 			group1Replicas:    nil,
 			group1MinReplicas: ptr.To[int32](1),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    nil,
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Both groups' Replicas are nil",
 			answer:            3,
 		},
-		"Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.": {
+		{
 			group1Replicas:    ptr.To[int32](0),
 			group1MinReplicas: ptr.To[int32](2),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    ptr.To[int32](6),
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Group1's Replicas is smaller than MinReplicas, and Group2's Replicas is more than MaxReplicas.",
 			answer:            7,
 		},
-		"Group1's Replicas is more than MaxReplicas.": {
+		{
 			group1Replicas:    ptr.To[int32](6),
 			group1MinReplicas: ptr.To[int32](2),
 			group1MaxReplicas: ptr.To[int32](5),
 			group2Replicas:    ptr.To[int32](3),
 			group2MinReplicas: ptr.To[int32](2),
 			group2MaxReplicas: ptr.To[int32](5),
+			name:              "Group1's Replicas is more than MaxReplicas.",
 			answer:            8,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cluster := rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
 					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
@@ -631,60 +645,68 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 }
 
 func TestUnmarshalRuntimeEnv(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name           string
 		runtimeEnvYAML string
 		isErrorNil     bool
 	}{
-		"Empty runtimeEnvYAML": {
+		{
+			name:           "Empty runtimeEnvYAML",
 			runtimeEnvYAML: "",
 			isErrorNil:     true,
 		},
-		"Valid runtimeEnvYAML": {
+		{
+			name: "Valid runtimeEnvYAML",
 			runtimeEnvYAML: `
 env_vars:
   counter_name: test_counter
 `,
 			isErrorNil: true,
 		},
-		"Invalid runtimeEnvYAML": {
+		{
+			name:           "Invalid runtimeEnvYAML",
 			runtimeEnvYAML: `invalid_yaml_str`,
 			isErrorNil:     false,
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
 			if tc.isErrorNil {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.NotNil(t, err)
+				require.Error(t, err)
 			}
 		})
 	}
 }
 
 func TestFindHeadPodReadyCondition(t *testing.T) {
-	tests := map[string]struct {
+	tests := []struct {
+		name     string
 		pod      *corev1.Pod
 		expected metav1.Condition
 	}{
-		"condition true if Ray head pod is running and ready": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+		{
+			name: "condition true if Ray head pod is running and ready",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionTrue,
 			},
 		},
-		"condition false if Ray head pod is not running": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+		{
+			name: "condition false if Ray head pod is not running",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
 			},
 		},
-		"condition false if Ray head pod is not ready": {
-			pod: createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+		{
+			name: "condition false if Ray head pod is not ready",
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -692,8 +714,8 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			headPodReadyCondition := FindHeadPodReadyCondition(tc.pod)
 			assert.Equal(t, tc.expected.Status, headPodReadyCondition.Status)
 		})
@@ -701,34 +723,34 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 }
 
 func TestErrRayClusterReplicaFailureReason(t *testing.T) {
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteAllPods), "FailedDeleteAllPods")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod), "FailedDeleteHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateHeadPod), "FailedCreateHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod), "FailedDeleteWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod), "FailedCreateWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))), "FailedDeleteAllPods")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))), "FailedDeleteHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))), "FailedCreateHeadPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))), "FailedDeleteWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))), "FailedCreateWorkerPod")
-	assert.Equal(t, RayClusterReplicaFailureReason(errors.New("other error")), "")
+	assert.Equal(t, "FailedDeleteAllPods", RayClusterReplicaFailureReason(ErrFailedDeleteAllPods))
+	assert.Equal(t, "FailedDeleteHeadPod", RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod))
+	assert.Equal(t, "FailedCreateHeadPod", RayClusterReplicaFailureReason(ErrFailedCreateHeadPod))
+	assert.Equal(t, "FailedDeleteWorkerPod", RayClusterReplicaFailureReason(ErrFailedDeleteWorkerPod))
+	assert.Equal(t, "FailedCreateWorkerPod", RayClusterReplicaFailureReason(ErrFailedCreateWorkerPod))
+	assert.Equal(t, "FailedDeleteAllPods", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteAllPods, errors.New("other error"))))
+	assert.Equal(t, "FailedDeleteHeadPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteHeadPod, errors.New("other error"))))
+	assert.Equal(t, "FailedCreateHeadPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateHeadPod, errors.New("other error"))))
+	assert.Equal(t, "FailedDeleteWorkerPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedDeleteWorkerPod, errors.New("other error"))))
+	assert.Equal(t, "FailedCreateWorkerPod", RayClusterReplicaFailureReason(errors.Join(ErrFailedCreateWorkerPod, errors.New("other error"))))
+	assert.Empty(t, RayClusterReplicaFailureReason(errors.New("other error")))
 }
 
 func TestIsAutoscalingEnabled(t *testing.T) {
 	// Test: RayCluster
 	cluster := &rayv1.RayCluster{}
-	assert.False(t, IsAutoscalingEnabled(cluster))
+	assert.False(t, IsAutoscalingEnabled(&cluster.Spec))
 
 	cluster = &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: ptr.To[bool](true),
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(cluster))
+	assert.True(t, IsAutoscalingEnabled(&cluster.Spec))
 
 	// Test: RayJob
 	job := &rayv1.RayJob{}
-	assert.False(t, IsAutoscalingEnabled(job))
+	assert.False(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
 
 	job = &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
@@ -737,11 +759,11 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(job))
+	assert.True(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
 
 	// Test: RayService
 	service := &rayv1.RayService{}
-	assert.False(t, IsAutoscalingEnabled(service))
+	assert.False(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
 
 	service = &rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
@@ -750,7 +772,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(service))
+	assert.True(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
 }
 
 func TestIsGCSFaultToleranceEnabled(t *testing.T) {
@@ -814,7 +836,7 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := IsGCSFaultToleranceEnabled(test.instance)
+			result := IsGCSFaultToleranceEnabled(&test.instance.Spec, test.instance.Annotations)
 			assert.Equal(t, test.expected, result)
 		})
 	}

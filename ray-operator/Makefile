@@ -76,6 +76,10 @@ test-e2e-autoscaler: WHAT ?= ./test/e2eautoscaler
 test-e2e-autoscaler: manifests fmt vet ## Run e2e autoscaler tests.
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
+test-e2e-upgrade: manifests fmt vet ## Run e2e tests.
+	go test -timeout 30m -v $(WHAT)
+
 test-sampleyaml: WHAT ?= ./test/sampleyaml
 test-sampleyaml: manifests fmt vet
 	go test -timeout 30m -v $(WHAT)
@@ -154,7 +158,7 @@ $(LOCALBIN):
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 $(CONTROLLER_GEN): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0
+	test -s $(CONTROLLER_GEN) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5
 
 KUSTOMIZE = $(LOCALBIN)/kustomize
 $(KUSTOMIZE): $(LOCALBIN)

@@ -2,9 +2,11 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -104,6 +106,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead", RayExternalStorageNSAnnotationKey)
 
 	tests := []struct {
+		rayStartParams           map[string]string
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions
 		annotations              map[string]string
 		name                     string
@@ -204,31 +207,26 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rayCluster := &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: tt.annotations,
-				},
-				Spec: rayv1.RayClusterSpec{
-					GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Env: tt.envVars,
-									},
+			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
+				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: tt.rayStartParams,
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Env: tt.envVars,
 								},
 							},
 						},
 					},
 				},
-			}
-			err := ValidateRayClusterSpec(rayCluster)
+			}, tt.annotations)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -291,11 +289,11 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -361,12 +359,56 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 					},
 				},
 			}
-			err := ValidateRayClusterSpec(rayCluster)
+			err := ValidateRayClusterSpec(&rayCluster.Spec, rayCluster.Annotations)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecNames(t *testing.T) {
+	tests := []struct {
+		name         string
+		errorMessage string
+		metadata     metav1.ObjectMeta
+		expectError  bool
+	}{
+		{
+			name: "RayCluster name is too long (> MaxRayClusterNameLength characters)",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("a", MaxRayClusterNameLength+1),
+			},
+			expectError:  true,
+			errorMessage: fmt.Sprintf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength),
+		},
+		{
+			name: "RayCluster name is ok (== MaxRayClusterNameLength)",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("a", MaxRayClusterNameLength),
+			},
+			expectError: false,
+		},
+		{
+			name: "RayCluster name is not a DNS1035 label",
+			metadata: metav1.ObjectMeta{
+				Name: strings.Repeat("1", MaxRayClusterNameLength),
+			},
+			expectError:  true,
+			errorMessage: "RayCluster name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterMetadata(tt.metadata)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -433,12 +475,12 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -509,13 +551,13 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)()
-			err := ValidateRayClusterSpec(tt.rayCluster)
+			features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)
+			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
 			} else {
-				assert.Nil(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -575,146 +617,288 @@ func TestValidateRayJobStatus(t *testing.T) {
 }
 
 func TestValidateRayJobSpec(t *testing.T) {
-	err := ValidateRayJobSpec(&rayv1.RayJob{})
-	assert.ErrorContains(t, err, "one of RayClusterSpec or ClusterSelector must be set")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend:                  true,
-			ShutdownAfterJobFinishes: false,
+	tests := []struct {
+		name        string
+		spec        rayv1.RayJobSpec
+		expectError bool
+	}{
+		{
+			name:        "one of RayClusterSpec or ClusterSelector must be set",
+			spec:        rayv1.RayJobSpec{},
+			expectError: true,
 		},
-	})
-	assert.ErrorContains(t, err, "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend:                  true,
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
+		{
+			name: "a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended",
+			spec: rayv1.RayJobSpec{
+				Suspend:                  true,
+				ShutdownAfterJobFinishes: false,
+			},
+			expectError: true,
 		},
-	})
-	assert.NoError(t, err)
+		{
+			name: "valid RayJob",
+			spec: rayv1.RayJobSpec{
+				Suspend:                  true,
+				ShutdownAfterJobFinishes: true,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "the ClusterSelector mode doesn't support the suspend operation",
+			spec: rayv1.RayJobSpec{
+				Suspend:                  true,
+				ShutdownAfterJobFinishes: true,
+				ClusterSelector: map[string]string{
+					"key": "value",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "failed to unmarshal RuntimeEnvYAML",
+			spec: rayv1.RayJobSpec{
+				RuntimeEnvYAML: "invalid_yaml_str",
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "backoffLimit must be a positive integer",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   ptr.To[int32](-1),
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+				ShutdownAfterJobFinishes: true,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+	}
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Suspend:                  true,
-			ShutdownAfterJobFinishes: true,
-			ClusterSelector: map[string]string{
-				"key": "value",
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayJobSpec(&rayv1.RayJob{
+				Spec: tt.spec,
+			})
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
+	headGroupSpecWithOneContainer := rayv1.HeadGroupSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
 			},
 		},
-	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support the suspend operation")
+	}
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			RuntimeEnvYAML: "invalid_yaml_str",
-			RayClusterSpec: &rayv1.RayClusterSpec{},
-		},
-	})
-	assert.ErrorContains(t, err, "failed to unmarshal RuntimeEnvYAML")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			BackoffLimit:   ptr.To[int32](-1),
-			RayClusterSpec: &rayv1.RayClusterSpec{},
-		},
-	})
-	assert.ErrorContains(t, err, "backoffLimit must be a positive integer")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
-		},
-	})
-	assert.ErrorContains(t, err, "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
-
-	defer features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)()
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
-			ClusterSelector: map[string]string{"key": "value"},
-		},
-	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:  ptr.To(rayv1.DeleteWorkersDeletionPolicy),
-			ClusterSelector: map[string]string{"key": "value"},
-		},
-	})
-	assert.ErrorContains(t, err, "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
-
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To[bool](true),
+	tests := []struct {
+		name        string
+		spec        rayv1.RayJobSpec
+		expectError bool
+	}{
+		{
+			name: "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:  ptr.To(rayv1.DeleteClusterDeletionPolicy),
+				ClusterSelector: map[string]string{"key": "value"},
 			},
+			expectError: true,
 		},
-	})
-	assert.ErrorContains(t, err, "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+		{
+			name: "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:  ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+				ClusterSelector: map[string]string{"key": "value"},
+			},
+			expectError: true,
+		},
+		{
+			name: "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					EnableInTreeAutoscaling: ptr.To[bool](true),
+					HeadGroupSpec:           headGroupSpecWithOneContainer,
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "valid RayJob with DeletionPolicy=DeleteCluster",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
+				ShutdownAfterJobFinishes: true,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "valid RayJob without DeletionPolicy",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:           nil,
+				ShutdownAfterJobFinishes: true,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
+				ShutdownAfterJobFinishes: true,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "headGroupSpec should have at least one container",
+			spec: rayv1.RayJobSpec{
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{},
+				},
+			},
+			expectError: true,
+		},
+	}
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:           ptr.To(rayv1.DeleteClusterDeletionPolicy),
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
-		},
-	})
-	assert.NoError(t, err)
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	defer func() {
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
+	}()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayJobSpec(&rayv1.RayJob{
+				Spec: tt.spec,
+			})
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:           nil,
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
-		},
+func TestValidateRayJobMetadata(t *testing.T) {
+	err := ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength+1),
 	})
-	assert.NoError(t, err)
+	require.ErrorContains(t, err, fmt.Sprintf("RayJob name should be no more than %d characters", MaxRayJobNameLength))
 
-	err = ValidateRayJobSpec(&rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			DeletionPolicy:           ptr.To(rayv1.DeleteNoneDeletionPolicy),
-			ShutdownAfterJobFinishes: true,
-			RayClusterSpec:           &rayv1.RayClusterSpec{},
-		},
+	err = ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("1", MaxRayJobNameLength),
 	})
-	assert.ErrorContains(t, err, "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+	require.ErrorContains(t, err, "RayJob name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]")
+
+	err = ValidateRayJobMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayJobNameLength),
+	})
+	require.NoError(t, err)
 }
 
 func TestValidateRayServiceSpec(t *testing.T) {
-	err := ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			RayClusterSpec: rayv1.RayClusterSpec{
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					HeadService: &corev1.Service{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "my-head-service",
+	upgradeStrat := rayv1.RayServiceUpgradeType("invalidStrategy")
+
+	tests := []struct {
+		name              string
+		unexpectedMessage string
+		spec              rayv1.RayServiceSpec
+		expectError       bool
+	}{
+		{
+			name: "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						HeadService: &corev1.Service{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "my-head-service",
+							},
 						},
 					},
 				},
 			},
+			expectError: true,
 		},
-	})
-	assert.Error(t, err, "spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+		{
+			name: "The RayService spec is valid.",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: *createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "spec.UpgradeSpec.Type is invalid",
+			spec: rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					Type: &upgradeStrat,
+				},
+				RayClusterSpec: *createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name:        "headGroupSpec should have at least one container",
+			spec:        rayv1.RayServiceSpec{},
+			expectError: true,
+		},
+	}
 
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{},
-	})
-	assert.NoError(t, err, "The RayService spec is valid.")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayServiceSpec(&rayv1.RayService{
+				Spec: tt.spec,
+			})
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
 
-	var upgradeStrat rayv1.RayServiceUpgradeType = "invalidStrategy"
-	err = ValidateRayServiceSpec(&rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: &upgradeStrat,
+func TestValidateRayServiceMetadata(t *testing.T) {
+	err := ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength+1),
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("RayService name should be no more than %d characters", MaxRayServiceNameLength))
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("1", MaxRayServiceNameLength),
+	})
+	require.ErrorContains(t, err, "RayService name should be a valid DNS1035 label: [a DNS-1035 label must consist of lower case alphanumeric characters or '-', start with an alphabetic character, and end with an alphanumeric character (e.g. 'my-name',  or 'abc-123', regex used for validation is '[a-z]([-a-z0-9]*[a-z0-9])?')]")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: strings.Repeat("j", MaxRayServiceNameLength),
+	})
+	require.NoError(t, err)
+}
+
+func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
+	return &rayv1.RayClusterSpec{
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{Name: "ray-head"},
+					},
+				},
 			},
 		},
-	})
-	assert.Error(t, err, "spec.UpgradeSpec.Type is invalid")
+	}
 }

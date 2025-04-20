@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -42,7 +42,7 @@ var instanceWithRouteEnabled = &rayv1.RayCluster{
 
 func TestBuildRouteForHeadService(t *testing.T) {
 	route, err := BuildRouteForHeadService(*instanceWithRouteEnabled)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Test name
 	var builder strings.Builder

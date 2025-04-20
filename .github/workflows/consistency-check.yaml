@@ -4,8 +4,11 @@ on:
   push:
     branches:
     - master
+    - release-*
   pull_request:
-    branches: [ master ]
+    branches:
+    - master
+    - release-*
 
 jobs:
   # Check consistency between types.go and generated API.
@@ -83,7 +86,7 @@ jobs:
         uses: tj-actions/verify-changed-files@v17
         with:
           files: |
-            ./config/bases/*.yaml
+            ./config/crd/bases/*.yaml
             ./config/rbac/*.yaml
 
       - name: Check changed files
@@ -151,5 +154,4 @@ jobs:
 
       - name: Check rbac configuration
         run: |
-          cd helm-chart/script/
-          pytest -s
+          pytest -s scripts/rbac_test.py

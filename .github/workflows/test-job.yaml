@@ -4,26 +4,17 @@ on:
   push:
     branches:
     - master
+    - release-*
   pull_request:
-    branches: [ master ]
+    branches:
+    - master
+    - release-*
 
 jobs:
   lint:
     name: Lint (pre-commit)
     runs-on: ubuntu-22.04
     steps:
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
-          mv ./bin/golangci-lint /usr/local/bin/golangci-lint
-        shell: bash
-
-      - name: Install kubeconform
-        run: |
-          curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
-          tar -xzf kubeconform.tar.gz
-          mv kubeconform /usr/local/bin/
-
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.1
@@ -318,86 +309,6 @@ jobs:
       - name: Test
         run: go test ./pkg/... -race -parallel 4
         working-directory: ${{env.working-directory}}
-
-  test-compatibility-2_7_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-22.04
-    name: Compatibility Test - 2.7.0
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.7.0
-
-  test-compatibility-2_8_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-22.04
-    name: Compatibility Test - 2.8.0
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.8.0
-
-  test-compatibility-2_9_0:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-22.04
-    name: Compatibility Test - 2.9.0
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: 2.9.0
-
-  test-compatibility-nightly:
-    needs:
-      - build_operator
-      - build_apiserver
-      - lint
-    runs-on: ubuntu-22.04
-    name: Compatibility Test - Nightly
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-        with:
-          # When checking out the repository that
-          # triggered a workflow, this defaults to the reference or SHA for that event.
-          # Default value should work for both pull_request and merge(push) event.
-          ref: ${{github.event.pull_request.head.sha}}
-
-      - uses: ./.github/workflows/actions/compatibility
-        with:
-          ray_version: nightly
 
   python-client-test:
     runs-on: ubuntu-22.04

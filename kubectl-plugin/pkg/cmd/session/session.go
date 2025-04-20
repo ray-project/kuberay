@@ -12,7 +12,6 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
@@ -24,12 +23,16 @@ type appPort struct {
 }
 
 type SessionOptions struct {
-	configFlags  *genericclioptions.ConfigFlags
-	ioStreams    *genericiooptions.IOStreams
-	ResourceType util.ResourceType
-	ResourceName string
-	Namespace    string
+	cmdFactory     cmdutil.Factory
+	ioStreams      *genericiooptions.IOStreams
+	currentContext string
+	ResourceType   util.ResourceType
+	ResourceName   string
+	namespace      string
+	Verbose        bool
 }
+
+const reconnectDelay = 3 * time.Second
 
 var (
 	dashboardPort = appPort{
@@ -54,56 +57,74 @@ var (
 	`)
 
 	sessionExample = templates.Examples(`
-		# Without specifying the resource type, forward local ports to the RayCluster resource
+		# Without specifying the resource type, forward local ports to the Ray cluster
 		kubectl ray session my-raycluster
 
-		# Forward local ports to the RayCluster resource
+		# Forward local ports to the Ray cluster
 		kubectl ray session raycluster/my-raycluster
 
-		# Forward local ports to the RayCluster used for the RayJob resource
+		# Forward local ports to the Ray cluster used for the Ray job
 		kubectl ray session rayjob/my-rayjob
 
-		# Forward local ports to the RayCluster used for the RayService resource
+		# Forward local ports to the Ray cluster used for the RayService resource
 		kubectl ray session rayservice/my-rayservice
 	`)
 )
 
-func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
-	configFlags := genericclioptions.NewConfigFlags(true)
+func NewSessionOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SessionOptions {
 	return &SessionOptions{
-		ioStreams:   &streams,
-		configFlags: configFlags,
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
-	options := NewSessionOptions(streams)
-	factory := cmdutil.NewFactory(options.configFlags)
+func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
+	options := NewSessionOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:               "session (RAYCLUSTER | TYPE/NAME)",
-		Short:             "Forward local ports to the Ray resources.",
-		Long:              sessionLong,
-		Example:           sessionExample,
-		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
+		Use:     "session (RAYCLUSTER | TYPE/NAME)",
+		Short:   "Forward local ports to the Ray resources.",
+		Long:    sessionLong,
+		Example: sessionExample,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return cmdutil.UsageErrorf(cmd, "accepts 1 arg, received %d\n%s", len(args), cmd.Use)
+			}
+			return nil
+		},
+		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
 			}
-			if err := options.Validate(); err != nil {
-				return err
-			}
-			return options.Run(cmd.Context(), factory)
+			return options.Run(cmd.Context(), cmdFactory)
 		},
 	}
-	options.configFlags.AddFlags(cmd.Flags())
+
+	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
+
 	return cmd
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
 	}
+	options.namespace = namespace
+	if options.namespace == "" {
+		options.namespace = "default"
+	}
+
+	context, err := cmd.Flags().GetString("context")
+	if err != nil || context == "" {
+		config, err := options.cmdFactory.ToRawKubeConfigLoader().RawConfig()
+		if err != nil {
+			return fmt.Errorf("error retrieving raw config: %w", err)
+		}
+		context = config.CurrentContext
+	}
+	options.currentContext = context
 
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
@@ -128,24 +149,6 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 		options.ResourceName = typeAndName[1]
 	}
 
-	if *options.configFlags.Namespace == "" {
-		options.Namespace = "default"
-	} else {
-		options.Namespace = *options.configFlags.Namespace
-	}
-
-	return nil
-}
-
-func (options *SessionOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if len(config.CurrentContext) == 0 {
-		return fmt.Errorf("no context is currently set, use %q to select a new one", "kubectl config use-context <context>")
-	}
 	return nil
 }
 
@@ -155,7 +158,7 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
+	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.namespace, options.ResourceType, options.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -173,7 +176,13 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	kubectlArgs := []string{"port-forward", "-n", options.Namespace, "service/" + svcName}
+	var kubectlArgs []string
+	if options.currentContext != "" {
+		kubectlArgs = append(kubectlArgs, "--context", options.currentContext)
+	}
+	// TODO (dxia): forward more global kubectl flags like --server, --insecure-skip-tls-verify, --token, --tls-server-name, --user, --password, etc?
+
+	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.namespace, "service/"+svcName)
 	for _, appPort := range appPorts {
 		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
@@ -188,14 +197,19 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	go func() {
 		defer wg.Done()
 		for {
-			const reconnectDelay = 100
-			var err error
 			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+			portforwardCmd.Stdout = options.ioStreams.Out
+			portforwardCmd.Stderr = options.ioStreams.ErrOut
+
+			if options.Verbose {
+				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
+			}
+
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}
-			fmt.Printf("failed to port-forward: %v, try to reconnect after %d miliseconds...\n", err, reconnectDelay)
-			time.Sleep(reconnectDelay * time.Millisecond)
+			fmt.Printf("failed to port-forward: %v. Retrying in %v ...\n\n", err, reconnectDelay)
+			time.Sleep(reconnectDelay)
 		}
 	}()
 

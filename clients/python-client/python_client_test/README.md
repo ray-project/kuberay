@@ -2,36 +2,22 @@
 
 ## For developers
 
-make sure you have installed setuptool
+1. `pip install -U pip setuptools`
+1. `cd clients/python-client && pip install -e .`
 
-`pip install -U pip setuptools`
-
-**run the pip command**
-
-
-from the directory `path/to/kuberay/clients/python-client`
-
-`pip install -e .`
-
-**to uninstall the module run**
-
-`pip uninstall python-client`
+Uninstall with `pip uninstall python-client`.
 
 ## For testing run
 
-`python -m unittest discover 'path/to/kuberay/clients/python-client/python_client_test/'`
+`python -m unittest discover 'clients/python-client/python_client_test/'`
 
 ### Coverage report
 
-__install prerequisites__
+#### Pre-requisites
 
-`sudo apt install libsqlite3-dev`
-
-`pip3 install db-sqlite3`
-
-`pyenv install 3.6.5` # or your Python version
-
-`pip install coverage`
+* `sudo apt install libsqlite3-dev`
+* `pyenv install 3.6.5` # or your Python version
+* `pip install db-sqlite3 coverage`
 
 __To gather data__
 `python -m coverage run -m unittest`

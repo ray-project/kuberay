@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # KubeRay
 
 [![Build Status](https://github.com/ray-project/kuberay/workflows/Go-build-and-test/badge.svg)](https://github.com/ray-project/kuberay/actions)
@@ -78,7 +79,6 @@ The KubeRay repository only contains documentation related to the development an
 KubeRay Helm charts are hosted on the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository.
 Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster.
 To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
-
 
 ```sh
 # Add the Helm repo

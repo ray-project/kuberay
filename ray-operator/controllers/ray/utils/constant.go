@@ -86,8 +86,8 @@ const (
 	ComponentName = "kuberay-operator"
 
 	// The default suffix for Headless Service for multi-host worker groups.
-	// The full name will be of the form "${RayCluster_Name}-headless-worker-svc".
-	HeadlessServiceSuffix = "headless-worker-svc"
+	// The full name will be of the form "${RayCluster_Name}-headless".
+	HeadlessServiceSuffix = "headless"
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
@@ -136,6 +136,10 @@ const (
 	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature
 	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
 	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
+
+	// This KubeRay operator environment variable is used to determine
+	// if operator should treat OpenShift cluster as Vanilla Kubernetes.
+	USE_INGRESS_ON_OPENSHIFT = "USE_INGRESS_ON_OPENSHIFT"
 
 	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
 	ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
@@ -192,6 +196,17 @@ const (
 	KubeRayController = "ray.io/kuberay-operator"
 
 	ServeConfigLRUSize = 1000
+
+	// MaxRayClusterNameLength is the maximum RayCluster name to make sure we don't truncate
+	// their k8s service names. Currently, "-serve-svc" is the longest service suffix:
+	// 63 - len("-serve-svc") == 53, so the name should not be longer than 53 characters.
+	MaxRayClusterNameLength = 53
+	// MaxRayServiceNameLength is the maximum RayService name to make sure it pass the RayCluster validation.
+	// Minus 6 since we append 6 characters to the RayService name to create the cluster (GenerateRayClusterName).
+	MaxRayServiceNameLength = MaxRayClusterNameLength - 6
+	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
+	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
+	MaxRayJobNameLength = MaxRayClusterNameLength - 6
 )
 
 type ServiceType string
@@ -237,8 +252,9 @@ type K8sEventType string
 
 const (
 	// RayCluster event list
-	InvalidRayClusterStatus K8sEventType = "InvalidRayClusterStatus"
-	InvalidRayClusterSpec   K8sEventType = "InvalidRayClusterSpec"
+	InvalidRayClusterStatus   K8sEventType = "InvalidRayClusterStatus"
+	InvalidRayClusterSpec     K8sEventType = "InvalidRayClusterSpec"
+	InvalidRayClusterMetadata K8sEventType = "InvalidRayClusterMetadata"
 	// Head Pod event list
 	CreatedHeadPod        K8sEventType = "CreatedHeadPod"
 	FailedToCreateHeadPod K8sEventType = "FailedToCreateHeadPod"
@@ -258,6 +274,7 @@ const (
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
+	InvalidRayJobMetadata         K8sEventType = "InvalidRayJobMetadata"
 	InvalidRayJobStatus           K8sEventType = "InvalidRayJobStatus"
 	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
 	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
@@ -271,7 +288,12 @@ const (
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 
 	// RayService event list
-	InvalidRayServiceSpec K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
+	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
+	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
+	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
+	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
@@ -288,7 +310,9 @@ const (
 
 	// Service event list
 	CreatedService        K8sEventType = "CreatedService"
+	UpdatedService        K8sEventType = "UpdatedService"
 	FailedToCreateService K8sEventType = "FailedToCreateService"
+	FailedToUpdateService K8sEventType = "FailedToUpdateService"
 
 	// ServiceAccount event list
 	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"

@@ -245,14 +245,14 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 1)
-	assert.Equal(t, len(testPod.Spec.Volumes), 1)
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 1)
+	assert.Len(t, testPod.Spec.Volumes, 1)
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
-	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 2)
+	assert.Len(t, testPod.Spec.Volumes, 2)
 	addEmptyDir(context.Background(), &testPod.Spec.Containers[0], testPod, "shared-mem2", "/dev/shm2", corev1.StorageMediumDefault)
-	assert.Equal(t, len(testPod.Spec.Containers[0].VolumeMounts), 2)
-	assert.Equal(t, len(testPod.Spec.Volumes), 2)
+	assert.Len(t, testPod.Spec.Containers[0].VolumeMounts, 2)
+	assert.Len(t, testPod.Spec.Volumes, 2)
 }
 
 func TestGetHeadPort(t *testing.T) {
@@ -389,10 +389,10 @@ func TestConfigureGCSFaultToleranceWithAnnotations(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Validate the test input
 			if test.redisUsernameEnv != "" && test.redisUsernameRayStartParams != "" {
-				assert.True(t, test.redisUsernameRayStartParams == "$REDIS_USERNAME")
+				assert.Equal(t, "$REDIS_USERNAME", test.redisUsernameRayStartParams)
 			}
 			if test.redisPasswordEnv != "" && test.redisPasswordRayStartParams != "" {
-				assert.True(t, test.redisPasswordRayStartParams == "$REDIS_PASSWORD")
+				assert.Equal(t, "$REDIS_PASSWORD", test.redisPasswordRayStartParams)
 			}
 
 			// Prepare the cluster
@@ -625,7 +625,7 @@ func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
 				assert.Equal(t, podTemplate.Annotations[utils.RayFTEnabledAnnotationKey], strconv.FormatBool(test.gcsFTOptions != nil))
 
 				env := getEnvVar(container, utils.RAY_REDIS_ADDRESS)
-				assert.Equal(t, env.Value, "redis:6379")
+				assert.Equal(t, "redis:6379", env.Value)
 
 				if test.gcsFTOptions.RedisUsername != nil {
 					env := getEnvVar(container, utils.REDIS_USERNAME)
@@ -668,7 +668,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_EXTRA_TAGS, fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, utils.RayClusterCRD))
 	headRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
-	assert.True(t, strings.Contains(headRayStartCommandEnv.Value, "ray start"))
+	assert.Contains(t, headRayStartCommandEnv.Value, "ray start")
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -734,7 +734,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	workerRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
-	assert.True(t, strings.Contains(workerRayStartCommandEnv.Value, "ray start"))
+	assert.Contains(t, workerRayStartCommandEnv.Value, "ray start")
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
@@ -813,8 +813,8 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, headContainer.Command, []string{"I am head"})
-	assert.Equal(t, headContainer.Args, []string{"I am head again"})
+	assert.Equal(t, []string{"I am head"}, headContainer.Command)
+	assert.Equal(t, []string{"I am head again"}, headContainer.Args)
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
@@ -822,8 +822,8 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, workerContainer.Command, []string{"I am worker"})
-	assert.Equal(t, workerContainer.Args, []string{"I am worker again"})
+	assert.Equal(t, []string{"I am worker"}, workerContainer.Command)
+	assert.Equal(t, []string{"I am worker again"}, workerContainer.Args)
 }
 
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
@@ -1121,8 +1121,8 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
 	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
-	assert.Equal(t, podTemplateSpec.ObjectMeta.Name, "")
-	assert.Equal(t, worker, expectedWorker)
+	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
+	assert.Equal(t, expectedWorker, worker)
 }
 
 func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {
@@ -1210,7 +1210,7 @@ func TestDefaultInitContainer(t *testing.T) {
 	healthCheckContainer := podTemplateSpec.Spec.InitContainers[numInitContainers-1]
 	rayContainer := worker.Template.Spec.Containers[utils.RayContainerIndex]
 
-	assert.NotEqual(t, len(rayContainer.Env), 0, "The test only makes sense if the Ray container has environment variables.")
+	assert.NotEmpty(t, rayContainer.Env, "The test only makes sense if the Ray container has environment variables.")
 	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
 	for _, env := range rayContainer.Env {
 		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
@@ -1299,7 +1299,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+				assert.Equalf(t, customAddress, rayStartParams["address"], "Expected `%v` but got `%v`", customAddress, rayStartParams["address"])
 			},
 		},
 		{
@@ -1309,7 +1309,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
 				expectedAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
-				assert.Equal(t, expectedAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"]))
+				assert.Equalf(t, expectedAddress, rayStartParams["address"], "Expected `%v` but got `%v`", expectedAddress, rayStartParams["address"])
 			},
 		},
 		{
@@ -1318,7 +1318,7 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, customAddress, rayStartParams["address"], fmt.Sprintf("Expected `%v` but got `%v`", customAddress, rayStartParams["address"]))
+				assert.Equalf(t, customAddress, rayStartParams["address"], "Expected `%v` but got `%v`", customAddress, rayStartParams["address"])
 			},
 		},
 	}
@@ -1353,7 +1353,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", utils.DefaultMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1362,7 +1362,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", customMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1371,7 +1371,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(utils.DefaultMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", utils.DefaultMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 		{
@@ -1380,7 +1380,7 @@ func TestSetMissingRayStartParamsMetricsExportPort(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], fmt.Sprintf("Expected `%v` but got `%v`", fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"]))
+				assert.Equalf(t, fmt.Sprint(customMetricsPort), rayStartParams["metrics-export-port"], "Expected `%v` but got `%v`", customMetricsPort, rayStartParams["metrics-export-port"])
 			},
 		},
 	}
@@ -1415,7 +1415,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "true", rayStartParams["block"])
 			},
 		},
 		{
@@ -1424,7 +1424,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "false", rayStartParams["block"])
 			},
 		},
 		{
@@ -1433,7 +1433,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "true", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "true", rayStartParams["block"])
 			},
 		},
 		{
@@ -1442,7 +1442,7 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "true", rayStartParams["block"], fmt.Sprintf("Expected `%v` but got `%v`", "false", rayStartParams["block"]))
+				assert.Equalf(t, "true", rayStartParams["block"], "Expected `%v` but got `%v`", "false", rayStartParams["block"])
 			},
 		},
 	}
@@ -1474,7 +1474,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "0.0.0.0", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "0.0.0.0", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"])
 			},
 		},
 		{
@@ -1483,7 +1483,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "localhost", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"])
 			},
 		},
 		{
@@ -1501,7 +1501,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      fqdnRayIP,
 			nodeType:       rayv1.WorkerNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equal(t, "localhost", rayStartParams["dashboard-host"], fmt.Sprintf("Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"]))
+				assert.Equalf(t, "localhost", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "localhost", rayStartParams["dashboard-host"])
 			},
 		},
 	}
@@ -1598,8 +1598,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.True(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
 
@@ -1612,8 +1612,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	// head pod should not have Ray Serve proxy health probes
-	assert.False(t, strings.Contains(strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
-	assert.False(t, strings.Contains(strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath))
+	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.NotContains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
 }

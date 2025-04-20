@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -11,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Calling ray plugin `session` command", func() {
+var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	var namespace string
 
 	BeforeEach(func() {
@@ -64,7 +65,6 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 	})
 
 	It("should reconnect after pod connection is lost", func() {
-		Skip("Skip this because it is flaky now")
 		sessionCmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 
 		err := sessionCmd.Start()
@@ -77,33 +77,33 @@ var _ = Describe("Calling ray plugin `session` command", func() {
 		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 		// Get the current head pod name
-		cmd := exec.Command("kubectl", "get", "--namespace", namespace, "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
+		cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
-		oldPodName := string(output)
-		var newPodName string
+		oldPodUID := string(output)
+		var newPodUID string
 
 		// Delete the pod
-		cmd = exec.Command("kubectl", "delete", "--namespace", namespace, "pod", oldPodName)
+		cmd = exec.Command("kubectl", "delete", "--namespace", namespace, "pod/raycluster-kuberay-head")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the new pod to be created
 		Eventually(func() error {
-			cmd := exec.Command("kubectl", "get", "--namespace", namespace, "raycluster/raycluster-kuberay", "-o", "jsonpath={.status.head.podName}")
+			cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
 			output, err := cmd.CombinedOutput()
-			newPodName = string(output)
+			newPodUID = string(output)
 			if err != nil {
 				return err
 			}
-			if string(output) == oldPodName {
-				return err
+			if newPodUID == oldPodUID {
+				return fmt.Errorf("head pod has not changed (UID still %s)", oldPodUID)
 			}
 			return nil
 		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the new pod to be ready
-		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod", newPodName, "--for=condition=Ready", "--timeout=60s")
+		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod/raycluster-kuberay-head", "--for=condition=Ready", "--timeout=120s")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 

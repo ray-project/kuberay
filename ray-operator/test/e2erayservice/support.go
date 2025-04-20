@@ -1,17 +1,18 @@
-package e2e
+package e2erayservice
 
 import (
 	"bytes"
 	"embed"
 	"fmt"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -22,7 +23,7 @@ var _files embed.FS
 func ReadFile(t Test, fileName string) []byte {
 	t.T().Helper()
 	file, err := _files.ReadFile(fileName)
-	assert.NoError(t.T(), err)
+	require.NoError(t.T(), err)
 	return file
 }
 
@@ -71,7 +72,7 @@ func files(t Test, fileNames ...string) option[corev1ac.ConfigMapApplyConfigurat
 	return options(files...)
 }
 
-func curlRayServicePod(
+func CurlRayServicePod(
 	t Test,
 	rayService *rayv1.RayService,
 	curlPod *corev1.Pod,
@@ -90,7 +91,7 @@ func curlRayServicePod(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
-func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
+func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
       - name: fruit_app
         import_path: fruit.deployment_graph
@@ -146,10 +147,10 @@ func rayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 							WithName("ray-head").
 							WithImage(GetRayImage()).
 							WithPorts(
-								corev1ac.ContainerPort().WithName("gcs-server").WithContainerPort(6379),
-								corev1ac.ContainerPort().WithName("serve").WithContainerPort(8000),
-								corev1ac.ContainerPort().WithName("dashboard").WithContainerPort(8265),
-								corev1ac.ContainerPort().WithName("client").WithContainerPort(10001),
+								corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
+								corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
+								corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
+								corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 							).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
