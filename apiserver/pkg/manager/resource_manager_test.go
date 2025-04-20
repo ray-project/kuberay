@@ -62,12 +62,12 @@ func TestPopulateComputeTemplate(t *testing.T) {
 	// mock client manager
 	mockClientManager := NewMockClientManagerInterface(ctrl)
 	mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
-	mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).AnyTimes()
+	mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).Times(2)
 
 	// mock config map client
 	fakeClientset := kubernetesfake.NewClientset(headConfigMap, workerConfigMap)
 	configMapClient := fakeClientset.CoreV1().ConfigMaps(namespace)
-	mockKubeClient.EXPECT().ConfigMapClient(namespace).Return(configMapClient).AnyTimes()
+	mockKubeClient.EXPECT().ConfigMapClient(namespace).Return(configMapClient).Times(2)
 
 	// Run
 	resourceManager := NewResourceManager(mockClientManager)
