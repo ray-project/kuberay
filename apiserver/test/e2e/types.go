@@ -256,33 +256,9 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
 }
 
-func (e2etc *End2EndTestingContext) CreateComputeTemplateCustomName(t *testing.T, name string) {
-	computeTemplateRequest := &api.CreateComputeTemplateRequest{
-		ComputeTemplate: &api.ComputeTemplate{
-			Name:      name,
-			Namespace: e2etc.namespaceName,
-			Cpu:       2,
-			Memory:    4,
-		},
-		Namespace: e2etc.namespaceName,
-	}
-
-	_, _, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
-	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
-}
-
 func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 	deleteComputeTemplateRequest := &api.DeleteClusterRequest{
 		Name:      e2etc.computeTemplateName,
-		Namespace: e2etc.namespaceName,
-	}
-	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
-	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
-}
-
-func (e2etc *End2EndTestingContext) DeleteComputeTemplateCustomName(t *testing.T, name string) {
-	deleteComputeTemplateRequest := &api.DeleteClusterRequest{
-		Name:      name,
 		Namespace: e2etc.namespaceName,
 	}
 	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
