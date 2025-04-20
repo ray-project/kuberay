@@ -95,10 +95,14 @@ run: fmt vet fumpt imports lint ## Run the api server from your host.
 build-swagger: go-bindata
 	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
 
+.PHONY: generate
+generate:  # Generate code using command after //go:generate in each file
+	go generate ./...
+
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports ## Run all unit tests.
+test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
 
 .PHONY: e2e-test
