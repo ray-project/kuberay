@@ -61,6 +61,6 @@ func TestCreateCluster(t *testing.T) {
 	assert.True(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Memory().Equal(resource.MustParse("4Gi")))
 
 	assert.Equal(t, "ray-worker", rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Name)
-	assert.True(t, rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu().Equal(resource.MustParse("2")))
-	assert.True(t, rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory().Equal(resource.MustParse("4Gi")))
+	assert.Equal(t, resource.MustParse("2"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
+	assert.Equal(t, resource.MustParse("4Gi"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
 }
