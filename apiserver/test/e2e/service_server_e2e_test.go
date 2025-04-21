@@ -224,18 +224,24 @@ func TestUpdateRayService(t *testing.T) {
 		tCtx.DeleteRayService(t, serviceName)
 	})
 
-	// Verify initial value before update
+	// Verify initial replica value
 	require.Equal(t, int32(1), testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Replicas)
 
-	// Reuse old spec and mutate only the target field
-	oldSpec := testServiceRequest.Service.ClusterSpec
-	updatedSpec := *oldSpec // shallow copy is ok here
-	updatedSpec.WorkerGroupSpec = make([]*api.WorkerGroupSpec, len(oldSpec.WorkerGroupSpec))
-	for i, w := range oldSpec.WorkerGroupSpec {
-		copyW := *w
-		updatedSpec.WorkerGroupSpec[i] = &copyW
+	// Manually construct a new ClusterSpec with only the updated field changed
+	updatedClusterSpec := &api.ClusterSpec{
+		HeadGroupSpec: testServiceRequest.Service.ClusterSpec.HeadGroupSpec,
+		WorkerGroupSpec: []*api.WorkerGroupSpec{
+			{
+				GroupName:       testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].GroupName,
+				ComputeTemplate: testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].ComputeTemplate,
+				Image:           testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Image,
+				Replicas:        2,
+				MinReplicas:     testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].MinReplicas,
+				MaxReplicas:     testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].MaxReplicas,
+				RayStartParams:  testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].RayStartParams,
+			},
+		},
 	}
-	updatedSpec.WorkerGroupSpec[0].Replicas = 2
 
 	updatedService := &api.RayService{
 		Name:                               serviceName,
@@ -245,7 +251,7 @@ func TestUpdateRayService(t *testing.T) {
 		ServeConfig_V2:                     testServiceRequest.Service.ServeConfig_V2,
 		ServiceUnhealthySecondThreshold:    testServiceRequest.Service.ServiceUnhealthySecondThreshold,
 		DeploymentUnhealthySecondThreshold: testServiceRequest.Service.DeploymentUnhealthySecondThreshold,
-		ClusterSpec:                        &updatedSpec,
+		ClusterSpec:                        updatedClusterSpec,
 	}
 
 	updateReq := &api.UpdateRayServiceRequest{
@@ -254,16 +260,17 @@ func TestUpdateRayService(t *testing.T) {
 		Name:      serviceName,
 	}
 
-	// Perform the update
+	// Perform update request
 	respService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().UpdateRayService(updateReq)
 	require.NoError(t, err)
 	require.Nil(t, actualRPCStatus)
 	require.NotNil(t, respService)
 
-	// Confirm the updated replica count via K8s CRD
+	// Confirm the update through the RayService CRD
 	crdRayService, err := tCtx.GetRayServiceByName(serviceName)
 	require.NoError(t, err)
 	require.NotNil(t, crdRayService)
+
 	require.GreaterOrEqual(t, len(crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs), 1)
 	require.NotNil(t, crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
 	require.Equal(t, int32(2), *crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
