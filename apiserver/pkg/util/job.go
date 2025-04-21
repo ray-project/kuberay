@@ -96,6 +96,9 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		// Entry point resources
 		rayJob.Spec.EntrypointResources = apiJob.EntrypointResources
 	}
+	if apiJob.ActiveDeadlineSeconds > 0 {
+		rayJob.Spec.ActiveDeadlineSeconds = &apiJob.ActiveDeadlineSeconds
+	}
 
 	return &RayJob{rayJob}, nil
 }
