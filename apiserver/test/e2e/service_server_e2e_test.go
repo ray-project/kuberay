@@ -8,6 +8,7 @@ import (
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -205,6 +206,66 @@ func TestDeleteService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdateRayService(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err)
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	testServiceRequest := createTestServiceV2(t, tCtx)
+	serviceName := testServiceRequest.Service.Name
+	namespace := testServiceRequest.Namespace
+
+	t.Cleanup(func() {
+		tCtx.DeleteRayService(t, serviceName)
+	})
+
+	// Verify the original value before update
+	require.Equal(t, int32(1), testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Replicas)
+
+	// Clone the original ClusterSpec (proto.Clone avoids copying sync.Mutex)
+	oldSpec := proto.Clone(testServiceRequest.Service.ClusterSpec).(*api.ClusterSpec)
+
+	// Only modify replicas
+	oldSpec.WorkerGroupSpec[0].Replicas = 2 // Only field updated in this test
+
+	// Construct updated service from old spec
+	updatedService := &api.RayService{
+		Name:                               serviceName,
+		Namespace:                          namespace,
+		User:                               testServiceRequest.Service.User,
+		Version:                            testServiceRequest.Service.Version,
+		ServeConfig_V2:                     testServiceRequest.Service.ServeConfig_V2,
+		ServiceUnhealthySecondThreshold:    testServiceRequest.Service.ServiceUnhealthySecondThreshold,
+		DeploymentUnhealthySecondThreshold: testServiceRequest.Service.DeploymentUnhealthySecondThreshold,
+		ClusterSpec:                        oldSpec,
+	}
+
+	updateReq := &api.UpdateRayServiceRequest{
+		Service:   updatedService,
+		Namespace: namespace,
+		Name:      serviceName,
+	}
+
+	// Perform the update
+	respService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().UpdateRayService(updateReq)
+	require.NoError(t, err)
+	require.Nil(t, actualRPCStatus)
+	require.NotNil(t, respService)
+
+	// Confirm update via RayService CRD
+	crdRayService, err := tCtx.GetRayServiceByName(serviceName)
+	require.NoError(t, err)
+	require.NotNil(t, crdRayService)
+
+	require.GreaterOrEqual(t, len(crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs), 1)
+	require.NotNil(t, crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
+	require.Equal(t, int32(2), *crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
 }
 
 func TestGetAllServices(t *testing.T) {
