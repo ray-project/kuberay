@@ -270,9 +270,10 @@ dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata mockgen ## 
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
-	rm -f $(REPO_ROOT_BIN)/golangci-lint
-	rm -f $(REPO_ROOT_BIN)/gofumpt
-	rm -f $(REPO_ROOT_BIN)/kustomize
-	rm -f $(REPO_ROOT_BIN)/goimports
-	rm -f $(REPO_ROOT_BIN)/kind
-	rm -f $(REPO_ROOT_BIN)/go-bindata
+	rm -f $(GOLANGCI_LINT)
+	rm -f $(GOFUMPT)
+	rm -f $(KUSTOMIZE)
+	rm -f $(GOIMPORTS)
+	rm -f $(KIND)
+	rm -f $(GOBINDATA)
+	rm -f $(MOCKGEN)
