@@ -224,10 +224,19 @@ func TestUpdateRayService(t *testing.T) {
 		tCtx.DeleteRayService(t, serviceName)
 	})
 
-	// Verify initial replica count
+	// Verify initial value before update
 	require.Equal(t, int32(1), testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Replicas)
 
-	// Construct a new RayService to update the existing one
+	// Reuse old spec and mutate only the target field
+	oldSpec := testServiceRequest.Service.ClusterSpec
+	updatedSpec := *oldSpec // shallow copy is ok here
+	updatedSpec.WorkerGroupSpec = make([]*api.WorkerGroupSpec, len(oldSpec.WorkerGroupSpec))
+	for i, w := range oldSpec.WorkerGroupSpec {
+		copyW := *w
+		updatedSpec.WorkerGroupSpec[i] = &copyW
+	}
+	updatedSpec.WorkerGroupSpec[0].Replicas = 2
+
 	updatedService := &api.RayService{
 		Name:                               serviceName,
 		Namespace:                          namespace,
@@ -236,20 +245,7 @@ func TestUpdateRayService(t *testing.T) {
 		ServeConfig_V2:                     testServiceRequest.Service.ServeConfig_V2,
 		ServiceUnhealthySecondThreshold:    testServiceRequest.Service.ServiceUnhealthySecondThreshold,
 		DeploymentUnhealthySecondThreshold: testServiceRequest.Service.DeploymentUnhealthySecondThreshold,
-		ClusterSpec: &api.ClusterSpec{
-			HeadGroupSpec: testServiceRequest.Service.ClusterSpec.HeadGroupSpec,
-			WorkerGroupSpec: []*api.WorkerGroupSpec{
-				{
-					GroupName:       "small-wg",
-					ComputeTemplate: testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].ComputeTemplate,
-					Image:           testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Image,
-					Replicas:        2,
-					MinReplicas:     testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].MinReplicas,
-					MaxReplicas:     testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].MaxReplicas,
-					RayStartParams:  testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].RayStartParams,
-				},
-			},
-		},
+		ClusterSpec:                        &updatedSpec,
 	}
 
 	updateReq := &api.UpdateRayServiceRequest{
@@ -258,13 +254,13 @@ func TestUpdateRayService(t *testing.T) {
 		Name:      serviceName,
 	}
 
-	// Call UpdateRayService and verify
+	// Perform the update
 	respService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().UpdateRayService(updateReq)
 	require.NoError(t, err)
 	require.Nil(t, actualRPCStatus)
 	require.NotNil(t, respService)
 
-	// Confirm via Kubernetes CRD (which uses the operator API version)
+	// Confirm the updated replica count via K8s CRD
 	crdRayService, err := tCtx.GetRayServiceByName(serviceName)
 	require.NoError(t, err)
 	require.NotNil(t, crdRayService)
