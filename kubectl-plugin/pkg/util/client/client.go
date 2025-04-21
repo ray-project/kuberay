@@ -7,13 +7,14 @@ import (
 	"time"
 
 	dockerparser "github.com/novln/docker-parser"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
