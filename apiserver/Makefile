@@ -64,7 +64,7 @@ clear-local-apiserver: clean-cluster
 
 ##@ Development
 
-.PHONY:
+.PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
