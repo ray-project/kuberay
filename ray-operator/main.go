@@ -235,9 +235,14 @@ func main() {
 	exitOnError(err, "unable to start manager")
 
 	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
+	var rayJobMetricsCollector *metrics.RayJobMetricsCollector
 	if config.EnableMetrics {
 		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
-		ctrlmetrics.Registry.MustRegister(rayClusterMetricCollector)
+		rayJobMetricsCollector = metrics.NewRayJobMetricsCollector()
+		ctrlmetrics.Registry.MustRegister(
+			rayClusterMetricCollector,
+			rayJobMetricsCollector,
+		)
 	}
 
 	ctx := ctrl.SetupSignalHandler()
@@ -253,7 +258,7 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		EnableMetrics: config.EnableMetrics,
+		RayJobMetricsCollector: rayJobMetricsCollector,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")

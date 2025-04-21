@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 
@@ -47,7 +48,7 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	EnableMetrics bool
+	RayJobMetricsCollector *metrics.RayJobMetricsCollector
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
