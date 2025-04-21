@@ -97,7 +97,8 @@ build-swagger: go-bindata
 
 .PHONY: generate
 generate: mockgen # Generate code using command after //go:generate in each file
-	go generate ./...
+	# temporarily prepend local bin/ directory to the system $PATH to run mockgen
+	PATH=$(REPO_ROOT_BIN):$$PATH go generate ./...
 
 ##@ Testing
 
