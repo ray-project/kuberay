@@ -7,15 +7,6 @@ The KubeRay APIServer provides gRPC and HTTP APIs to manage KubeRay resources.
 
 The KubeRay APIServer is an optional component. It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally by some organizations to back user interfaces for KubeRay resource management.
 
-The KubeRay APIServer is community-managed and is not officially endorsed by the Ray maintainers. At this time, the only officially supported methods for
-managing KubeRay resources are:
-
-- Direct management of KubeRay custom resources via kubectl, kustomize, and Kubernetes language clients.
-- Helm charts.
-
-KubeRay APIServer maintainer contacts (GitHub handles):
-@Jeffwan @scarlet25151
-
 ## Installation
 
 ### Start a local apiserver
