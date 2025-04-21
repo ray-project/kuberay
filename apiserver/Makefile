@@ -96,7 +96,7 @@ build-swagger: go-bindata
 	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
 
 .PHONY: generate
-generate:  # Generate code using command after //go:generate in each file
+generate: mockgen # Generate code using command after //go:generate in each file
 	go generate ./...
 
 ##@ Testing
@@ -217,6 +217,7 @@ GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 KIND ?= $(REPO_ROOT_BIN)/kind
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
+MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 
 
 ## Tool Versions
@@ -226,6 +227,7 @@ GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.64.8
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
+MOCKGEN_VERSION ?= v1.6.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -258,8 +260,13 @@ go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
 $(GOBINDATA): $(REPO_ROOT_BIN)
 	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
+.PHONY: mockgen
+mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
+$(MOCKGEN): $(REPO_ROOT_BIN)
+	test -s $(MOCKGEN) || GOBIN=$(REPO_ROOT_BIN) go install github.com/golang/mock/mockgen@$(MOCKGEN_VERSION)
+
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
+dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata mockgen ## Install all development tools
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools
