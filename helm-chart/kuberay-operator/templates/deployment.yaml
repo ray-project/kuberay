@@ -34,7 +34,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ .Values.serviceAccount.name  }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
