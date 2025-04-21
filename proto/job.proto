@@ -162,6 +162,10 @@ message RayJob {
   // Optional entrypointResources specifies the custom resources and quantities to reserve
   // for the entrypoint command.
   string entrypointResources = 20;
+  // Optional activeDeadlineSeconds is the duration in seconds that the RayJob may be active before
+  // KubeRay actively tries to terminate the RayJob; value must be positive integer.
+  // If not set, the job may run indefinitely until it completes, fails, or is manually stopped.
+  int32 activeDeadlineSeconds = 25;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the job deleted.
