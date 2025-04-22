@@ -166,7 +166,7 @@ spec:
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
 | featureGates[1].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
-| operatorComand | string | `"/manager"` | Path to the operator binary |
+| operatorCommand | string | `"/manager"` | Path to the operator binary |
 | leaderElectionEnabled | bool | `true` | If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability. |
 | rbacEnable | bool | `true` | If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on. |
 | crNamespacedRbacEnable | bool | `true` | When crNamespacedRbacEnable is set to true, the KubeRay operator will create a Role for RayCluster preparation (e.g., Pods, Services) and a corresponding RoleBinding for each namespace listed in the "watchNamespace" parameter. Please note that even if crNamespacedRbacEnable is set to false, the Role and RoleBinding for leader election will still be created.  Note: (1) This variable is only effective when rbacEnable and singleNamespaceInstall are both set to true. (2) In most cases, it should be set to true, unless you are using a Kubernetes cluster managed by GitOps tools such as ArgoCD. |
