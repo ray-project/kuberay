@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// Ensure the api.ClusterSpec
 func TestCreateCluster(t *testing.T) {
 	ctx := context.Background()
 	tCtx, err := NewEnd2EndTestingContext(t)
@@ -63,4 +62,67 @@ func TestCreateCluster(t *testing.T) {
 	assert.Equal(t, "ray-worker", rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Name)
 	assert.Equal(t, resource.MustParse("2"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
 	assert.Equal(t, resource.MustParse("4Gi"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+}
+
+func TestListClusters(t *testing.T) {
+	ctx := context.Background()
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	clusterSpec := &api.ClusterSpec{
+		HeadGroupSpec: &api.HeadGroupSpec{
+			ComputeTemplate: tCtx.GetComputeTemplateName(),
+			Image:           tCtx.GetRayImage(),
+			RayStartParams: map[string]string{
+				"dashboard-host":      "0.0.0.0",
+				"metrics-export-port": "8080",
+			},
+		},
+	}
+
+	// Create cluster
+	// TODO: need to add compute template string here to prevent panic
+	clustersList := []*api.Cluster{
+		{
+			Name:        tCtx.GetNextName(),
+			Namespace:   tCtx.GetNamespaceName(),
+			ClusterSpec: clusterSpec,
+		},
+		{
+			Name:        tCtx.GetNextName(),
+			Namespace:   tCtx.GetNamespaceName(),
+			ClusterSpec: clusterSpec,
+		},
+		{
+			Name:        tCtx.GetNextName(),
+			Namespace:   tCtx.GetNamespaceName(),
+			ClusterSpec: clusterSpec,
+		},
+		{
+			Name:        tCtx.GetNextName(),
+			Namespace:   tCtx.GetNamespaceName(),
+			ClusterSpec: clusterSpec,
+		},
+	}
+
+	clientManager := manager.NewClientManager()
+	resourceManager := manager.NewResourceManager(&clientManager)
+	for _, cluster := range clustersList {
+		_, err := resourceManager.CreateCluster(ctx, cluster)
+		require.NoError(t, err)
+	}
+
+	// Verify returning 2 clusters each time using continue token
+	resRayClusters, continueToken, err := resourceManager.ListClusters(ctx, tCtx.GetNamespaceName(), "", 2)
+	require.NoError(t, err)
+	assert.Len(t, resRayClusters, 2)
+
+	resRayClusters, _, err = resourceManager.ListClusters(ctx, tCtx.GetNamespaceName(), continueToken, 2)
+	require.NoError(t, err)
+	assert.Len(t, resRayClusters, 2)
 }
