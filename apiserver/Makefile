@@ -95,10 +95,15 @@ run: fmt vet fumpt imports lint ## Run the api server from your host.
 build-swagger: go-bindata
 	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
 
+.PHONY: generate
+generate: mockgen # Generate code using command after //go:generate in each file
+	# temporarily prepend local bin/ directory to the system $PATH to run mockgen
+	PATH=$(REPO_ROOT_BIN):$$PATH go generate ./...
+
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports ## Run all unit tests.
+test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
@@ -213,6 +218,7 @@ GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 KIND ?= $(REPO_ROOT_BIN)/kind
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
+MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 
 
 ## Tool Versions
@@ -222,6 +228,7 @@ GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.64.8
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
+MOCKGEN_VERSION ?= v1.6.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -254,14 +261,20 @@ go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
 $(GOBINDATA): $(REPO_ROOT_BIN)
 	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
+.PHONY: mockgen
+mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
+$(MOCKGEN): $(REPO_ROOT_BIN)
+	test -s $(MOCKGEN) || GOBIN=$(REPO_ROOT_BIN) go install github.com/golang/mock/mockgen@$(MOCKGEN_VERSION)
+
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools.
+dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata mockgen ## Install all development tools.
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools.
-	rm -f $(REPO_ROOT_BIN)/golangci-lint
-	rm -f $(REPO_ROOT_BIN)/gofumpt
-	rm -f $(REPO_ROOT_BIN)/kustomize
-	rm -f $(REPO_ROOT_BIN)/goimports
-	rm -f $(REPO_ROOT_BIN)/kind
-	rm -f $(REPO_ROOT_BIN)/go-bindata
+	rm -f $(GOLANGCI_LINT)
+	rm -f $(GOFUMPT)
+	rm -f $(KUSTOMIZE)
+	rm -f $(GOIMPORTS)
+	rm -f $(KIND)
+	rm -f $(GOBINDATA)
+	rm -f $(MOCKGEN)

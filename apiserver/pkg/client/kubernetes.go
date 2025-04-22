@@ -9,6 +9,8 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
+//go:generate mockgen -source=kubernetes.go -destination=kubernetes_mock.go -package=client
+
 type KubernetesClientInterface interface {
 	PodClient(namespace string) v1.PodInterface
 	ConfigMapClient(namespace string) v1.ConfigMapInterface

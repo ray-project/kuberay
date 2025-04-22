@@ -62,6 +62,20 @@ make build
 make test
 ```
 
+To generate mock files for interfaces, add a `//go:generate` comment in the target Go file:
+
+```go
+//go:generate mockgen -source=your_file.go -destination=your_file_mock.go -package=your_package
+```
+
+Then run:
+
+```sh
+make generate
+```
+
+This will create or update mock files.
+
 #### End to End Testing
 
 There are two `make` targets provide execute the end to end test (integration between Kuberay API server and Kuberay Operator):
