@@ -7,13 +7,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 )
 
 type ScaleClusterOptions struct {
