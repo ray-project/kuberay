@@ -616,6 +616,11 @@
           "type": "string",
           "description": "Optional entrypointResources specifies the custom resources and quantities to reserve\nfor the entrypoint command."
         },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional activeDeadlineSeconds is the duration in seconds that the RayJob may be active before\nKubeRay actively tries to terminate the RayJob; value must be positive integer.\nIf not set, the job may run indefinitely until it completes, fails, or is manually stopped."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

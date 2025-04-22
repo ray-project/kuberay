@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kuberay-operator.fullname" . }}
+  name: {{ include "kuberay-operator.deployment.name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
@@ -65,7 +65,7 @@ spec:
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
           command:
-            - {{ .Values.operatorComand }}
+            - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}

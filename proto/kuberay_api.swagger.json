@@ -26,7 +26,7 @@
   "paths": {
     "/apis/v1/clusters": {
       "get": {
-        "summary": "Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all Clusters in all namespaces.",
         "operationId": "ClusterService_ListAllClusters",
         "responses": {
           "200": {
@@ -66,7 +66,7 @@
     },
     "/apis/v1/namespaces/{namespace}/clusters": {
       "get": {
-        "summary": "Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all Clusters in a given namespace.",
         "operationId": "ClusterService_ListCluster",
         "responses": {
           "200": {
@@ -228,7 +228,7 @@
     },
     "/apis/v1/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in all namespaces. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in all namespaces.",
         "operationId": "ComputeTemplateService_ListAllComputeTemplates",
         "responses": {
           "200": {
@@ -292,7 +292,7 @@
     },
     "/apis/v1/namespaces/{namespace}/compute_templates": {
       "get": {
-        "summary": "Finds all compute templates in a given namespace. Supports pagination, and sorting on certain fields.",
+        "summary": "Finds all compute templates in a given namespace.",
         "operationId": "ComputeTemplateService_ListComputeTemplates",
         "responses": {
           "200": {
@@ -439,7 +439,7 @@
     },
     "/apis/v1/namespaces/{namespace}/image_templates": {
       "get": {
-        "summary": "Not Implemented. Finds all ImageTemplates. Supports pagination, and sorting on certain fields.",
+        "summary": "Not Implemented. Finds all ImageTemplates.",
         "operationId": "ImageTemplateService_ListImageTemplates",
         "responses": {
           "200": {
@@ -775,7 +775,7 @@
           },
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -976,7 +976,7 @@
         "parameters": [
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -1734,7 +1734,7 @@
           "title": "Output. The result image generated"
         }
       },
-      "title": "ImageTemplate can be used by worker group and workspce.\nThey can be distinguish by different entrypoints"
+      "title": "ImageTemplate can be used by worker group and workspace.\nThey can be distinguish by different entrypoints"
     },
     "protoListAllComputeTemplatesResponse": {
       "type": "object",
@@ -1933,6 +1933,11 @@
           "type": "string",
           "description": "Optional entrypointResources specifies the custom resources and quantities to reserve\nfor the entrypoint command."
         },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional activeDeadlineSeconds is the duration in seconds that the RayJob may be active before\nKubeRay actively tries to terminate the RayJob; value must be positive integer.\nIf not set, the job may run indefinitely until it completes, fails, or is manually stopped."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -2053,7 +2058,7 @@
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices.",
+          "description": "The token to list the next page of RayServices.\n\nIf there are no more clusters, this field will be empty.",
           "readOnly": true
         }
       }

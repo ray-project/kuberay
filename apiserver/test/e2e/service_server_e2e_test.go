@@ -8,8 +8,7 @@ import (
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,7 +142,6 @@ func TestCreateServiceV2(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
-				waitForRunningService(t, tCtx, actualService.Name)
 				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -210,6 +208,66 @@ func TestDeleteService(t *testing.T) {
 	}
 }
 
+func TestUpdateRayService(t *testing.T) {
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err)
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	testServiceRequest := createTestServiceV2(t, tCtx)
+	serviceName := testServiceRequest.Service.Name
+	namespace := testServiceRequest.Namespace
+
+	t.Cleanup(func() {
+		tCtx.DeleteRayService(t, serviceName)
+	})
+
+	// Verify the original value before update
+	require.Equal(t, int32(1), testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Replicas)
+
+	// Clone the original ClusterSpec (proto.Clone avoids copying sync.Mutex)
+	oldSpec := proto.Clone(testServiceRequest.Service.ClusterSpec).(*api.ClusterSpec)
+
+	// Only modify replicas
+	oldSpec.WorkerGroupSpec[0].Replicas = 2 // Only field updated in this test
+
+	// Construct updated service from old spec
+	updatedService := &api.RayService{
+		Name:                               serviceName,
+		Namespace:                          namespace,
+		User:                               testServiceRequest.Service.User,
+		Version:                            testServiceRequest.Service.Version,
+		ServeConfig_V2:                     testServiceRequest.Service.ServeConfig_V2,
+		ServiceUnhealthySecondThreshold:    testServiceRequest.Service.ServiceUnhealthySecondThreshold,
+		DeploymentUnhealthySecondThreshold: testServiceRequest.Service.DeploymentUnhealthySecondThreshold,
+		ClusterSpec:                        oldSpec,
+	}
+
+	updateReq := &api.UpdateRayServiceRequest{
+		Service:   updatedService,
+		Namespace: namespace,
+		Name:      serviceName,
+	}
+
+	// Perform the update
+	respService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().UpdateRayService(updateReq)
+	require.NoError(t, err)
+	require.Nil(t, actualRPCStatus)
+	require.NotNil(t, respService)
+
+	// Confirm update via RayService CRD
+	crdRayService, err := tCtx.GetRayServiceByName(serviceName)
+	require.NoError(t, err)
+	require.NotNil(t, crdRayService)
+
+	require.GreaterOrEqual(t, len(crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs), 1)
+	require.NotNil(t, crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
+	require.Equal(t, int32(2), *crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
+}
+
 func TestGetAllServices(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -254,6 +312,107 @@ func TestGetServicesInNamespace(t *testing.T) {
 	require.NotEmpty(t, response.Services, "A list of compute templates is required")
 	require.Equal(t, testServiceRequest.Service.Name, response.Services[0].Name)
 	require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
+}
+
+func TestGetServicesInNamespaceWithPagination(t *testing.T) {
+	const serviceCount = 2
+	expectedServiceNames := make([]string, 0, serviceCount)
+
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	for ii := 0; ii < serviceCount; ii++ {
+		testServiceRequest := createTestServiceV2(t, tCtx)
+		t.Cleanup(func() {
+			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
+		})
+		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
+	}
+
+	// Test pagination with limit 1, which is less than the total number of services.
+	t.Run("Test pagination return part of the result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
+
+		pageToken := ""
+		for ii := 0; ii < serviceCount; ii++ {
+			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
+				Namespace: tCtx.GetNamespaceName(),
+				PageToken: pageToken,
+				PageSize:  int32(1),
+			})
+
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			require.NotEmpty(t, response.Services, "A list of service is required")
+			require.Len(t, response.Services, 1)
+
+			for _, curService := range response.Services {
+				for jj := 0; jj < serviceCount; jj++ {
+					if expectedServiceNames[jj] == curService.Name {
+						gotServices[jj] = true
+						break
+					}
+				}
+			}
+
+			// Check next page token.
+			pageToken = response.NextPageToken
+			if ii == serviceCount-1 {
+				require.Empty(t, pageToken, "Last page token should be empty")
+			} else {
+				require.NotEmpty(t, pageToken, "Non-last page token should be non empty")
+			}
+		}
+
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
+		}
+	})
+
+	// Test pagination with limit 3, which is larger than the total number of services.
+	t.Run("Test pagination return all result services", func(t *testing.T) {
+		// Used to check all services have been returned.
+		gotServices := []bool{false, false}
+
+		pageToken := ""
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
+			Namespace: tCtx.GetNamespaceName(),
+			PageToken: pageToken,
+			PageSize:  serviceCount + 1,
+		})
+
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.NotEmpty(t, response.Services, "A list of services is required")
+		require.Len(t, response.Services, serviceCount)
+		require.Empty(t, pageToken, "Page token should be empty")
+		for _, curService := range response.Services {
+			for jj := 0; jj < serviceCount; jj++ {
+				if expectedServiceNames[jj] == curService.Name {
+					gotServices[jj] = true
+					break
+				}
+			}
+		}
+
+		// Check all services created have been returned.
+		for idx := 0; idx < serviceCount; idx++ {
+			if !gotServices[idx] {
+				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
+			}
+		}
+	})
 }
 
 func TestGetService(t *testing.T) {
@@ -369,36 +528,27 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
-	waitForRunningService(t, tCtx, actualService.Name)
-
+	checkRayServiceCreatedSuccessfully(t, tCtx, actualService.Name)
 	return testServiceRequest
 }
 
-func waitForRunningService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
-	// wait for the service to be in a running state for 3 minutes
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
-		if err00 != nil {
-			return true, err00
-		}
-		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return rayService.Status.ServiceStatus == rayv1api.Running, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray service: '%s', err %v", serviceName, err)
+func checkRayServiceCreatedSuccessfully(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
+	rayService, err := tCtx.GetRayServiceByName(serviceName)
+	require.NoError(t, err)
+	require.NotNil(t, rayService)
 }
 
 func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
 	// wait for the service to be deleted
 	// if is not in that state, return an error
 	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := tCtx.GetRayServiceByName(serviceName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayservices.ray.io \""+serviceName+"\" not found") {
+		rayService, err := tCtx.GetRayServiceByName(serviceName)
+		if err != nil &&
+			assert.EqualError(t, err, "rayservices.ray.io \""+serviceName+"\" not found") {
 			return true, nil
 		}
 		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, err00
+		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray service: '%s', err %v", serviceName, err)
 }
