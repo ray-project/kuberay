@@ -502,7 +502,7 @@ func TestDeleteCluster(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedCluster(t, tCtx, tc.Input.Name)
+				waitForClusterToDisappear(t, tCtx, tc.Input.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")

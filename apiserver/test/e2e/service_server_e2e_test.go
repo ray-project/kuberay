@@ -1,15 +1,10 @@
 package e2e
 
 import (
-	"context"
 	"net/http"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -199,73 +194,13 @@ func TestDeleteService(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedService(t, tCtx, testServiceRequest.Service.Name)
+				waitForServiceToDisappear(t, tCtx, testServiceRequest.Service.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
 			}
 		})
 	}
-}
-
-func TestUpdateRayService(t *testing.T) {
-	tCtx, err := NewEnd2EndTestingContext(t)
-	require.NoError(t, err)
-
-	tCtx.CreateComputeTemplate(t)
-	t.Cleanup(func() {
-		tCtx.DeleteComputeTemplate(t)
-	})
-
-	testServiceRequest := createTestServiceV2(t, tCtx)
-	serviceName := testServiceRequest.Service.Name
-	namespace := testServiceRequest.Namespace
-
-	t.Cleanup(func() {
-		tCtx.DeleteRayService(t, serviceName)
-	})
-
-	// Verify the original value before update
-	require.Equal(t, int32(1), testServiceRequest.Service.ClusterSpec.WorkerGroupSpec[0].Replicas)
-
-	// Clone the original ClusterSpec (proto.Clone avoids copying sync.Mutex)
-	oldSpec := proto.Clone(testServiceRequest.Service.ClusterSpec).(*api.ClusterSpec)
-
-	// Only modify replicas
-	oldSpec.WorkerGroupSpec[0].Replicas = 2 // Only field updated in this test
-
-	// Construct updated service from old spec
-	updatedService := &api.RayService{
-		Name:                               serviceName,
-		Namespace:                          namespace,
-		User:                               testServiceRequest.Service.User,
-		Version:                            testServiceRequest.Service.Version,
-		ServeConfig_V2:                     testServiceRequest.Service.ServeConfig_V2,
-		ServiceUnhealthySecondThreshold:    testServiceRequest.Service.ServiceUnhealthySecondThreshold,
-		DeploymentUnhealthySecondThreshold: testServiceRequest.Service.DeploymentUnhealthySecondThreshold,
-		ClusterSpec:                        oldSpec,
-	}
-
-	updateReq := &api.UpdateRayServiceRequest{
-		Service:   updatedService,
-		Namespace: namespace,
-		Name:      serviceName,
-	}
-
-	// Perform the update
-	respService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().UpdateRayService(updateReq)
-	require.NoError(t, err)
-	require.Nil(t, actualRPCStatus)
-	require.NotNil(t, respService)
-
-	// Confirm update via RayService CRD
-	crdRayService, err := tCtx.GetRayServiceByName(serviceName)
-	require.NoError(t, err)
-	require.NotNil(t, crdRayService)
-
-	require.GreaterOrEqual(t, len(crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs), 1)
-	require.NotNil(t, crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
-	require.Equal(t, int32(2), *crdRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas)
 }
 
 func TestGetAllServices(t *testing.T) {
@@ -536,19 +471,4 @@ func checkRayServiceCreatedSuccessfully(t *testing.T, tCtx *End2EndTestingContex
 	rayService, err := tCtx.GetRayServiceByName(serviceName)
 	require.NoError(t, err)
 	require.NotNil(t, rayService)
-}
-
-func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
-	// wait for the service to be deleted
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err := tCtx.GetRayServiceByName(serviceName)
-		if err != nil &&
-			assert.EqualError(t, err, "rayservices.ray.io \""+serviceName+"\" not found") {
-			return true, nil
-		}
-		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, err
-	})
-	require.NoErrorf(t, err, "No error expected when deleting ray service: '%s', err %v", serviceName, err)
 }

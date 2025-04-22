@@ -10,6 +10,7 @@ import (
 	"time"
 
 	petnames "github.com/dustinkirkland/golang-petname"
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -17,7 +18,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -345,15 +345,15 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
 		rayCluster, err := e2etc.GetRayClusterByName(clusterName)
 		if err != nil && k8sApiErrors.IsNotFound(err) {
-			return true, nil
+			return true
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting for ray cluster: '%s' to be deleted, err %v", clusterName, err)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName string) {
@@ -366,15 +366,15 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
 		rayService, err := e2etc.GetRayServiceByName(serviceName)
 		if err != nil && k8sApiErrors.IsNotFound(err) {
-			return true, nil
+			return true
 		}
-		t.Logf("Found service state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting to delete ray service: '%s', err %v", serviceName, err)
+		t.Logf("Found service state of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName string) {
@@ -387,14 +387,15 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
 		rayJob, err := e2etc.GetRayJobByName(rayJobName)
 		if err != nil && k8sApiErrors.IsNotFound(err) {
-			return true, nil
+			return true
 		}
-		t.Logf("Found job state of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, rayJobName)
-		return false, nil
-	})
+		t.Logf("Found job state of '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 	require.NoErrorf(t, err, "No error expected when waiting to delete ray job: '%s', err %v", rayJobName, err)
 }
 
