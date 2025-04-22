@@ -56,11 +56,11 @@ help: ## Display this help.
 
 ##@ Deployment
 
-.PHONY: start-local-apiserver ## Build and start apiserver from scratch.
-start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run
+.PHONY: start-local-apiserver
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
 
-.PHONY: clean-local-apiserver ## Clear local apiserver.
-clear-local-apiserver: clean-cluster
+.PHONY: clean-local-apiserver
+clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
 ##@ Development
 
