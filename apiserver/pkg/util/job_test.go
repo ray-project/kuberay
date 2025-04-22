@@ -20,6 +20,7 @@ var apiJobNewCluster = &api.RayJob{
 	RuntimeEnv:               "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: \"test_counter\"\n",
 	ShutdownAfterJobFinishes: true,
 	ClusterSpec:              rayCluster.ClusterSpec,
+	ActiveDeadlineSeconds:    120,
 }
 
 var apiJobExistingCluster = &api.RayJob{
@@ -88,6 +89,7 @@ func TestBuildRayJob(t *testing.T) {
 	assert.Len(t, job.Spec.Metadata, 1)
 	assert.Nil(t, job.Spec.ClusterSelector)
 	assert.NotNil(t, job.Spec.RayClusterSpec)
+	assert.Equal(t, 120, int(*job.Spec.ActiveDeadlineSeconds))
 
 	// Test request without cluster creation
 	job, err = NewRayJob(apiJobExistingCluster, map[string]*api.ComputeTemplate{"foo": &template})
