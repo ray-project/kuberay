@@ -216,7 +216,7 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
-				waitForRayJob(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
+				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -274,7 +274,7 @@ func TestDeleteJob(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedRayJob(t, tCtx, testJobRequest.Job.Name)
+				waitForRayJobToDisappear(t, tCtx, testJobRequest.Job.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -643,7 +643,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
-				waitForRayJob(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
+				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -721,6 +721,6 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, testJobRequest.Job.Name, expectedJobStatues)
+	waitForRayJobInExpectedStatuses(t, tCtx, testJobRequest.Job.Name, expectedJobStatues)
 	return testJobRequest
 }

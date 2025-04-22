@@ -29,7 +29,7 @@ var (
 	TestPollingInterval = 500 * time.Millisecond
 )
 
-// CreateHttpRequest instantiates a http request for the  specified endpoint and host
+// CreateHttpRequest instantiates a http request for the specified endpoint and host
 func CreateHttpRequest(method string, host string, endPoint string, body io.Reader) (*http.Request, error) {
 	url := host + endPoint
 	req, err := http.NewRequestWithContext(context.TODO(), method, url, body)
@@ -41,7 +41,7 @@ func CreateHttpRequest(method string, host string, endPoint string, body io.Read
 	return req, nil
 }
 
-// MakeBodyReader creates a io.Reader from the supplied string if is not empty after
+// MakeBodyReader creates an io.Reader from the supplied string if is not empty after
 // trimming the spaces
 func MakeBodyReader(s string) io.Reader {
 	if strings.TrimSpace(s) != "" {
@@ -100,8 +100,8 @@ func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 	waitForClusterConditions(t, tCtx, clusterName, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 }
 
-func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
-	// wait for the cluster to be deleted
+func waitForClusterToDisappear(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
+	// wait for the cluster to disappear
 	g := gomega.NewWithT(t)
 	g.Eventually(func() bool {
 		_, err := tCtx.GetRayClusterByName(clusterName)
@@ -113,7 +113,7 @@ func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
-func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
+func waitForRayJobInExpectedStatuses(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
 	// `expectedJobStatuses` is a slice of job statuses that we expect the job to be in
 	// wait for the job to be in any of the `expectedJobStatuses` state for 3 minutes
 	// if is not in that state, return an error
@@ -125,13 +125,13 @@ func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string,
 			t.Logf("Error getting ray job '%s': %v", rayJobName, err)
 			return false
 		}
-		t.Logf("Waiting for ray job '%s' to be in one of the expected conditions %s", rayJobName, expectedJobStatuses)
+		t.Logf("Waiting for ray job '%s' to be in one of the expected statuses %s", rayJobName, expectedJobStatuses)
 		return slices.Contains(expectedJobStatuses, rayJob.Status.JobStatus)
 	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
-func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
-	// wait for the job to be deleted
+func waitForRayJobToDisappear(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
+	// wait for the job to disappear
 	// if is not in that state, return an error
 	g := gomega.NewWithT(t)
 	t.Logf("Starting to wait for ray job %s to be deleted", jobName)
@@ -147,7 +147,7 @@ func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName str
 	t.Logf("Ray job %s successfully deleted", jobName)
 }
 
-func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
+func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
 	g := gomega.NewWithT(t)
 	t.Logf("Starting to wait for service %s to be deleted", serviceName)
 	g.Eventually(func() error {

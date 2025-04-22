@@ -120,7 +120,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
+	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
 	g.Eventually(func() int32 {
@@ -149,7 +149,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
+	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 	g.Eventually(func() int32 {
 		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)
 		if err != nil {
