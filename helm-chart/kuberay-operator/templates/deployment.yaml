@@ -65,7 +65,7 @@ spec:
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
           command:
-            - {{ .Values.operatorComand }}
+            - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
