@@ -59,7 +59,7 @@ help: ## Display this help.
 .PHONY: start-local-apiserver
 start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
 
-.PHONY: clean-local-apiserver
+.PHONY: clear-local-apiserver
 clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
 ##@ Development
