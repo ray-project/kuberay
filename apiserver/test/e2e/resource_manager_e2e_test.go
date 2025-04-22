@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestCreateCluster(t *testing.T) {
@@ -125,4 +127,77 @@ func TestListClusters(t *testing.T) {
 	resRayClusters, _, err = resourceManager.ListClusters(ctx, tCtx.GetNamespaceName(), continueToken, 2)
 	require.NoError(t, err)
 	assert.Len(t, resRayClusters, 2)
+}
+
+func TestResourceManagerDeleteCluster(t *testing.T) {
+	ctx := context.Background()
+	tCtx, err := NewEnd2EndTestingContext(t)
+	require.NoError(t, err, "No error expected when creating testing context")
+
+	tCtx.CreateComputeTemplate(t)
+	t.Cleanup(func() {
+		tCtx.DeleteComputeTemplate(t)
+	})
+
+	tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
+		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
+		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
+	}, []rayv1api.RayClusterConditionType{})
+
+	clientManager := manager.NewClientManager()
+	resourceManager := manager.NewResourceManager(&clientManager)
+
+	type clusterInfo struct {
+		clusterName string
+		namespace   string
+	}
+
+	tests := []struct {
+		name                string
+		input               *clusterInfo
+		expectedErrorString string
+	}{
+		{
+			name: "Delete an existing cluster",
+			input: &clusterInfo{
+				clusterName: tCtx.GetRayClusterName(),
+				namespace:   tCtx.GetNamespaceName(),
+			},
+			expectedErrorString: "",
+		},
+		{
+			name: "Delete a non existing cluster",
+			input: &clusterInfo{
+				clusterName: "bogus-cluster-name",
+				namespace:   tCtx.GetNamespaceName(),
+			},
+			expectedErrorString: "NotFoundError",
+		},
+		{
+			name: "Delete a cluster with no namespace",
+			input: &clusterInfo{
+				clusterName: "bogus-cluster-name",
+				namespace:   "",
+			},
+			expectedErrorString: "NotFoundError",
+		},
+		{
+			name: "Delete a cluster with no name",
+			input: &clusterInfo{
+				clusterName: "",
+				namespace:   tCtx.GetNamespaceName(),
+			},
+			expectedErrorString: "resource name may not be empty",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := resourceManager.DeleteCluster(ctx, tc.input.clusterName, tc.input.namespace)
+			if tc.expectedErrorString == "" {
+				require.NoError(t, err, "No error expected")
+			} else {
+				require.ErrorContains(t, err, tc.expectedErrorString)
+			}
+		})
+	}
 }
