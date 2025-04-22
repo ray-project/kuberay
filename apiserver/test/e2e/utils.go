@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,4 +104,67 @@ func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterNam
 		return false, err
 	})
 	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s', err %v", clusterName, err)
+}
+
+// LogPodMetrics captures pod memory usage and logs it to a file
+func LogPodMetrics(observedNamespace string, interval time.Duration, result *[]string) (chan<- struct{}, error) {
+	stopCh := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+				cmd := exec.Command("kubectl", "top", "pod", "-n", observedNamespace)
+				var stdout, stderr bytes.Buffer
+				cmd.Stdout = &stdout
+				cmd.Stderr = &stderr
+
+				if err := cmd.Run(); err != nil {
+					continue
+				}
+
+				lines := strings.Split(stdout.String(), "\n")
+				if len(lines) > 1 {
+					*result = append(*result, strings.Join(lines[1:], "\n"))
+				}
+
+				time.Sleep(interval)
+			}
+		}
+	}()
+	return stopCh, nil
+}
+
+func cleanupAndProcessMetrics(t *testing.T, stopCh *chan<- struct{}, result *[]string) {
+	close(*stopCh)
+	resultString := ""
+	peakCPU := float64(0)
+	peakMemory := float64(0)
+	for _, s := range *result {
+		lines := strings.Split(s, "\n")
+
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				cpu := strings.TrimSuffix(fields[1], "m")
+				mem := strings.TrimSuffix(fields[2], "Mi")
+				cpuVal, _ := strconv.ParseFloat(cpu, 64)
+				memVal, _ := strconv.ParseFloat(mem, 64)
+				if cpuVal > peakCPU {
+					peakCPU = cpuVal
+				}
+				if memVal > peakMemory {
+					peakMemory = memVal
+				}
+			}
+		}
+		resultString += s
+
+	}
+	t.Logf("Metrics result:\n%s\n", resultString)
+	t.Logf("\nPeak CPU usage: %.1fm\nPeak Memory usage: %.1fMi", peakCPU, peakMemory)
 }

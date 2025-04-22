@@ -91,7 +91,10 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	}
 
 	// Create cluster
-	actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(&clusterReq)
+	actualCluster, actualRPCStatus, _ := tCtx.GetRayAPIServerClient().CreateCluster(&clusterReq)
+	metricsResult := make([]string, 50)
+	stopCh, err := LogPodMetrics(actualCluster.Namespace, 5*time.Second, &metricsResult)
+	defer cleanupAndProcessMetrics(t, &stopCh, &metricsResult)
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")

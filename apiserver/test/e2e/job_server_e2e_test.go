@@ -218,7 +218,11 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(tc.Input)
+			actualJob, actualRPCStatus, _ := tCtx.GetRayAPIServerClient().CreateRayJob(tc.Input)
+			metricsResult := make([]string, 50)
+			stopCh, err := LogPodMetrics(tc.Input.Namespace, 5*time.Second, &metricsResult)
+			defer cleanupAndProcessMetrics(t, &stopCh, &metricsResult)
+			require.NoError(t, err)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
@@ -227,7 +231,7 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
-				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
+				require.NotNil(t, actualRPCStatus, "A not nil RPC status is required")
 			}
 		})
 	}
@@ -277,6 +281,7 @@ func TestDeleteJob(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
+			require.NoError(t, err)
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteRayJob(tc.Input)
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")

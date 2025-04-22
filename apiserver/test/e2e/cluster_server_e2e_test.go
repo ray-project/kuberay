@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -427,8 +428,14 @@ func TestCreateClusterEndpoint(t *testing.T) {
 	// Execute tests sequentially
 	for _, tc := range tests {
 		tc := tc // capture range variable
+		require.NoError(t, err, "No error expected")
 		t.Run(tc.Name, func(t *testing.T) {
 			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(tc.Input)
+			if tc.Input.Namespace != "" {
+				metricsResult := make([]string, 50)
+				stopCh, _ := LogPodMetrics(tc.Input.Namespace, 5*time.Second, &metricsResult)
+				defer cleanupAndProcessMetrics(t, &stopCh, &metricsResult)
+			}
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
