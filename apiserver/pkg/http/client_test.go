@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/require"
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
