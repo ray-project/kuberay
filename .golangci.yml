@@ -55,11 +55,11 @@ linters-settings:
       - fieldalignment
   lll:
     line-length: 120
-  gci:
+  gci: # Splits all import blocks into different sections and sorts them.
     sections:
-      - standard
-      - default
-      - prefix(github.com/ray-project/kuberay)
+      - standard # Go official imports, like "fmt"
+      - default # Third-party libraries (anything not in standard or prefix)
+      - prefix(github.com/ray-project/kuberay) # kuberay packages
     skip-generated: true
 linters:
   enable:
