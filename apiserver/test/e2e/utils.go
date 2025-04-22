@@ -7,21 +7,29 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/util/wait"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 //go:embed resources/*.py
 var files embed.FS
 
-// CreateHttpRequest instantiates a http request for the  specified endpoint and host
+var (
+	TestTimeoutShort    = 1 * time.Minute
+	TestTimeoutMedium   = 3 * time.Minute
+	TestTimeoutLong     = 5 * time.Minute
+	TestPollingInterval = 500 * time.Millisecond
+)
+
+// CreateHttpRequest instantiates a http request for the specified endpoint and host
 func CreateHttpRequest(method string, host string, endPoint string, body io.Reader) (*http.Request, error) {
 	url := host + endPoint
 	req, err := http.NewRequestWithContext(context.TODO(), method, url, body)
@@ -33,7 +41,7 @@ func CreateHttpRequest(method string, host string, endPoint string, body io.Read
 	return req, nil
 }
 
-// MakeBodyReader creates a io.Reader from the supplied string if is not empty after
+// MakeBodyReader creates an io.Reader from the supplied string if is not empty after
 // trimming the spaces
 func MakeBodyReader(s string) io.Reader {
 	if strings.TrimSpace(s) != "" {
@@ -70,36 +78,86 @@ func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 	}
 	// wait for the cluster to be in one of the expected conditions for 3 minutes
 	// if it is not in one of those conditions, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
 		rayCluster, err := tCtx.GetRayClusterByName(clusterName)
 		if err != nil {
-			return true, err
+			t.Logf("Error getting ray cluster '%s': %v", clusterName, err)
+			return false
 		}
 		t.Logf("Waiting for ray cluster '%s' to be in one of the expected conditions %s", clusterName, expectedConditions)
 		for _, condition := range expectedConditions {
 			if meta.IsStatusConditionTrue(rayCluster.Status.Conditions, string(condition)) {
 				t.Logf("Found condition '%s' for ray cluster '%s'", string(condition), clusterName)
-				return true, nil
+				return true
 			}
 		}
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", tCtx.GetRayClusterName(), err)
+		return false
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
 }
 
 func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
 	waitForClusterConditions(t, tCtx, clusterName, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 }
 
-func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
-	// wait for the cluster to be deleted
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		_, err = tCtx.GetRayClusterByName(clusterName)
+func waitForClusterToDisappear(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
+	// wait for the cluster to disappear
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		_, err := tCtx.GetRayClusterByName(clusterName)
 		if err != nil && strings.Contains(err.Error(), "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
-			return true, nil
+			return true
 		}
 		t.Logf("Found ray cluster '%s'", clusterName)
-		return false, err
-	})
-	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s', err %v", clusterName, err)
+		return false
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
+}
+
+func waitForRayJobInExpectedStatuses(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, expectedJobStatuses []rayv1api.JobStatus) {
+	// `expectedJobStatuses` is a slice of job statuses that we expect the job to be in
+	// wait for the job to be in any of the `expectedJobStatuses` state for 3 minutes
+	// if is not in that state, return an error
+	g := gomega.NewWithT(t)
+
+	g.Eventually(func() bool {
+		rayJob, err := tCtx.GetRayJobByName(rayJobName)
+		if err != nil {
+			t.Logf("Error getting ray job '%s': %v", rayJobName, err)
+			return false
+		}
+		t.Logf("Waiting for ray job '%s' to be in one of the expected statuses %s", rayJobName, expectedJobStatuses)
+		return slices.Contains(expectedJobStatuses, rayJob.Status.JobStatus)
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeTrue())
+}
+
+func waitForRayJobToDisappear(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
+	// wait for the job to disappear
+	// if is not in that state, return an error
+	g := gomega.NewWithT(t)
+	t.Logf("Starting to wait for ray job %s to be deleted", jobName)
+	g.Eventually(func() error {
+		rayJob, err := tCtx.GetRayJobByName(jobName)
+		if err != nil {
+			return err
+		}
+		t.Logf("Find rayJob with status %v", rayJob.Status.JobStatus)
+		return nil
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayjobs.ray.io \"" + jobName + "\" not found"))
+
+	t.Logf("Ray job %s successfully deleted", jobName)
+}
+
+func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
+	g := gomega.NewWithT(t)
+	t.Logf("Starting to wait for service %s to be deleted", serviceName)
+	g.Eventually(func() error {
+		rayService, err := tCtx.GetRayServiceByName(serviceName)
+		if err != nil {
+			return err
+		}
+		t.Logf("Find rayService with status %v", rayService.Status)
+		return nil
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayservices.ray.io \"" + serviceName + "\" not found"))
+
+	t.Logf("Service %s successfully deleted", serviceName)
 }
