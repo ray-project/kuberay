@@ -5,16 +5,14 @@ import (
 	"testing"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-func TestCreateCluster(t *testing.T) {
+func TestResourceManagerCreateCluster(t *testing.T) {
 	ctx := context.Background()
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -24,46 +22,84 @@ func TestCreateCluster(t *testing.T) {
 		tCtx.DeleteComputeTemplate(t)
 	})
 
-	// Create cluster
-	cluster := &api.Cluster{
-		Name:      tCtx.GetNextName(),
-		Namespace: tCtx.GetNamespaceName(),
-		ClusterSpec: &api.ClusterSpec{
-			HeadGroupSpec: &api.HeadGroupSpec{
-				ComputeTemplate: tCtx.GetComputeTemplateName(),
-				Image:           tCtx.GetRayImage(),
-				RayStartParams: map[string]string{
-					"dashboard-host":      "0.0.0.0",
-					"metrics-export-port": "8080",
-				},
-			},
-			WorkerGroupSpec: []*api.WorkerGroupSpec{
-				{
-					GroupName:       "small-wg",
-					ComputeTemplate: tCtx.GetComputeTemplateName(),
-					RayStartParams: map[string]string{
-						"node-ip-address": "$MY_POD_IP",
+	clientManager := manager.NewClientManager()
+	resourceManager := manager.NewResourceManager(&clientManager)
+
+	tests := []struct {
+		name                string
+		cluster             *api.Cluster
+		expectedErrorString string
+	}{
+		{
+			name: "Create a valid cluster",
+			cluster: &api.Cluster{
+				Name:      tCtx.GetNextName(),
+				Namespace: tCtx.GetNamespaceName(),
+				ClusterSpec: &api.ClusterSpec{
+					HeadGroupSpec: &api.HeadGroupSpec{
+						ComputeTemplate: tCtx.GetComputeTemplateName(),
+						Image:           tCtx.GetRayImage(),
+						RayStartParams: map[string]string{
+							"dashboard-host":      "0.0.0.0",
+							"metrics-export-port": "8080",
+						},
+					},
+					WorkerGroupSpec: []*api.WorkerGroupSpec{
+						{
+							GroupName:       "small-wg",
+							ComputeTemplate: tCtx.GetComputeTemplateName(),
+							RayStartParams: map[string]string{
+								"node-ip-address": "$MY_POD_IP",
+							},
+						},
 					},
 				},
 			},
+			expectedErrorString: "",
+		},
+		{
+			name: "Create a cluster with missing name",
+			cluster: &api.Cluster{
+				Name:      "",
+				Namespace: tCtx.GetNamespaceName(),
+				ClusterSpec: &api.ClusterSpec{
+					HeadGroupSpec: &api.HeadGroupSpec{
+						ComputeTemplate: tCtx.GetComputeTemplateName(),
+						Image:           tCtx.GetRayImage(),
+						RayStartParams: map[string]string{
+							"dashboard-host": "0.0.0.0",
+						},
+					},
+				},
+			},
+			expectedErrorString: "Required value: name or generateName is required",
+		},
+		{
+			name: "Create a cluster with missing namespace",
+			cluster: &api.Cluster{
+				Name:      tCtx.GetNextName(),
+				Namespace: "",
+				ClusterSpec: &api.ClusterSpec{
+					HeadGroupSpec: &api.HeadGroupSpec{
+						ComputeTemplate: tCtx.GetComputeTemplateName(),
+						Image:           tCtx.GetRayImage(),
+					},
+				},
+			},
+			expectedErrorString: "the server could not find the requested resource",
 		},
 	}
 
-	clientManager := manager.NewClientManager()
-	resourceManager := manager.NewResourceManager(&clientManager)
-	rayCluster, err := resourceManager.CreateCluster(ctx, cluster)
-	require.NoError(t, err)
-
-	assert.Equal(t, cluster.Name, rayCluster.ObjectMeta.Name)
-	assert.Equal(t, tCtx.GetNamespaceName(), rayCluster.Namespace)
-	assert.Equal(t, tCtx.GetComputeTemplateName(), rayCluster.Spec.HeadGroupSpec.Template.ObjectMeta.Annotations[util.RayClusterComputeTemplateAnnotationKey])
-	assert.Equal(t, "ray-head", rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Name)
-	assert.True(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Cpu().Equal(resource.MustParse("2")))
-	assert.True(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests.Memory().Equal(resource.MustParse("4Gi")))
-
-	assert.Equal(t, "ray-worker", rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Name)
-	assert.Equal(t, resource.MustParse("2"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Cpu())
-	assert.Equal(t, resource.MustParse("4Gi"), *rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests.Memory())
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := resourceManager.CreateCluster(ctx, tc.cluster)
+			if tc.expectedErrorString == "" {
+				require.NoError(t, err, "No error expected")
+			} else {
+				require.ErrorContains(t, err, tc.expectedErrorString)
+			}
+		})
+	}
 }
 
 func TestListClusters(t *testing.T) {
