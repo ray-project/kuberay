@@ -193,7 +193,7 @@ func Wrap(err error, message string) error {
 		return userErr.wrap(message)
 	}
 
-	return errors.Wrapf(err, message)
+	return errors.Wrapf(err, "%s", message)
 }
 
 func LogError(err error) {
