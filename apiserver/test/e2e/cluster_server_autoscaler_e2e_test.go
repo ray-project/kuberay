@@ -1,21 +1,21 @@
 package e2e
 
 import (
-	"context"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
+	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCreateClusterAutoscalerEndpoint sequentially iterates over the create cluster endpoint
 // with valid and invalid requests
 func TestCreateClusterAutoscaler(t *testing.T) {
+	g := gomega.NewWithT(t)
+
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
 
@@ -120,18 +120,18 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
+	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
-	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	g.Eventually(func() int32 {
 		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)
 		if err != nil {
-			return true, err
+			t.Logf("Error getting ray cluster: %v", err)
+			return -1 // Return -1 to indicate error condition
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
-		return rayCluster.Status.AvailableWorkerReplicas == 1, nil
-	})
-	require.NoError(t, err, "No error expected")
+		return rayCluster.Status.AvailableWorkerReplicas
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.Equal(int32(1)))
 	// Delete actor
 	deleteActorRequest := api.CreateRayJobRequest{
 		Namespace: tCtx.GetNamespaceName(),
@@ -149,15 +149,15 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
-
-	err = wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
+	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
+	g.Eventually(func() int32 {
 		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)
 		if err != nil {
-			return true, err
+			t.Logf("Error getting ray cluster: %v", err)
+			return -1 // Return -1 to indicate error condition
 		}
 		t.Logf("Found ray cluster with %d available worker replicas", rayCluster.Status.AvailableWorkerReplicas)
-		return rayCluster.Status.AvailableWorkerReplicas == 0, nil
-	})
+		return rayCluster.Status.AvailableWorkerReplicas
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.Equal(int32(0)))
 	require.NoError(t, err, "No error expected")
 }
