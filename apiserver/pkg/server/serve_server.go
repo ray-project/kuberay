@@ -143,7 +143,7 @@ func (s *RayServiceServer) DeleteRayService(ctx context.Context, request *api.De
 
 func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 	if request == nil {
-		return util.NewInvalidInputError("A non nill request is expected")
+		return util.NewInvalidInputError("A non nil request is expected")
 	}
 	if request.Namespace == "" {
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
