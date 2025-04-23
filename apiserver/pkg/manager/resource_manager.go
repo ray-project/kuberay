@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/model"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"github.com/ray-project/kuberay/apiserver/pkg/model"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	api "github.com/ray-project/kuberay/proto/go_client"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -276,7 +277,7 @@ func (r *ResourceManager) GetService(ctx context.Context, serviceName, namespace
 	return getServiceByName(ctx, client, serviceName)
 }
 
-func (r *ResourceManager) ListServices(ctx context.Context, namespace string) ([]*rayv1api.RayService, error) {
+func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pageToken string, pageSize int32) ([]*rayv1api.RayService, string /*nextPageToken*/, error) {
 	labelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			util.KubernetesManagedByLabelKey: util.ComponentName,
@@ -284,16 +285,18 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string) ([
 	}
 	rayServiceList, err := r.getRayServiceClient(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		Limit:         int64(pageSize),
+		Continue:      pageToken,
 	})
 	if err != nil {
-		return nil, util.Wrap(err, fmt.Sprintf("List RayService failed in %s", namespace))
+		return nil, "" /*nextPageToken*/, util.Wrap(err, fmt.Sprintf("List RayService failed in %s with next page token %s and page limit %d", namespace, pageToken, pageSize))
 	}
 	rayServices := make([]*rayv1api.RayService, 0)
 	for _, service := range rayServiceList.Items {
 		rayServices = append(rayServices, &service)
 	}
 
-	return rayServices, nil
+	return rayServices, rayServiceList.Continue, nil
 }
 
 func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayService, error) {
@@ -305,7 +308,7 @@ func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayS
 	}
 
 	for _, namespace := range namespaces.Items {
-		servicesByNamespace, err := r.ListServices(ctx, namespace.Name)
+		servicesByNamespace, _, err := r.ListServices(ctx, namespace.Name, "" /*pageToken*/, 0 /*pageSize*/)
 		if err != nil {
 			return nil, util.Wrap(err, "List All Rayservices failed")
 		}

@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"strconv"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	klog "k8s.io/klog/v2"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 type KuberayAPIServerClient struct {
@@ -463,6 +463,10 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
 
+	q := httpRequest.URL.Query()
+	q.Set("pageSize", strconv.FormatInt(int64(request.PageSize), 10))
+	q.Set("pageToken", request.PageToken)
+	httpRequest.URL.RawQuery = q.Encode()
 	httpRequest.Header.Add("Accept", "application/json")
 
 	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)
@@ -473,6 +477,7 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
+
 	return response, nil, nil
 }
 
