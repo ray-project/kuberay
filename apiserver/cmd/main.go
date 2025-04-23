@@ -51,11 +51,21 @@ func main() {
 		_ = flagSet.Set("log_file", *logFile)
 	}
 
+	grpcTimeout := 60 * time.Second // Default timeout
+	if timeoutStr := os.Getenv("GRPC_SERVER_TIMEOUT"); timeoutStr != "" {
+		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+			grpcTimeout = timeout
+			klog.Infof("gRPC servier timeout set to %v", grpcTimeout)
+		} else {
+			klog.Warningf("Invalid GRPC_SERVER_TIMEOUT value: %v, using default timeout (60 seconds)", err)
+		}
+	}
+
 	clientManager := manager.NewClientManager()
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	go startRPCServer(resourceManager)
+	go startRPCServer(resourceManager, grpcTimeout)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
 	quit := make(chan os.Signal, 1)
@@ -71,7 +81,7 @@ func main() {
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
-func startRPCServer(resourceManager *manager.ResourceManager) {
+func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.Duration) {
 	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)
@@ -87,8 +97,13 @@ func startRPCServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptor.TimeoutInterceptor(60*time.Second), grpc_prometheus.UnaryServerInterceptor, interceptor.APIServerInterceptor)),
-		grpc.MaxRecvMsgSize(math.MaxInt32))
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			interceptor.TimeoutInterceptor(grpcTimeout),
+			grpc_prometheus.UnaryServerInterceptor,
+			interceptor.APIServerInterceptor,
+		)),
+		grpc.MaxRecvMsgSize(math.MaxInt32),
+	)
 	api.RegisterClusterServiceServer(s, clusterServer)
 	api.RegisterComputeTemplateServiceServer(s, templateServer)
 	api.RegisterRayJobServiceServer(s, jobServer)
