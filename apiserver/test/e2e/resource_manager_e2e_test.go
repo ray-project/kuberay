@@ -231,6 +231,10 @@ func TestResourceManagerDeleteCluster(t *testing.T) {
 			err := resourceManager.DeleteCluster(ctx, tc.input.clusterName, tc.input.namespace)
 			if tc.expectedErrorString == "" {
 				require.NoError(t, err, "No error expected")
+
+				// Verify the cluster is deleted
+				_, err := resourceManager.GetCluster(ctx, tc.input.clusterName, tc.input.namespace)
+				require.Error(t, err, "Cluster should not exist after deletion")
 			} else {
 				require.ErrorContains(t, err, tc.expectedErrorString)
 			}
