@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,6 +191,66 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 			}
 
 			assert.True(t, handler.called, "handler should have been called")
+		})
+	}
+}
+
+func TestTimeoutInterceptor(t *testing.T) {
+	tests := []struct {
+		expectedError  error
+		name           string
+		timeout        time.Duration
+		handlerDelay   time.Duration
+		expectedCalled bool
+	}{
+		{
+			name:           "handler completes before timeout",
+			timeout:        100 * time.Millisecond,
+			handlerDelay:   50 * time.Millisecond,
+			expectedError:  nil,
+			expectedCalled: true,
+		},
+		{
+			name:           "handler exceeds timeout",
+			timeout:        50 * time.Millisecond,
+			handlerDelay:   100 * time.Millisecond,
+			expectedError:  fmt.Errorf("grpc server timed out"),
+			expectedCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create test context and request
+			ctx := context.Background()
+			req := "test_request"
+			handler := &mockHandler{}
+
+			// Create the interceptor with the specified timeout
+			interceptor := TimeoutInterceptor(tt.timeout)
+
+			// Call the interceptor
+			resp, err := interceptor(
+				ctx,
+				req,
+				&grpc.UnaryServerInfo{FullMethod: "TestTimeoutMethod"},
+				func(ctx context.Context, req interface{}) (interface{}, error) {
+					time.Sleep(tt.handlerDelay)
+					return handler.Handle(ctx, req)
+				},
+			)
+
+			// Verify response and error
+			if tt.expectedError == nil {
+				// Verify handler was called
+				assert.Equal(t, tt.expectedCalled, handler.called, "handler call status should match expected")
+
+				require.NoError(t, err)
+				assert.Equal(t, "test_response", resp, "response should match expected")
+			} else {
+				require.Error(t, err)
+				require.EqualError(t, err, tt.expectedError.Error(), "A matching error is expected")
+			}
 		})
 	}
 }
