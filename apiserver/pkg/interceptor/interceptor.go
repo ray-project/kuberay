@@ -22,6 +22,7 @@ func APIServerInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	return
 }
 
+// TimeoutInterceptor implements UnaryServerInterceptor that sets the timeout for the request
 func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,

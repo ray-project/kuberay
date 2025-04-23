@@ -87,7 +87,7 @@ func startRPCServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptor.TimeoutInterceptor(20*time.Second), grpc_prometheus.UnaryServerInterceptor, interceptor.APIServerInterceptor)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(interceptor.TimeoutInterceptor(60*time.Second), grpc_prometheus.UnaryServerInterceptor, interceptor.APIServerInterceptor)),
 		grpc.MaxRecvMsgSize(math.MaxInt32))
 	api.RegisterClusterServiceServer(s, clusterServer)
 	api.RegisterComputeTemplateServiceServer(s, templateServer)
