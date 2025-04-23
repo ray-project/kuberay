@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
+
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 //go:embed resources/*.py

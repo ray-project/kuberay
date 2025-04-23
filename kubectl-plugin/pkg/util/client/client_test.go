@@ -16,7 +16,6 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
