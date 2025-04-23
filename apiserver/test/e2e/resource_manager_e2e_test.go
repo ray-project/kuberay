@@ -156,7 +156,7 @@ func TestListClusters(t *testing.T) {
 	}
 
 	// Verify returning 2 clusters each time using continue token
-	resRayClusters, continueToken, err := resourceManager.ListClusters(ctx, tCtx.GetNamespaceName(), "", 2)
+	resRayClusters, continueToken, err := resourceManager.ListClusters(ctx, tCtx.GetNamespaceName(), "" /*continueToken*/, 2 /*limit*/)
 	require.NoError(t, err)
 	assert.Len(t, resRayClusters, 2)
 
