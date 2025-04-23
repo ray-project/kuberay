@@ -48,9 +48,12 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -3564,6 +3567,73 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			} else {
 				// skip reconciliation
 				assert.InDelta(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds(), 1e-6)
+			}
+		})
+	}
+}
+
+func TestCollectRayClusterMetrics(t *testing.T) {
+	tests := []struct {
+		creationTime     time.Time
+		name             string
+		clusterName      string
+		clusterNamespace string
+		newClusterStatus rayv1.RayClusterStatus
+		oldClusterStatus rayv1.RayClusterStatus
+		expectMetric     bool
+	}{
+		{
+			name:             "Transition from not provisioned to provisioned (should emit metric)",
+			clusterName:      "test",
+			clusterNamespace: "default",
+			creationTime:     time.Now().Add(-100 * time.Second),
+			expectMetric:     true,
+			newClusterStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+				},
+			},
+			oldClusterStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionFalse},
+				},
+			},
+		},
+		{
+			name:             "No transition, both provisioned (should not emit metric)",
+			clusterName:      "test",
+			clusterNamespace: "default",
+			creationTime:     time.Now().Add(-100 * time.Second),
+			expectMetric:     false,
+			newClusterStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+				},
+			},
+			oldClusterStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := prometheus.NewRegistry()
+			collector := metrics.NewRayClusterMetricCollector()
+			require.NoError(t, registry.Register(collector))
+
+			collectRayClusterMetrics(collector, tc.clusterName, tc.clusterNamespace, tc.newClusterStatus, tc.oldClusterStatus, tc.creationTime)
+
+			metricFamilies, err := registry.Gather()
+			require.NoError(t, err)
+			for _, mf := range metricFamilies {
+				if tc.expectMetric {
+					require.Len(t, mf.Metric, 1)
+				} else {
+					assert.Empty(t, mf.Metric, "should not emit metric")
+				}
 			}
 		})
 	}
