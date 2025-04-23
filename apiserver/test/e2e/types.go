@@ -247,7 +247,7 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 			Name:      e2etc.computeTemplateName,
 			Namespace: e2etc.namespaceName,
 			Cpu:       ComputeTemplateCPUForE2E,
-			Memory:    ComputeTemplateMemForE2E,
+			Memory:    CompTemplateMemGiBForE2E,
 		},
 		Namespace: e2etc.namespaceName,
 	}

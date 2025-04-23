@@ -29,7 +29,7 @@ var (
 	TestTimeoutLong          = 5 * time.Minute
 	TestPollingInterval      = 500 * time.Millisecond
 	ComputeTemplateCPUForE2E = uint32(1) // CPU core
-	ComputeTemplateMemForE2E = uint32(1) // Gi
+	CompTemplateMemGiBForE2E = uint32(1)
 )
 
 // CreateHttpRequest instantiates a http request for the specified endpoint and host
