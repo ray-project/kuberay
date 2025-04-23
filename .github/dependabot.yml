@@ -15,3 +15,6 @@ updates:
       kubernetes:
         patterns:
           - "k8s.io/*"
+      google-golang:
+        patterns:
+          - "google.golang.org/*"
