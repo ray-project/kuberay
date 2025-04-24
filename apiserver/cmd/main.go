@@ -58,7 +58,7 @@ func main() {
 			grpcTimeout = timeout
 			klog.Infof("gRPC servier timeout set to %v", grpcTimeout)
 		} else {
-			klog.Warningf("Invalid GRPC_SERVER_TIMEOUT value: %v, using default timeout (60 seconds)", err)
+			klog.Warningf("Invalid GRPC_SERVER_TIMEOUT value: %v, using default timeout (%d seconds)", err, util.GRPCServerDefaultTimeoutSeconds)
 		}
 	}
 
