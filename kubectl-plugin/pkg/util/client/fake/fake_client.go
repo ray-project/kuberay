@@ -7,7 +7,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
 
