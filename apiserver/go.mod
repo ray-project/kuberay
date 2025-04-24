@@ -71,10 +71,17 @@ require (
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+<<<<<<< HEAD
   go.opentelemetry.io/otel v1.32.0 // indirect
   go.opentelemetry.io/otel/trace v1.32.0 // indirect
   golang.org/x/net v0.38.0 // indirect
   golang.org/x/oauth2 v0.27.0 // indirect
+=======
+	go.opentelemetry.io/otel v1.32.0 // indirect
+	go.opentelemetry.io/otel/trace v1.32.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
+>>>>>>> 6b36bdfb ([Chore] Update go module)
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
