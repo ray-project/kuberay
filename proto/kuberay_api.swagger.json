@@ -2034,7 +2034,7 @@
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices.",
+          "description": "The token to list the next page of RayServices.\n\nIf there are no more clusters, this field will be empty.",
           "readOnly": true
         }
       }

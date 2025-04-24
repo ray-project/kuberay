@@ -216,7 +216,7 @@ func TestGetAllServices(t *testing.T) {
 		tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{})
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
