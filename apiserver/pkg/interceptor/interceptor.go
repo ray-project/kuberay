@@ -50,7 +50,7 @@ func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 		case <-ctx.Done():
 			// Raise error if time out
 			if ctx.Err() == context.DeadlineExceeded {
-				return nil, fmt.Errorf("grpc server timed out")
+				return nil, fmt.Errorf("API server request timed out on the gRPC server")
 			}
 			return nil, ctx.Err()
 		case <-done:
