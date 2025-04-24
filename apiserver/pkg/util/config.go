@@ -30,4 +30,7 @@ const (
 
 	// The component name for apiserver
 	ComponentName = "kuberay-apiserver"
+
+	// Timeout for apiserver gRPC server
+	GRPCServerDefaultTimeoutSeconds = 60
 )

@@ -28,6 +28,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/swagger"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -51,7 +52,7 @@ func main() {
 		_ = flagSet.Set("log_file", *logFile)
 	}
 
-	grpcTimeout := 60 * time.Second // Default timeout
+	grpcTimeout := util.GRPCServerDefaultTimeoutSeconds * time.Second
 	if timeoutStr := os.Getenv("GRPC_SERVER_TIMEOUT"); timeoutStr != "" {
 		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
 			grpcTimeout = timeout
