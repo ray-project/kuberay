@@ -430,7 +430,34 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
+	// Emit metrics for the RayJob
+	emitRayJobMetrics(r.options.RayJobMetricsCollector, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+func emitRayJobMetrics(rayJobMetricsCollector *metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+	if rayJobMetricsCollector == nil {
+		return
+	}
+	// Emit kuberay_job_execution_duration_seconds if the job is in a terminal state or retrying (previously failed).
+	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
+		retryCount := 0
+		if originalRayJobStatus.Failed != nil {
+			retryCount += int(*originalRayJobStatus.Failed)
+		}
+		result := rayJobStatus.JobDeploymentStatus
+		if result == rayv1.JobDeploymentStatusRetrying {
+			// If the job is in the retrying state, it was previously failed.
+			result = rayv1.JobDeploymentStatusFailed
+		}
+		rayJobMetricsCollector.ObserveRayJobExecutionDuration(
+			rayJobName,
+			rayJobNamespace,
+			string(result),
+			retryCount,
+			time.Since(rayJobStatus.StartTime.Time).Seconds(),
+		)
+	}
 }
 
 // checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,

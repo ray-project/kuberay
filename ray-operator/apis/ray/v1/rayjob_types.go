@@ -56,6 +56,14 @@ const (
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
+func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
+	terminalStatusSet := map[JobDeploymentStatus]struct{}{
+		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
+	}
+	_, ok := terminalStatusSet[status]
+	return ok
+}
+
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
 type JobFailedReason string
 
