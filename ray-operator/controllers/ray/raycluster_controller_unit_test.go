@@ -25,6 +25,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
@@ -47,8 +48,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -3586,7 +3585,7 @@ func TestCollectRayClusterMetrics(t *testing.T) {
 			name:             "Transition from not provisioned to provisioned (should emit metric)",
 			clusterName:      "test",
 			clusterNamespace: "default",
-			creationTime:     time.Now().Add(-100 * time.Second),
+			creationTime:     time.Now(),
 			expectMetric:     true,
 			newClusterStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
@@ -3603,7 +3602,7 @@ func TestCollectRayClusterMetrics(t *testing.T) {
 			name:             "No transition, both provisioned (should not emit metric)",
 			clusterName:      "test",
 			clusterNamespace: "default",
-			creationTime:     time.Now().Add(-100 * time.Second),
+			creationTime:     time.Now(),
 			expectMetric:     false,
 			newClusterStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
@@ -3628,12 +3627,21 @@ func TestCollectRayClusterMetrics(t *testing.T) {
 
 			metricFamilies, err := registry.Gather()
 			require.NoError(t, err)
+			found := false
 			for _, mf := range metricFamilies {
-				if tc.expectMetric {
-					require.Len(t, mf.Metric, 1)
-				} else {
-					assert.Empty(t, mf.Metric, "should not emit metric")
+				if mf.GetName() == "kuberay_cluster_provisioned_duration_seconds" {
+					found = true
+					if tc.expectMetric {
+						require.Len(t, mf.Metric, 1)
+						assert.Equal(t, tc.clusterName, mf.Metric[0].GetLabel()[0].GetValue())
+						assert.Equal(t, tc.clusterNamespace, mf.Metric[0].GetLabel()[1].GetValue())
+					} else {
+						assert.Empty(t, mf.Metric, "should not emit metric")
+					}
 				}
+			}
+			if tc.expectMetric && !found {
+				t.Errorf("expected metric 'kuberay_cluster_provisioned_duration_seconds' not found")
 			}
 		})
 	}
