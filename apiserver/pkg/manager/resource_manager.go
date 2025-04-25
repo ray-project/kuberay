@@ -3,8 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -298,83 +296,6 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pa
 	}
 
 	return rayServices, rayServiceList.Continue, nil
-}
-
-// ListAllServices retrieves Ray services across all namespaces with pagination support
-// pageToken format: "namespace[:continueToken]" where continueToken is optional
-// pageSize controls max number of services returned in a single call
-func (r *ResourceManager) ListAllServices(ctx context.Context, pageToken string, pageSize int32) ([]*rayv1api.RayService, string /*nextPageToken*/, error) {
-	rayServices := make([]*rayv1api.RayService, 0)
-
-	// Get all namespaces and sort them for consistent pagination
-	namespaceList, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, "", util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
-	}
-
-	// Extract and sort namespace names
-	sortedNamespaceList := make([]string, 0, len(namespaceList.Items))
-	for _, ns := range namespaceList.Items {
-		sortedNamespaceList = append(sortedNamespaceList, ns.Name)
-	}
-	sort.Strings(sortedNamespaceList)
-
-	// Parse pageToken to determine starting point
-	startNamespaceIdx := 0
-	continueToken := ""
-	if pageToken != "" {
-		tokens := strings.SplitN(pageToken, ":", 2)
-
-		// Extract namespace from token
-		namespaceToken := tokens[0]
-		found := false
-		for i, name := range sortedNamespaceList {
-			if name == namespaceToken {
-				startNamespaceIdx = i
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return nil, "", util.NewInvalidInputError("Invalid namespace in page token: %s", namespaceToken)
-		}
-
-		// Extract continue token if present
-		if len(tokens) == 2 {
-			continueToken = tokens[1]
-		}
-	}
-
-	// Collect services across namespaces up to page size
-	remainingCount := pageSize
-	var nextPageToken string
-	for i := startNamespaceIdx; i < len(sortedNamespaceList) && remainingCount > 0; i++ {
-		namespace := sortedNamespaceList[i]
-		servicesByNamespace, nextContinueToken, err := r.ListServices(ctx, namespace, continueToken, remainingCount)
-		if err != nil {
-			return nil, "", util.Wrap(err, fmt.Sprintf("Failed to list services in namespace %s", namespace))
-		}
-		rayServices = append(rayServices, servicesByNamespace...)
-
-		//nolint:gosec // The conversion is safe since servicesByNamespace is limited by remainingCount (which is int32)
-		remainingCount -= int32(len(servicesByNamespace))
-		continueToken = ""
-
-		// Determine if we need to create a next page token
-		if nextContinueToken != "" {
-			// More services in this namespace - create token with continue value
-			nextPageToken = namespace + ":" + nextContinueToken
-			return rayServices, nextPageToken, nil
-		} else if remainingCount == 0 && i+1 < len(sortedNamespaceList) {
-			// Page is full, but more namespaces exist - create token to start at next namespace
-			nextPageToken = sortedNamespaceList[i+1]
-			return rayServices, nextPageToken, nil
-		}
-	}
-
-	// No more results - return empty token
-	return rayServices, "", nil
 }
 
 func (r *ResourceManager) DeleteService(ctx context.Context, serviceName, namespace string) error {

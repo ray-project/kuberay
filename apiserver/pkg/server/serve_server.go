@@ -109,7 +109,7 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 }
 
 func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
-	services, nextPageToken, err := s.resourceManager.ListAllServices(ctx, request.PageToken, request.PageSize)
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, "" /*namespace*/, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
 	}
