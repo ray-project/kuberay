@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -231,10 +232,14 @@ func main() {
 	exitOnError(err, "unable to start manager")
 
 	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
-	var rayJobMetricsCollector *metrics.RayJobMetricsCollector
+	var rayJobMetricsCollector ray.RayJobMetricsCollector = metrics.NewRayJobNoopCollector()
 	if config.EnableMetrics {
 		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
-		rayJobMetricsCollector = metrics.NewRayJobMetricsCollector()
+		rayJobMetricsCollector = metrics.NewRayJobCollector()
+		rayJobMetricsCollector, ok := rayJobMetricsCollector.(prometheus.Collector)
+		if !ok {
+			exitOnError(fmt.Errorf("RayJobMetricsCollector does not implement prometheus.Collector"), "failed to register RayJobMetricsCollector")
+		}
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricCollector,
 			rayJobMetricsCollector,

@@ -6,15 +6,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// RayJobMetricsCollector implements the prometheus.Collector interface to collect ray job metrics.
-type RayJobMetricsCollector struct {
-	// Metrics
+// RayJobCollector implements the prometheus.Collector and ray.RayJobMetricsCollector interface to collect ray job metrics.
+type RayJobCollector struct {
 	rayJobExecutionDurationSeconds *prometheus.GaugeVec
 }
 
-// NewRayJobMetricsCollector creates a new RayJobMetricsCollector instance.
-func NewRayJobMetricsCollector() *RayJobMetricsCollector {
-	collector := &RayJobMetricsCollector{
+// NewRayJobCollector creates a new RayJobCollector instance.
+func NewRayJobCollector() *RayJobCollector {
+	collector := &RayJobCollector{
 		rayJobExecutionDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_job_execution_duration_seconds",
@@ -27,15 +26,24 @@ func NewRayJobMetricsCollector() *RayJobMetricsCollector {
 }
 
 // Describe implements prometheus.Collector interface Describe method.
-func (c *RayJobMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
+func (c *RayJobCollector) Describe(ch chan<- *prometheus.Desc) {
 	c.rayJobExecutionDurationSeconds.Describe(ch)
 }
 
 // Collect implements prometheus.Collector interface Collect method.
-func (c *RayJobMetricsCollector) Collect(ch chan<- prometheus.Metric) {
+func (c *RayJobCollector) Collect(ch chan<- prometheus.Metric) {
 	c.rayJobExecutionDurationSeconds.Collect(ch)
 }
 
-func (c *RayJobMetricsCollector) ObserveRayJobExecutionDuration(name, namespace, result string, retryCount int, duration float64) {
+func (c *RayJobCollector) ObserveRayJobExecutionDuration(name, namespace, result string, retryCount int, duration float64) {
 	c.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, result, strconv.Itoa(retryCount)).Set(duration)
+}
+
+type RayJobNoopCollector struct{}
+
+func NewRayJobNoopCollector() *RayJobNoopCollector {
+	return &RayJobNoopCollector{}
+}
+
+func (c *RayJobNoopCollector) ObserveRayJobExecutionDuration(_ string, _ string, _ string, _ int, _ float64) {
 }

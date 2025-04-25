@@ -3,22 +3,28 @@ package ray
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
@@ -524,4 +530,97 @@ func TestFailedDeleteRayClusterEvent(t *testing.T) {
 	}
 
 	assert.Truef(t, foundFailureEvent, "Expected event to be generated for cluster deletion failure, got events: %s", strings.Join(events, "\n"))
+}
+
+func TestEmitRayJobExecutionDuration(t *testing.T) {
+	rayJobName := "test-job"
+	rayJobNamespace := "default"
+	mockTime := time.Now().Add(-60 * time.Second)
+
+	//nolint:govet // disable govet to keep the order of the struct fields
+	tests := []struct {
+		name                 string
+		originalRayJobStatus rayv1.RayJobStatus
+		rayJobStatus         rayv1.RayJobStatus
+		expectMetricsCall    bool
+		expectedResult       string
+		expectedRetryCount   int
+		expectedDuration     float64
+	}{
+		{
+			name: "non-terminal to complete state should emit metrics",
+			originalRayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+			rayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+				StartTime:           &metav1.Time{Time: mockTime},
+			},
+			expectMetricsCall:  true,
+			expectedResult:     string(rayv1.JobDeploymentStatusComplete),
+			expectedRetryCount: 0,
+			expectedDuration:   60.0,
+		},
+		{
+			name: "non-terminal to failed state should emit metrics",
+			originalRayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+			rayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+				StartTime:           &metav1.Time{Time: mockTime},
+			},
+			expectMetricsCall:  true,
+			expectedResult:     string(rayv1.JobDeploymentStatusFailed),
+			expectedRetryCount: 0,
+			expectedDuration:   60.0,
+		},
+		{
+			name: "non-terminal to retrying state should emit metrics",
+			originalRayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+				Failed:              pointer.Int32(2),
+			},
+			rayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+				StartTime:           &metav1.Time{Time: mockTime},
+			},
+			expectMetricsCall:  true,
+			expectedResult:     string(rayv1.JobDeploymentStatusFailed),
+			expectedRetryCount: 2,
+			expectedDuration:   60.0,
+		},
+		{
+			name: "non-terminal to non-terminal state should not emit metrics",
+			originalRayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusInitializing,
+			},
+			rayJobStatus: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+			expectMetricsCall: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayJobMetricsCollector(ctrl)
+			if tt.expectMetricsCall {
+				mockCollector.EXPECT().
+					ObserveRayJobExecutionDuration(
+						rayJobName,
+						rayJobNamespace,
+						tt.expectedResult,
+						tt.expectedRetryCount,
+						mock.MatchedBy(func(d float64) bool {
+							// Allow some wiggle room in timing
+							return math.Abs(d-tt.expectedDuration) < 1.0
+						}),
+					).Times(1)
+			}
+
+			emitRayJobMetrics(mockCollector, rayJobName, rayJobNamespace, tt.originalRayJobStatus, tt.rayJobStatus)
+		})
+	}
 }

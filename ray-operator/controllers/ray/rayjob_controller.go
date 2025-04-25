@@ -24,7 +24,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -45,8 +44,13 @@ type RayJobReconciler struct {
 	options             RayJobReconcilerOptions
 }
 
+//go:generate mockgen -destination=mocks/rayjob_controller_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray RayJobMetricsCollector
+type RayJobMetricsCollector interface {
+	ObserveRayJobExecutionDuration(name, namespace, result string, retryCount int, duration float64)
+}
+
 type RayJobReconcilerOptions struct {
-	RayJobMetricsCollector *metrics.RayJobMetricsCollector
+	RayJobMetricsCollector RayJobMetricsCollector
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -435,10 +439,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func emitRayJobMetrics(rayJobMetricsCollector *metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
-	if rayJobMetricsCollector == nil {
-		return
-	}
+func emitRayJobMetrics(rayJobMetricsCollector RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+	emitRayJobExecutionDuration(rayJobMetricsCollector, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
+}
+
+func emitRayJobExecutionDuration(rayJobMetricsCollector RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
 	// Emit kuberay_job_execution_duration_seconds if the job is in a terminal state or retrying (previously failed).
 	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
 		retryCount := 0
