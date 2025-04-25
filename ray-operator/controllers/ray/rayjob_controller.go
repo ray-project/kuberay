@@ -444,7 +444,7 @@ func emitRayJobMetrics(rayJobMetricsCollector RayJobMetricsCollector, rayJobName
 }
 
 func emitRayJobExecutionDuration(rayJobMetricsCollector RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
-	// Emit kuberay_job_execution_duration_seconds if the job is in a terminal state or retrying (previously failed).
+	// Emit kuberay_job_execution_duration_seconds when a job transitions from a non-terminal state to either a terminal state or a retrying state (following a failure).
 	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
 		retryCount := 0
 		if originalRayJobStatus.Failed != nil {
