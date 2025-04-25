@@ -15,7 +15,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )

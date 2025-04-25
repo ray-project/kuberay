@@ -7,7 +7,7 @@ linters-settings:
   ginkgolinter:
     forbid-focus-container: true
   goimports:
-    local-prefixes: github.com/ray-project/kuberay/ray-operator
+    local-prefixes: github.com/ray-project/kuberay
   misspell:
     locale: US
   nolintlint:
@@ -55,11 +55,18 @@ linters-settings:
       - fieldalignment
   lll:
     line-length: 120
+  gci: # Splits all import blocks into different sections and sorts them.
+    sections:
+      - standard # Go official imports, like "fmt"
+      - default # Third-party libraries (anything not in standard or prefix)
+      - prefix(github.com/ray-project/kuberay) # kuberay packages
+    skip-generated: true
 linters:
   enable:
     - asciicheck
     - errcheck
     - errorlint
+    - gci
     - ginkgolinter
 #    - gocyclo
     - gofmt
