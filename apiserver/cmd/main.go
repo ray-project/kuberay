@@ -38,6 +38,7 @@ var (
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
+	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeoutSeconds*time.Second, "gRPC server timeout duration")
 	healthy            int32
 )
 
@@ -52,21 +53,12 @@ func main() {
 		_ = flagSet.Set("log_file", *logFile)
 	}
 
-	grpcTimeout := util.GRPCServerDefaultTimeoutSeconds * time.Second
-	if timeoutStr := os.Getenv("GRPC_SERVER_TIMEOUT"); timeoutStr != "" {
-		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
-			grpcTimeout = timeout
-			klog.Infof("gRPC servier timeout set to %v", grpcTimeout)
-		} else {
-			klog.Warningf("Invalid GRPC_SERVER_TIMEOUT value: %v, using default timeout (%d seconds)", err, util.GRPCServerDefaultTimeoutSeconds)
-		}
-	}
-
 	clientManager := manager.NewClientManager()
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	go startRPCServer(resourceManager, grpcTimeout)
+	klog.Infof("Setting gRPC server timeout to %v", grpcTimeout)
+	go startRPCServer(resourceManager, *grpcTimeout)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
 	quit := make(chan os.Signal, 1)
