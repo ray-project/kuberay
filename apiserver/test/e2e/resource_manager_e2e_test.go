@@ -124,7 +124,6 @@ func TestListClusters(t *testing.T) {
 	}
 
 	// Create cluster
-	// TODO: need to add compute template string here to prevent panic
 	clustersList := []*api.Cluster{
 		{
 			Name:        tCtx.GetNextName(),
