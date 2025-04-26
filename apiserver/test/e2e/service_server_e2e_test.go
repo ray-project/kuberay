@@ -225,6 +225,80 @@ func TestGetAllServices(t *testing.T) {
 	require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
 }
 
+func createOneServiceInEachNamespace(t *testing.T, numberOfNamespaces int) ([]*End2EndTestingContext, []string) {
+	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
+	serviceNames := make([]string, 0, numberOfNamespaces)
+
+	for i := 0; i < numberOfNamespaces; i++ {
+		tCtx, err := NewEnd2EndTestingContext(t)
+		require.NoError(t, err, "No error expected when creating testing context")
+
+		tCtx.CreateComputeTemplate(t)
+		t.Cleanup(func() {
+			tCtx.DeleteComputeTemplate(t)
+		})
+
+		testServiceRequest := createTestServiceV2(t, tCtx)
+		t.Cleanup(func() {
+			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
+		})
+
+		tCtxs[i] = tCtx
+		serviceNames = append(serviceNames, testServiceRequest.Service.Name)
+	}
+
+	return tCtxs, serviceNames
+}
+
+func TestGetAllServicesWithPagination(t *testing.T) {
+	const numberOfNamespaces = 3
+
+	var tCtxs []*End2EndTestingContext
+	var expectedServiceNames []string
+	tCtxs, expectedServiceNames = createOneServiceInEachNamespace(t, numberOfNamespaces)
+
+	var pageToken string
+	tCtx := tCtxs[0]
+	pageToken = ""
+	gotServices := make([]bool, numberOfNamespaces)
+
+	for i := 0; i < numberOfNamespaces; i++ {
+		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
+			PageToken: pageToken,
+			PageSize:  int32(1),
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.NotEmpty(t, response.Services, "A list of service is required")
+		require.Len(t, response.Services, 1)
+
+		for _, service := range response.Services {
+			for j, ctx := range tCtxs {
+				if service.Namespace == ctx.GetNamespaceName() &&
+					service.Name == expectedServiceNames[j] {
+					gotServices[j] = true
+					break
+				}
+			}
+		}
+
+		pageToken = response.NextPageToken
+		if i == numberOfNamespaces-1 {
+			require.Empty(t, pageToken, "No continue token is expected")
+		} else {
+			require.NotEmpty(t, pageToken, "A continue token is expected")
+		}
+	}
+	// Ensure we found all services
+	for i := 0; i < numberOfNamespaces; i++ {
+		if !gotServices[i] {
+			t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
+				expectedServiceNames[i], tCtxs[i].GetNamespaceName())
+		}
+	}
+}
+
 func TestGetServicesInNamespace(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")

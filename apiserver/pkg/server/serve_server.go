@@ -113,7 +113,7 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
 	}
-	serviceEventMap := make(map[string][]corev1.Event, len(services))
+	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
 		if err != nil {
