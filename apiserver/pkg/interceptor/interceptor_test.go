@@ -23,6 +23,10 @@ type mockHandler struct {
 	called    bool
 }
 
+// Handle simulates the behavior of a gRPC handler with an optional delay.
+// If the delay completes before the context expires, it returns "test_response" along with predefined error.
+// If the context is canceled or the deadline is exceeded before the delay completes,
+// it returns a corresponding gRPC status error instead.
 func (h *mockHandler) Handle(ctx context.Context, _ interface{}, delay time.Duration) (interface{}, error) {
 	h.called = true
 
