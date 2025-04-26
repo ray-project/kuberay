@@ -57,7 +57,7 @@ func main() {
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	klog.Infof("Setting gRPC server timeout to %v", grpcTimeout)
+	klog.Infof("Setting gRPC server timeout to %v", *grpcTimeout)
 	go startRPCServer(resourceManager, *grpcTimeout)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
