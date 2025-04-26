@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-
-	"github.com/stretchr/testify/require"
 )
 
 // TestServiceServerV2 sequentially iterates over the endpoints of the service endpoints using

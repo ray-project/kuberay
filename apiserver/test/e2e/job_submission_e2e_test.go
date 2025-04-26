@@ -3,9 +3,9 @@ package e2e
 import (
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	"github.com/stretchr/testify/require"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 func TestCreateJobSubmission(t *testing.T) {

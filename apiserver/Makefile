@@ -56,11 +56,11 @@ help: ## Display this help.
 
 ##@ Deployment
 
-.PHONY: start-local-apiserver ## Build and start apiserver from scratch.
-start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run
+.PHONY: start-local-apiserver
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
 
-.PHONY: clean-local-apiserver ## Clear local apiserver.
-clear-local-apiserver: clean-cluster
+.PHONY: clear-local-apiserver
+clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
 ##@ Development
 
@@ -120,7 +120,11 @@ OPERATOR_IMAGE_TAG ?= latest
 SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
-	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
+	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
+		echo "Kind cluster $(KIND_CLUSTER_NAME) already exists, please run 'make clean-cluster' to delete the cluster."; \
+	else \
+		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
+	fi
 
 .PHONY: clean-cluster
 clean-cluster: kind ## Delete kind development cluster.

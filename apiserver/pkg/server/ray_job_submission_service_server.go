@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 

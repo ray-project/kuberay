@@ -5,6 +5,14 @@ WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY apiserver/go.mod apiserver/go.mod
 COPY apiserver/go.sum apiserver/go.sum
+COPY proto/go.mod proto/go.mod
+COPY proto/go.sum proto/go.sum
+COPY ray-operator/go.mod ray-operator/go.mod
+COPY ray-operator/go.sum ray-operator/go.sum
+
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN cd apiserver && go mod download && cd ..
 
 # Copy the go source
 COPY proto/ proto/
@@ -12,9 +20,7 @@ COPY ray-operator/ ray-operator/
 COPY apiserver/ apiserver/
 
 WORKDIR /workspace/apiserver
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+
 
 # Build
 USER root

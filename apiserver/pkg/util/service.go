@@ -6,7 +6,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
-
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
