@@ -17,7 +17,7 @@ You could build and start apiserver from scratch on your local environment in on
 make start-local-apiserver
 ```
 
-apiserver supports HTTP request, so you could easily check whether it's started successfully by by issuing two simple curl requests.
+apiserver supports HTTP request, so you could easily check whether it's started successfully by issuing two simple curl requests.
 
 ```sh
 # Create complete template.
