@@ -2,7 +2,6 @@ package interceptor
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
@@ -30,32 +29,8 @@ func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		// Create a context with timeout
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
-
-		// Channel to capture execution result
-		done := make(chan struct{})
-		var (
-			resp interface{}
-			err  error
-		)
-
-		go func() {
-			resp, err = handler(ctx, req)
-			close(done)
-		}()
-
-		select {
-		case <-ctx.Done():
-			// Raise error if time out
-			if ctx.Err() == context.DeadlineExceeded {
-				return nil, fmt.Errorf("API server request timed out on the gRPC server")
-			}
-			return nil, ctx.Err()
-		case <-done:
-			// Handler finished
-			return resp, err
-		}
+		return handler(ctx, req)
 	}
 }
