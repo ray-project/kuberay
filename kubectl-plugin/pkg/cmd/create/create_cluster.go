@@ -5,19 +5,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/templates"
 	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/kubectl/pkg/util/templates"
-
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )

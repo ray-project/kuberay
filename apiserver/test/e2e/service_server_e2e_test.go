@@ -1,17 +1,13 @@
 package e2e
 
 import (
-	"context"
 	"net/http"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // TestServiceServerV2 sequentially iterates over the endpoints of the service endpoints using
@@ -198,7 +194,7 @@ func TestDeleteService(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedService(t, tCtx, testServiceRequest.Service.Name)
+				waitForServiceToDisappear(t, tCtx, testServiceRequest.Service.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -475,19 +471,4 @@ func checkRayServiceCreatedSuccessfully(t *testing.T, tCtx *End2EndTestingContex
 	rayService, err := tCtx.GetRayServiceByName(serviceName)
 	require.NoError(t, err)
 	require.NotNil(t, rayService)
-}
-
-func waitForDeletedService(t *testing.T, tCtx *End2EndTestingContext, serviceName string) {
-	// wait for the service to be deleted
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err := tCtx.GetRayServiceByName(serviceName)
-		if err != nil &&
-			assert.EqualError(t, err, "rayservices.ray.io \""+serviceName+"\" not found") {
-			return true, nil
-		}
-		t.Logf("Found status of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, err
-	})
-	require.NoErrorf(t, err, "No error expected when deleting ray service: '%s', err %v", serviceName, err)
 }

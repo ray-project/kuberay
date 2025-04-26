@@ -5,19 +5,17 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/rest"
-
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/rest"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type CreateWorkerGroupOptions struct {

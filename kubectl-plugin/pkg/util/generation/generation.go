@@ -6,18 +6,15 @@ import (
 	"os"
 	"strconv"
 
-	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
-
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-	"k8s.io/utils/ptr"
-
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 )

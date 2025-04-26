@@ -1,13 +1,15 @@
 package client
 
 import (
+	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
-	"k8s.io/client-go/kubernetes"
-	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
+
+//go:generate mockgen -source=kubernetes.go -destination=kubernetes_mock.go -package=client
 
 type KubernetesClientInterface interface {
 	PodClient(namespace string) v1.PodInterface

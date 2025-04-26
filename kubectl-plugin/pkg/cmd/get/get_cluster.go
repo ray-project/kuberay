@@ -7,9 +7,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -17,6 +14,9 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 

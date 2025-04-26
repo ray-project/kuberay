@@ -11,13 +11,13 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zerologr"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 

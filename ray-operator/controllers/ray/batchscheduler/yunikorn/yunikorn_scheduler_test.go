@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -15,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func TestPopulatePodLabels(t *testing.T) {

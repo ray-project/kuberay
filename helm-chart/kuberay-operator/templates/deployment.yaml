@@ -34,7 +34,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ .Values.serviceAccount.name  }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
@@ -65,7 +65,7 @@ spec:
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
           command:
-            - {{ .Values.operatorComand }}
+            - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}

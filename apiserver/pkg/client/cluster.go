@@ -2,10 +2,9 @@ package client
 
 import (
 	"k8s.io/klog/v2"
-
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )

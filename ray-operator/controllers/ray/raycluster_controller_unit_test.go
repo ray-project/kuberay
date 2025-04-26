@@ -24,18 +24,9 @@ import (
 	"testing"
 	"time"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-	"github.com/ray-project/kuberay/ray-operator/test/support"
-
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -50,14 +41,20 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	// +kubebuilder:scaffold:imports
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 var (

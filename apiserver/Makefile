@@ -1,30 +1,30 @@
 BUILD_TIME      := $(shell date "+%F %T")
-COMMIT_SHA1     := $(shell git rev-parse HEAD )
+COMMIT_SHA1     := $(shell git rev-parse HEAD)
 REPO_ROOT	    := $(shell dirname ${PWD})
 REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
 IMG_REPO ?= quay.io/kuberay/apiserver
-IMG_TAG ?=latest
+IMG_TAG ?= latest
 IMG ?= $(IMG_REPO):$(IMG_TAG)
 
 # Allow for additional test flags (-v, etc)
 GO_TEST_FLAGS ?=
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
-ifeq (arm64,$(shell go env GOARCH))
-E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.9.0-py310-aarch64
+ifeq (arm64, $(shell go env GOARCH))
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310-aarch64
 else
-E2E_API_SERVER_RAY_IMAGE ?=rayproject/ray:2.9.0-py310
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310
 endif
 # Kuberay API Server base URL to use in end to end tests
-E2E_API_SERVER_URL ?=http://localhost:31888
+E2E_API_SERVER_URL ?= http://localhost:31888
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+ifeq (, $(shell go env GOBIN))
+	GOBIN = $(shell go env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+	GOBIN = $(shell go env GOBIN)
 endif
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -56,15 +56,15 @@ help: ## Display this help.
 
 ##@ Deployment
 
-.PHONY: start-local-apiserver ## Build and start apiserver from scratch.
-start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run
+.PHONY: start-local-apiserver
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
 
-.PHONY: clean-local-apiserver ## Clear local apiserver.
-clear-local-apiserver: clean-cluster
+.PHONY: clear-local-apiserver
+clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
 ##@ Development
 
-.PHONY:
+.PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
@@ -86,7 +86,7 @@ lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
 
 build: fmt vet fumpt imports ## Build api server binary.
-	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
+	go build -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
 run: fmt vet fumpt imports lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
@@ -95,15 +95,20 @@ run: fmt vet fumpt imports lint ## Run the api server from your host.
 build-swagger: go-bindata
 	cd $(REPO_ROOT) && $(GOBINDATA) --nocompress --pkg swagger -o apiserver/pkg/swagger/datafile.go third_party/swagger-ui/...
 
+.PHONY: generate
+generate: mockgen # Generate code using command after //go:generate in each file
+	# temporarily prepend local bin/ directory to the system $PATH to run mockgen
+	PATH=$(REPO_ROOT_BIN):$$PATH go generate ./...
+
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports ## Run all unit tests.
-	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out  -parallel 4
+test: fmt vet fumpt imports generate ## Run all unit tests.
+	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
 e2e-test: ## Run end to end tests using a pre-exiting cluster.
-	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m  -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
+	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
 local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
@@ -115,7 +120,11 @@ OPERATOR_IMAGE_TAG ?= latest
 SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
-	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
+	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
+		echo "Kind cluster $(KIND_CLUSTER_NAME) already exists, please run 'make clean-cluster' to delete the cluster."; \
+	else \
+		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
+	fi
 
 .PHONY: clean-cluster
 clean-cluster: kind ## Delete kind development cluster.
@@ -135,7 +144,7 @@ security-proxy-image: ## Build the security proxy image to be loaded in your kin
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
-# Note that you should make your operatorimage available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
+# Note that you should make your operator image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster.
 # If you are using a Kind cluster for development, you can run `make load-operator-image` to load the newly built image into the Kind cluster.
 	helm upgrade --install raycluster ../helm-chart/kuberay-operator --wait \
 	--set image.tag=${OPERATOR_IMAGE_TAG} --set image.pullPolicy=IfNotPresent
@@ -146,20 +155,20 @@ undeploy-operator: ## Undeploy operator via helm from the K8s cluster specified 
 
 .PHONY: load-operator-image
 load-operator-image: ## Load the operator image to the kind cluster created with make cluster.
-ifneq (${OPERATOR_IMAGE_TAG}, latest)
+ifneq ($(OPERATOR_IMAGE_TAG), latest)
 	$(ENGINE) pull quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 endif
 	$(KIND) load docker-image quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
-ifneq (${SECURITY_IMAGE_TAG}, latest)
+ifneq ($(SECURITY_IMAGE_TAG), latest)
 	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 endif
 	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-ray-test-image
-load-ray-test-image: ## Load the ray test images
+load-ray-test-image: ## Load the ray test images.
 	$(ENGINE) pull $(E2E_API_SERVER_RAY_IMAGE)
 	$(KIND) load docker-image $(E2E_API_SERVER_RAY_IMAGE) -n $(KIND_CLUSTER_NAME)
 
@@ -213,6 +222,7 @@ GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
 KIND ?= $(REPO_ROOT_BIN)/kind
 GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
+MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 
 
 ## Tool Versions
@@ -222,6 +232,7 @@ GOIMPORTS_VERSION ?= v0.14.0
 GOLANGCI_LINT_VERSION ?= v1.64.8
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
+MOCKGEN_VERSION ?= v1.6.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -254,14 +265,20 @@ go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
 $(GOBINDATA): $(REPO_ROOT_BIN)
 	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
 
+.PHONY: mockgen
+mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
+$(MOCKGEN): $(REPO_ROOT_BIN)
+	test -s $(MOCKGEN) || GOBIN=$(REPO_ROOT_BIN) go install github.com/golang/mock/mockgen@$(MOCKGEN_VERSION)
+
 .PHONY: dev-tools
-dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata ## Install all development tools
+dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata mockgen ## Install all development tools.
 
 .PHONY: clean-dev-tools
-clean-dev-tools: ## Remove all development tools
-	rm -f $(REPO_ROOT_BIN)/golangci-lint
-	rm -f $(REPO_ROOT_BIN)/gofumpt
-	rm -f $(REPO_ROOT_BIN)/kustomize
-	rm -f $(REPO_ROOT_BIN)/goimports
-	rm -f $(REPO_ROOT_BIN)/kind
-	rm -f $(REPO_ROOT_BIN)/go-bindata
+clean-dev-tools: ## Remove all development tools.
+	rm -f $(GOLANGCI_LINT)
+	rm -f $(GOFUMPT)
+	rm -f $(KUSTOMIZE)
+	rm -f $(GOIMPORTS)
+	rm -f $(KIND)
+	rm -f $(GOBINDATA)
+	rm -f $(MOCKGEN)
