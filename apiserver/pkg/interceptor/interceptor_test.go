@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -13,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	klog "k8s.io/klog/v2"
 )
 
@@ -22,9 +23,24 @@ type mockHandler struct {
 	called    bool
 }
 
-func (h *mockHandler) Handle(_ context.Context, _ interface{}) (interface{}, error) {
+func (h *mockHandler) Handle(ctx context.Context, _ interface{}, delay time.Duration) (interface{}, error) {
 	h.called = true
-	return "test_response", h.returnErr
+
+	select {
+	case <-time.After(delay):
+		return "test_response", h.returnErr
+	case <-ctx.Done():
+		var grpcCode codes.Code
+		switch ctx.Err() {
+		case context.Canceled:
+			grpcCode = codes.Canceled
+		case context.DeadlineExceeded:
+			grpcCode = codes.DeadlineExceeded
+		default:
+			grpcCode = codes.Unknown
+		}
+		return nil, status.Error(grpcCode, ctx.Err().Error())
+	}
 }
 
 func TestAPIServerInterceptor(t *testing.T) {
@@ -63,7 +79,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 				req,
 				info,
 				func(ctx context.Context, req interface{}) (interface{}, error) {
-					return tt.handler.Handle(ctx, req)
+					return tt.handler.Handle(ctx, req, 0)
 				},
 			)
 
@@ -98,7 +114,7 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		func(receivedCtx context.Context, req interface{}) (interface{}, error) {
 			// Verify context value is passed through
 			assert.Equal(t, "test_value", receivedCtx.Value(testContextKey("test_key")))
-			return handler.Handle(receivedCtx, req)
+			return handler.Handle(receivedCtx, req, 0)
 		},
 	)
 }
@@ -155,7 +171,7 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 				"test_request",
 				info,
 				func(receivedCtx context.Context, req interface{}) (interface{}, error) {
-					return handler.Handle(receivedCtx, req)
+					return handler.Handle(receivedCtx, req, 0)
 				},
 			)
 
@@ -214,7 +230,7 @@ func TestTimeoutInterceptor(t *testing.T) {
 			name:           "handler exceeds timeout",
 			timeout:        50 * time.Millisecond,
 			handlerDelay:   100 * time.Millisecond,
-			expectedError:  fmt.Errorf("grpc server timed out"),
+			expectedError:  status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
 			expectedCalled: true,
 		},
 	}
@@ -235,8 +251,7 @@ func TestTimeoutInterceptor(t *testing.T) {
 				req,
 				&grpc.UnaryServerInfo{FullMethod: "TestTimeoutMethod"},
 				func(ctx context.Context, req interface{}) (interface{}, error) {
-					time.Sleep(tt.handlerDelay)
-					return handler.Handle(ctx, req)
+					return handler.Handle(ctx, req, tt.handlerDelay)
 				},
 			)
 
@@ -249,7 +264,7 @@ func TestTimeoutInterceptor(t *testing.T) {
 				assert.Equal(t, "test_response", resp, "response should match expected")
 			} else {
 				require.Error(t, err)
-				require.EqualError(t, err, tt.expectedError.Error(), "A matching error is expected")
+				require.Equal(t, tt.expectedError, err, "A matching error is expected")
 			}
 		})
 	}
