@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/manager"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
