@@ -1272,12 +1272,12 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 			// Record ray_cluster_head_pod_ready_duration_seconds metric
 			// Calculate the time from RayClusters created to head pod ready
-			if headPodReadyCondition.Status == metav1.ConditionTrue {
-				if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.HeadPodReady)) {
-					readyDuration := time.Since(instance.CreationTimestamp.Time)
-					common.ObserveRayClusterHeadPodReadyDuration(instance.Namespace, readyDuration)
-				}
-			}
+			// if headPodReadyCondition.Status == metav1.ConditionTrue {
+			// 	if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.HeadPodReady)) {
+			// 		readyDuration := time.Since(instance.CreationTimestamp.Time)
+			// 		common.ObserveRayClusterHeadPodReadyDuration(instance.Namespace, readyDuration)
+			// 	}
+			// }
 
 			meta.SetStatusCondition(&newInstance.Status.Conditions, headPodReadyCondition)
 		}
