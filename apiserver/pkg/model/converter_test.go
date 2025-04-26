@@ -728,3 +728,24 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "Job is currently running", job.Message)
 	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
 }
+
+func TestFromCrdToAPIServices(t *testing.T) {
+	services := []*rayv1api.RayService{&ServiceV2Test}
+	serviceEventsMap := map[string][]corev1.Event{}
+	apiServices := FromCrdToAPIServices(services, serviceEventsMap)
+	assert.Len(t, apiServices, 1)
+
+	apiService := apiServices[0]
+	assert.Equal(t, "test", apiService.Name)
+	assert.Equal(t, "test", apiService.Namespace)
+	assert.Equal(t, "user", apiService.User)
+}
+
+func TestPopulateService(t *testing.T) {
+	service := FromCrdToAPIService(&ServiceV2Test, []corev1.Event{})
+	assert.Equal(t, "test", service.Name)
+	assert.Equal(t, "test", service.Namespace)
+	assert.Equal(t, "user", service.User)
+	assert.Equal(t, "Some yaml value", service.ServeConfig_V2)
+	assert.Equal(t, int64(-1), service.DeleteAt.Seconds)
+}

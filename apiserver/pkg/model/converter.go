@@ -527,7 +527,7 @@ func FromCrdToAPIServices(
 	services []*rayv1api.RayService,
 	serviceEventsMap map[string][]corev1.Event,
 ) []*api.RayService {
-	apiServices := make([]*api.RayService, 0)
+	apiServices := make([]*api.RayService, 0, len(services))
 	for _, service := range services {
 		apiServices = append(apiServices, FromCrdToAPIService(service, serviceEventsMap[service.Name]))
 	}
