@@ -17,7 +17,7 @@ func NewRayJobCollector() *RayJobCollector {
 		rayJobExecutionDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_job_execution_duration_seconds",
-				Help: "Duration from RayJob CR initialization to reaching a terminal state.",
+				Help: "Duration from RayJob CR initialization to reaching a terminal state or retrying state, where retrying state indicates the CR was previously failed and backoff is enabled.",
 			},
 			[]string{"name", "namespace", "result", "retry_count"},
 		),
