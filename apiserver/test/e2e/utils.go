@@ -22,11 +22,14 @@ import (
 //go:embed resources/*.py
 var files embed.FS
 
+// Refer to https://github.com/ray-project/kuberay/pull/3455 for more info how we observe the right amount resource for e2e test
 var (
-	TestTimeoutShort    = 1 * time.Minute
-	TestTimeoutMedium   = 3 * time.Minute
-	TestTimeoutLong     = 5 * time.Minute
-	TestPollingInterval = 500 * time.Millisecond
+	TestTimeoutShort         = 1 * time.Minute
+	TestTimeoutMedium        = 3 * time.Minute
+	TestTimeoutLong          = 5 * time.Minute
+	TestPollingInterval      = 500 * time.Millisecond
+	ComputeTemplateCPUForE2E = uint32(1) // CPU core
+	CompTemplateMemGiBForE2E = uint32(1)
 )
 
 // CreateHttpRequest instantiates a http request for the specified endpoint and host
