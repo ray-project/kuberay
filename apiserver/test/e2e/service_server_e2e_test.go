@@ -234,7 +234,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 	expectedServiceNames := make([][]string, numberOfNamespaces)
 
 	// Create services for each namespace
-	for i := range numberOfNamespaces {
+	for i := 0; i < numberOfNamespaces; i++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
 
@@ -244,7 +244,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		})
 
 		expectedServiceNames[i] = make([]string, 0, numberOfService)
-		for range numberOfService {
+		for j := 0; j < numberOfService; j++ {
 			testServiceRequest := createTestServiceV2(t, tCtx)
 			t.Cleanup(func() {
 				tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
@@ -261,11 +261,11 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 	t.Run("Test pagination return part of the result services", func(t *testing.T) {
 		pageToken = ""
 		gotServices := make([][]bool, numberOfNamespaces)
-		for i := range numberOfNamespaces {
-			gotServices[i] = make([]bool, numberOfNamespaces)
+		for i := 0; i < numberOfNamespaces; i++ {
+			gotServices[i] = make([]bool, numberOfService)
 		}
 
-		for i := range totalServices {
+		for i := 0; i < totalServices; i++ {
 			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
 				PageToken: pageToken,
 				PageSize:  int32(1),
@@ -278,7 +278,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 			for _, service := range response.Services {
 				for namespaceIdx, ctx := range tCtxs {
-					for serviceIdx := range numberOfService {
+					for serviceIdx := 0; serviceIdx < numberOfService; serviceIdx++ {
 						if service.Namespace == ctx.GetNamespaceName() &&
 							service.Name == expectedServiceNames[namespaceIdx][serviceIdx] {
 							gotServices[namespaceIdx][serviceIdx] = true
@@ -296,8 +296,9 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			}
 		}
 
+		// Check all services were found
 		for namespaceIdx, ctx := range tCtxs {
-			for serviceIdx := range numberOfService {
+			for serviceIdx := 0; serviceIdx < numberOfService; serviceIdx++ {
 				if !gotServices[namespaceIdx][serviceIdx] {
 					t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
 						expectedServiceNames[namespaceIdx][serviceIdx], ctx.GetNamespaceName())
@@ -306,17 +307,17 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		}
 	})
 
-	// // Test pagination with limit 7, which is larger than the total number of services in all namespaces.
+	// Test pagination with limit 7, which is larger than the total number of services in all namespaces.
 	t.Run("Test pagination return all result services", func(t *testing.T) {
 		pageToken = ""
 		gotServices := make([][]bool, numberOfNamespaces)
-		for i := range numberOfNamespaces {
-			gotServices[i] = make([]bool, numberOfNamespaces)
+		for i := 0; i < numberOfNamespaces; i++ {
+			gotServices[i] = make([]bool, numberOfService)
 		}
 
 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
 			PageToken: pageToken,
-			PageSize:  totalServices + 1,
+			PageSize:  int32(totalServices + 1),
 		})
 
 		require.NoError(t, err, "No error expected")
@@ -324,11 +325,11 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Services, "A list of services is required")
 		require.Len(t, response.Services, totalServices)
-		require.Empty(t, pageToken, "Page token should be empty")
+		require.Empty(t, response.NextPageToken, "Page token should be empty")
 
 		for _, service := range response.Services {
 			for namespaceIdx, ctx := range tCtxs {
-				for serviceIdx := range numberOfService {
+				for serviceIdx := 0; serviceIdx < numberOfService; serviceIdx++ {
 					if service.Namespace == ctx.GetNamespaceName() &&
 						service.Name == expectedServiceNames[namespaceIdx][serviceIdx] {
 						gotServices[namespaceIdx][serviceIdx] = true
@@ -339,7 +340,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		}
 
 		for namespaceIdx, ctx := range tCtxs {
-			for serviceIdx := range numberOfService {
+			for serviceIdx := 0; serviceIdx < numberOfService; serviceIdx++ {
 				if !gotServices[namespaceIdx][serviceIdx] {
 					t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
 						expectedServiceNames[namespaceIdx][serviceIdx], ctx.GetNamespaceName())
