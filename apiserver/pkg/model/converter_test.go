@@ -416,6 +416,16 @@ var serveDeploymentStatus = rayv1api.ServeDeploymentStatus{
 	Message: "Updating...",
 }
 
+var svcEvent = corev1.Event{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "test",
+	},
+	Reason:  "test",
+	Message: "test",
+	Type:    "Normal",
+	Count:   2,
+}
+
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
 	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
@@ -784,4 +794,18 @@ func TestPopulateServeDeploymentStatus(t *testing.T) {
 	deploymentStatus := deploymentStatuses[0]
 	assert.Equal(t, rayv1api.DeploymentStatusEnum.UPDATING, deploymentStatus.Status)
 	assert.Equal(t, "Updating...", deploymentStatus.Message)
+}
+
+func TestPopulateRayServiceEvent(t *testing.T) {
+	events := []corev1.Event{svcEvent}
+	serviceEvents := PopulateRayServiceEvent("svc0", events)
+	assert.Len(t, serviceEvents, 1)
+
+	serviceEvent := serviceEvents[0]
+	assert.Equal(t, "test", serviceEvent.Id)
+	assert.Equal(t, "svc0-test", serviceEvent.Name)
+	assert.Equal(t, "test", serviceEvent.Reason)
+	assert.Equal(t, "test", serviceEvent.Message)
+	assert.Equal(t, "Normal", serviceEvent.Type)
+	assert.Equal(t, int32(2), serviceEvent.Count)
 }

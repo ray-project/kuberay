@@ -622,7 +622,7 @@ func PopulateServeDeploymentStatus(
 }
 
 func PopulateRayServiceEvent(serviceName string, events []corev1.Event) []*api.RayServiceEvent {
-	serviceEvents := make([]*api.RayServiceEvent, 0)
+	serviceEvents := make([]*api.RayServiceEvent, 0, len(events))
 	for _, event := range events {
 		serviceEvent := &api.RayServiceEvent{
 			Id:             event.Name,
