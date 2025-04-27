@@ -38,7 +38,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -91,8 +90,13 @@ type RayClusterReconciler struct {
 	options                    RayClusterReconcilerOptions
 }
 
+type RayClusterMetricsCollector interface {
+	ObserveRayClusterProvisionedDuration(name, namespace string, duration float64)
+	ObserveRayClusterHeadPodReadyDuration(name, namespace string, duration float64)
+}
+
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricCollector *metrics.RayClusterMetricCollector
+	RayClusterMetricCollector RayClusterMetricsCollector
 	HeadSidecarContainers     []corev1.Container
 	WorkerSidecarContainers   []corev1.Container
 	IsOpenShift               bool
@@ -328,6 +332,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	} else {
 		inconsistent, updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
+
+	emitRayClusterMetrics(r.options.RayClusterMetricCollector, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 
 	// Return error based on order.
 	var err error
@@ -1269,16 +1275,6 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			})
 		} else {
 			headPodReadyCondition := utils.FindHeadPodReadyCondition(headPod)
-
-			// Record ray_cluster_head_pod_ready_duration_seconds metric
-			// Calculate the time from RayClusters created to head pod ready
-			// if headPodReadyCondition.Status == metav1.ConditionTrue {
-			// 	if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.HeadPodReady)) {
-			// 		readyDuration := time.Since(instance.CreationTimestamp.Time)
-			// 		common.ObserveRayClusterHeadPodReadyDuration(instance.Namespace, readyDuration)
-			// 	}
-			// }
-
 			meta.SetStatusCondition(&newInstance.Status.Conditions, headPodReadyCondition)
 		}
 
@@ -1618,21 +1614,28 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	}
-	collectRayClusterMetrics(r.options.RayClusterMetricCollector, newInstance.Name, newInstance.Namespace, newInstance.Status, originalRayClusterInstance.Status, originalRayClusterInstance.CreationTimestamp.Time)
 
 	return inconsistent, err
 }
 
-// collectRayClusterMetrics records metrics related to the RayCluster.
-func collectRayClusterMetrics(collector *metrics.RayClusterMetricCollector, name, namespace string, newClusterStatus, oldClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
-	if collector == nil {
-		return
-	}
+func emitRayClusterMetrics(rayClusterMetricsCollector RayClusterMetricsCollector, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	emitRayClusterProvisionedDuration(rayClusterMetricsCollector, rayClusterName, rayClusterNamespace, originRayClusterStatus, rayClusterStatus, creationTimestamp)
+	emitRayClusterHeadPodReadyDuration(rayClusterMetricsCollector, rayClusterName, rayClusterNamespace, originRayClusterStatus, rayClusterStatus, creationTimestamp)
+}
 
-	// Record `kuberay_cluster_provisioned_duration_seconds` metric if just provisioned
-	if meta.IsStatusConditionTrue(newClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
-		!meta.IsStatusConditionTrue(oldClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		collector.ObserveRayClusterProvisionedDuration(name, namespace, time.Since(creationTimestamp).Seconds())
+func emitRayClusterProvisionedDuration(collector RayClusterMetricsCollector, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
+	if !meta.IsStatusConditionTrue(originRayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		meta.IsStatusConditionTrue(rayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		collector.ObserveRayClusterProvisionedDuration(rayClusterName, rayClusterNamespace, time.Since(creationTimestamp).Seconds())
+	}
+}
+
+func emitRayClusterHeadPodReadyDuration(collector RayClusterMetricsCollector, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	// Emit kuberay_cluster_head_pod_ready_duration_seconds when a RayCluster's HeadPodReady status transitions from false (or unset) to true
+	if !meta.IsStatusConditionTrue(originRayClusterStatus.Conditions, string(rayv1.HeadPodReady)) &&
+		meta.IsStatusConditionTrue(rayClusterStatus.Conditions, string(rayv1.HeadPodReady)) {
+		collector.ObserveRayClusterHeadPodReadyDuration(rayClusterName, rayClusterNamespace, time.Since(creationTimestamp).Seconds())
 	}
 }
 

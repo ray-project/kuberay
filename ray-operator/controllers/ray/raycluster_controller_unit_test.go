@@ -18,15 +18,17 @@ package ray
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,7 +54,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/mocks"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -3571,78 +3573,244 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
-func TestCollectRayClusterMetrics(t *testing.T) {
-	tests := []struct {
-		creationTime     time.Time
-		name             string
-		clusterName      string
-		clusterNamespace string
-		newClusterStatus rayv1.RayClusterStatus
-		oldClusterStatus rayv1.RayClusterStatus
-		expectMetric     bool
+func TestEmitRayClusterProvisionedDuration(t *testing.T) {
+	clusterName := "test-ray-cluster"
+	clusterNamespace := "default"
+
+	// Creation time 5 minutes ago to simulate cluster runtime
+	creationTime := time.Now().Add(-5 * time.Minute)
+	duration := time.Since(creationTime).Seconds()
+
+	testCases := []struct {
+		name           string
+		originStatus   rayv1.RayClusterStatus
+		newStatus      rayv1.RayClusterStatus
+		expectMetric   bool
+		expectedDeltaS float64
 	}{
 		{
-			name:             "Transition from not provisioned to provisioned (should emit metric)",
-			clusterName:      "test",
-			clusterNamespace: "default",
-			creationTime:     time.Now(),
-			expectMetric:     true,
-			newClusterStatus: rayv1.RayClusterStatus{
+			name: "transition from unprovisioned to provisioned (should emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionFalse,
+					},
 				},
 			},
-			oldClusterStatus: rayv1.RayClusterStatus{
+			newStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionFalse},
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
 				},
 			},
+			expectMetric:   true,
+			expectedDeltaS: 1.0, // Allow 1 second difference to account for test execution time
 		},
 		{
-			name:             "No transition, both provisioned (should not emit metric)",
-			clusterName:      "test",
-			clusterNamespace: "default",
-			creationTime:     time.Now(),
-			expectMetric:     false,
-			newClusterStatus: rayv1.RayClusterStatus{
+			name: "already provisioned (should not emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
 				},
 			},
-			oldClusterStatus: rayv1.RayClusterStatus{
+			newStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
 				},
 			},
+			expectMetric: false,
+		},
+		{
+			name: "transition from provisioned to unprovisioned (should emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			expectMetric: false,
+		},
+		{
+			name:         "condition missing in original status",
+			originStatus: rayv1.RayClusterStatus{},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:   true,
+			expectedDeltaS: 1.0,
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			registry := prometheus.NewRegistry()
-			collector := metrics.NewRayClusterMetricCollector()
-			require.NoError(t, registry.Register(collector))
-
-			collectRayClusterMetrics(collector, tc.clusterName, tc.clusterNamespace, tc.newClusterStatus, tc.oldClusterStatus, tc.creationTime)
-
-			metricFamilies, err := registry.Gather()
-			require.NoError(t, err)
-			found := false
-			for _, mf := range metricFamilies {
-				if mf.GetName() == "kuberay_cluster_provisioned_duration_seconds" {
-					found = true
-					if tc.expectMetric {
-						require.Len(t, mf.Metric, 1)
-						assert.Equal(t, tc.clusterName, mf.Metric[0].GetLabel()[0].GetValue())
-						assert.Equal(t, tc.clusterNamespace, mf.Metric[0].GetLabel()[1].GetValue())
-					} else {
-						assert.Empty(t, mf.Metric, "should not emit metric")
-					}
-				}
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayClusterMetricsCollector(ctrl)
+			if tc.expectMetric {
+				// Verify metric is emitted with correct parameters and duration
+				mockCollector.EXPECT().
+					ObserveRayClusterProvisionedDuration(
+						clusterName,
+						clusterNamespace,
+						mock.MatchedBy(func(d float64) bool {
+							// Allow some wiggle room in timing
+							return math.Abs(d-duration) < tc.expectedDeltaS
+						}),
+					).Times(1)
 			}
-			if tc.expectMetric && !found {
-				t.Errorf("expected metric 'kuberay_cluster_provisioned_duration_seconds' not found")
+
+			emitRayClusterProvisionedDuration(
+				mockCollector,
+				clusterName,
+				clusterNamespace,
+				tc.originStatus,
+				tc.newStatus,
+				creationTime,
+			)
+		})
+	}
+}
+
+func TestEmitRayClusterHeadPodReadyDuration_DirectStatus(t *testing.T) {
+	clusterName := "test-ray-cluster"
+	clusterNamespace := "default"
+
+	// Creation time 5 minutes ago to simulate cluster runtime
+	creationTime := time.Now().Add(-5 * time.Minute)
+	duration := time.Since(creationTime).Seconds()
+
+	testCases := []struct {
+		name           string
+		originStatus   rayv1.RayClusterStatus
+		newStatus      rayv1.RayClusterStatus
+		expectMetric   bool
+		expectedDeltaS float64
+	}{
+		{
+			name: "transition from head pod not ready to ready (should emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:   true,
+			expectedDeltaS: 1.0, // Allow 1 second difference to account for test execution time
+		},
+		{
+			name: "already head pod ready (should not emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric: false,
+		},
+		{
+			name: "transition from head pod ready to not ready (should not emit metrics)",
+			originStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			expectMetric: false,
+		},
+		{
+			name:         "condition missing in original status",
+			originStatus: rayv1.RayClusterStatus{},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:   true,
+			expectedDeltaS: 1.0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayClusterMetricsCollector(ctrl)
+
+			if tc.expectMetric {
+				mockCollector.EXPECT().
+					ObserveRayClusterHeadPodReadyDuration(
+						clusterName,
+						clusterNamespace,
+						mock.MatchedBy(func(d float64) bool {
+							// Allow some wiggle room in timing
+							return math.Abs(d-duration) < tc.expectedDeltaS
+						}),
+					).Times(1)
 			}
+
+			emitRayClusterHeadPodReadyDuration(
+				mockCollector,
+				clusterName,
+				clusterNamespace,
+				tc.originStatus,
+				tc.newStatus,
+				creationTime,
+			)
 		})
 	}
 }
