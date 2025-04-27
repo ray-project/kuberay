@@ -405,7 +405,7 @@ var ServiceV2Test = rayv1api.RayService{
 	},
 }
 
-var serviceAppStatus = rayv1api.AppStatus{
+var serveAppStatus= rayv1api.AppStatus{
 	Deployments: map[string]rayv1api.ServeDeploymentStatus{},
 	Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
 	Message:     "Deploying...",
@@ -758,7 +758,7 @@ func TestPopulateService(t *testing.T) {
 
 func TestPopulateServeApplicationStatus(t *testing.T) {
 	serveApplicationStatuses := map[string]rayv1api.AppStatus{
-		"app0": serviceAppStatus,
+		"app0": serveAppStatus,
 	}
 	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
 	assert.Len(t, appStatuses, 1)
