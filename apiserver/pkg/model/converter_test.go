@@ -405,6 +405,12 @@ var ServiceV2Test = rayv1api.RayService{
 	},
 }
 
+var serviceAppStatus = rayv1api.AppStatus{
+	Deployments: map[string]rayv1api.ServeDeploymentStatus{},
+	Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
+	Message:     "Deploying...",
+}
+
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
 	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
@@ -748,4 +754,17 @@ func TestPopulateService(t *testing.T) {
 	assert.Equal(t, "user", service.User)
 	assert.Equal(t, "Some yaml value", service.ServeConfig_V2)
 	assert.Equal(t, int64(-1), service.DeleteAt.Seconds)
+}
+
+func TestPopulateServeApplicationStatus(t *testing.T) {
+	serveApplicationStatuses := map[string]rayv1api.AppStatus{
+		"svc_app0": serviceAppStatus,
+	}
+	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
+	assert.Len(t, appStatuses, 1)
+
+	appStatus := appStatuses[0]
+	assert.Equal(t, "svc_app0", appStatus.Name)
+	assert.Equal(t, rayv1api.ApplicationStatusEnum.DEPLOYING, appStatus.Status)
+	assert.Equal(t, "Deploying...", appStatus.Message)
 }

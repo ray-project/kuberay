@@ -593,7 +593,7 @@ func PoplulateRayServiceStatus(
 func PopulateServeApplicationStatus(
 	serveApplicationStatuses map[string]rayv1api.AppStatus,
 ) []*api.ServeApplicationStatus {
-	appStatuses := make([]*api.ServeApplicationStatus, 0)
+	appStatuses := make([]*api.ServeApplicationStatus, 0, len(serveApplicationStatuses))
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
 			Name:                  appName,
