@@ -225,10 +225,13 @@ func TestGetAllServices(t *testing.T) {
 	require.Equal(t, tCtx.GetNamespaceName(), response.Services[0].Namespace)
 }
 
-func createOneServiceInEachNamespace(t *testing.T, numberOfNamespaces int) ([]*End2EndTestingContext, []string) {
-	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	serviceNames := make([]string, 0, numberOfNamespaces)
+func TestGetAllServicesWithPagination(t *testing.T) {
+	const numberOfNamespaces = 3
 
+	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
+	expectedServiceNames := make([]string, 0, numberOfNamespaces)
+
+	// Create Services for each namespace
 	for i := 0; i < numberOfNamespaces; i++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
@@ -244,18 +247,8 @@ func createOneServiceInEachNamespace(t *testing.T, numberOfNamespaces int) ([]*E
 		})
 
 		tCtxs[i] = tCtx
-		serviceNames = append(serviceNames, testServiceRequest.Service.Name)
+		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
 	}
-
-	return tCtxs, serviceNames
-}
-
-func TestGetAllServicesWithPagination(t *testing.T) {
-	const numberOfNamespaces = 3
-
-	var tCtxs []*End2EndTestingContext
-	var expectedServiceNames []string
-	tCtxs, expectedServiceNames = createOneServiceInEachNamespace(t, numberOfNamespaces)
 
 	var pageToken string
 	tCtx := tCtxs[0]
@@ -291,7 +284,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		}
 	}
 	// Ensure we found all services
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		if !gotServices[i] {
 			t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
 				expectedServiceNames[i], tCtxs[i].GetNamespaceName())
