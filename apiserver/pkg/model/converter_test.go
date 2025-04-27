@@ -405,10 +405,15 @@ var ServiceV2Test = rayv1api.RayService{
 	},
 }
 
-var serveAppStatus= rayv1api.AppStatus{
+var serveAppStatus = rayv1api.AppStatus{
 	Deployments: map[string]rayv1api.ServeDeploymentStatus{},
 	Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
 	Message:     "Deploying...",
+}
+
+var serveDeploymentStatus = rayv1api.ServeDeploymentStatus{
+	Status:  rayv1api.DeploymentStatusEnum.UPDATING,
+	Message: "Updating...",
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
@@ -767,4 +772,16 @@ func TestPopulateServeApplicationStatus(t *testing.T) {
 	assert.Equal(t, "app0", appStatus.Name)
 	assert.Equal(t, rayv1api.ApplicationStatusEnum.DEPLOYING, appStatus.Status)
 	assert.Equal(t, "Deploying...", appStatus.Message)
+}
+
+func TestPopulateServeDeploymentStatus(t *testing.T) {
+	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
+		"deployment0": serveDeploymentStatus,
+	}
+	deploymentStatuses := PopulateServeDeploymentStatus(serveDeploymentStatuses)
+	assert.Len(t, deploymentStatuses, 1)
+
+	deploymentStatus := deploymentStatuses[0]
+	assert.Equal(t, rayv1api.DeploymentStatusEnum.UPDATING, deploymentStatus.Status)
+	assert.Equal(t, "Updating...", deploymentStatus.Message)
 }

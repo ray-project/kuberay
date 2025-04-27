@@ -609,7 +609,7 @@ func PopulateServeApplicationStatus(
 func PopulateServeDeploymentStatus(
 	serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus,
 ) []*api.ServeDeploymentStatus {
-	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
+	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0, len(serveDeploymentStatuses))
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{
 			DeploymentName: deploymentName,
