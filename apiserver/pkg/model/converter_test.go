@@ -758,13 +758,13 @@ func TestPopulateService(t *testing.T) {
 
 func TestPopulateServeApplicationStatus(t *testing.T) {
 	serveApplicationStatuses := map[string]rayv1api.AppStatus{
-		"svc_app0": serviceAppStatus,
+		"app0": serviceAppStatus,
 	}
 	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
 	assert.Len(t, appStatuses, 1)
 
 	appStatus := appStatuses[0]
-	assert.Equal(t, "svc_app0", appStatus.Name)
+	assert.Equal(t, "app0", appStatus.Name)
 	assert.Equal(t, rayv1api.ApplicationStatusEnum.DEPLOYING, appStatus.Status)
 	assert.Equal(t, "Deploying...", appStatus.Message)
 }
