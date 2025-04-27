@@ -227,12 +227,14 @@ func TestGetAllServices(t *testing.T) {
 
 func TestGetAllServicesWithPagination(t *testing.T) {
 	const numberOfNamespaces = 3
+	const numberOfService = 2
+	const totalServices = numberOfNamespaces * numberOfService
 
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	expectedServiceNames := make([]string, 0, numberOfNamespaces)
+	expectedServiceNames := make([][]string, numberOfNamespaces)
 
 	// Create Services for each namespace
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
 
@@ -241,55 +243,82 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			tCtx.DeleteComputeTemplate(t)
 		})
 
-		testServiceRequest := createTestServiceV2(t, tCtx)
-		t.Cleanup(func() {
-			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
-		})
+		expectedServiceNames[i] = make([]string, 0, numberOfService)
+		for range numberOfService {
+			testServiceRequest := createTestServiceV2(t, tCtx)
+			t.Cleanup(func() {
+				tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
+			})
+			expectedServiceNames[i] = append(expectedServiceNames[i], testServiceRequest.Service.Name)
+		}
 
 		tCtxs[i] = tCtx
-		expectedServiceNames = append(expectedServiceNames, testServiceRequest.Service.Name)
 	}
 
 	var pageToken string
 	tCtx := tCtxs[0]
-	pageToken = ""
-	gotServices := make([]bool, numberOfNamespaces)
+	// Test pagination with limit 1, which is less than the total number of services.
+	t.Run("Test pagination return part of the result services", func(t *testing.T) {
+		pageToken = ""
+		gotServices := make([][]bool, numberOfNamespaces)
+		for i := range numberOfNamespaces {
+			gotServices[i] = make([]bool, numberOfNamespaces)
+		}
 
-	for i := 0; i < numberOfNamespaces; i++ {
-		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
-			PageToken: pageToken,
-			PageSize:  int32(1),
-		})
-		require.NoError(t, err, "No error expected")
-		require.Nil(t, actualRPCStatus, "No RPC status expected")
-		require.NotNil(t, response, "A response is expected")
-		require.NotEmpty(t, response.Services, "A list of service is required")
-		require.Len(t, response.Services, 1)
+		for i := range totalServices {
+			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
+				PageToken: pageToken,
+				PageSize:  int32(1),
+			})
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			require.NotEmpty(t, response.Services, "A list of service is required")
+			require.Len(t, response.Services, 1)
 
-		for _, service := range response.Services {
-			for j, ctx := range tCtxs {
-				if service.Namespace == ctx.GetNamespaceName() &&
-					service.Name == expectedServiceNames[j] {
-					gotServices[j] = true
-					break
+			for _, service := range response.Services {
+				for namespaceIdx, ctx := range tCtxs {
+					for serviceIdx := range numberOfService {
+						if service.Namespace == ctx.GetNamespaceName() &&
+							service.Name == expectedServiceNames[namespaceIdx][serviceIdx] {
+							gotServices[namespaceIdx][serviceIdx] = true
+							break
+						}
+					}
 				}
+			}
+
+			pageToken = response.NextPageToken
+			if i == totalServices-1 {
+				require.Empty(t, pageToken, "No continue token is expected")
+			} else {
+				require.NotEmpty(t, pageToken, "A continue token is expected")
 			}
 		}
 
-		pageToken = response.NextPageToken
-		if i == numberOfNamespaces-1 {
-			require.Empty(t, pageToken, "No continue token is expected")
-		} else {
-			require.NotEmpty(t, pageToken, "A continue token is expected")
+		for namespaceIdx, ctx := range tCtxs {
+			for serviceIdx := range numberOfService {
+				if !gotServices[namespaceIdx][serviceIdx] {
+					t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
+						expectedServiceNames[namespaceIdx][serviceIdx], ctx.GetNamespaceName())
+				}
+			}
 		}
-	}
-	// Ensure we found all services
-	for i := range numberOfNamespaces {
-		if !gotServices[i] {
-			t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
-				expectedServiceNames[i], tCtxs[i].GetNamespaceName())
-		}
-	}
+	})
+
+	// // Test pagination with limit 3, which is larger than the total number of services.
+	// t.Run("Test pagination return all result services", func(t *testing.T) {
+	// 	pageToken = ""
+	// 	gotServices := make([]bool, numberOfNamespaces)
+
+	// 	for i := range numberOfNamespaces {
+	// 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
+	// 			PageToken: pageToken,
+	// 			PageSize:  servic,
+	// 		})
+	// 	}
+
+	// })
 }
 
 func TestGetServicesInNamespace(t *testing.T) {
