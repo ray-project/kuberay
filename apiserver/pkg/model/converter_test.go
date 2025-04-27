@@ -405,27 +405,6 @@ var ServiceV2Test = rayv1api.RayService{
 	},
 }
 
-var serveAppStatus = rayv1api.AppStatus{
-	Deployments: map[string]rayv1api.ServeDeploymentStatus{},
-	Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
-	Message:     "Deploying...",
-}
-
-var serveDeploymentStatus = rayv1api.ServeDeploymentStatus{
-	Status:  rayv1api.DeploymentStatusEnum.UPDATING,
-	Message: "Updating...",
-}
-
-var svcEvent = corev1.Event{
-	ObjectMeta: metav1.ObjectMeta{
-		Name: "test",
-	},
-	Reason:  "test",
-	Message: "test",
-	Type:    "Normal",
-	Count:   2,
-}
-
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
 	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
@@ -773,7 +752,11 @@ func TestPopulateService(t *testing.T) {
 
 func TestPopulateServeApplicationStatus(t *testing.T) {
 	serveApplicationStatuses := map[string]rayv1api.AppStatus{
-		"app0": serveAppStatus,
+		"app0": rayv1api.AppStatus{
+			Deployments: map[string]rayv1api.ServeDeploymentStatus{},
+			Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
+			Message:     "Deploying...",
+		},
 	}
 	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
 	assert.Len(t, appStatuses, 1)
@@ -786,7 +769,10 @@ func TestPopulateServeApplicationStatus(t *testing.T) {
 
 func TestPopulateServeDeploymentStatus(t *testing.T) {
 	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
-		"deployment0": serveDeploymentStatus,
+		"deployment0": rayv1api.ServeDeploymentStatus{
+			Status:  rayv1api.DeploymentStatusEnum.UPDATING,
+			Message: "Updating...",
+		},
 	}
 	deploymentStatuses := PopulateServeDeploymentStatus(serveDeploymentStatuses)
 	assert.Len(t, deploymentStatuses, 1)
@@ -797,7 +783,17 @@ func TestPopulateServeDeploymentStatus(t *testing.T) {
 }
 
 func TestPopulateRayServiceEvent(t *testing.T) {
-	events := []corev1.Event{svcEvent}
+	events := []corev1.Event{
+		corev1.Event{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test",
+			},
+			Reason:  "test",
+			Message: "test",
+			Type:    "Normal",
+			Count:   2,
+		},
+	}
 	serviceEvents := PopulateRayServiceEvent("svc0", events)
 	assert.Len(t, serviceEvents, 1)
 
