@@ -752,7 +752,7 @@ func TestPopulateService(t *testing.T) {
 
 func TestPopulateServeApplicationStatus(t *testing.T) {
 	serveApplicationStatuses := map[string]rayv1api.AppStatus{
-		"app0": rayv1api.AppStatus{
+		"app0": {
 			Deployments: map[string]rayv1api.ServeDeploymentStatus{},
 			Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
 			Message:     "Deploying...",
@@ -769,7 +769,7 @@ func TestPopulateServeApplicationStatus(t *testing.T) {
 
 func TestPopulateServeDeploymentStatus(t *testing.T) {
 	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
-		"deployment0": rayv1api.ServeDeploymentStatus{
+		"deployment0": {
 			Status:  rayv1api.DeploymentStatusEnum.UPDATING,
 			Message: "Updating...",
 		},
@@ -784,7 +784,7 @@ func TestPopulateServeDeploymentStatus(t *testing.T) {
 
 func TestPopulateRayServiceEvent(t *testing.T) {
 	events := []corev1.Event{
-		corev1.Event{
+		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test",
 			},
