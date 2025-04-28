@@ -24,6 +24,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -45,7 +46,7 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	EnableMetrics bool
+	RayJobMetricsCollector *metrics.RayJobMetricsCollector
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler

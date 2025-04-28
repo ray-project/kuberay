@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/ray-project/kuberay/apiserver/pkg/client"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
+
+	"github.com/ray-project/kuberay/apiserver/pkg/client"
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 func TestPopulateComputeTemplate(t *testing.T) {

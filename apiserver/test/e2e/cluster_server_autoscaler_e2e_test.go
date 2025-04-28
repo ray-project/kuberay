@@ -3,12 +3,11 @@ package e2e
 import (
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
+	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // TestCreateClusterAutoscalerEndpoint sequentially iterates over the create cluster endpoint

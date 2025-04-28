@@ -3,7 +3,7 @@
 
 Thank you for investing your time in contributing to KubeRay project!
 
-Read our [Code of Coduct](./CODE_OF_CONDUCT.md) to keep our community approachable and respectable.
+Read our [Code of Conduct](./CODE_OF_CONDUCT.md) to keep our community approachable and respectable.
 
 This guide details how to use issues and pull requests to improve KubeRay project.
 
@@ -54,7 +54,7 @@ If you spot a problem with the problem, [search if an issue already exists](http
 
 ### Solve an issue
 
-KubeRay has subproject and each of them may have different development and testing procedure. Please check `DEVELOPMENT.md` in sub folder to get familar with running and testing codes.
+KubeRay has subproject and each of them may have different development and testing procedure. Please check `DEVELOPMENT.md` in sub folder to get familiar with running and testing codes.
 
 ### Open a Pull request
 
