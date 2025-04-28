@@ -1,7 +1,7 @@
 # Kuberay Dashboard
 This is the repo for the open source dashboard for KubeRay
 
-<img width="874" alt="image" src="https://github.com/user-attachments/assets/a1bb124e-630c-428a-a28c-8c39741c300a" />
+![image](https://github.com/user-attachments/assets/3c71169d-44c6-45ee-907d-b8a44043b861)
 
 ## How to deploy with KubeRay Operator and API Server
 
