@@ -1,10 +1,7 @@
 # Patterns to ignore when building packages.
 # This supports shell glob matching, relative path matching, and
 # negation (prefixed with !). Only one pattern per line.
-
-ci/
-.helmignore
-
+.DS_Store
 # Common VCS dirs
 .git/
 .gitignore
@@ -13,27 +10,14 @@ ci/
 .hg/
 .hgignore
 .svn/
-
 # Common backup files
 *.swp
 *.bak
 *.tmp
 *.orig
 *~
-
 # Various IDEs
-*.tmproj
 .project
 .idea/
+*.tmproj
 .vscode/
-
-# helm-unittest
-tests
-.debug
-__snapshot__
-
-# helm-docs
-README.md.gotmpl
-
-# MacOS
-.DS_Store

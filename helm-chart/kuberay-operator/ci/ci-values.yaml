@@ -1,4 +1,0 @@
-image:
-  repository: kuberay/operator
-  tag: local
-  pullPolicy: Never
