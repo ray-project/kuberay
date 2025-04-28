@@ -751,35 +751,38 @@ func TestPopulateService(t *testing.T) {
 }
 
 func TestPopulateServeApplicationStatus(t *testing.T) {
+	expectedAppName := "app0"
+	expectedAppStatus := rayv1api.AppStatus{
+		Deployments: map[string]rayv1api.ServeDeploymentStatus{},
+		Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
+		Message:     "Deploying...",
+	}
 	serveApplicationStatuses := map[string]rayv1api.AppStatus{
-		"app0": {
-			Deployments: map[string]rayv1api.ServeDeploymentStatus{},
-			Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
-			Message:     "Deploying...",
-		},
+		expectedAppName: expectedAppStatus,
 	}
 	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
 	assert.Len(t, appStatuses, 1)
 
 	appStatus := appStatuses[0]
-	assert.Equal(t, "app0", appStatus.Name)
-	assert.Equal(t, rayv1api.ApplicationStatusEnum.DEPLOYING, appStatus.Status)
-	assert.Equal(t, "Deploying...", appStatus.Message)
+	assert.Equal(t, expectedAppName, appStatus.Name)
+	assert.Equal(t, expectedAppStatus.Status, appStatus.Status)
+	assert.Equal(t, expectedAppStatus.Message, appStatus.Message)
 }
 
 func TestPopulateServeDeploymentStatus(t *testing.T) {
+	expectedDeploymentStatus := rayv1api.ServeDeploymentStatus{
+		Status:  rayv1api.DeploymentStatusEnum.UPDATING,
+		Message: "Updating...",
+	}
 	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
-		"deployment0": {
-			Status:  rayv1api.DeploymentStatusEnum.UPDATING,
-			Message: "Updating...",
-		},
+		"deployment0": expectedDeploymentStatus,
 	}
 	deploymentStatuses := PopulateServeDeploymentStatus(serveDeploymentStatuses)
 	assert.Len(t, deploymentStatuses, 1)
 
 	deploymentStatus := deploymentStatuses[0]
-	assert.Equal(t, rayv1api.DeploymentStatusEnum.UPDATING, deploymentStatus.Status)
-	assert.Equal(t, "Updating...", deploymentStatus.Message)
+	assert.Equal(t, expectedDeploymentStatus.Status, deploymentStatus.Status)
+	assert.Equal(t, expectedDeploymentStatus.Message, deploymentStatus.Message)
 }
 
 func TestPopulateRayServiceEvent(t *testing.T) {
