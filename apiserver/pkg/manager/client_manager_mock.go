@@ -12,85 +12,95 @@ import (
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
-// MockClientManagerInterface is a mock of ClientManagerInterface interface
+// MockClientManagerInterface is a mock of ClientManagerInterface interface.
 type MockClientManagerInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientManagerInterfaceMockRecorder
 }
 
-// MockClientManagerInterfaceMockRecorder is the mock recorder for MockClientManagerInterface
+// MockClientManagerInterfaceMockRecorder is the mock recorder for MockClientManagerInterface.
 type MockClientManagerInterfaceMockRecorder struct {
 	mock *MockClientManagerInterface
 }
 
-// NewMockClientManagerInterface creates a new mock instance
+// NewMockClientManagerInterface creates a new mock instance.
 func NewMockClientManagerInterface(ctrl *gomock.Controller) *MockClientManagerInterface {
 	mock := &MockClientManagerInterface{ctrl: ctrl}
 	mock.recorder = &MockClientManagerInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockClientManagerInterface) EXPECT() *MockClientManagerInterfaceMockRecorder {
 	return m.recorder
 }
 
-// ClusterClient mocks base method
+// ClusterClient mocks base method.
 func (m *MockClientManagerInterface) ClusterClient() client.ClusterClientInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClusterClient")
 	ret0, _ := ret[0].(client.ClusterClientInterface)
 	return ret0
 }
 
-// ClusterClient indicates an expected call of ClusterClient
+// ClusterClient indicates an expected call of ClusterClient.
 func (mr *MockClientManagerInterfaceMockRecorder) ClusterClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClusterClient", reflect.TypeOf((*MockClientManagerInterface)(nil).ClusterClient))
 }
 
-// JobClient mocks base method
+// JobClient mocks base method.
 func (m *MockClientManagerInterface) JobClient() client.JobClientInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "JobClient")
 	ret0, _ := ret[0].(client.JobClientInterface)
 	return ret0
 }
 
-// JobClient indicates an expected call of JobClient
+// JobClient indicates an expected call of JobClient.
 func (mr *MockClientManagerInterfaceMockRecorder) JobClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JobClient", reflect.TypeOf((*MockClientManagerInterface)(nil).JobClient))
 }
 
-// ServiceClient mocks base method
-func (m *MockClientManagerInterface) ServiceClient() client.ServiceClientInterface {
-	ret := m.ctrl.Call(m, "ServiceClient")
-	ret0, _ := ret[0].(client.ServiceClientInterface)
-	return ret0
-}
-
-// ServiceClient indicates an expected call of ServiceClient
-func (mr *MockClientManagerInterfaceMockRecorder) ServiceClient() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceClient", reflect.TypeOf((*MockClientManagerInterface)(nil).ServiceClient))
-}
-
-// KubernetesClient mocks base method
+// KubernetesClient mocks base method.
 func (m *MockClientManagerInterface) KubernetesClient() client.KubernetesClientInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KubernetesClient")
 	ret0, _ := ret[0].(client.KubernetesClientInterface)
 	return ret0
 }
 
-// KubernetesClient indicates an expected call of KubernetesClient
+// KubernetesClient indicates an expected call of KubernetesClient.
 func (mr *MockClientManagerInterfaceMockRecorder) KubernetesClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KubernetesClient", reflect.TypeOf((*MockClientManagerInterface)(nil).KubernetesClient))
 }
 
-// Time mocks base method
+// ServiceClient mocks base method.
+func (m *MockClientManagerInterface) ServiceClient() client.ServiceClientInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ServiceClient")
+	ret0, _ := ret[0].(client.ServiceClientInterface)
+	return ret0
+}
+
+// ServiceClient indicates an expected call of ServiceClient.
+func (mr *MockClientManagerInterfaceMockRecorder) ServiceClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceClient", reflect.TypeOf((*MockClientManagerInterface)(nil).ServiceClient))
+}
+
+// Time mocks base method.
 func (m *MockClientManagerInterface) Time() util.TimeInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Time")
 	ret0, _ := ret[0].(util.TimeInterface)
 	return ret0
 }
 
-// Time indicates an expected call of Time
+// Time indicates an expected call of Time.
 func (mr *MockClientManagerInterfaceMockRecorder) Time() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Time", reflect.TypeOf((*MockClientManagerInterface)(nil).Time))
 }

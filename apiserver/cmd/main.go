@@ -38,7 +38,7 @@ var (
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
-	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeoutSeconds*time.Second, "gRPC server timeout duration")
+	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	healthy            int32
 )
 

@@ -1,5 +1,7 @@
 package util
 
+import "time"
+
 // ClientOptions contains configuration needed to create a Kubernetes client
 type ClientOptions struct {
 	QPS   float32
@@ -32,5 +34,5 @@ const (
 	ComponentName = "kuberay-apiserver"
 
 	// Timeout for apiserver gRPC server
-	GRPCServerDefaultTimeoutSeconds = 60
+	GRPCServerDefaultTimeout = 60 * time.Second
 )
