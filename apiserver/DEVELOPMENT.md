@@ -83,8 +83,13 @@ There are two `make` targets provided to execute the end to end test (integratio
 * `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads. Please make sure you have done the following before running `make e2e-test`:
     1. Install the KubeRay Operator into the cluster by running `make operator-image load-operator-image deploy-operator`
     2. Install the KubeRay API server into the cluster by running `make install`
-    3. Verify the setup with a smoke test `curl localhost:31888`
-        * You should see a response like `{"code":5, "message":"Not Found"}`
+    3. Verify the setup with a smoke test `curl -I localhost:31888/healthz`, and you should see a response like:
+
+```bash
+> curl -I localhost:31888/healthz
+HTTP/1.1 200 OK
+Date: Tue, 29 Apr 2025 12:36:05 GMT
+```
 
 > Alternatively, you can simply run `make start-local-apiserver` to spin up the API server within the kind cluster in one single command.
 
