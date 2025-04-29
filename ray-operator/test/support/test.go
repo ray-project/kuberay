@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,7 +92,8 @@ func (t *T) OutputDir() string {
 				}
 			}
 			LogWithTimestamp(t.T(), "Creating output directory in parent directory: %s", parent)
-			dir, err := os.MkdirTemp(parent, t.T().Name())
+			safeName := strings.ReplaceAll(t.T().Name(), "/", "_")
+			dir, err := os.MkdirTemp(parent, safeName)
 			if err != nil {
 				t.T().Fatalf("Error creating output directory: %v", err)
 			}
