@@ -46,7 +46,7 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsCollector metrics.RayJobMetricsCollector
+	RayJobMetricsObserver metrics.RayJobMetricsObserver
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -430,33 +430,28 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	emitRayJobMetrics(r.options.RayJobMetricsCollector, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
+	emitRayJobMetrics(r.options.RayJobMetricsObserver, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func emitRayJobMetrics(rayJobMetricsCollector metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
-	if rayJobMetricsCollector == nil {
+func emitRayJobMetrics(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+	if rayJobMetricsObserver == nil {
 		return
 	}
-	emitRayJobExecutionDuration(rayJobMetricsCollector, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
+	emitRayJobExecutionDuration(rayJobMetricsObserver, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
 }
 
-func emitRayJobExecutionDuration(rayJobMetricsCollector metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
 	// Emit kuberay_job_execution_duration_seconds when a job transitions from a non-terminal state to either a terminal state or a retrying state (following a failure).
 	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
 		retryCount := 0
 		if originalRayJobStatus.Failed != nil {
 			retryCount += int(*originalRayJobStatus.Failed)
 		}
-		jobDeploymentResult := rayJobStatus.JobDeploymentStatus
-		if jobDeploymentResult == rayv1.JobDeploymentStatusRetrying {
-			// If the job is in the retrying state, it was previously failed.
-			jobDeploymentResult = rayv1.JobDeploymentStatusFailed
-		}
-		rayJobMetricsCollector.ObserveRayJobExecutionDuration(
+		rayJobMetricsObserver.ObserveRayJobExecutionDuration(
 			rayJobName,
 			rayJobNamespace,
-			string(jobDeploymentResult),
+			rayJobStatus.JobDeploymentStatus,
 			retryCount,
 			time.Since(rayJobStatus.StartTime.Time).Seconds(),
 		)

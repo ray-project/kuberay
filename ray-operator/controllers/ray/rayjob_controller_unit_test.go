@@ -539,13 +539,13 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 
 	//nolint:govet // disable govet to keep the order of the struct fields
 	tests := []struct {
-		name                 string
-		originalRayJobStatus rayv1.RayJobStatus
-		rayJobStatus         rayv1.RayJobStatus
-		expectMetricsCall    bool
-		expectedResult       string
-		expectedRetryCount   int
-		expectedDuration     float64
+		name                        string
+		originalRayJobStatus        rayv1.RayJobStatus
+		rayJobStatus                rayv1.RayJobStatus
+		expectMetricsCall           bool
+		expectedJobDeploymentStatus rayv1.JobDeploymentStatus
+		expectedRetryCount          int
+		expectedDuration            float64
 	}{
 		{
 			name: "non-terminal to complete state should emit metrics",
@@ -556,10 +556,10 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
 				StartTime:           &metav1.Time{Time: mockTime},
 			},
-			expectMetricsCall:  true,
-			expectedResult:     string(rayv1.JobDeploymentStatusComplete),
-			expectedRetryCount: 0,
-			expectedDuration:   60.0,
+			expectMetricsCall:           true,
+			expectedJobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			expectedRetryCount:          0,
+			expectedDuration:            60.0,
 		},
 		{
 			name: "non-terminal to failed state should emit metrics",
@@ -570,10 +570,10 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
 				StartTime:           &metav1.Time{Time: mockTime},
 			},
-			expectMetricsCall:  true,
-			expectedResult:     string(rayv1.JobDeploymentStatusFailed),
-			expectedRetryCount: 0,
-			expectedDuration:   60.0,
+			expectMetricsCall:           true,
+			expectedJobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+			expectedRetryCount:          0,
+			expectedDuration:            60.0,
 		},
 		{
 			name: "non-terminal to retrying state should emit metrics",
@@ -585,10 +585,10 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
 				StartTime:           &metav1.Time{Time: mockTime},
 			},
-			expectMetricsCall:  true,
-			expectedResult:     string(rayv1.JobDeploymentStatusFailed),
-			expectedRetryCount: 2,
-			expectedDuration:   60.0,
+			expectMetricsCall:           true,
+			expectedJobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+			expectedRetryCount:          2,
+			expectedDuration:            60.0,
 		},
 		{
 			name: "non-terminal to non-terminal state should not emit metrics",
@@ -605,13 +605,13 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			mockCollector := mocks.NewMockRayJobMetricsCollector(ctrl)
+			mockObserver := mocks.NewMockRayJobMetricsObserver(ctrl)
 			if tt.expectMetricsCall {
-				mockCollector.EXPECT().
+				mockObserver.EXPECT().
 					ObserveRayJobExecutionDuration(
 						rayJobName,
 						rayJobNamespace,
-						tt.expectedResult,
+						tt.expectedJobDeploymentStatus,
 						tt.expectedRetryCount,
 						mock.MatchedBy(func(d float64) bool {
 							// Allow some wiggle room in timing
@@ -620,7 +620,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 					).Times(1)
 			}
 
-			emitRayJobMetrics(mockCollector, rayJobName, rayJobNamespace, tt.originalRayJobStatus, tt.rayJobStatus)
+			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, tt.originalRayJobStatus, tt.rayJobStatus)
 		})
 	}
 }

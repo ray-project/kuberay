@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -232,17 +231,13 @@ func main() {
 	exitOnError(err, "unable to start manager")
 
 	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
-	var rayJobMetricsCollector metrics.RayJobMetricsCollector
+	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	if config.EnableMetrics {
 		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
-		rayJobMetricsCollector = metrics.NewRayJobCollector()
-		rayJobMetricsCollector, ok := rayJobMetricsCollector.(prometheus.Collector)
-		if !ok {
-			exitOnError(fmt.Errorf("RayJobMetricsCollector does not implement prometheus.Collector"), "failed to register RayJobMetricsCollector")
-		}
+		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricCollector,
-			rayJobMetricsCollector,
+			rayJobMetricsManager,
 		)
 	}
 
@@ -259,7 +254,7 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		RayJobMetricsCollector: rayJobMetricsCollector,
+		RayJobMetricsObserver: rayJobMetricsManager,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
