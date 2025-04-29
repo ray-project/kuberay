@@ -11,7 +11,7 @@ type RayJobMetricsCollector interface {
 	ObserveRayJobExecutionDuration(name, namespace, result string, retryCount int, duration float64)
 }
 
-// RayJobCollector implements the prometheus.Collector and ray.RayJobMetricsCollector interface to collect ray job metrics.
+// RayJobCollector implements the prometheus.Collector and RayJobMetricsCollector interface to collect ray job metrics.
 type RayJobCollector struct {
 	rayJobExecutionDurationSeconds *prometheus.GaugeVec
 }
