@@ -24,6 +24,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -44,13 +45,8 @@ type RayJobReconciler struct {
 	options             RayJobReconcilerOptions
 }
 
-//go:generate mockgen -destination=mocks/rayjob_controller_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray RayJobMetricsCollector
-type RayJobMetricsCollector interface {
-	ObserveRayJobExecutionDuration(name, namespace, result string, retryCount int, duration float64)
-}
-
 type RayJobReconcilerOptions struct {
-	RayJobMetricsCollector RayJobMetricsCollector
+	RayJobMetricsCollector metrics.RayJobMetricsCollector
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -434,31 +430,33 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	// Emit metrics for the RayJob
 	emitRayJobMetrics(r.options.RayJobMetricsCollector, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func emitRayJobMetrics(rayJobMetricsCollector RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+func emitRayJobMetrics(rayJobMetricsCollector metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+	if rayJobMetricsCollector == nil {
+		return
+	}
 	emitRayJobExecutionDuration(rayJobMetricsCollector, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
 }
 
-func emitRayJobExecutionDuration(rayJobMetricsCollector RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+func emitRayJobExecutionDuration(rayJobMetricsCollector metrics.RayJobMetricsCollector, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
 	// Emit kuberay_job_execution_duration_seconds when a job transitions from a non-terminal state to either a terminal state or a retrying state (following a failure).
 	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
 		retryCount := 0
 		if originalRayJobStatus.Failed != nil {
 			retryCount += int(*originalRayJobStatus.Failed)
 		}
-		result := rayJobStatus.JobDeploymentStatus
-		if result == rayv1.JobDeploymentStatusRetrying {
+		jobDeploymentResult := rayJobStatus.JobDeploymentStatus
+		if jobDeploymentResult == rayv1.JobDeploymentStatusRetrying {
 			// If the job is in the retrying state, it was previously failed.
-			result = rayv1.JobDeploymentStatusFailed
+			jobDeploymentResult = rayv1.JobDeploymentStatusFailed
 		}
 		rayJobMetricsCollector.ObserveRayJobExecutionDuration(
 			rayJobName,
 			rayJobNamespace,
-			string(result),
+			string(jobDeploymentResult),
 			retryCount,
 			time.Since(rayJobStatus.StartTime.Time).Seconds(),
 		)

@@ -232,7 +232,7 @@ func main() {
 	exitOnError(err, "unable to start manager")
 
 	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
-	var rayJobMetricsCollector ray.RayJobMetricsCollector = metrics.NewRayJobNoopCollector()
+	var rayJobMetricsCollector metrics.RayJobMetricsCollector
 	if config.EnableMetrics {
 		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
 		rayJobMetricsCollector = metrics.NewRayJobCollector()

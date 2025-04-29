@@ -56,6 +56,8 @@ const (
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
+// IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
+// is in a terminal state. Terminal states are either Complete or Failed.
 func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
 	terminalStatusSet := map[JobDeploymentStatus]struct{}{
 		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
