@@ -92,9 +92,7 @@ Date: Tue, 29 Apr 2025 12:36:05 GMT
 ```
 
 > [!NOTE]
-> Please rerun `make uninstall && make install` whenever you make changes to the `apiserver/` codebase to ensure the KubeRay API server is rebuilt and redeployed properly.
-
-> Alternatively, you can simply run `make start-local-apiserver` to spin up the API server within the kind cluster in one single command.
+> Please rerun `make uninstall && make install` whenever you make changes to the `apiserver/` codebase to ensure the KubeRay API server is rebuilt and redeployed properly. Alternatively, you can simply run `make start-local-apiserver` to spin up the API server within the kind cluster in one single command.
 
 * `make local-e2e-test` creates a local kind cluster, builds the Kuberay operator and API server images from the current branch and deploys the operator and API server into the kind cluster. It shuts down the kind cluster upon successful execution of the end to end test. If the tests fail the cluster will be left running and will have to manually be shutdown by executing the `make clean-cluster`
 
