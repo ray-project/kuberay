@@ -92,7 +92,7 @@ Date: Tue, 29 Apr 2025 12:36:05 GMT
 ```
 
 > [!NOTE]
-> Please rerun `make install` whenever you make changes to the `apiserver/` codebase to ensure the KubeRay API server is rebuilt and redeployed properly.
+> Please rerun `make uninstall && make install` whenever you make changes to the `apiserver/` codebase to ensure the KubeRay API server is rebuilt and redeployed properly.
 
 > Alternatively, you can simply run `make start-local-apiserver` to spin up the API server within the kind cluster in one single command.
 
