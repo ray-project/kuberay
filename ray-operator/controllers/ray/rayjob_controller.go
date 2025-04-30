@@ -434,11 +434,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func emitRayJobMetrics(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
-	if rayJobMetricsObserver == nil {
+func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+	if rayJobMetricsManager == nil {
 		return
 	}
-	emitRayJobExecutionDuration(rayJobMetricsObserver, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
+	emitRayJobExecutionDuration(rayJobMetricsManager, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
 }
 
 func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
