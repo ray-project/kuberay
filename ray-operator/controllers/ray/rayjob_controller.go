@@ -46,7 +46,7 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsObserver metrics.RayJobMetricsObserver
+	RayJobMetricsManager *metrics.RayJobMetricsManager
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -430,7 +430,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	emitRayJobMetrics(r.options.RayJobMetricsObserver, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
+	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 

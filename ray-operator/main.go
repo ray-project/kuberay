@@ -254,7 +254,7 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		RayJobMetricsObserver: rayJobMetricsManager,
+		RayJobMetricsManager: rayJobMetricsManager,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
