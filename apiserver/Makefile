@@ -1,15 +1,18 @@
 BUILD_TIME      := $(shell date "+%F %T")
 COMMIT_SHA1     := $(shell git rev-parse HEAD)
-REPO_ROOT	    := $(shell dirname ${PWD})
-REPO_ROOT_BIN	:= $(REPO_ROOT)/bin
+REPO_ROOT       := $(shell dirname ${PWD})
+REPO_ROOT_BIN   := $(REPO_ROOT)/bin
 
 # Image URL to use all building/pushing image targets
-IMG_REPO ?= quay.io/kuberay/apiserver
-IMG_TAG ?= latest
-IMG ?= $(IMG_REPO):$(IMG_TAG)
-
+IMG_REPO        ?= quay.io/kuberay/apiserver
+IMG_TAG         ?= latest
+IMG             := $(IMG_REPO):$(IMG_TAG)
 # Allow for additional test flags (-v, etc)
-GO_TEST_FLAGS ?=
+GO_TEST_FLAGS   ?=
+# Container Engine to be used for building images
+ENGINE          ?= docker
+# Kuberay API Server base URL to use in end to end tests
+E2E_API_SERVER_URL ?= http://localhost:31888
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64, $(shell go env GOARCH))
@@ -17,8 +20,6 @@ ifeq (arm64, $(shell go env GOARCH))
 else
 	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310
 endif
-# Kuberay API Server base URL to use in end to end tests
-E2E_API_SERVER_URL ?= http://localhost:31888
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (, $(shell go env GOBIN))
@@ -26,15 +27,29 @@ ifeq (, $(shell go env GOBIN))
 else
 	GOBIN = $(shell go env GOBIN)
 endif
-
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# Container Engine to be used for building images
-ENGINE ?= docker
+## Tool Versions
+KUSTOMIZE_VERSION ?= v5.4.3
+GOFUMPT_VERSION ?= v0.3.1
+GOIMPORTS_VERSION ?= v0.14.0
+GOLANGCI_LINT_VERSION ?= v1.64.8
+KIND_VERSION ?= v0.19.0
+GOBINDATA_VERSION ?= v4.0.2
+MOCKGEN_VERSION ?= v1.6.0
+
+## Tool Binaries
+KUSTOMIZE ?= $(REPO_ROOT_BIN)/kustomize
+GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
+GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
+GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
+KIND ?= $(REPO_ROOT_BIN)/kind
+GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
+MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 
 all: build
 
@@ -66,29 +81,37 @@ clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	go fmt ./...
+	@echo "Running go fmt..."
+	@go fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	go vet ./...
+	@echo "Running go vet..."
+	@go vet ./...
 
 .PHONY: fumpt
-fumpt: gofumpt ## Run gofmtumpt against code.
-	$(GOFUMPT) -l -w .
+fumpt: gofumpt ## Run gofumpt against code.
+	@echo "Running gofumpt..."
+	@$(GOFUMPT) -l -w .
 
 .PHONY: imports
 imports: goimports ## Run goimports against code.
-	$(GOIMPORTS) -l -w .
+	@echo "Running goimports..."
+	@$(GOIMPORTS) -l -w .
+
+.PHONY: format
+format: fmt vet fumpt imports ## Run all formatting tools
 
 .PHONY: lint
-lint: golangci-lint fmt vet fumpt imports ## Run the linter.
+lint: format golangci-lint ## Run the linter.
+	@echo "Running golangci-lint..."
 	# exclude the SA1019 check which checks the usage of deprecated fields.
-	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
+	@$(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners
 
-build: fmt vet fumpt imports ## Build api server binary.
+build: format ## Build api server binary.
 	go build -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
 
-run: fmt vet fumpt imports lint ## Run the api server from your host.
+run: lint ## Run the api server from your host.
 	go run -race cmd/main.go -localSwaggerPath ${REPO_ROOT}/proto/swagger
 
 .PHONY: build-swagger
@@ -103,7 +126,7 @@ generate: mockgen # Generate code using command after //go:generate in each file
 ##@ Testing
 
 .PHONY: test
-test: fmt vet fumpt imports generate ## Run all unit tests.
+test: lint generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
@@ -213,72 +236,52 @@ undeploy: ## Undeploy via helm the kuberay api server to the K8s cluster specifi
 
 ## Location to install dependencies to
 $(REPO_ROOT_BIN):
-	mkdir -p $(REPO_ROOT_BIN)
+	@mkdir -p $(REPO_ROOT_BIN)
+	@echo "Created $(REPO_ROOT_BIN) directory"
 
-## Tool Binaries
-KUSTOMIZE ?= $(REPO_ROOT_BIN)/kustomize
-GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
-GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
-GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
-KIND ?= $(REPO_ROOT_BIN)/kind
-GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
-MOCKGEN = $(REPO_ROOT_BIN)/mockgen
+# Generic tool installation function
+define go_install_tool
+@if [ ! -f $(1) ]; then \
+	echo "Installing $(2)..."; \
+	GOBIN=$(REPO_ROOT_BIN) go install $(3)@$(4); \
+	echo "$(2) installed successfully"; \
+fi
+endef
 
-
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.4.3
-GOFUMPT_VERSION ?= v0.3.1
-GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.64.8
-KIND_VERSION ?= v0.19.0
-GOBINDATA_VERSION ?= v4.0.2
-MOCKGEN_VERSION ?= v1.6.0
-
-KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-$(KUSTOMIZE): $(REPO_ROOT_BIN)
-	test -s $(KUSTOMIZE) || (curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(REPO_ROOT_BIN);)
+kustomize: ## Download kustomize locally if necessary.
+	$(call go_install_tool,$(KUSTOMIZE),kustomize,sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
 
 .PHONY: goimports
-goimports: $(GOIMPORTS) ## Download goimports locally if necessary
-$(GOIMPORTS): $(REPO_ROOT_BIN)
-	test -s $(GOIMPORTS) || GOBIN=$(REPO_ROOT_BIN) go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
+goimports: $(REPO_ROOT_BIN) ## Download goimports locally if necessary
+	$(call go_install_tool,$(GOIMPORTS),goimports,golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
 
 .PHONY: gofumpt
-gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
-$(GOFUMPT): $(REPO_ROOT_BIN)
-	test -s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
-
-.PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Download golangci_lint locally if necessary.
-$(GOLANGCI_LINT): $(REPO_ROOT_BIN)
-	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
+gofumpt: $(REPO_ROOT_BIN) ## Download gofumpt locally if necessary.
+	$(call go_install_tool,$(GOFUMPT),gofumpt,mvdan.cc/gofumpt,$(GOFUMPT_VERSION))
 
 .PHONY: kind
-kind: $(KIND) ## Download kind locally if necessary.
-$(KIND): $(REPO_ROOT_BIN)
-	test -s $(KIND) || GOBIN=$(REPO_ROOT_BIN) go install sigs.k8s.io/kind@$(KIND_VERSION)
+kind: $(REPO_ROOT_BIN) ## Download kind locally if necessary.
+	$(call go_install_tool,$(KIND),kind,sigs.k8s.io/kind,$(KIND_VERSION))
 
 .PHONY: go-bindata
-go-bindata: $(GOBINDATA) ## Download the go-bindata executable if necessary.
-$(GOBINDATA): $(REPO_ROOT_BIN)
-	test -s $(GOBINDATA) || GOBIN=$(REPO_ROOT_BIN) go install github.com/kevinburke/go-bindata/v4/...@$(GOBINDATA_VERSION)
+go-bindata: $(REPO_ROOT_BIN) ## Download the go-bindata executable if necessary.
+	$(call go_install_tool,$(GOBINDATA),go-bindata,github.com/kevinburke/go-bindata/v4/...,$(GOBINDATA_VERSION))
 
 .PHONY: mockgen
-mockgen: $(MOCKGEN) ## Download mockgen locally if necessary.
-$(MOCKGEN): $(REPO_ROOT_BIN)
-	test -s $(MOCKGEN) || GOBIN=$(REPO_ROOT_BIN) go install github.com/golang/mock/mockgen@$(MOCKGEN_VERSION)
+mockgen: $(REPO_ROOT_BIN) ## Download mockgen locally if necessary.
+	$(call go_install_tool,$(MOCKGEN),mockgen,github.com/golang/mock/mockgen,$(MOCKGEN_VERSION))
+
+.PHONY: golangci-lint
+golangci-lint: $(REPO_ROOT_BIN) ## Download golangci_lint locally if necessary.
+	$(call go_install_tool,$(GOLANGCI_LINT),golangci-lint,github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 .PHONY: dev-tools
 dev-tools: kind golangci-lint gofumpt kustomize goimports go-bindata mockgen ## Install all development tools.
+	@echo "All development tools installed"
 
 .PHONY: clean-dev-tools
 clean-dev-tools: ## Remove all development tools.
-	rm -f $(GOLANGCI_LINT)
-	rm -f $(GOFUMPT)
-	rm -f $(KUSTOMIZE)
-	rm -f $(GOIMPORTS)
-	rm -f $(KIND)
-	rm -f $(GOBINDATA)
-	rm -f $(MOCKGEN)
+	@echo "Cleaning development tools..."
+	@rm -f $(GOLANGCI_LINT) $(GOFUMPT) $(KUSTOMIZE) $(GOIMPORTS) $(KIND) $(GOBINDATA) $(MOCKGEN)
+	@echo "Development tools cleaned"
