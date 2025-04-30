@@ -19,18 +19,15 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 		return nil, err
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	proxy.Transport, err = rest.TransportFor(config.KubernetesConfig)
-	if err != nil {
+	if proxy.Transport, err = rest.TransportFor(config.KubernetesConfig); err != nil {
 		return nil, err
 	}
 	if config.Middleware == nil {
 		config.Middleware = func(handler http.Handler) http.Handler { return handler }
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/apis/ray.io/v1/", func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: add template features to specify routes.
-		config.Middleware(proxy).ServeHTTP(writer, request)
-	})
+	// TODO: add template features to specify routes.
+	mux.Handle("/apis/ray.io/v1/", config.Middleware(proxy))
 	// TODO: add query filters to make sure only KubeRay events are queried.
 	mux.Handle("/api/v1/namespaces/{namespace}/events", config.Middleware(proxy))
 	// TODO: check whether the service belongs to KubeRay first.
