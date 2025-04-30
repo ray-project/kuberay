@@ -107,11 +107,16 @@ test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
-e2e-test: clean-kuberay-resources ## Run end to end tests using a pre-exiting cluster.
+e2e-test: ## Run end to end tests using a pre-existing cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
-.PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
-local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+# 1. Create a fresh kind cluster if no existing cluster is found.
+# 2. Delete all kuberay resources if a cluster is found.
+# 3. Deploy the kuberay operator into the cluster.
+# 4. Install the kuberay apiserver into the cluster.
+# 5. Run the end to end tests.
+.PHONY: local-e2e-test
+local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
@@ -120,11 +125,7 @@ OPERATOR_IMAGE_TAG ?= latest
 SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
 cluster: kind ## Start kind development cluster.
-	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
-		echo "Kind cluster $(KIND_CLUSTER_NAME) already exists, please run 'make clean-cluster' to delete the cluster."; \
-	else \
-		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
-	fi
+	$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
 
 .PHONY: clean-kuberay-resources
 clean-kuberay-resources: ## Delete all kuberay resources in the current cluster. kubectl won't return error if the resources don't exist, so this is safe to run.
