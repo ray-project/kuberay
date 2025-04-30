@@ -53,6 +53,8 @@ type CreateClusterOptions struct {
 
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
+	defaultImage              = "rayproject/ray"
+	defaultImageWithTag       = fmt.Sprintf("%s:%s", defaultImage, util.RayVersion)
 
 	createClusterLong = templates.LongDesc(`
 	Create a Ray cluster with the given name and options.
@@ -115,7 +117,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringToStringVar(&options.labels, "labels", nil, "K8s labels (e.g. --labels app=ray,env=dev)")
 	cmd.Flags().StringToStringVar(&options.annotations, "annotations", nil, "K8s annotations (e.g. --annotations ttl-hours=24,owner=chthulu)")
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.image, "image", defaultImageWithTag, "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", util.DefaultHeadCPU, "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", util.DefaultHeadMemory, "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", util.DefaultHeadGPU, "number of GPUs in the Ray head")
@@ -158,7 +160,12 @@ func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string)
 	options.clusterName = args[0]
 
 	if options.image == "" {
-		options.image = fmt.Sprintf("rayproject/ray:%s", options.rayVersion)
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
+	}
+
+	// If the image is the default but the ray version is not the default, set the image to use the specified ray version
+	if options.image == defaultImageWithTag && options.rayVersion != util.RayVersion {
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
 	}
 
 	return nil
