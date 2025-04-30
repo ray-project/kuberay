@@ -127,7 +127,7 @@ cluster: kind ## Start kind development cluster.
 	fi
 
 .PHONY: clean-kuberay-resources
-clean-kuberay-resources: ## Delete all kuberay resources in the current cluster.
+clean-kuberay-resources: ## Delete all kuberay resources in the current cluster. kubectl won't return error if the resources don't exist, so this is safe to run.
 	@echo "Deleting RayClusters..."
 	kubectl delete raycluster --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
 	@echo "Deleting RayJobs..."
