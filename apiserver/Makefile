@@ -107,7 +107,7 @@ test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
-e2e-test: ## Run end to end tests using a pre-exiting cluster.
+e2e-test: clean-kuberay-resources ## Run end to end tests using a pre-exiting cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 .PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
@@ -125,6 +125,18 @@ cluster: kind ## Start kind development cluster.
 	else \
 		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
 	fi
+
+.PHONY: clean-kuberay-resources
+clean-kuberay-resources: ## Delete all kuberay resources in the current cluster.
+	@echo "Deleting RayClusters..."
+	kubectl delete raycluster --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
+	@echo "Deleting RayJobs..."
+	kubectl delete rayjob --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
+	@echo "Deleting RayServices..."
+	kubectl delete rayservice --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
+	@echo "Deleting ComputeTemplates..."
+	kubectl delete configmap --all-namespaces -l ray.io/config-type=compute-template
+
 
 .PHONY: clean-cluster
 clean-cluster: kind ## Delete kind development cluster.
