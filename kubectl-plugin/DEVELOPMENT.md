@@ -7,7 +7,7 @@ This section walks through how to build and test the plugin.
 | software | version  | link                         |
 |:---------|:---------|:-----------------------------|
 | kubectl  |  >= 1.23 | [download][download-kubectl] |
-| go       |  v1.22   | [download-go]                |
+| go       |  v1.24   | [download-go]                |
 
 ## IDE Setup (VS Code)
 
