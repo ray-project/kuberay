@@ -13,6 +13,22 @@ GO_TEST_FLAGS   ?=
 ENGINE          ?= docker
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?= http://localhost:31888
+## Tool Versions
+KUSTOMIZE_VERSION       ?= v5.4.3
+GOFUMPT_VERSION         ?= v0.3.1
+GOIMPORTS_VERSION       ?= v0.14.0
+GOLANGCI_LINT_VERSION   ?= v1.64.8
+KIND_VERSION            ?= v0.19.0
+GOBINDATA_VERSION       ?= v4.0.2
+MOCKGEN_VERSION         ?= v1.6.0
+## Tool Binaries
+KUSTOMIZE     ?= $(REPO_ROOT_BIN)/kustomize
+GOIMPORTS     ?= $(REPO_ROOT_BIN)/goimports
+GOFUMPT       ?= $(REPO_ROOT_BIN)/gofumpt
+GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
+KIND          ?= $(REPO_ROOT_BIN)/kind
+GOBINDATA     ?= $(REPO_ROOT_BIN)/go-bindata
+MOCKGEN       ?= $(REPO_ROOT_BIN)/mockgen
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64, $(shell go env GOARCH))
@@ -32,24 +48,6 @@ endif
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
-
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.4.3
-GOFUMPT_VERSION ?= v0.3.1
-GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.64.8
-KIND_VERSION ?= v0.19.0
-GOBINDATA_VERSION ?= v4.0.2
-MOCKGEN_VERSION ?= v1.6.0
-
-## Tool Binaries
-KUSTOMIZE ?= $(REPO_ROOT_BIN)/kustomize
-GOIMPORTS ?= $(REPO_ROOT_BIN)/goimports
-GOFUMPT ?= $(REPO_ROOT_BIN)/gofumpt
-GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
-KIND ?= $(REPO_ROOT_BIN)/kind
-GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
-MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 
 all: build
 
@@ -126,7 +124,7 @@ generate: mockgen # Generate code using command after //go:generate in each file
 ##@ Testing
 
 .PHONY: test
-test: lint generate ## Run all unit tests.
+test: format generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
