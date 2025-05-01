@@ -37,19 +37,20 @@ type GenericEnd2EndTest[I proto.Message] struct {
 // End2EndTestingContext provides a common set of values and methods that
 // can be used in executing the tests
 type End2EndTestingContext struct {
-	ctx                    context.Context
-	apiServerHttpClient    *http.Client
-	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
-	rayClient              rayv1.RayV1Interface
-	k8client               *kubernetes.Clientset
-	apiServerBaseURL       string
-	rayImage               string
-	rayVersion             string
-	namespaceName          string
-	computeTemplateName    string
-	clusterName            string
-	configMapName          string
-	currentName            string
+	ctx                        context.Context
+	apiServerHttpClient        *http.Client
+	kuberayAPIServerClient     *kuberayHTTP.KuberayAPIServerClient
+	kuberayAPIServerExecClient *kuberayHTTP.KuberayAPIServerExecClient
+	rayClient                  rayv1.RayV1Interface
+	k8client                   *kubernetes.Clientset
+	apiServerBaseURL           string
+	rayImage                   string
+	rayVersion                 string
+	namespaceName              string
+	computeTemplateName        string
+	clusterName                string
+	configMapName              string
+	currentName                string
 }
 
 // contextOption is a functional option that allows for building out an instance
@@ -93,7 +94,9 @@ func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
-		return nil
+		var err error
+		testingContext.kuberayAPIServerExecClient, err = kuberayHTTP.NewKuberayAPIServerExecClient(testingContext.apiServerBaseURL)
+		return err
 	}
 }
 
@@ -108,7 +111,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
@@ -251,7 +254,7 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 		Namespace: e2etc.namespaceName,
 	}
 
-	_, _, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
+	_, _, err := e2etc.kuberayAPIServerExecClient.CreateComputeTemplate(computeTemplateRequest)
 	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
 }
 

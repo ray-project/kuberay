@@ -15,6 +15,7 @@ const (
 	RayClusterEnvironmentLabelKey     = "ray.io/environment"
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
+	KubernetesComponentLabelKey       = "app.kubernetes.io/component"
 
 	// Annotation keys
 	// Role level
