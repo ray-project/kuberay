@@ -1,3 +1,5 @@
+BUILD_TIME      := $(shell date "+%F %T")
+COMMIT_SHA1     := $(shell git rev-parse HEAD)
 REPO_ROOT       := $(shell dirname ${PWD})
 REPO_ROOT_BIN   := $(REPO_ROOT)/bin
 
