@@ -7,26 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	// "k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
 	klog "k8s.io/klog/v2"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/manager"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -41,14 +27,6 @@ type KuberayAPIServerClient struct {
 	// Store http request handling function for unit test purpose.
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
-}
-
-type KuberayAPIServerExecClient struct {
-	KubeClient  kubernetes.Interface
-	RestConfig  *rest.Config
-	marshaler   *protojson.MarshalOptions
-	unmarshaler *protojson.UnmarshalOptions
-	baseURL     string
 }
 
 type KuberayAPIServerClientError struct {
@@ -67,39 +45,6 @@ func IsNotFoundError(err error) bool {
 		}
 	}
 	return false
-}
-
-func NewKuberayAPIServerExecClient(baseURL string) (*KuberayAPIServerExecClient, error) {
-	kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load in-cluster config: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
-	}
-
-	return &KuberayAPIServerExecClient{
-		baseURL:    baseURL,
-		KubeClient: clientset,
-		RestConfig: config,
-		marshaler: &protojson.MarshalOptions{
-			Multiline:       true,
-			Indent:          "    ",
-			AllowPartial:    false,
-			UseProtoNames:   true,
-			UseEnumNumbers:  false,
-			EmitUnpopulated: false,
-			Resolver:        nil,
-		},
-		unmarshaler: &protojson.UnmarshalOptions{
-			AllowPartial:   false,
-			DiscardUnknown: false,
-			Resolver:       nil,
-		},
-	}, nil
 }
 
 func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *KuberayAPIServerClient {
@@ -123,116 +68,6 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 	}
 	client.executeHttpRequest = client.executeRequest
 	return client
-}
-
-func (krc *KuberayAPIServerExecClient) findPod(namespace string) (*corev1.Pod, error) {
-	// Find the KubeRay API server pod
-
-	selector := labels.Set(map[string]string{
-		util.KubernetesComponentLabelKey: util.ComponentName,
-	}).AsSelector().String()
-
-	podList, err := krc.KubeClient.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: selector,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("no pods found with label %s=%s", util.KubernetesComponentLabelKey, util.ComponentName)
-	}
-	// pick the first pod selected
-	targetPod := podList.Items[0]
-	return &targetPod, nil
-}
-
-func (krc *KuberayAPIServerExecClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url string, jsonBody string) (string, error) {
-	var (
-		execOut bytes.Buffer
-		execErr bytes.Buffer
-	)
-
-	command := []string{
-		"curl", "-s", "-X", "POST", url,
-		"-H", "Content-Type: application/json",
-		"-H", "Accept: application/json",
-		"-d", jsonBody,
-	}
-
-	containerName := pod.Spec.Containers[0].Name
-
-	req := krc.KubeClient.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(pod.Name).
-		Namespace(pod.Namespace).
-		SubResource("exec")
-
-	req.VersionedParams(&corev1.PodExecOptions{
-		Container: containerName,
-		Command:   command,
-		Stdout:    true,
-		Stderr:    true,
-	}, runtime.NewParameterCodec(scheme.Scheme))
-
-	exec, err := remotecommand.NewSPDYExecutor(krc.RestConfig, "POST", req.URL())
-	if err != nil {
-		return "", fmt.Errorf("failed to initialize executor: %w", err)
-	}
-
-	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
-		Stdout: &execOut,
-		Stderr: &execErr,
-		Tty:    false,
-	})
-	if err != nil {
-		return "", fmt.Errorf("command execution failed: %w", err)
-	}
-
-	if execErr.Len() > 0 {
-		return "", fmt.Errorf("stderr: %s", execErr.String())
-	}
-
-	return execOut.String(), nil
-}
-
-// ExecRequest executes arbitrary command inside the pod
-func (krc *KuberayAPIServerExecClient) ExecRequest(url string, jsonBody string) (string, error) {
-	pod, err := krc.findPod(manager.DefaultNamespace)
-	if err != nil {
-		return "", fmt.Errorf("could not find pod: %w", err)
-	}
-
-	execOut, err := krc.ExecCommandWithCurlInPod(pod, url, jsonBody)
-
-	return execOut, err
-}
-
-// CreateComputeTemplate creates a new compute template.
-func (krc *KuberayAPIServerExecClient) CreateComputeTemplate(request *api.CreateComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
-	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
-	// createURL := "http://localhost:8888/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
-
-	bytez, err := krc.marshaler.Marshal(request.ComputeTemplate)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal api.ComputeTemplate to JSON: %w", err)
-	}
-
-	// Prepare the JSON body as a string
-	jsonBody := string(bytez)
-
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(createURL, jsonBody)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
-	}
-
-	// Now, parse the response into ComputeTemplate
-	computeTemplate := &api.ComputeTemplate{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), computeTemplate); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal response: %+w", err)
-	}
-
-	return computeTemplate, nil, nil
 }
 
 // CreateComputeTemplate creates a new compute template.
@@ -262,13 +97,6 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 	}
 
 	return computeTemplate, nil, nil
-}
-
-// DeleteComputeTemplate deletes a compute template.
-func (krc *KuberayAPIServerExecClient) DeleteComputeTemplate(request *api.DeleteComputeTemplateRequest) (string, error) {
-	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
-	response, err := krc.doDelete(deleteURL)
-	return response, err
 }
 
 // DeleteComputeTemplate deletes a compute template.
@@ -793,16 +621,6 @@ func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionR
 func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJobSubmissionRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
 	return krc.doDelete(deleteURL)
-}
-
-func (krc *KuberayAPIServerExecClient) doDelete(deleteURL string) (string, error) {
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(deleteURL, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to execute curl command inside pod: %w", err)
-	}
-
-	return response, err
 }
 
 func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status, error) {

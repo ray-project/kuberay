@@ -21,7 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	// kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -37,20 +37,19 @@ type GenericEnd2EndTest[I proto.Message] struct {
 // End2EndTestingContext provides a common set of values and methods that
 // can be used in executing the tests
 type End2EndTestingContext struct {
-	ctx                        context.Context
-	apiServerHttpClient        *http.Client
-	kuberayAPIServerClient     *kuberayHTTP.KuberayAPIServerClient
-	kuberayAPIServerExecClient *kuberayHTTP.KuberayAPIServerExecClient
-	rayClient                  rayv1.RayV1Interface
-	k8client                   *kubernetes.Clientset
-	apiServerBaseURL           string
-	rayImage                   string
-	rayVersion                 string
-	namespaceName              string
-	computeTemplateName        string
-	clusterName                string
-	configMapName              string
-	currentName                string
+	ctx                    context.Context
+	apiServerHttpClient    *http.Client
+	kuberayAPIServerClient *KuberayAPIServerClient
+	rayClient              rayv1.RayV1Interface
+	k8client               *kubernetes.Clientset
+	apiServerBaseURL       string
+	rayImage               string
+	rayVersion             string
+	namespaceName          string
+	computeTemplateName    string
+	clusterName            string
+	configMapName          string
+	currentName            string
 }
 
 // contextOption is a functional option that allows for building out an instance
@@ -93,9 +92,8 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
 		var err error
-		testingContext.kuberayAPIServerExecClient, err = kuberayHTTP.NewKuberayAPIServerExecClient(testingContext.apiServerBaseURL)
+		testingContext.kuberayAPIServerClient, err = NewKuberayAPIServerClient(testingContext.apiServerBaseURL)
 		return err
 	}
 }
@@ -230,7 +228,7 @@ func (e2etc *End2EndTestingContext) GetRayVersion() string {
 	return e2etc.rayVersion
 }
 
-func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
+func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *KuberayAPIServerClient {
 	return e2etc.kuberayAPIServerClient
 }
 
@@ -254,7 +252,7 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 		Namespace: e2etc.namespaceName,
 	}
 
-	_, _, err := e2etc.kuberayAPIServerExecClient.CreateComputeTemplate(computeTemplateRequest)
+	_, _, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
 	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
 }
 
@@ -263,7 +261,7 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 		Name:      e2etc.computeTemplateName,
 		Namespace: e2etc.namespaceName,
 	}
-	_, err := e2etc.kuberayAPIServerExecClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
+	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
 	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
 }
 
