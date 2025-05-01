@@ -263,7 +263,7 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 		Name:      e2etc.computeTemplateName,
 		Namespace: e2etc.namespaceName,
 	}
-	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
+	_, err := e2etc.kuberayAPIServerExecClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
 	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
 }
 

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	// "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -127,17 +128,12 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 func (krc *KuberayAPIServerExecClient) findPod(namespace string) (*corev1.Pod, error) {
 	// Find the KubeRay API server pod
 
-	// selector := labels.Set(map[string]string{
-	// 	util.KubernetesComponentLabelKey: util.ComponentName,
-	// }).AsSelector().String()
-
-	// podListAll, err := krc.KubeClient.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
-	// if err != nil {
-	// 	return nil, err
-	// }
+	selector := labels.Set(map[string]string{
+		util.KubernetesComponentLabelKey: util.ComponentName,
+	}).AsSelector().String()
 
 	podList, err := krc.KubeClient.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: "", // selector,
+		LabelSelector: selector,
 	})
 	if err != nil {
 		return nil, err
@@ -266,6 +262,13 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 	}
 
 	return computeTemplate, nil, nil
+}
+
+// DeleteComputeTemplate deletes a compute template.
+func (krc *KuberayAPIServerExecClient) DeleteComputeTemplate(request *api.DeleteComputeTemplateRequest) (string, error) {
+	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
+	response, err := krc.doDelete(deleteURL)
+	return response, err
 }
 
 // DeleteComputeTemplate deletes a compute template.
@@ -790,6 +793,16 @@ func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionR
 func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJobSubmissionRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
 	return krc.doDelete(deleteURL)
+}
+
+func (krc *KuberayAPIServerExecClient) doDelete(deleteURL string) (string, error) {
+	// Execute the curl command inside the pod using kubectl exec
+	response, err := krc.ExecRequest(deleteURL, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to execute curl command inside pod: %w", err)
+	}
+
+	return response, err
 }
 
 func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status, error) {
