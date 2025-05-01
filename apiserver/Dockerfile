@@ -21,13 +21,14 @@ COPY apiserver/ apiserver/
 
 WORKDIR /workspace/apiserver
 
-
 # Build
 USER root
 WORKDIR /workspace/apiserver
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kuberay-apiserver cmd/main.go
 
-FROM scratch
+FROM alpine:3.17
+RUN apk add --no-cache curl
+
 WORKDIR /workspace
 COPY --from=builder /workspace/apiserver/kuberay-apiserver apiserver/
 # Support serving swagger files
