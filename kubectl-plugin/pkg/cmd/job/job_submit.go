@@ -241,9 +241,6 @@ func (options *SubmitJobOptions) Validate() error {
 		return fmt.Errorf("working directory is required, use --working-dir or set with runtime env")
 	}
 
-	// Changed working dir clean to here instead of complete since calling Clean on empty string return "." and it would be dificult to determine if that is actually user input or not.
-	options.workingDir = filepath.Clean(options.workingDir)
-
 	resourceFields := map[string]string{
 		"head-cpu":      options.headCPU,
 		"head-gpu":      options.headGPU,
