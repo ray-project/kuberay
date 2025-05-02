@@ -115,6 +115,7 @@ e2e-test: ## Run end to end tests using a pre-existing cluster.
 # 3. Install the kuberay apiserver into the cluster.
 # 4. Deploy the kuberay operator into the cluster.
 # 5. Run the end to end tests.
+# 6. Clean up the cluster.
 .PHONY: local-e2e-test
 local-e2e-test: clean-cluster cluster install operator-image load-operator-image deploy-operator load-ray-test-image e2e-test clean-cluster
 
