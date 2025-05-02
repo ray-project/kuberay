@@ -22,5 +22,3 @@ nodes:
   - containerPort: 31887
     hostPort: 31887
     listenAddress: "0.0.0.0"
-- role: worker
-- role: worker
