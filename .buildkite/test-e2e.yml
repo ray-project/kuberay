@@ -82,7 +82,7 @@
   image: golang:1.24
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-e2e-apiserver.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator

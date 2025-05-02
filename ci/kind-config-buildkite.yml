@@ -15,3 +15,10 @@ nodes:
     apiServer:
       certSANs:
         - "docker"
+  extraPortMappings:
+  - containerPort: 31888
+    hostPort: 31888
+    listenAddress: "0.0.0.0"
+  - containerPort: 31887
+    hostPort: 31887
+    listenAddress: "0.0.0.0"
