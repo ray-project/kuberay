@@ -44,12 +44,18 @@ func TestRayCreateClusterComplete(t *testing.T) {
 		"should succeed with default image when no image is specified": {
 			args:          []string{"testRayClusterName"},
 			rayVersion:    util.RayVersion,
-			expectedImage: fmt.Sprintf("rayproject/ray:%s", util.RayVersion),
+			expectedImage: defaultImageWithTag,
 		},
 		"should succeed with provided image when provided": {
 			args:          []string{"testRayClusterName"},
 			image:         "DEADBEEF",
 			expectedImage: "DEADBEEF",
+		},
+		"should set the image to the same version as the ray version when the image is the default and the ray version is not the default": {
+			args:          []string{"testRayClusterName"},
+			image:         defaultImageWithTag,
+			rayVersion:    "2.44.0",
+			expectedImage: fmt.Sprintf("%s:2.44.0", defaultImage),
 		},
 	}
 

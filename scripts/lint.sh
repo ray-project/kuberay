@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-dirs_to_lint="ray-operator kubectl-plugin apiserver"
+dirs_to_lint="ray-operator kubectl-plugin apiserver apiserversdk"
 
 for dir in $dirs_to_lint; do
   pushd "$dir"
