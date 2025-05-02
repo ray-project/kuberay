@@ -70,6 +70,7 @@ type SubmitJobOptions struct {
 	workerReplicas     int32
 	noWait             bool
 	dryRun             bool
+	verbose            bool
 }
 
 var (
@@ -160,6 +161,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
+	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
 
 	return cmd
 }
@@ -550,6 +552,9 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	}
 	if len(options.logColor) > 0 {
 		raySubmitCmd = append(raySubmitCmd, "--log-color", options.logColor)
+	}
+	if options.verbose {
+		raySubmitCmd = append(raySubmitCmd, "--verbose")
 	}
 
 	raySubmitCmd = append(raySubmitCmd, "--working-dir", options.workingDir)
