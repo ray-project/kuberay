@@ -267,7 +267,10 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 	// Test pagination with limit 1, which is less than the total number of services in all namespaces.
 	t.Run("Test pagination return part of the result services", func(t *testing.T) {
 		pageToken = ""
-		gotServices := make(map[targetService]bool)
+		gotServices := make(map[targetService]bool, totalServices)
+		for _, expectedService := range expectedServices {
+			gotServices[expectedService] = false
+		}
 
 		for i := 0; i < totalServices; i++ {
 			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
@@ -307,7 +310,10 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 	// Test pagination with limit 7, which is larger than the total number of services in all namespaces.
 	t.Run("Test pagination return all result services", func(t *testing.T) {
 		pageToken = ""
-		gotServices := make(map[targetService]bool)
+		gotServices := make(map[targetService]bool, totalServices)
+		for _, expectedService := range expectedServices {
+			gotServices[expectedService] = false
+		}
 
 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
 			PageToken: pageToken,
