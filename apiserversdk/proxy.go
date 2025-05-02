@@ -22,15 +22,16 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if proxy.Transport, err = rest.TransportFor(config.KubernetesConfig); err != nil { // rest.TransportFor provides the auth to the K8s API server.
 		return nil, err
 	}
-	if config.Middleware == nil {
-		config.Middleware = func(handler http.Handler) http.Handler { return handler }
+	var handler http.Handler = proxy
+	if config.Middleware != nil {
+		handler = config.Middleware(proxy)
 	}
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
-	mux.Handle("/apis/ray.io/v1/", config.Middleware(proxy)) // forward KubeRay CR requests.
+	mux.Handle("/apis/ray.io/v1/", handler) // forward KubeRay CR requests.
 	// TODO: add query filters to make sure only KubeRay events are queried.
-	mux.Handle("/api/v1/namespaces/{namespace}/events", config.Middleware(proxy)) // allow querying KubeRay CR events.
+	mux.Handle("/api/v1/namespaces/{namespace}/events", handler) // allow querying KubeRay CR events.
 	// TODO: check whether the service belongs to KubeRay first.
-	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", config.Middleware(proxy)) // allow accessing KubeRay dashboards and job submissions.
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", handler) // allow accessing KubeRay dashboards and job submissions.
 	return mux, nil
 }
