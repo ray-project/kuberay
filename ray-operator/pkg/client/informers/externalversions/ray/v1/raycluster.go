@@ -46,13 +46,25 @@ func NewFilteredRayClusterInformer(client versioned.Interface, namespace string,
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.RayV1().RayClusters(namespace).List(context.TODO(), options)
+				return client.RayV1().RayClusters(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.RayV1().RayClusters(namespace).Watch(context.TODO(), options)
+				return client.RayV1().RayClusters(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.RayV1().RayClusters(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.RayV1().RayClusters(namespace).Watch(ctx, options)
 			},
 		},
 		&apisrayv1.RayCluster{},
