@@ -132,7 +132,6 @@ cluster: kind ## Start kind development cluster.
 		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
 	fi
 
-
 .PHONY: clean-cluster
 clean-cluster: kind ## Delete kind development cluster.
 	$(KIND) delete cluster -n $(KIND_CLUSTER_NAME)
