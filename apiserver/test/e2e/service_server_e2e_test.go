@@ -280,18 +280,18 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			require.NotEmpty(t, response.Services, "A list of service is required")
 			require.Len(t, response.Services, 1)
 
-			for _, service := range response.Services {
-				gotServices[targetService{
-					namespace: service.Namespace,
-					service:   service.Name,
-				}] = true
-			}
-
 			pageToken = response.NextPageToken
 			if i == totalServices-1 {
 				require.Empty(t, pageToken, "No continue token is expected")
 			} else {
 				require.NotEmpty(t, pageToken, "A continue token is expected")
+			}
+
+			for _, service := range response.Services {
+				gotServices[targetService{
+					namespace: service.Namespace,
+					service:   service.Name,
+				}] = true
 			}
 		}
 
