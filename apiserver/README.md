@@ -38,7 +38,7 @@ curl --silent -X 'GET' \
     -H 'accept: application/json'
 ```
 
-### Helm
+### Install with Helm
 
 Make sure the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
 
@@ -46,7 +46,7 @@ Make sure the version of Helm is v3+. Currently, [existing CI tests](https://git
 helm version
 ```
 
-### Install KubeRay Operator
+#### Install KubeRay Operator
 
 - Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
 
@@ -63,7 +63,7 @@ helm version
     # kuberay-operator-7456c6b69b-t6pt7                1/1     Running   0          172m
   ```
 
-### Install KubeRay APIServer
+#### Install KubeRay APIServer
 
 ```text
 Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0` does not yet contain critical fixes
@@ -110,7 +110,7 @@ to the api server that would allow Kuberay Serve endpoints to work properly
   make docker-image cluster load-image deploy
   ```
 
-### List the chart
+#### List the chart
 
 To list the deployments:
 
@@ -121,7 +121,7 @@ helm ls
 # kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0
 ```
 
-### Uninstall the Chart
+#### Uninstall the Chart
 
 ```sh
 # Uninstall the `kuberay-apiserver` release
