@@ -83,7 +83,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 				req,
 				info,
 				func(ctx context.Context, req interface{}) (interface{}, error) {
-					return tt.handler.Handle(ctx, req, 0)
+					return tt.handler.Handle(ctx, req, 0 /*delay*/)
 				},
 			)
 
@@ -118,7 +118,7 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		func(receivedCtx context.Context, req interface{}) (interface{}, error) {
 			// Verify context value is passed through
 			assert.Equal(t, "test_value", receivedCtx.Value(testContextKey("test_key")))
-			return handler.Handle(receivedCtx, req, 0)
+			return handler.Handle(receivedCtx, req, 0 /*delay*/)
 		},
 	)
 }
@@ -175,7 +175,7 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 				"test_request",
 				info,
 				func(receivedCtx context.Context, req interface{}) (interface{}, error) {
-					return handler.Handle(receivedCtx, req, 0)
+					return handler.Handle(receivedCtx, req, 0 /*delay*/)
 				},
 			)
 
