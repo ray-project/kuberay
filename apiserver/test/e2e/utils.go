@@ -14,8 +14,10 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/api/meta"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -163,4 +165,16 @@ func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, servic
 	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayservices.ray.io \"" + serviceName + "\" not found"))
 
 	t.Logf("Service %s successfully deleted", serviceName)
+}
+
+func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
+	if expected.HeadGroupSpec.Environment == nil {
+		expected.HeadGroupSpec.Environment = &api.EnvironmentVariables{}
+	}
+	for _, wg := range expected.WorkerGroupSpec {
+		if wg.Environment == nil {
+			wg.Environment = &api.EnvironmentVariables{}
+		}
+	}
+	return proto.Equal(expected, actual)
 }
