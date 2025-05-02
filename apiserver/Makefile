@@ -110,13 +110,13 @@ test: fmt vet fumpt imports generate ## Run all unit tests.
 e2e-test: ## Run end to end tests using a pre-existing cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
-# 1. Create a fresh kind cluster if no existing cluster is found.
-# 2. Delete all kuberay resources and uninstall apiserver if a cluster is found.
+# 1. Clean up the cluster if it exists.
+# 2. Create a fresh kind cluster.
 # 3. Install the kuberay apiserver into the cluster.
 # 4. Deploy the kuberay operator into the cluster.
 # 5. Run the end to end tests.
 .PHONY: local-e2e-test
-local-e2e-test: cluster install operator-image load-operator-image deploy-operator load-ray-test-image e2e-test clean-cluster
+local-e2e-test: clean-cluster cluster install operator-image load-operator-image deploy-operator load-ray-test-image e2e-test clean-cluster
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
@@ -124,25 +124,12 @@ KIND_CLUSTER_NAME ?= ray-api-server-cluster
 OPERATOR_IMAGE_TAG ?= latest
 SECURITY_IMAGE_TAG ?= latest
 .PHONY: cluster
-cluster: kind ## Start kind development cluster. If the cluster already exists, clean up kuberay resources and uninstall the apiserver.
+cluster: kind ## Start kind development cluster.
 	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
-		echo "Kind cluster $(KIND_CLUSTER_NAME) already exists, clean up kuberay resources and uninstall the apiserver."; \
-		$(MAKE) clean-kuberay-resources; \
-		$(MAKE) uninstall; \
+		echo "Kind cluster $(KIND_CLUSTER_NAME) already exists, please run 'make clean-cluster' to delete the cluster."; \
 	else \
 		$(KIND) create cluster -n $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG); \
 	fi
-
-.PHONY: clean-kuberay-resources
-clean-kuberay-resources: ## Delete all kuberay resources in the current cluster. kubectl won't return error if the resources don't exist, so this is safe to run.
-	@echo "Deleting RayClusters..."
-	kubectl delete raycluster --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
-	@echo "Deleting RayJobs..."
-	kubectl delete rayjob --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
-	@echo "Deleting RayServices..."
-	kubectl delete rayservice --all-namespaces -l app.kubernetes.io/managed-by=kuberay-apiserver
-	@echo "Deleting ComputeTemplates..."
-	kubectl delete configmap --all-namespaces -l ray.io/config-type=compute-template
 
 
 .PHONY: clean-cluster
