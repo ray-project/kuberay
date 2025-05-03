@@ -16,7 +16,7 @@ type RayClusterMetricsManager struct {
 
 // RayClusterMetricsManager creates a new RayClusterManager instance.
 func NewRayClusterMetricsManager() *RayClusterMetricsManager {
-	collector := &RayClusterMetricsManager{
+	manager := &RayClusterMetricsManager{
 		rayClusterProvisionedDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_cluster_provisioned_duration_seconds",
@@ -25,7 +25,7 @@ func NewRayClusterMetricsManager() *RayClusterMetricsManager {
 			[]string{"name", "namespace"},
 		),
 	}
-	return collector
+	return manager
 }
 
 // Describe implements prometheus.Collector interface Describe method.

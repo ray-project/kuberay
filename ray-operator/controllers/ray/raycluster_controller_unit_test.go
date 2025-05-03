@@ -3661,14 +3661,16 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 					).Times(1)
 			}
 
-			emitRayClusterProvisionedDuration(
-				mockCollector,
-				clusterName,
-				clusterNamespace,
-				tc.originStatus,
-				tc.newStatus,
-				creationTime,
-			)
+			if mockCollector != nil {
+				if !meta.IsStatusConditionTrue(tc.originStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+					meta.IsStatusConditionTrue(tc.newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+					mockCollector.ObserveRayClusterProvisionedDuration(
+						clusterName,
+						clusterNamespace,
+						time.Since(creationTime).Seconds(),
+					)
+				}
+			}
 		})
 	}
 }

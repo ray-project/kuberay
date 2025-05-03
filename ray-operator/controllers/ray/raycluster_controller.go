@@ -329,8 +329,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		inconsistent, updateErr = r.updateRayClusterStatus(ctx, originalRayClusterInstance, newInstance)
 	}
 
-	emitRayClusterMetrics(r.options.RayClusterMetricManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
-
 	// Return error based on order.
 	var err error
 	if reconcileErr != nil {
@@ -1609,23 +1607,21 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	err := r.Status().Update(ctx, newInstance)
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
+	} else {
+		emitRayClusterMetrics(r.options.RayClusterMetricManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 	}
 
 	return inconsistent, err
 }
 
-func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
 	if rayClusterMetricsManager == nil {
 		return
 	}
-	emitRayClusterProvisionedDuration(rayClusterMetricsManager, rayClusterName, rayClusterNamespace, originRayClusterStatus, rayClusterStatus, creationTimestamp)
-}
-
-func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, rayClusterName, rayClusterNamespace string, originRayClusterStatus, rayClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
 	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
-	if !meta.IsStatusConditionTrue(originRayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
-		meta.IsStatusConditionTrue(rayClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(rayClusterName, rayClusterNamespace, time.Since(creationTimestamp).Seconds())
+	if !meta.IsStatusConditionTrue(oldStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		rayClusterMetricsManager.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
 	}
 }
 
