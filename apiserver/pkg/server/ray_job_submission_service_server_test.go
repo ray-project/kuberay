@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	fakeclientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
@@ -217,4 +219,64 @@ func TestGetRayClusterURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConvertNodeInfo(t *testing.T) {
+	entrypoint := "entrypoint"
+	jobID := "ID1"
+	submissionID := "subID1"
+	message := "some message"
+	errorType := "SomeError"
+
+	unixStart := time.Date(2025, 5, 3, 0, 0, 0, 0, time.UTC).Unix()
+	unixEnd := time.Date(2025, 5, 3, 0, 0, 0, 0, time.UTC).Unix()
+	// Prevent overflow when converting negative int64 to uint64
+	if unixStart < 0 || unixEnd < 0 {
+		t.Fatalf("Start or end time is negative, invalid Unix timestamp: start=%d, end=%d", unixStart, unixEnd)
+	}
+
+	startTime := uint64(unixStart)
+	endTime := uint64(unixEnd)
+
+	metadata := map[string]string{
+		"foo": "boo",
+	}
+	runtimeEnv := utils.RuntimeEnvType{
+		"working_dir": "/tmp/workdir",
+		"pip":         []string{"numpy", "pandas"},
+	}
+	expectedRuntimeEnv := map[string]string{
+		"working_dir": "/tmp/workdir",
+		"pip":         "[numpy pandas]",
+	}
+
+	rayJobInfo := utils.RayJobInfo{
+		Entrypoint:   entrypoint,
+		JobId:        jobID,
+		SubmissionId: submissionID,
+		JobStatus:    rayv1.JobStatusRunning,
+		Message:      message,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		ErrorType:    &errorType,
+		Metadata:     metadata,
+		RuntimeEnv:   runtimeEnv,
+	}
+
+	expected := &api.JobSubmissionInfo{
+		Entrypoint:   entrypoint,
+		JobId:        jobID,
+		SubmissionId: submissionID,
+		Status:       string(rayv1.JobStatusRunning),
+		Message:      message,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		ErrorType:    errorType,
+		Metadata:     metadata,
+		RuntimeEnv:   expectedRuntimeEnv,
+	}
+
+	result := convertNodeInfo(&rayJobInfo)
+
+	assert.Equal(t, expected, result)
 }
