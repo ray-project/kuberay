@@ -168,8 +168,8 @@ func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, servic
 }
 
 func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
-	// Since we add default environment variables to the cluster spec in buildRayClusterSpec and skip them when converting CRD back to api server result.
-	// An empty environment variable would be populated even if the user doesn't set it.
+	// Since default environment variables are added in buildRayClusterSpec but omitted during CRD-to-API conversion,
+	// an empty variable may appear in the spec even if the user didn't set it.
 	if expected.HeadGroupSpec.Environment == nil {
 		expected.HeadGroupSpec.Environment = &api.EnvironmentVariables{}
 	}
