@@ -172,7 +172,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:      tCtx.GetNextName(),
 					Namespace: tCtx.GetNamespaceName(),
-					User:      "boris",
+					User:      "kuberay",
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
 							ComputeTemplate: tCtx.GetComputeTemplateName(),
