@@ -105,6 +105,9 @@ head:
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+  # initContainers specifies init containers to attach to the Ray pod.
+  # Follows standard K8s container spec.
+  initContainers: []
   # See docs/guidance/pod-command.md for more details about how to specify
   # container command for head Pod.
   command: []
@@ -188,6 +191,9 @@ worker:
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+  # initContainers specifies init containers to attach to the Ray pod.
+  # Follows standard K8s container spec.
+  initContainers: []
   # See docs/guidance/pod-command.md for more details about how to specify
   # container command for worker Pod.
   command: []
