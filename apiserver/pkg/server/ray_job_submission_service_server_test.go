@@ -174,26 +174,26 @@ func TestGetRayClusterURL(t *testing.T) {
 				},
 			}
 
-			// create fake ray cluster
-			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
-			fakeRayCluster := fakeClient.RayV1().RayClusters(tc.rayCluster.Namespace)
-
 			// mock controller
 			ctrl := gomock.NewController(t)
 
-			// mocking r.clientManager.ClusterClient().RayClusterClient(namespace)
 			mockClientManager := manager.NewMockClientManagerInterface(ctrl)
+
+			// mocking r.clientManager.ClusterClient().RayClusterClient(namespace)
 			mockClusterClient := client.NewMockClusterClientInterface(ctrl)
-			mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
-			// NOTE: the call times here can varies if not specifying name or namespace
+			// create fake ray cluster
+			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
+			fakeRayCluster := fakeClient.RayV1().RayClusters(tc.rayCluster.Namespace)
 			mockClusterClient.EXPECT().RayClusterClient(tc.rayCluster.Namespace).Return(fakeRayCluster).MinTimes(1).MaxTimes(2)
 			mockClientManager.EXPECT().ClusterClient().Return(mockClusterClient).MinTimes(1).MaxTimes(2)
-			mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).MaxTimes(1)
 
-			// mock client set
+			// mocking r.clientManager.KubernetesClient().EventsClient(namespace)
+			mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
+			// create fake events
 			fakeClientset := kubernetesfake.NewClientset(expectedEvent)
 			fakeEvents := fakeClientset.CoreV1().Events(tc.rayCluster.Namespace)
 			mockKubeClient.EXPECT().EventsClient(tc.rayCluster.Namespace).Return(fakeEvents).MaxTimes(1)
+			mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).MaxTimes(1)
 
 			resourceManager := manager.NewResourceManager(mockClientManager)
 
