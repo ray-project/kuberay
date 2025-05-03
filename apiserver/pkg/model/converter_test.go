@@ -736,17 +736,17 @@ func TestFromCrdToAPIServices(t *testing.T) {
 	assert.Len(t, apiServices, 1)
 
 	apiService := apiServices[0]
-	assert.Equal(t, "test", apiService.Name)
-	assert.Equal(t, "test", apiService.Namespace)
-	assert.Equal(t, "user", apiService.User)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, apiService.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, apiService.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], apiService.User)
 }
 
 func TestPopulateService(t *testing.T) {
 	service := FromCrdToAPIService(&ServiceV2Test, []corev1.Event{})
-	assert.Equal(t, "test", service.Name)
-	assert.Equal(t, "test", service.Namespace)
-	assert.Equal(t, "user", service.User)
-	assert.Equal(t, "Some yaml value", service.ServeConfig_V2)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, service.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, service.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], service.User)
+	assert.Equal(t, ServiceV2Test.Spec.ServeConfigV2, service.ServeConfig_V2)
 	assert.Equal(t, int64(-1), service.DeleteAt.Seconds)
 }
 
@@ -786,25 +786,25 @@ func TestPopulateServeDeploymentStatus(t *testing.T) {
 }
 
 func TestPopulateRayServiceEvent(t *testing.T) {
-	events := []corev1.Event{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test",
-			},
-			Reason:  "test",
-			Message: "test",
-			Type:    "Normal",
-			Count:   2,
+	expectedServiceName := "svc0"
+	expectedEvent := corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
 		},
+		Reason:  "test",
+		Message: "test",
+		Type:    "Normal",
+		Count:   2,
 	}
-	serviceEvents := PopulateRayServiceEvent("svc0", events)
+	events := []corev1.Event{expectedEvent}
+	serviceEvents := PopulateRayServiceEvent(expectedServiceName, events)
 	assert.Len(t, serviceEvents, 1)
 
 	serviceEvent := serviceEvents[0]
-	assert.Equal(t, "test", serviceEvent.Id)
-	assert.Equal(t, "svc0-test", serviceEvent.Name)
-	assert.Equal(t, "test", serviceEvent.Reason)
-	assert.Equal(t, "test", serviceEvent.Message)
-	assert.Equal(t, "Normal", serviceEvent.Type)
-	assert.Equal(t, int32(2), serviceEvent.Count)
+	assert.Equal(t, expectedEvent.Name, serviceEvent.Id)
+	assert.Equal(t, expectedServiceName+"-"+expectedEvent.ObjectMeta.Name, serviceEvent.Name)
+	assert.Equal(t, expectedEvent.Reason, serviceEvent.Reason)
+	assert.Equal(t, expectedEvent.Message, serviceEvent.Message)
+	assert.Equal(t, expectedEvent.Type, serviceEvent.Type)
+	assert.Equal(t, expectedEvent.Count, serviceEvent.Count)
 }
