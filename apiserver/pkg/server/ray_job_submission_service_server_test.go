@@ -25,82 +25,196 @@ func TestGetRayClusterURL(t *testing.T) {
 	namespace := "test-namespace"
 	clusterName := "test-raycluster"
 
-	expectedRayCluster := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: namespace,
-			Labels: map[string]string{
-				util.KubernetesManagedByLabelKey: util.ComponentName,
-			},
-		},
-		Status: rayv1.RayClusterStatus{
-			// TODO: test case without this, err: not ready
-			State: rayv1.Ready,
-		},
-		// TODO: test case without this `Spec`, will panic
-		Spec: rayv1.RayClusterSpec{
-			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								// TODO: test case with/without this (set as different value)
-								// converter.go line 263 (in PopulateHeadNodeSpec)
-								ImagePullPolicy: corev1.PullAlways,
+	tests := []struct {
+		rayCluster          *rayv1.RayCluster
+		rayEvent            *corev1.Event
+		name                string
+		expectedURL         string
+		expectedErrorString string
+	}{
+		{
+			name: "Get URL from a valid cluster",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						util.KubernetesManagedByLabelKey: util.ComponentName,
+					},
+				},
+				Status: rayv1.RayClusterStatus{
+					State: rayv1.Ready,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
 							},
 						},
 					},
 				},
 			},
+			expectedURL:         clusterName + "-head-svc." + namespace + ".svc.cluster.local:8265",
+			expectedErrorString: "",
+		},
+		{
+			name: "Get URL from a cluster with missing name",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "",
+					Namespace: namespace,
+					Labels: map[string]string{
+						util.KubernetesManagedByLabelKey: util.ComponentName,
+					},
+				},
+				Status: rayv1.RayClusterStatus{
+					State: rayv1.Ready,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedURL:         "",
+			expectedErrorString: "Cluster name is empty. Please specify a valid value.",
+		},
+		{
+			name: "Get URL from a cluster with missing namespace",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: "",
+					Labels: map[string]string{
+						util.KubernetesManagedByLabelKey: util.ComponentName,
+					},
+				},
+				Status: rayv1.RayClusterStatus{
+					State: rayv1.Ready,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedURL:         "",
+			expectedErrorString: "Namespace is empty. Please specify a valid value.",
+		},
+		{
+			name: "Get URL from a cluster without ready state",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						util.KubernetesManagedByLabelKey: util.ComponentName,
+					},
+				},
+				Status: rayv1.RayClusterStatus{
+					State: rayv1.Suspended,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedURL:         "",
+			expectedErrorString: "cluster is not ready",
 		},
 	}
 
-	expectedEvent := &corev1.Event{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ray-event-1",
-			Namespace: namespace,
-		},
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			getClusterRequest := &api.GetClusterRequest{
+				Name:      tc.rayCluster.Name,
+				Namespace: tc.rayCluster.Namespace,
+			}
+
+			expectedEvent := &corev1.Event{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ray-event-1",
+					Namespace: tc.rayCluster.Namespace,
+				},
+			}
+
+			// create fake ray cluster
+			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
+			fakeRayCluster := fakeClient.RayV1().RayClusters(tc.rayCluster.Namespace)
+
+			// mock controller
+			ctrl := gomock.NewController(t)
+
+			// mocking r.clientManager.ClusterClient().RayClusterClient(namespace)
+			mockClientManager := manager.NewMockClientManagerInterface(ctrl)
+			mockClusterClient := client.NewMockClusterClientInterface(ctrl)
+			mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
+			// NOTE: the call times here can varies if not specifying name or namespace
+			mockClusterClient.EXPECT().RayClusterClient(tc.rayCluster.Namespace).Return(fakeRayCluster).MinTimes(1).MaxTimes(2)
+			mockClientManager.EXPECT().ClusterClient().Return(mockClusterClient).MinTimes(1).MaxTimes(2)
+			mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).MaxTimes(1)
+
+			// mock client set
+			fakeClientset := kubernetesfake.NewClientset(expectedEvent)
+			fakeEvents := fakeClientset.CoreV1().Events(tc.rayCluster.Namespace)
+			mockKubeClient.EXPECT().EventsClient(tc.rayCluster.Namespace).Return(fakeEvents).MaxTimes(1)
+
+			resourceManager := manager.NewResourceManager(mockClientManager)
+
+			rayJobSubmissionService := NewRayJobSubmissionServiceServer(
+				&ClusterServer{
+					resourceManager: resourceManager,
+					options:         &ClusterServerOptions{},
+				}, &RayJobSubmissionServiceServerOptions{},
+			)
+
+			url, err := rayJobSubmissionService.getRayClusterURL(ctx, getClusterRequest)
+
+			if tc.expectedErrorString == "" {
+				require.NoError(t, err, "No error expected")
+			} else {
+				require.ErrorContains(t, err, tc.expectedErrorString)
+			}
+
+			if url != nil {
+				assert.Equal(t, tc.expectedURL, *url)
+			} else {
+				assert.Empty(t, tc.expectedURL, "Expected empty URL when url is nil")
+			}
+		})
 	}
-
-	getClusterRequest := &api.GetClusterRequest{
-		Name:      clusterName,
-		Namespace: namespace,
-	}
-
-	expectedURL := clusterName + "-head-svc." + namespace + ".svc.cluster.local:8265"
-
-	// create fake ray cluster
-	fakeClient := fakeclientset.NewSimpleClientset(expectedRayCluster)
-	fakeRayCluster := fakeClient.RayV1().RayClusters(namespace)
-
-	// mock controller
-	ctrl := gomock.NewController(t)
-
-	// mocking r.clientManager.ClusterClient().RayClusterClient(namespace)
-	mockClientManager := manager.NewMockClientManagerInterface(ctrl)
-	mockClusterClient := client.NewMockClusterClientInterface(ctrl)
-	mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
-	// mock return of RayClusterClient(namespace)
-	mockClusterClient.EXPECT().RayClusterClient(namespace).Return(fakeRayCluster).Times(2)
-	// mock return of clientManager.ClusterClient()
-	mockClientManager.EXPECT().ClusterClient().Return(mockClusterClient).Times(2)
-	mockClientManager.EXPECT().KubernetesClient().Return(mockKubeClient).Times(1)
-
-	// mock config map client
-	fakeClientset := kubernetesfake.NewClientset(expectedEvent)
-	fakeEvents := fakeClientset.CoreV1().Events(namespace)
-	mockKubeClient.EXPECT().EventsClient(namespace).Return(fakeEvents).Times(1)
-
-	resourceManager := manager.NewResourceManager(mockClientManager)
-
-	rayJobSubmissionService := NewRayJobSubmissionServiceServer(
-		&ClusterServer{
-			resourceManager: resourceManager,
-			options:         &ClusterServerOptions{},
-		}, &RayJobSubmissionServiceServerOptions{},
-	)
-
-	url, err := rayJobSubmissionService.getRayClusterURL(ctx, getClusterRequest)
-	require.NoError(t, err)
-	assert.Equal(t, expectedURL, *url)
 }
