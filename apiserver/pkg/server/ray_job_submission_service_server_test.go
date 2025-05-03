@@ -151,10 +151,10 @@ func TestGetRayClusterURL(t *testing.T) {
 				require.ErrorContains(t, err, tc.expectedErrorString)
 			}
 
-			if url != nil {
-				assert.Equal(t, tc.expectedURL, *url)
+			if tc.expectedURL == "" {
+				assert.Empty(t, url, "Expect empty URL")
 			} else {
-				assert.Empty(t, tc.expectedURL, "Expected empty URL when url is nil")
+				assert.Equal(t, tc.expectedURL, *url)
 			}
 		})
 	}
