@@ -222,7 +222,8 @@ message ClusterSpec {
   bool enableInTreeAutoscaling = 3;
   // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
   AutoscalerOptions autoscalerOptions = 4;
-
+  // Optional. The annotations for the head service
+  map<string, string> headServiceAnnotations = 5;
 }
 
 message Volume {

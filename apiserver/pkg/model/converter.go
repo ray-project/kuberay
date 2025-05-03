@@ -146,6 +146,7 @@ func PopulateRayClusterSpec(spec rayv1api.RayClusterSpec) *api.ClusterSpec {
 		clusterSpec.EnableInTreeAutoscaling = true
 		clusterSpec.AutoscalerOptions = convertAutoscalingOptions(spec.AutoscalerOptions)
 	}
+	clusterSpec.HeadServiceAnnotations = spec.HeadServiceAnnotations
 	return clusterSpec
 }
 
