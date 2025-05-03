@@ -1,0 +1,60 @@
+name: update-files-for-dependabot-PR
+
+# This action runs on PRs opened by dependabot.
+on:
+  pull_request:
+    branches:
+      - dependabot/**
+  push:
+    branches:
+      - dependabot/**
+  workflow_dispatch:
+
+permissions:
+  contents: write # Allow to update the PR.
+
+# Update modules and generated code. Commit changes if any are found.
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: '1.23'
+    - name: Update go modules for proto
+      working-directory: './proto'
+      run: go mod tidy
+    - name: Update go modules for experimental
+      working-directory: './experimental'
+      run: go mod tidy
+    - name: Update go modules for kubectl plugin
+      working-directory: './kubectl-plugin'
+      run: go mod tidy
+    - name: Update go modules for apiserver
+      working-directory: './apiserver'
+      run: go mod tidy
+    - name: Update go modules for ray operator
+      working-directory: './ray-operator'
+      run: go mod tidy
+    - name: Update generated code
+      working-directory: './ray-operator'
+      run: ./hack/update-codegen.sh
+    - name: Update CRDs/RBAC files
+      working-directory: './ray-operator'
+      run: |
+        make manifests && make sync
+    - name: commit and push the changes
+      run: |
+        if ! git diff --exit-code; then
+              git config user.name "$(git log -1 --pretty=%an)"
+              git config user.email "$(git log -1 --pretty=%ae)"
+              git add .
+              git commit -m "Update generated code and modules"
+              git push
+        else
+              echo "No changes to commit"
+        fi
