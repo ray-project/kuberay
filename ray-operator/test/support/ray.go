@@ -164,6 +164,35 @@ func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
+func PodPhase(pod corev1.Pod) corev1.PodPhase {
+	return pod.Status.Phase
+}
+
+func AllPodsRunning(pods []corev1.Pod) bool {
+	for _, pod := range pods {
+		if pod.Status.Phase != corev1.PodRunning {
+			return false
+		}
+	}
+	return true
+}
+
+func RateLimitedPendingPods(pods []corev1.Pod) bool {
+	// The number of Pending Pods must be less than or equal to the size of the RayCluster.
+	// The minimum number of pending launches is 5 regardless of RayCluster size and upscaling_speed.
+	numRunning := 0
+	numPending := 0
+	for _, pod := range pods {
+		if PodPhase(pod) == corev1.PodRunning {
+			numRunning++
+		}
+		if PodPhase(pod) == corev1.PodPending {
+			numPending++
+		}
+	}
+	return (numPending <= 5) || (numRunning >= numPending)
+}
+
 func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
