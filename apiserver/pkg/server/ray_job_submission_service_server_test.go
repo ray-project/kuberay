@@ -27,6 +27,33 @@ func TestGetRayClusterURL(t *testing.T) {
 	namespace := "test-namespace"
 	clusterName := "test-raycluster"
 
+	validCluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				util.KubernetesManagedByLabelKey: util.ComponentName,
+			},
+		},
+		Status: rayv1.RayClusterStatus{
+			State: rayv1.Ready,
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "test",
+								Image: "test",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
 	tests := []struct {
 		rayCluster          *rayv1.RayCluster
 		rayEvent            *corev1.Event
@@ -35,126 +62,38 @@ func TestGetRayClusterURL(t *testing.T) {
 		expectedErrorString string
 	}{
 		{
-			name: "Get URL from a valid cluster",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
-					Labels: map[string]string{
-						util.KubernetesManagedByLabelKey: util.ComponentName,
-					},
-				},
-				Status: rayv1.RayClusterStatus{
-					State: rayv1.Ready,
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test",
-										Image: "test",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			name:                "Get URL from a valid cluster",
+			rayCluster:          &validCluster,
 			expectedURL:         clusterName + "-head-svc." + namespace + ".svc.cluster.local:8265",
 			expectedErrorString: "",
 		},
 		{
 			name: "Get URL from a cluster with missing name",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "",
-					Namespace: namespace,
-					Labels: map[string]string{
-						util.KubernetesManagedByLabelKey: util.ComponentName,
-					},
-				},
-				Status: rayv1.RayClusterStatus{
-					State: rayv1.Ready,
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test",
-										Image: "test",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			rayCluster: func() *rayv1.RayCluster {
+				newCluster := validCluster
+				newCluster.ObjectMeta.Name = ""
+				return &newCluster
+			}(),
 			expectedURL:         "",
 			expectedErrorString: "Cluster name is empty. Please specify a valid value.",
 		},
 		{
 			name: "Get URL from a cluster with missing namespace",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: "",
-					Labels: map[string]string{
-						util.KubernetesManagedByLabelKey: util.ComponentName,
-					},
-				},
-				Status: rayv1.RayClusterStatus{
-					State: rayv1.Ready,
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test",
-										Image: "test",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			rayCluster: func() *rayv1.RayCluster {
+				newCluster := validCluster
+				newCluster.ObjectMeta.Namespace = ""
+				return &newCluster
+			}(),
 			expectedURL:         "",
 			expectedErrorString: "Namespace is empty. Please specify a valid value.",
 		},
 		{
 			name: "Get URL from a cluster without ready state",
-			rayCluster: &rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
-					Labels: map[string]string{
-						util.KubernetesManagedByLabelKey: util.ComponentName,
-					},
-				},
-				Status: rayv1.RayClusterStatus{
-					State: rayv1.Suspended,
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test",
-										Image: "test",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			rayCluster: func() *rayv1.RayCluster {
+				newCluster := validCluster
+				newCluster.Status.State = rayv1.Suspended
+				return &newCluster
+			}(),
 			expectedURL:         "",
 			expectedErrorString: "cluster is not ready",
 		},
