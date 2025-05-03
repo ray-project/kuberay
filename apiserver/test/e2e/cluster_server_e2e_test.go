@@ -170,43 +170,15 @@ func TestCreateClusterEndpoint(t *testing.T) {
 			Name: "Create cluster with head service annotations",
 			Input: &api.CreateClusterRequest{
 				Cluster: &api.Cluster{
-					Name:        tCtx.GetNextName(),
-					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
-					Version:     tCtx.GetRayVersion(),
-					Environment: api.Cluster_DEV,
+					Name:      tCtx.GetNextName(),
+					Namespace: tCtx.GetNamespaceName(),
+					User:      "boris",
 					ClusterSpec: &api.ClusterSpec{
 						HeadGroupSpec: &api.HeadGroupSpec{
 							ComputeTemplate: tCtx.GetComputeTemplateName(),
 							Image:           tCtx.GetRayImage(),
-							ServiceType:     "NodePort",
 							RayStartParams: map[string]string{
-								"dashboard-host":      "0.0.0.0",
-								"metrics-export-port": "8080",
-							},
-							Volumes: []*api.Volume{
-								{
-									MountPath:  "/home/ray/samples",
-									VolumeType: api.Volume_CONFIGMAP,
-									Name:       "code-sample",
-									Source:     tCtx.GetConfigMapName(),
-									Items: map[string]string{
-										"counter_sample.py": "counter_sample.py",
-									},
-								},
-							},
-						},
-						WorkerGroupSpec: []*api.WorkerGroupSpec{
-							{
-								GroupName:       "small-wg",
-								ComputeTemplate: tCtx.GetComputeTemplateName(),
-								Image:           tCtx.GetRayImage(),
-								Replicas:        1,
-								MinReplicas:     1,
-								MaxReplicas:     5,
-								RayStartParams: map[string]string{
-									"node-ip-address": "$MY_POD_IP",
-								},
+								"dashboard-host": "0.0.0.0",
 							},
 						},
 						HeadServiceAnnotations: map[string]string{
