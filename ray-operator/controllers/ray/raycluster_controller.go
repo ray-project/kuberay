@@ -1618,10 +1618,14 @@ func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsMa
 	if rayClusterMetricsManager == nil {
 		return
 	}
+	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, oldStatus, newStatus, creationTimestamp)
+}
+
+func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
 	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
 	if !meta.IsStatusConditionTrue(oldStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
 		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		rayClusterMetricsManager.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
+		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
 	}
 }
 

@@ -14,7 +14,7 @@ type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 }
 
-// RayClusterMetricsManager creates a new RayClusterManager instance.
+// NewRayClusterMetricsManager creates a new RayClusterManager instance.
 func NewRayClusterMetricsManager() *RayClusterMetricsManager {
 	manager := &RayClusterMetricsManager{
 		rayClusterProvisionedDurationSeconds: prometheus.NewGaugeVec(
