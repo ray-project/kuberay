@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -27,6 +28,12 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
+)
+
+const (
+	GET    = "GET"
+	POST   = "POST"
+	DELETE = "DELETE"
 )
 
 type KuberayAPIServerClient struct {
@@ -109,21 +116,31 @@ func (krc *KuberayAPIServerClient) findPod(namespace string) (*corev1.Pod, error
 	return &targetPod, nil
 }
 
-func (krc *KuberayAPIServerClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url string, jsonBody string) (string, error) {
+func (krc *KuberayAPIServerClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url string, method string, jsonBody string) ([]byte, *rpcStatus.Status, error) {
 	var (
 		execOut bytes.Buffer
 		execErr bytes.Buffer
 	)
 
-	command := []string{"curl", "-s", "-H", "Accept: application/json"}
+	command := []string{"curl", "-s", "-L", "-w", "HTTP_STATUS:%{http_code}", "-H", "Accept: application/json", "-X", method}
 
 	if jsonBody != "" {
-		command = append(command, "-X", "POST", "-H", "Content-Type: application/json", "-d", jsonBody)
+		command = append(command, "-H", "Content-Type: application/json", "-d", jsonBody)
 	}
 
 	command = append(command, url)
 
-	containerName := pod.Spec.Containers[0].Name
+	// get curl container
+	var containerName string
+	for _, container := range pod.Spec.Containers {
+		if container.Name == util.CurlContainerName {
+			containerName = container.Name
+			break
+		}
+	}
+	if containerName == "" {
+		return nil, nil, fmt.Errorf("could not find container %s in pod", util.CurlContainerName)
+	}
 
 	req := krc.KubeClient.CoreV1().RESTClient().Post().
 		Resource("pods").
@@ -140,7 +157,7 @@ func (krc *KuberayAPIServerClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url
 
 	exec, err := remotecommand.NewSPDYExecutor(krc.RestConfig, "POST", req.URL())
 	if err != nil {
-		return "", fmt.Errorf("failed to initialize executor: %w", err)
+		return nil, nil, fmt.Errorf("failed to initialize executor: %w", err)
 	}
 
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
@@ -149,26 +166,48 @@ func (krc *KuberayAPIServerClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url
 		Tty:    false,
 	})
 	if err != nil {
-		return "", fmt.Errorf("command execution failed: %w", err)
+		return nil, nil, fmt.Errorf("command execution failed: %w", err)
 	}
 
 	if execErr.Len() > 0 {
-		return "", fmt.Errorf("stderr: %s", execErr.String())
+		return nil, nil, fmt.Errorf("stderr: %s", execErr.String())
 	}
 
-	return execOut.String(), nil
+	// extract status code
+	parts := strings.Split(execOut.String(), "HTTP_STATUS:")
+	if len(parts) != 2 {
+		return nil, nil, fmt.Errorf("unexpected curl output format")
+	}
+	statusCodeStr := strings.TrimSpace(parts[1])
+	statusCode, err := strconv.Atoi(statusCodeStr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Cannot convert status code string to int: %s", statusCodeStr)
+	}
+
+	bodyBytes := []byte(parts[0])
+
+	if statusCode != http.StatusOK {
+		status, err := krc.extractStatus(bodyBytes)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, status, &KuberayAPIServerClientError{
+			HTTPStatusCode: statusCode,
+		}
+	}
+	return bodyBytes, nil, nil
 }
 
 // ExecRequest executes arbitrary command inside the pod
-func (krc *KuberayAPIServerClient) ExecRequest(url string, jsonBody string) (string, error) {
+func (krc *KuberayAPIServerClient) ExecRequest(url string, method string, jsonBody string) ([]byte, *rpcStatus.Status, error) {
 	pod, err := krc.findPod(manager.DefaultNamespace)
 	if err != nil {
-		return "", fmt.Errorf("could not find pod: %w", err)
+		return nil, nil, fmt.Errorf("could not find pod: %w", err)
 	}
 
-	execOut, err := krc.ExecCommandWithCurlInPod(pod, url, jsonBody)
+	bodyBytes, status, err := krc.ExecCommandWithCurlInPod(pod, url, method, jsonBody)
 
-	return execOut, err
+	return bodyBytes, status, err
 }
 
 // CreateComputeTemplate creates a new compute template.
@@ -184,42 +223,37 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 	jsonBody := string(bytez)
 
 	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(createURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	computeTemplate := &api.ComputeTemplate{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), computeTemplate); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal response: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
 	return computeTemplate, nil, nil
 }
 
 // DeleteComputeTemplate deletes a compute template.
-func (krc *KuberayAPIServerClient) DeleteComputeTemplate(request *api.DeleteComputeTemplateRequest) (string, error) {
+func (krc *KuberayAPIServerClient) DeleteComputeTemplate(request *api.DeleteComputeTemplateRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
-	response, err := krc.doDelete(deleteURL)
-	return response, err
+	return krc.doDelete(deleteURL)
 }
 
 // Finds a specific compute template by its name and namespace.
 func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates/" + request.Name
 
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
-
-	// Now, parse the response into ComputeTemplate
 	computeTemplate := &api.ComputeTemplate{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), computeTemplate); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal response: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, computeTemplate); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
-
 	return computeTemplate, nil, nil
 }
 
@@ -227,34 +261,34 @@ func (krc *KuberayAPIServerClient) GetComputeTemplate(request *api.GetComputeTem
 func (krc *KuberayAPIServerClient) GetAllComputeTemplates() (*api.ListAllComputeTemplatesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/compute_templates"
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
-	allComputeTemplates := &api.ListAllComputeTemplatesResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), allComputeTemplates); err != nil {
+	response := &api.ListAllComputeTemplatesResponse{}
+
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
-	return allComputeTemplates, nil, nil
+	return response, nil, nil
 }
 
 // GetAllComputeTemplatesInNamespace Finds all compute templates in a given namespace.
 func (krc *KuberayAPIServerClient) GetAllComputeTemplatesInNamespace(request *api.ListComputeTemplatesRequest) (*api.ListComputeTemplatesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
-
-	computeTemplates := &api.ListComputeTemplatesResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), computeTemplates); err != nil {
+	response := &api.ListComputeTemplatesResponse{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
-	return computeTemplates, nil, nil
+	return response, nil, nil
 }
 
 // CreateCluster creates a new cluster.
@@ -266,69 +300,70 @@ func (krc *KuberayAPIServerClient) CreateCluster(request *api.CreateClusterReque
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	// Prepare the JSON body as a string
 	jsonBody := string(bytez)
 
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(createURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	cluster := &api.Cluster{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), cluster); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
 	return cluster, nil, nil
 }
 
-// DeleteCluster deletes a cluster
-func (krc *KuberayAPIServerClient) DeleteCluster(request *api.DeleteClusterRequest) (string, error) {
+// DeleteCluster deletes a cluster.
+func (krc *KuberayAPIServerClient) DeleteCluster(request *api.DeleteClusterRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters/" + request.Name
-	response, err := krc.doDelete(deleteURL)
-	return response, err
+	return krc.doDelete(deleteURL)
 }
 
-// GetCluster finds a specific Cluster by ID.
+// GetCluster finds a specific cluster by its name and namespace.
 func (krc *KuberayAPIServerClient) GetCluster(request *api.GetClusterRequest) (*api.Cluster, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters/" + request.Name
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	cluster := &api.Cluster{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), cluster); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, cluster); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
+
 	return cluster, nil, nil
 }
 
-// ListCluster finds all clusters in a given namespace.
+// ListClusters finds all clusters in a given namespace.
 func (krc *KuberayAPIServerClient) ListClusters(request *api.ListClustersRequest) (*api.ListClustersResponse, *rpcStatus.Status, error) {
-	baseURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters"
-
-	values := url.Values{}
-	values.Set("limit", strconv.FormatInt(request.Limit, 10))
-	if request.Continue != "" {
-		values.Set("continue", request.Continue)
-	}
-	getURL := baseURL + "?" + values.Encode()
-
-	response, err := krc.ExecRequest(getURL, "")
+	u, err := url.Parse(krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/clusters")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
-	clustersResponses := &api.ListClustersResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), clustersResponses); err != nil {
+
+	q := u.Query()
+	q.Set("limit", strconv.FormatInt(request.Limit, 10))
+	q.Set("continue", request.Continue)
+	u.RawQuery = q.Encode()
+
+	bodyBytes, status, err := krc.ExecRequest(u.String(), GET, "")
+	if err != nil {
+		return nil, status, err
+	}
+
+	response := &api.ListClustersResponse{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
-	return clustersResponses, nil, nil
+
+	return response, nil, nil
 }
 
-// ListAllClusters finds all Clusters in all namespaces.
+// ListAllClusters finds all clusters in all namespaces.
 func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, *rpcStatus.Status, error) {
 	baseURL := krc.baseURL + "/apis/v1/clusters"
 
@@ -339,15 +374,17 @@ func (krc *KuberayAPIServerClient) ListAllClusters(request *api.ListAllClustersR
 	}
 	getURL := baseURL + "?" + values.Encode()
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
-	allClustersResponses := &api.ListAllClustersResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), allClustersResponses); err != nil {
+
+	response := &api.ListAllClustersResponse{}
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, response); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
-	return allClustersResponses, nil, nil
+
+	return response, nil, nil
 }
 
 // CreateRayJob creates a new job.
@@ -363,14 +400,14 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 	jsonBody := string(bytez)
 
 	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(createURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	rayJob := &api.RayJob{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayJob); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayJob, nil, nil
 }
@@ -379,15 +416,14 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 func (krc *KuberayAPIServerClient) GetRayJob(request *api.GetRayJobRequest) (*api.RayJob, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs/" + request.Name
 
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	rayJob := &api.RayJob{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayJob); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJob); err != nil {
+		return nil, status, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayJob, nil, nil
 }
@@ -403,13 +439,13 @@ func (krc *KuberayAPIServerClient) ListRayJobs(request *api.ListRayJobsRequest) 
 	}
 	getURL := baseURL + "?" + values.Encode()
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	rayJobResponse := &api.ListRayJobsResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayJobResponse); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayJobResponse); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayJobResponse, nil, nil
@@ -426,23 +462,22 @@ func (krc *KuberayAPIServerClient) ListAllRayJobs(request *api.ListAllRayJobsReq
 	}
 	getURL := baseURL + "?" + values.Encode()
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	allRayJobResponse := &api.ListAllRayJobsResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), allRayJobResponse); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, allRayJobResponse); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return allRayJobResponse, nil, nil
 }
 
 // Deletes a job by its name and namespace.
-func (krc *KuberayAPIServerClient) DeleteRayJob(request *api.DeleteRayJobRequest) (string, error) {
+func (krc *KuberayAPIServerClient) DeleteRayJob(request *api.DeleteRayJobRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobs/" + request.Name
-	response, err := krc.doDelete(deleteURL)
-	return response, err
+	return krc.doDelete(deleteURL)
 }
 
 // CreateRayService create a new ray serve.
@@ -455,13 +490,13 @@ func (krc *KuberayAPIServerClient) CreateRayService(request *api.CreateRayServic
 
 	jsonBody := string(bytez)
 
-	response, err := krc.ExecRequest(createURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	rayService := &api.RayService{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayService); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayService, nil, nil
@@ -477,13 +512,13 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 
 	jsonBody := string(bytez)
 
-	response, err := krc.ExecRequest(updateURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(updateURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	rayService := &api.RayService{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayService); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayService, nil, nil
@@ -492,12 +527,12 @@ func (krc *KuberayAPIServerClient) UpdateRayService(request *api.UpdateRayServic
 // Find a specific ray serve by name and namespace.
 func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceRequest) (*api.RayService, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 	rayService := &api.RayService{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayService); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayService); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return rayService, nil, nil
@@ -505,13 +540,22 @@ func (krc *KuberayAPIServerClient) GetRayService(request *api.GetRayServiceReque
 
 // Finds all ray services in a given namespace.
 func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesRequest) (*api.ListRayServicesResponse, *rpcStatus.Status, error) {
-	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services"
-	response, err := krc.ExecRequest(getURL, "")
+	u, err := url.Parse(krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("pageSize", strconv.FormatInt(int64(request.PageSize), 10))
+	q.Set("pageToken", request.PageToken)
+	u.RawQuery = q.Encode()
+
+	bodyBytes, status, err := krc.ExecRequest(u.String(), GET, "")
+	if err != nil {
+		return nil, status, err
 	}
 	rayServiceResponses := &api.ListRayServicesResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), rayServiceResponses); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, rayServiceResponses); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 
@@ -521,23 +565,22 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 // Finds all ray services in a given namespace.
 func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/services"
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	allRayServiceResponses := &api.ListAllRayServicesResponse{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), allRayServiceResponses); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, allRayServiceResponses); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return allRayServiceResponses, nil, nil
 }
 
 // DeleteRayService deletes a ray service by its name and namespace
-func (krc *KuberayAPIServerClient) DeleteRayService(request *api.DeleteRayServiceRequest) (string, error) {
+func (krc *KuberayAPIServerClient) DeleteRayService(request *api.DeleteRayServiceRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/services/" + request.Name
-	response, err := krc.doDelete(deleteURL)
-	return response, err
+	return krc.doDelete(deleteURL)
 }
 
 // SubmitRayJob creates a new job on a given cluster.
@@ -549,14 +592,13 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 	}
 	jsonBody := string(bytez)
 
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(createURL, jsonBody)
+	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	submission := &api.SubmitRayJobReply{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), submission); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, submission); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return submission, nil, nil
@@ -565,13 +607,13 @@ func (krc *KuberayAPIServerClient) SubmitRayJob(request *api.SubmitRayJobRequest
 // GetRayJobDetails. Get details about specific job on a given cluster.
 func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRequest) (*api.JobSubmissionInfo, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	jobSubmission := &api.JobSubmissionInfo{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), jobSubmission); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, jobSubmission); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return jobSubmission, nil, nil
@@ -580,12 +622,12 @@ func (krc *KuberayAPIServerClient) GetRayJobDetails(request *api.GetJobDetailsRe
 // GetRayJobLog. Get log for a specific job on a given cluster.
 func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (*api.GetJobLogReply, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/log/" + request.Submissionid
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 	jobLogReply := &api.GetJobLogReply{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), jobLogReply); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, jobLogReply); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return jobLogReply, nil, nil
@@ -595,78 +637,45 @@ func (krc *KuberayAPIServerClient) GetRayJobLog(request *api.GetJobLogRequest) (
 func (krc *KuberayAPIServerClient) ListRayJobsCluster(request *api.ListJobDetailsRequest) (*api.ListJobSubmissionInfo, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername
 
-	response, err := krc.ExecRequest(getURL, "")
+	bodyBytes, status, err := krc.ExecRequest(getURL, GET, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, status, err
 	}
 
 	jobSubmissionInfo := &api.ListJobSubmissionInfo{}
-	if err := krc.unmarshaler.Unmarshal([]byte(response), jobSubmissionInfo); err != nil {
+	if err := krc.unmarshaler.Unmarshal(bodyBytes, jobSubmissionInfo); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %+w", err)
 	}
 	return jobSubmissionInfo, nil, nil
 }
 
 // StopRayJob stops job on a given cluster.
-func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionRequest) (string, error) {
+func (krc *KuberayAPIServerClient) StopRayJob(request *api.StopRayJobSubmissionRequest) (*rpcStatus.Status, error) {
 	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
 
-	response, err := krc.ExecRequest(createURL, "")
+	_, status, err := krc.ExecRequest(createURL, POST, "")
 	if err != nil {
-		return "", fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return status, err
 	}
-	return response, nil
+	return nil, nil
 }
 
 // DeleteRayService deletes a ray service by its name and namespace
-func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJobSubmissionRequest) (string, error) {
+func (krc *KuberayAPIServerClient) DeleteRayJobCluster(request *api.DeleteRayJobSubmissionRequest) (*rpcStatus.Status, error) {
 	deleteURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/jobsubmissions/" + request.Clustername + "/" + request.Submissionid
-	response, err := krc.doDelete(deleteURL)
-	return response, err
+	return krc.doDelete(deleteURL)
 }
 
-func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (string, error) {
-	// Execute the curl command inside the pod using kubectl exec
-	response, err := krc.ExecRequest(deleteURL, "")
+func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status, error) {
+	_, status, err := krc.ExecRequest(deleteURL, DELETE, "")
+	return status, err
+}
+
+func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
+	status := &rpcStatus.Status{}
+	err := krc.unmarshaler.Unmarshal(bodyBytes, status)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute curl command inside pod: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal status object: %w", err)
 	}
-
-	return response, err
+	return status, nil
 }
-
-//
-// func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
-// 	response, err := krc.httpClient.Do(httpRequest)
-// 	if err != nil {
-// 		return nil, nil, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
-// 	}
-// 	defer func() {
-// 		if closeErr := response.Body.Close(); closeErr != nil {
-// 			klog.Errorf("Failed to close http response body because %+v", closeErr)
-// 		}
-// 	}()
-// 	bodyBytes, err := io.ReadAll(response.Body)
-// 	if err != nil {
-// 		return nil, nil, fmt.Errorf("failed to read response body bytes: %w", err)
-// 	}
-// 	if response.StatusCode != http.StatusOK {
-// 		status, err := krc.extractStatus(bodyBytes)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 		return nil, status, &KuberayAPIServerClientError{
-// 			HTTPStatusCode: response.StatusCode,
-// 		}
-// 	}
-// 	return bodyBytes, nil, nil
-// }
-
-// func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
-// 	status := &rpcStatus.Status{}
-// 	err := krc.unmarshaler.Unmarshal(bodyBytes, status)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to unmarshal status object: %w", err)
-// 	}
-// 	return status, nil
-// }

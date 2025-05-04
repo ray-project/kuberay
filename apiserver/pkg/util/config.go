@@ -31,4 +31,7 @@ const (
 
 	// The component name for apiserver
 	ComponentName = "kuberay-apiserver"
+
+	// The curl container name for apiserver
+	CurlContainerName = "apiserver-curl"
 )

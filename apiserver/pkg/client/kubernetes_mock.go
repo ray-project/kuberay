@@ -11,73 +11,81 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
-// MockKubernetesClientInterface is a mock of KubernetesClientInterface interface
+// MockKubernetesClientInterface is a mock of KubernetesClientInterface interface.
 type MockKubernetesClientInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockKubernetesClientInterfaceMockRecorder
 }
 
-// MockKubernetesClientInterfaceMockRecorder is the mock recorder for MockKubernetesClientInterface
+// MockKubernetesClientInterfaceMockRecorder is the mock recorder for MockKubernetesClientInterface.
 type MockKubernetesClientInterfaceMockRecorder struct {
 	mock *MockKubernetesClientInterface
 }
 
-// NewMockKubernetesClientInterface creates a new mock instance
+// NewMockKubernetesClientInterface creates a new mock instance.
 func NewMockKubernetesClientInterface(ctrl *gomock.Controller) *MockKubernetesClientInterface {
 	mock := &MockKubernetesClientInterface{ctrl: ctrl}
 	mock.recorder = &MockKubernetesClientInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockKubernetesClientInterface) EXPECT() *MockKubernetesClientInterfaceMockRecorder {
 	return m.recorder
 }
 
-// PodClient mocks base method
-func (m *MockKubernetesClientInterface) PodClient(namespace string) v1.PodInterface {
-	ret := m.ctrl.Call(m, "PodClient", namespace)
-	ret0, _ := ret[0].(v1.PodInterface)
-	return ret0
-}
-
-// PodClient indicates an expected call of PodClient
-func (mr *MockKubernetesClientInterfaceMockRecorder) PodClient(namespace interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PodClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).PodClient), namespace)
-}
-
-// ConfigMapClient mocks base method
+// ConfigMapClient mocks base method.
 func (m *MockKubernetesClientInterface) ConfigMapClient(namespace string) v1.ConfigMapInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ConfigMapClient", namespace)
 	ret0, _ := ret[0].(v1.ConfigMapInterface)
 	return ret0
 }
 
-// ConfigMapClient indicates an expected call of ConfigMapClient
+// ConfigMapClient indicates an expected call of ConfigMapClient.
 func (mr *MockKubernetesClientInterfaceMockRecorder) ConfigMapClient(namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigMapClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).ConfigMapClient), namespace)
 }
 
-// NamespaceClient mocks base method
-func (m *MockKubernetesClientInterface) NamespaceClient() v1.NamespaceInterface {
-	ret := m.ctrl.Call(m, "NamespaceClient")
-	ret0, _ := ret[0].(v1.NamespaceInterface)
-	return ret0
-}
-
-// NamespaceClient indicates an expected call of NamespaceClient
-func (mr *MockKubernetesClientInterfaceMockRecorder) NamespaceClient() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NamespaceClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).NamespaceClient))
-}
-
-// EventsClient mocks base method
+// EventsClient mocks base method.
 func (m *MockKubernetesClientInterface) EventsClient(namespace string) v1.EventInterface {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EventsClient", namespace)
 	ret0, _ := ret[0].(v1.EventInterface)
 	return ret0
 }
 
-// EventsClient indicates an expected call of EventsClient
+// EventsClient indicates an expected call of EventsClient.
 func (mr *MockKubernetesClientInterfaceMockRecorder) EventsClient(namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventsClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).EventsClient), namespace)
+}
+
+// NamespaceClient mocks base method.
+func (m *MockKubernetesClientInterface) NamespaceClient() v1.NamespaceInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NamespaceClient")
+	ret0, _ := ret[0].(v1.NamespaceInterface)
+	return ret0
+}
+
+// NamespaceClient indicates an expected call of NamespaceClient.
+func (mr *MockKubernetesClientInterfaceMockRecorder) NamespaceClient() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NamespaceClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).NamespaceClient))
+}
+
+// PodClient mocks base method.
+func (m *MockKubernetesClientInterface) PodClient(namespace string) v1.PodInterface {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PodClient", namespace)
+	ret0, _ := ret[0].(v1.PodInterface)
+	return ret0
+}
+
+// PodClient indicates an expected call of PodClient.
+func (mr *MockKubernetesClientInterfaceMockRecorder) PodClient(namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PodClient", reflect.TypeOf((*MockKubernetesClientInterface)(nil).PodClient), namespace)
 }
