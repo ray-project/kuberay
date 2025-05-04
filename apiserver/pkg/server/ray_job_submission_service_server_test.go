@@ -70,9 +70,9 @@ func TestGetRayClusterURL(t *testing.T) {
 		{
 			name: "Get URL from a cluster with missing name",
 			rayCluster: func() *rayv1.RayCluster {
-				newCluster := validCluster
+				newCluster := validCluster.DeepCopy()
 				newCluster.ObjectMeta.Name = ""
-				return &newCluster
+				return newCluster
 			}(),
 			expectedURL:         "",
 			expectedErrorString: "Cluster name is empty. Please specify a valid value.",
@@ -80,9 +80,9 @@ func TestGetRayClusterURL(t *testing.T) {
 		{
 			name: "Get URL from a cluster with missing namespace",
 			rayCluster: func() *rayv1.RayCluster {
-				newCluster := validCluster
+				newCluster := validCluster.DeepCopy()
 				newCluster.ObjectMeta.Namespace = ""
-				return &newCluster
+				return newCluster
 			}(),
 			expectedURL:         "",
 			expectedErrorString: "Namespace is empty. Please specify a valid value.",
@@ -90,9 +90,9 @@ func TestGetRayClusterURL(t *testing.T) {
 		{
 			name: "Get URL from a cluster without ready state",
 			rayCluster: func() *rayv1.RayCluster {
-				newCluster := validCluster
+				newCluster := validCluster.DeepCopy()
 				newCluster.Status.State = rayv1.Suspended
-				return &newCluster
+				return newCluster
 			}(),
 			expectedURL:         "",
 			expectedErrorString: "cluster is not ready",
