@@ -2,7 +2,6 @@ package apiserversdk
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -53,7 +52,6 @@ var _ = BeforeSuite(func(_ SpecContext) {
 		Middleware: func(handler http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				lastReq.Store(r.Clone(r.Context()))
-				fmt.Printf("Request Method: %s,URI %s, Headers%s \n", r.Method, r.URL, r.Header)
 				handler.ServeHTTP(w, r)
 			})
 		},
