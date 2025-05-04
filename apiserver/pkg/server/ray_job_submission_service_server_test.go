@@ -24,8 +24,8 @@ import (
 func TestGetRayClusterURL(t *testing.T) {
 	ctx := context.Background()
 
-	namespace := "test-namespace"
-	clusterName := "test-raycluster"
+	const namespace = "test-namespace"
+	const clusterName = "test-raycluster"
 
 	validCluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
