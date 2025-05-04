@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base/insecure
+namespace: ray-system
+images:
+- name: apiserver/curl
+  newName: curlimages/curl
+  newTag: latest
+- name: kuberay/apiserver
+  newName: quay.io/kuberay/apiserver
+  newTag: latest
+patches:
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+  target:
+    kind: Deployment
+    name: kuberay-apiserver
+    version: v1
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/1
+      value:
+        name: apiserver-curl
+        image: apiserver/curl
+        command: ["sleep", "infinity"]
+        imagePullPolicy: IfNotPresent
+  target:
+    kind: Deployment
+    name: kuberay-apiserver
+    version: v1
