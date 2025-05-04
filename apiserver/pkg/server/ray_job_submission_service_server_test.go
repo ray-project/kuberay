@@ -118,7 +118,7 @@ func TestGetRayClusterURL(t *testing.T) {
 
 			mockClientManager := manager.NewMockClientManagerInterface(ctrl)
 
-			// mocking r.clientManager.ClusterClient().RayClusterClient(namespace)
+			// Mock ray cluster client
 			mockClusterClient := client.NewMockClusterClientInterface(ctrl)
 			// create fake ray cluster
 			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
@@ -126,7 +126,7 @@ func TestGetRayClusterURL(t *testing.T) {
 			mockClusterClient.EXPECT().RayClusterClient(tc.rayCluster.Namespace).Return(fakeRayCluster).MinTimes(1).MaxTimes(2)
 			mockClientManager.EXPECT().ClusterClient().Return(mockClusterClient).MinTimes(1).MaxTimes(2)
 
-			// mocking r.clientManager.KubernetesClient().EventsClient(namespace)
+			// Mock events client
 			mockKubeClient := client.NewMockKubernetesClientInterface(ctrl)
 			// create fake events
 			fakeClientset := kubernetesfake.NewClientset(expectedEvent)
