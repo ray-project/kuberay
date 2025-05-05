@@ -914,6 +914,8 @@ var _ = Context("Inside the default namespace", func() {
 		numOfHosts := int32(4)
 		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
 		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		headPods := corev1.PodList{}
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		workerPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
@@ -958,6 +960,37 @@ var _ = Context("Inside the default namespace", func() {
 				}
 				return true
 			}, time.Second*5, time.Millisecond*500).Should(BeTrue())
+		})
+
+		It("Create a head Pod", func() {
+			err := k8sClient.List(ctx, &headPods, headFilters...)
+			Expect(err).NotTo(HaveOccurred(), "Failed to list head Pods")
+			Expect(headPods.Items).Should(HaveLen(1), "headPods: %v", headPods.Items)
+		})
+
+		It("Update all Pods to Running", func() {
+			// Note that this test assumes that headPods and workerPods are up-to-date.
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 
 		It("Simulate Ray Autoscaler scales down", func() {

@@ -949,6 +949,21 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 	}
 }
 
+func createRayPodSpec(cpu, memory string) corev1.PodSpec {
+	return corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(cpu),
+						corev1.ResourceMemory: resource.MustParse(memory),
+					},
+				},
+			},
+		},
+	}
+}
+
 func createRayClusterTemplate(
 	head struct {
 		cpu    string
@@ -967,18 +982,7 @@ func createRayClusterTemplate(
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Resources: corev1.ResourceRequirements{
-									Requests: corev1.ResourceList{
-										corev1.ResourceCPU:    resource.MustParse(head.cpu),
-										corev1.ResourceMemory: resource.MustParse(head.memory),
-									},
-								},
-							},
-						},
-					},
+					Spec: createRayPodSpec(head.cpu, head.memory),
 				},
 			},
 		},
@@ -991,18 +995,7 @@ func createRayClusterTemplate(
 			MinReplicas: w.minReplicas,
 			Suspend:     w.suspend,
 			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(w.cpu),
-									corev1.ResourceMemory: resource.MustParse(w.memory),
-								},
-							},
-						},
-					},
-				},
+				Spec: createRayPodSpec(w.cpu, w.memory),
 			},
 		})
 	}
@@ -1015,8 +1008,8 @@ func TestCalculateDesiredResources(t *testing.T) {
 		cpu    string
 		memory string
 	}{
-		cpu:    "500m",
-		memory: "128Mi",
+		cpu:    "1",
+		memory: "100Mi",
 	}
 
 	tests := []struct {
@@ -1028,8 +1021,8 @@ func TestCalculateDesiredResources(t *testing.T) {
 			name:    "Single head pod with no worker groups",
 			cluster: createRayClusterTemplate(headStuct, nil),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("128Mi"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
 			},
 		},
 		{
@@ -1047,13 +1040,13 @@ func TestCalculateDesiredResources(t *testing.T) {
 					replicas:    ptr.To[int32](3),
 					minReplicas: ptr.To[int32](0),
 					cpu:         "1",
-					memory:      "256Mi",
+					memory:      "200Mi",
 					suspend:     nil,
 				},
 			}),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("6.5"),
-				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+				corev1.ResourceCPU:    resource.MustParse("7"),
+				corev1.ResourceMemory: resource.MustParse("1300Mi"),
 			},
 		},
 		{
@@ -1070,14 +1063,14 @@ func TestCalculateDesiredResources(t *testing.T) {
 					numOfHosts:  2,
 					replicas:    ptr.To[int32](3),
 					minReplicas: ptr.To[int32](0),
-					cpu:         "1",
-					memory:      "256Mi",
+					cpu:         "2",
+					memory:      "200Mi",
 					suspend:     ptr.To(true),
 				},
 			}),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("128Mi"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
 			},
 		},
 	}
@@ -1096,8 +1089,8 @@ func TestCalculateMinResources(t *testing.T) {
 		cpu    string
 		memory string
 	}{
-		cpu:    "500m",
-		memory: "128Mi",
+		cpu:    "1",
+		memory: "100Mi",
 	}
 
 	tests := []struct {
@@ -1109,8 +1102,8 @@ func TestCalculateMinResources(t *testing.T) {
 			name:    "Single head pod with no worker groups",
 			cluster: createRayClusterTemplate(headStruct, nil),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("128Mi"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
 			},
 		},
 		{
@@ -1128,13 +1121,13 @@ func TestCalculateMinResources(t *testing.T) {
 					replicas:    nil,
 					minReplicas: ptr.To[int32](3),
 					cpu:         "1",
-					memory:      "256Mi",
+					memory:      "200Mi",
 					suspend:     nil,
 				},
 			}),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("6.5"),
-				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+				corev1.ResourceCPU:    resource.MustParse("7"),
+				corev1.ResourceMemory: resource.MustParse("1300Mi"),
 			},
 		},
 		{
@@ -1152,13 +1145,13 @@ func TestCalculateMinResources(t *testing.T) {
 					replicas:    nil,
 					minReplicas: ptr.To[int32](3),
 					cpu:         "1",
-					memory:      "256Mi",
+					memory:      "200Mi",
 					suspend:     ptr.To(true),
 				},
 			}),
 			expected: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("6.5"),
-				corev1.ResourceMemory: resource.MustParse("1664Mi"),
+				corev1.ResourceCPU:    resource.MustParse("7"),
+				corev1.ResourceMemory: resource.MustParse("1300Mi"),
 			},
 		},
 	}
@@ -1170,4 +1163,42 @@ func TestCalculateMinResources(t *testing.T) {
 			assert.Equal(t, tt.expected.Memory().String(), result.Memory().String())
 		})
 	}
+}
+
+func TestCalculateResourcesDoesNotMutateCluster(t *testing.T) {
+	headStruct := struct {
+		cpu    string
+		memory string
+	}{
+		cpu:    "1",
+		memory: "100Mi",
+	}
+
+	cluster := createRayClusterTemplate(headStruct, []struct {
+		replicas    *int32
+		minReplicas *int32
+		suspend     *bool
+		cpu         string
+		memory      string
+		numOfHosts  int32
+	}{
+		{
+			numOfHosts:  2,
+			replicas:    ptr.To[int32](3),
+			minReplicas: ptr.To[int32](3),
+			cpu:         "1",
+			memory:      "200Mi",
+			suspend:     nil,
+		},
+	})
+
+	deepCopyCluster := cluster.DeepCopy()
+
+	_ = CalculateMinResources(cluster)
+
+	assert.Equal(t, deepCopyCluster, cluster)
+
+	_ = CalculateDesiredResources(cluster)
+
+	assert.Equal(t, deepCopyCluster, cluster)
 }
