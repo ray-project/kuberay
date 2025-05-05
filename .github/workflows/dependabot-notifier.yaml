@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   monitor-dependabot:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
