@@ -309,7 +309,7 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 					User:      "",
 				},
 			},
-			expectedError: util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value."),
+			expectedError: util.NewInvalidInputError("User who created the Service is empty. Please specify a valid value."),
 		},
 		{
 			name: "A create service with no service graph or V2 config",
@@ -468,7 +468,7 @@ func TestValidateUpdateServiceRequest(t *testing.T) {
 					User:      "",
 				},
 			},
-			expectedError: util.NewInvalidInputError("User who update the Service is empty. Please specify a valid value."),
+			expectedError: util.NewInvalidInputError("User who updated the Service is empty. Please specify a valid value."),
 		},
 	}
 	for _, tc := range tests {
