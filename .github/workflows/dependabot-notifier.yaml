@@ -81,30 +81,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // Step 1: Get collaborators
-            const collaborators = await github.paginate(
-              github.rest.repos.listCollaborators,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                affiliation: 'direct',
-                per_page: 100
-              }
-            );
-
-            // Step 2: Filter maintainers
-            const maintainers = collaborators
-              .filter(user => user.permissions.admin)
-              .map(user => user.login);
-
-            // Step 3: Assign to the PR
-            if (maintainers.length > 0) {
-              await github.rest.issues.addAssignees({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                assignees: maintainers,
-              });
-            } else {
-              console.warn("No maintainers found to assign.");
-            }
+            const maintainers = ["dentiny", "CheyuWu"];
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              assignees: maintainers,
+            });
