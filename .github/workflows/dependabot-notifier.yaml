@@ -6,7 +6,7 @@ on:
 
 jobs:
   monitor-dependabot:
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Wait for checks to complete
