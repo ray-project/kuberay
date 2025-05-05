@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-complete
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   # Ray head pod configuration
   headGroupSpec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
@@ -27,7 +27,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -84,7 +84,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:

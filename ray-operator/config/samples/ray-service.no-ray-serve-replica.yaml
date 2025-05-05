@@ -17,7 +17,7 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
@@ -25,7 +25,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.46.0
               resources:
                 limits:
                   cpu: 1
@@ -43,7 +43,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.41.0
+                image: rayproject/ray:2.46.0
                 resources:
                   limits:
                     cpu: "1"
