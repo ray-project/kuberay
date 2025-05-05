@@ -264,7 +264,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 	var pageToken string
 	tCtx := tCtxs[0]
-	
+
 	// Test pagination with limit less than the total number of services in all namespaces.
 	t.Run("Test pagination return part of the result services", func(t *testing.T) {
 		pageToken = ""
@@ -294,10 +294,20 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 			for _, service := range response.Services {
 				t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
-				gotServices[targetService{
-					namespace: service.Namespace,
-					service:   service.Name,
-				}] = true
+				key := targetService{namespace: service.Namespace, service: service.Name}
+				seen, ok := gotServices[key]
+				// service not found in expectedServices list
+				if !ok {
+					t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
+						key.namespace, key.service)
+				}
+
+				// key already marked true (duplicate service)
+				if seen {
+					t.Fatalf("ListAllRayServices returned duplicated service: namespace=%s, name=%s",
+						key.namespace, key.service)
+				}
+				gotServices[key] = true
 			}
 		}
 
@@ -333,10 +343,20 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 		for _, service := range response.Services {
 			t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
-			gotServices[targetService{
-				namespace: service.Namespace,
-				service:   service.Name,
-			}] = true
+			key := targetService{namespace: service.Namespace, service: service.Name}
+			seen, ok := gotServices[key]
+			// service not found in expectedServices list
+			if !ok {
+				t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
+					key.namespace, key.service)
+			}
+
+			// key already marked true (duplicate service)
+			if seen {
+				t.Fatalf("ListAllRayServices returned duplicated service: namespace=%s, name=%s",
+					key.namespace, key.service)
+			}
+			gotServices[key] = true
 		}
 
 		// Check all services were found
