@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
@@ -84,6 +85,9 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 			klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
 			continue
 		}
+		if _, exists := clusterEventMap[cluster.Name]; exists {
+			return nil, fmt.Errorf("API Server internal error: resource manager returns multiple cluster information for %s when list cluster", cluster.Name)
+		}
 		clusterEventMap[cluster.Name] = clusterEvents
 	}
 
@@ -96,7 +100,7 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 // Finds all Clusters in all namespaces.
 func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
 	// Leave the namespace empty to list all clusters in all namespaces.
-	clusters, continueToken, err := s.resourceManager.ListClusters(ctx /*namespace=*/, "", request.Continue, request.Limit)
+	clusters, continueToken, err := s.resourceManager.ListClusters(ctx, "" /*namespace*/, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List clusters from all namespaces failed.")
 	}
@@ -106,6 +110,9 @@ func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAl
 		if err != nil {
 			klog.Warningf("Failed to get cluster's event, cluster: %s/%s, err: %v", cluster.Namespace, cluster.Name, err)
 			continue
+		}
+		if _, exists := clusterEventMap[cluster.Name]; exists {
+			return nil, fmt.Errorf("API Server internal error: resource manager returns multiple cluster information for %s when list all clusters", cluster.Name)
 		}
 		clusterEventMap[cluster.Name] = clusterEvents
 	}
