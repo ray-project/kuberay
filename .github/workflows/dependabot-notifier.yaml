@@ -1,0 +1,102 @@
+name: Dependabot Upgrade Monitor
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  monitor-dependabot:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for checks to complete
+        uses: WyriHaximus/github-action-wait-for-status@v1.8.0
+        with:
+          ignoreActions: monitor-dependabot
+          checkInterval: 60
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Check if PR is failing
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: checkRunsData } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: sha,
+            });
+            const checkRuns = checkRunsData.check_runs;
+            if (checkRuns.length === 0) {
+              core.setFailed("No status checks found for this PR.");
+              return;
+            }
+            const failedChecks = checkRuns.filter(
+              check => check.status === 'completed' && check.conclusion !== 'success'
+            );
+            if (failedChecks.length > 0) {
+              console.log("Some checks failed:");
+              failedChecks.forEach(check => {
+                console.log(`- ${check.name}: ${check.conclusion}`);
+              });
+              core.setFailed("Some required checks did not pass.");
+            } else {
+              console.log("All checks passed.");
+            }
+      - name: Create issue on failure
+        if: failure() && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Dependabot upgrade failed: #${context.issue.number} - ${context.payload.pull_request.title}`,
+              body: `
+              🚨 **Dependabot Upgrade Failed**
+
+              The following Dependabot pull request could not be merged automatically due to failed or incomplete status checks:
+
+              - **PR:** [#${context.issue.number}](${context.payload.pull_request.html_url})
+              - **Status:** Not mergeable
+
+              Please review the PR and resolve any conflicts or CI issues to proceed with the upgrade.`,
+              labels: ["dependencies", "enhancement", "go"],
+            });
+
+      - name: Assign maintainers on success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Step 1: Get collaborators
+            const collaborators = await github.paginate(
+              github.rest.repos.listCollaborators,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                affiliation: 'direct',
+                per_page: 100
+              }
+            );
+
+            // Step 2: Filter maintainers
+            const maintainers = collaborators
+              .filter(user => user.permissions.admin)
+              .map(user => user.login);
+
+            // Step 3: Assign to the PR
+            if (maintainers.length > 0) {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                assignees: maintainers,
+              });
+            } else {
+              console.warn("No maintainers found to assign.");
+            }
