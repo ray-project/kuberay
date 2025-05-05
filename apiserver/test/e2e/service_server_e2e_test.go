@@ -264,7 +264,8 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 	var pageToken string
 	tCtx := tCtxs[0]
-	// Test pagination with limit 1, which is less than the total number of services in all namespaces.
+	
+	// Test pagination with limit less than the total number of services in all namespaces.
 	t.Run("Test pagination return part of the result services", func(t *testing.T) {
 		pageToken = ""
 		gotServices := make(map[targetService]bool, totalServices)
@@ -307,7 +308,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		}
 	})
 
-	// Test pagination with limit 7, which is larger than the total number of services in all namespaces.
+	// Test pagination with limit larger than the total number of services in all namespaces.
 	t.Run("Test pagination return all result services", func(t *testing.T) {
 		pageToken = ""
 		gotServices := make(map[targetService]bool, totalServices)
