@@ -27,40 +27,27 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
-	var eventQueryHandler http.Handler = proxy
-	eventQueryHandler = AddQueryFilterToHandler(eventQueryHandler)
 
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
-	mux.Handle("/apis/ray.io/v1/", handler)                                // forward KubeRay CR requests.
-	mux.Handle("/api/v1/namespaces/{namespace}/events", eventQueryHandler) // allow querying KubeRay CR events.
+	mux.Handle("/apis/ray.io/v1/", handler)                                                                                    // forward KubeRay CR requests.
+	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 	// TODO: check whether the service belongs to KubeRay first.
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", handler) // allow accessing KubeRay dashboards and job submissions.
 	return mux, nil
 }
 
-func AddQueryFilterToHandler(handler http.Handler) http.Handler {
+func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only allow query requests for events
-		if r.Method != http.MethodGet {
-			http.Error(w, "Only GET requests are allowed for events", http.StatusMethodNotAllowed)
-			return
-		}
-
 		q := r.URL.Query()
-
-		// Filter for KubeRay resources
-		fieldSelectors := []string{
-			"involvedObject.apiVersion=ray.io/v1",
-		}
 
 		// Preserve existing field selectors if any
 		if existing := q.Get("fieldSelector"); existing != "" {
-			fieldSelectors = append(fieldSelectors, existing)
+			selectors = append(selectors, existing)
 		}
 
 		// Set the combined field selectors
-		q.Set("fieldSelector", strings.Join(fieldSelectors, ","))
+		q.Set("fieldSelector", strings.Join(selectors, ","))
 
 		r.URL.RawQuery = q.Encode()
 
