@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   monitor-dependabot:
     # Assume this job is triggered by Dependabot PRs
