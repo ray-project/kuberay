@@ -95,9 +95,8 @@ func NewKuberayAPIServerClient(baseURL string) (*KuberayAPIServerClient, error) 
 	}, nil
 }
 
+// Internal method to Find the KubeRay apiserver pod
 func (krc *KuberayAPIServerClient) findPod(namespace string) (*corev1.Pod, error) {
-	// Find the KubeRay API server pod
-
 	selector := labels.Set(map[string]string{
 		util.KubernetesComponentLabelKey: util.ComponentName,
 	}).AsSelector().String()
@@ -111,7 +110,6 @@ func (krc *KuberayAPIServerClient) findPod(namespace string) (*corev1.Pod, error
 	if len(podList.Items) == 0 {
 		return nil, fmt.Errorf("no pods found with label %s=%s", util.KubernetesComponentLabelKey, util.ComponentName)
 	}
-	// pick the first pod selected
 	targetPod := podList.Items[0]
 	return &targetPod, nil
 }
@@ -219,10 +217,8 @@ func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComp
 		return nil, nil, fmt.Errorf("failed to marshal api.ComputeTemplate to JSON: %w", err)
 	}
 
-	// Prepare the JSON body as a string
 	jsonBody := string(bytez)
 
-	// Execute the curl command inside the pod using kubectl exec
 	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
 		return nil, status, err
@@ -396,10 +392,8 @@ func (krc *KuberayAPIServerClient) CreateRayJob(request *api.CreateRayJobRequest
 		return nil, nil, fmt.Errorf("failed to marshal api.Cluster to JSON: %w", err)
 	}
 
-	// Prepare the JSON body as a string
 	jsonBody := string(bytez)
 
-	// Execute the curl command inside the pod using kubectl exec
 	bodyBytes, status, err := krc.ExecRequest(createURL, POST, jsonBody)
 	if err != nil {
 		return nil, status, err
