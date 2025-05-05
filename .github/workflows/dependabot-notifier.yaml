@@ -6,7 +6,8 @@ on:
 
 jobs:
   monitor-dependabot:
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    # Assume this job is triggered by Dependabot PRs
+    # if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Wait for checks to complete
