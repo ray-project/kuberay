@@ -143,6 +143,38 @@ var _ = Describe("events", Ordered, func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err).To(MatchError(ContainSubstring("the server does not allow this method on the requested resource")))
 	})
+	It("Only querying KubeRay CR events", func() {
+		testEvent := &corev1.Event{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-event-",
+				Namespace:    "default",
+			},
+			InvolvedObject: corev1.ObjectReference{
+				Kind:       "RayCluster",
+				Namespace:  "default",
+				Name:       "test-event",
+				APIVersion: "ray.io/v1",
+			},
+			Type:    "Normal",
+			Reason:  "Testing",
+			Message: "This is a test event",
+			Source: corev1.EventSource{
+				Component: "test-component",
+			},
+		}
+		testEvent2 := testEvent.DeepCopy()
+		testEvent2.InvolvedObject.APIVersion = ""
+		tmpK8sClient := k8sclient.NewForConfigOrDie(cfg)
+		_, err := tmpK8sClient.Events("default").Create(context.Background(), testEvent, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		_, err = tmpK8sClient.Events("default").Create(context.Background(), testEvent2, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		events, err := k8sClient.Events("default").List(context.Background(), metav1.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(events.Items).To(HaveLen(1))
+		Expect(events.Items[0].ObjectMeta.GenerateName).To(Equal(testEvent.ObjectMeta.GenerateName))
+		Expect(events.Items[0].InvolvedObject.APIVersion).To(Equal("ray.io/v1"))
+	})
 })
 
 var _ = Describe("not match", Ordered, func() {
