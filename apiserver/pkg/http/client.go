@@ -639,10 +639,12 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
 	// Record the last error got
 	var lastErr error
+	var lastStatus *rpcStatus.Status
 
 	for attempt := 0; attempt < krc.maxRetry; attempt++ {
 		response, err := krc.httpClient.Do(httpRequest)
 		if err != nil {
+			lastStatus = nil
 			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
 			continue
 		}
@@ -655,6 +657,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 		bodyBytes, err := io.ReadAll(response.Body)
 		if err != nil {
+			lastStatus = nil
 			lastErr = fmt.Errorf("failed to read response body bytes: %w", err)
 			continue
 		}
@@ -662,18 +665,21 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		if response.StatusCode != http.StatusOK {
 			status, err := krc.extractStatus(bodyBytes)
 			if err != nil {
+				lastStatus = nil
 				lastErr = err
 				continue
 			}
 
-			return nil, status, &KuberayAPIServerClientError{
+			lastStatus = status
+			lastErr = &KuberayAPIServerClientError{
 				HTTPStatusCode: response.StatusCode,
 			}
+			continue
 		}
 
 		return bodyBytes, nil, nil
 	}
-	return nil, nil, lastErr
+	return nil, lastStatus, lastErr
 }
 
 func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
