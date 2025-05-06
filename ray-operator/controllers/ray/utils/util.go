@@ -343,7 +343,7 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
-	return workerReplicas
+	return workerReplicas * workerGroupSpec.NumOfHosts
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
@@ -363,7 +363,7 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MinReplicas
+		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -376,7 +376,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MaxReplicas
+		count += (*nodeGroup.MaxReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -423,6 +423,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)
 		}
@@ -436,11 +437,24 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
 	return sumResourceList(minResourcesList)
+}
+
+// calculateReplicaResource adjusts the resource quantities in a given ResourceList
+// to account for the specified number of hosts. It multiplies each resource quantity
+// in the ResourceList by the number of hosts.
+//
+// Note: This function modifies the provided ResourceList in place.
+func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32) {
+	for name, quantity := range *podResource {
+		quantity.Mul(int64(numOfHosts))
+		(*podResource)[name] = quantity
+	}
 }
 
 // CalculatePodResource returns the total resources of a pod.
