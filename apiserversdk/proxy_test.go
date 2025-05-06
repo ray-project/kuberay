@@ -137,6 +137,12 @@ var _ = Describe("events", Ordered, func() {
 		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
 		Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/events"))
 	})
+	It("Only GET method is allowed for events endpoint", func() {
+		event := &corev1.Event{}
+		_, err := k8sClient.Events("default").Create(context.Background(), event, metav1.CreateOptions{})
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(ContainSubstring("the server does not allow this method on the requested resource")))
+	})
 })
 
 var _ = Describe("not match", Ordered, func() {
