@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -38,7 +39,7 @@ type GenericEnd2EndTest[I proto.Message] struct {
 type End2EndTestingContext struct {
 	ctx                    context.Context
 	apiServerHttpClient    *http.Client
-	kuberayAPIServerClient *KuberayAPIServerClient
+	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
 	rayClient              rayv1.RayV1Interface
 	k8client               *kubernetes.Clientset
 	apiServerBaseURL       string
@@ -91,9 +92,16 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-		var err error
-		testingContext.kuberayAPIServerClient, err = NewKuberayAPIServerClient(testingContext.apiServerBaseURL)
-		return err
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
+
+		remoteExecClient, err := NewRemoteExecuteClient()
+		if err != nil {
+			return err
+		}
+
+		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
+
+		return nil
 	}
 }
 
@@ -227,7 +235,7 @@ func (e2etc *End2EndTestingContext) GetRayVersion() string {
 	return e2etc.rayVersion
 }
 
-func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *KuberayAPIServerClient {
+func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
 	return e2etc.kuberayAPIServerClient
 }
 
