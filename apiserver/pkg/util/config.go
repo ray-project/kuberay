@@ -22,6 +22,9 @@ const (
 	RayClusterImageAnnotationKey           = "ray.io/compute-image"
 
 	RayClusterDefaultImageRepository = "rayproject/ray"
+
+	// Max retry times for HTTP Client
+	HTTPClientDefaultMaxRetry = 3
 )
 
 const (

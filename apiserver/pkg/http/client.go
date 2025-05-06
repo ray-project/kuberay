@@ -66,7 +66,6 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry
 			DiscardUnknown: false,
 			Resolver:       nil,
 		},
-		// TODO: make this into constant
 		maxRetry: maxRetry,
 	}
 	client.executeHttpRequest = client.executeRequest
@@ -637,7 +636,7 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 }
 
 func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
-	// Record the last error got
+	// Record the last error and status got
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 

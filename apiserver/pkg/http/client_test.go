@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -47,7 +48,7 @@ func (r *transportForRetry) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, 3 /*maxRetry*/)
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		resp := &api.ListClustersResponse{
 			Clusters: []*api.Cluster{
@@ -75,7 +76,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, 3 /* maxRetry */)
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		// Intentionall returning a bad response.
 		return []byte("helloworld"), nil, nil
