@@ -1,5 +1,7 @@
 package util
 
+import "time"
+
 // ClientOptions contains configuration needed to create a Kubernetes client
 type ClientOptions struct {
 	QPS   float32
@@ -34,4 +36,7 @@ const (
 
 	// The curl container name for apiserver
 	CurlContainerName = "apiserver-curl"
+
+	// Timeout for apiserver gRPC server
+	GRPCServerDefaultTimeout = 60 * time.Second
 )

@@ -14,9 +14,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-func TestCreatePodGroup(t *testing.T) {
-	a := assert.New(t)
-
+func createTestRayCluster(numOfHosts int32) rayv1.RayCluster {
 	headSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
 			{
@@ -54,7 +52,7 @@ func TestCreatePodGroup(t *testing.T) {
 		},
 	}
 
-	cluster := rayv1.RayCluster{
+	return rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
 			Namespace: "default",
@@ -71,12 +69,19 @@ func TestCreatePodGroup(t *testing.T) {
 						Spec: workerSpec,
 					},
 					Replicas:    ptr.To[int32](2),
+					NumOfHosts:  numOfHosts,
 					MinReplicas: ptr.To[int32](1),
 					MaxReplicas: ptr.To[int32](4),
 				},
 			},
 		},
 	}
+}
+
+func TestCreatePodGroup(t *testing.T) {
+	a := assert.New(t)
+
+	cluster := createTestRayCluster(1)
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
@@ -95,4 +100,32 @@ func TestCreatePodGroup(t *testing.T) {
 
 	// 2 GPUs total
 	a.Equal("2", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+}
+
+func TestCreatePodGroup_NumOfHosts2(t *testing.T) {
+	a := assert.New(t)
+
+	cluster := createTestRayCluster(2)
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+
+	a.Equal(cluster.Namespace, pg.Namespace)
+
+	// 2 workers (desired, not min replicas) * 2 (num of hosts) + 1 head
+	// 2 * 2 + 1 = 5
+	a.Equal(int32(5), pg.Spec.MinMember)
+
+	// 256m * (2 (requests, not limits) * 2 (num of hosts) + 1 head)
+	// 256m * 5 = 1280m
+	a.Equal("1280m", pg.Spec.MinResources.Cpu().String())
+
+	// 256Mi * (2 (requests, not limits) * 2 (num of hosts) + 1 head)
+	// 256Mi * 5 = 1280Mi
+	a.Equal("1280Mi", pg.Spec.MinResources.Memory().String())
+
+	// 2 GPUs * 2 (num of hosts) total
+	// 2 GPUs * 2 = 4 GPUs
+	a.Equal("4", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
 }
