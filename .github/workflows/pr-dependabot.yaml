@@ -31,15 +31,16 @@ jobs:
     - name: Update go modules for experimental
       working-directory: './experimental'
       run: go mod tidy
+    - name: Update go modules for ray operator
+      working-directory: './ray-operator'
+      run: go mod tidy         
     - name: Update go modules for kubectl plugin
       working-directory: './kubectl-plugin'
       run: go mod tidy
     - name: Update go modules for apiserver
       working-directory: './apiserver'
       run: go mod tidy
-    - name: Update go modules for ray operator
-      working-directory: './ray-operator'
-      run: go mod tidy
+
     - name: Update generated code
       working-directory: './ray-operator'
       run: ./hack/update-codegen.sh
@@ -47,6 +48,10 @@ jobs:
       working-directory: './ray-operator'
       run: |
         make manifests && make sync
+    - name: Update update mock files for apiserver
+      working-directory: './apiserver'
+      run: make generate
+
     - name: commit and push the changes
       run: |
         if ! git diff --exit-code; then
