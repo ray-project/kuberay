@@ -3582,14 +3582,14 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		originStatus     rayv1.RayClusterStatus
+		oldStatus        rayv1.RayClusterStatus
 		newStatus        rayv1.RayClusterStatus
 		expectMetric     bool
 		expectedDuration float64
 	}{
 		{
 			name: "transition from unprovisioned to provisioned (should emit metrics)",
-			originStatus: rayv1.RayClusterStatus{
+			oldStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(rayv1.RayClusterProvisioned),
@@ -3610,7 +3610,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 		},
 		{
 			name: "already provisioned (should not emit metrics)",
-			originStatus: rayv1.RayClusterStatus{
+			oldStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(rayv1.RayClusterProvisioned),
@@ -3630,8 +3630,8 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 			expectedDuration: time.Since(creationTime).Seconds(),
 		},
 		{
-			name:         "transition from unset to provisioned (should emit metrics)",
-			originStatus: rayv1.RayClusterStatus{},
+			name:      "transition from unset to provisioned (should emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{},
 			newStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
 					{
@@ -3665,7 +3665,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 				mockCollector,
 				clusterName,
 				clusterNamespace,
-				tc.originStatus,
+				tc.oldStatus,
 				tc.newStatus,
 				creationTime,
 			)
