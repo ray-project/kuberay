@@ -230,23 +230,23 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
+	var rayClusterMetricManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	if config.EnableMetrics {
-		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
+		rayClusterMetricManager = metrics.NewRayClusterMetricsManager()
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
 		ctrlmetrics.Registry.MustRegister(
-			rayClusterMetricCollector,
+			rayClusterMetricManager,
 			rayJobMetricsManager,
 		)
 	}
 
 	ctx := ctrl.SetupSignalHandler()
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:     config.HeadSidecarContainers,
-		WorkerSidecarContainers:   config.WorkerSidecarContainers,
-		IsOpenShift:               utils.GetClusterType(),
-		RayClusterMetricCollector: rayClusterMetricCollector,
+		HeadSidecarContainers:   config.HeadSidecarContainers,
+		WorkerSidecarContainers: config.WorkerSidecarContainers,
+		IsOpenShift:             utils.GetClusterType(),
+		RayClusterMetricManager: rayClusterMetricManager,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
