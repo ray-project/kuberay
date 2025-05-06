@@ -33,7 +33,7 @@ jobs:
       run: go mod tidy
     - name: Update go modules for ray operator
       working-directory: './ray-operator'
-      run: go mod tidy         
+      run: go mod tidy
     - name: Update go modules for kubectl plugin
       working-directory: './kubectl-plugin'
       run: go mod tidy
