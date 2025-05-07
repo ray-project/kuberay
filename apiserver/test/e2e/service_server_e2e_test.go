@@ -298,16 +298,14 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 				seen, exist := gotServices[key]
 
 				// Check if this service is in expectedServices list
-				if !exist {
-					t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
-						key.namespace, key.service)
-				}
+				require.True(t, exist,
+					"ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
+					key.namespace, key.service)
 
 				// Check if we've already seen this service before (duplicate)
-				if seen {
-					t.Fatalf("ListAllRayServices returned duplicated service: namespace=%s, name=%s",
-						key.namespace, key.service)
-				}
+				require.False(t, seen,
+					"ListAllRayServices returned duplicated service: namespace=%s, name=%s",
+					key.namespace, key.service)
 
 				gotServices[key] = true
 			}
@@ -315,10 +313,9 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 
 		// Check all services were found
 		for _, expectedService := range expectedServices {
-			if !gotServices[expectedService] {
-				t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
-					expectedService.service, expectedService.namespace)
-			}
+			require.True(t, gotServices[expectedService],
+				"ListAllRayServices did not return expected service %s from namespace %s",
+				expectedService.service, expectedService.namespace)
 		}
 	})
 
@@ -349,25 +346,21 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			seen, exist := gotServices[key]
 
 			// Check if this service is in expectedServices list
-			if !exist {
-				t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
-					key.namespace, key.service)
-			}
+			require.True(t, exist, "ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
+				key.namespace, key.service)
 
 			// Check if we've already seen this service before (duplicate)
-			if seen {
-				t.Fatalf("ListAllRayServices returned duplicated service: namespace=%s, name=%s",
-					key.namespace, key.service)
-			}
+			require.False(t, seen, "ListAllRayServices returned duplicated service: namespace=%s, name=%s",
+				key.namespace, key.service)
+
 			gotServices[key] = true
 		}
 
 		// Check all services were found
 		for _, expectedService := range expectedServices {
-			if !gotServices[expectedService] {
-				t.Errorf("ListAllRayServices did not return expected service %s from namespace %s",
-					expectedService.service, expectedService.namespace)
-			}
+			require.True(t, gotServices[expectedService],
+				"ListAllRayServices did not return expected service %s from namespace %s",
+				expectedService.service, expectedService.namespace)
 		}
 	})
 }
