@@ -17,23 +17,18 @@ spec:
           engine_kwargs:
             dtype: bfloat16
             max_model_len: 1024
-            enable_lora: true
+            device: auto
+            gpu_memory_utilization: 0.75
           deployment_config:
             autoscaling_config:
               min_replicas: 1
               max_replicas: 4
-              # Target number of in-flight requests per replica before triggering scale-up
               target_ongoing_requests: 64
-            # Maximum number of ongoing requests per replica (LoRA Adapters will only be loaded on new replica when condition on max_ongoing_requests limit is reached)
-            max_ongoing_requests: 96 
-          lora_config:
-            # S3 Path for LoRA Adapters, Eg: s3://my-s3-bucket/task-adapter
-            dynamic_lora_loading_path: s3://my-s3-bucket
-            max_num_adapters_per_replica: 3
+            max_ongoing_requests: 128
   rayClusterConfig:
     rayVersion: "2.44.1"
     headGroupSpec:
-      rayStartParams: 
+      rayStartParams:
         num-cpus: "0"
         dashboard-host: "0.0.0.0"
       template:
@@ -65,38 +60,30 @@ spec:
                 cpu: 2
                 memory: 4Gi
             env:
-            # Hugging Face Token
             - name: HUGGING_FACE_HUB_TOKEN
-              value: "<HF-TOKEN>"
-            # AWS credentials and region for accessing LoRA adapters in S3
-            - name: AWS_ACCESS_KEY_ID
-              value: "<aws-access-key-id>"
-            - name: AWS_SECRET_ACCESS_KEY
-              value: "<aws-secret-access-key>"
-            - name: AWS_DEFAULT_REGION
-              value: "<aws-default-region>"
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: hf_token
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
       maxReplicas: 1
       numOfHosts: 1
       groupName: gpu-group
-      rayStartParams: 
+      rayStartParams:
         num-gpus: "4"
       template:
         spec:
-          containers: 
+          containers:
           - name: ray-worker
             image: rayproject/ray-llm:2.44.1-py311-cu124
             env:
             - name: HUGGING_FACE_HUB_TOKEN
-              value: "<HF-TOKEN>"
-            - name: AWS_ACCESS_KEY_ID
-              value: "<aws-access-key-id>"
-            - name: AWS_SECRET_ACCESS_KEY
-              value: "<aws-secret-access-key>"
-            - name: AWS_DEFAULT_REGION
-              value: "<aws-default-region>"
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: hf_token
             resources:
               limits:
                 cpu: 32
