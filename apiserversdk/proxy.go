@@ -41,11 +41,7 @@ func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		// Preserve existing field selectors if any
-		if existing := q.Get("fieldSelector"); existing != "" {
-			selectors = append(selectors, existing)
-		}
-		// Set the combined field selectors
-		q.Set("fieldSelector", strings.Join(selectors, ","))
+		q.Set("fieldSelector", strings.Join(append(q["fieldSelector"], selectors...), ","))
 		r.URL.RawQuery = q.Encode()
 		handler.ServeHTTP(w, r)
 	})
