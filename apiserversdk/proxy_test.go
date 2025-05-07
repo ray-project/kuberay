@@ -175,7 +175,7 @@ var _ = Describe("events", Ordered, func() {
 		Expect(events.Items[0].ObjectMeta.GenerateName).To(Equal(testEvent.ObjectMeta.GenerateName))
 		Expect(events.Items[0].InvolvedObject.APIVersion).To(Equal("ray.io/v1"))
 		// Test the existing fieldSelector works
-		fieldSelectorString := "involvedObject.name!=test-event"
+		fieldSelectorString := "involvedObject.apiVersion="
 		events, err = k8sClient.Events("default").List(context.Background(), metav1.ListOptions{FieldSelector: fieldSelectorString})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(events.Items).To(BeEmpty())
