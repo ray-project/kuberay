@@ -40,40 +40,42 @@ const (
 )
 
 type SubmitJobOptions struct {
-	cmdFactory         cmdutil.Factory
-	dashboardClient    utils.RayDashboardClientInterface
-	ioStreams          *genericiooptions.IOStreams
-	RayJob             *rayv1.RayJob
-	logColor           string
-	image              string
-	fileName           string
-	workingDir         string
-	runtimeEnv         string
-	headers            string
-	verify             string
-	cluster            string
-	runtimeEnvJson     string
-	entryPointResource string
-	metadataJson       string
-	logStyle           string
-	submissionID       string
-	rayjobName         string
-	rayVersion         string
-	entryPoint         string
-	headCPU            string
-	headMemory         string
-	headGPU            string
-	workerCPU          string
-	workerMemory       string
-	workerGPU          string
-	namespace          string
-	entryPointMemory   int
-	entryPointGPU      float32
-	workerReplicas     int32
-	entryPointCPU      float32
-	noWait             bool
-	dryRun             bool
-	verbose            bool
+	cmdFactory          cmdutil.Factory
+	dashboardClient     utils.RayDashboardClientInterface
+	ioStreams           *genericiooptions.IOStreams
+	RayJob              *rayv1.RayJob
+	workerNodeSelectors map[string]string
+	headNodeSelectors   map[string]string
+	logColor            string
+	image               string
+	fileName            string
+	workingDir          string
+	runtimeEnv          string
+	headers             string
+	verify              string
+	cluster             string
+	runtimeEnvJson      string
+	entryPointResource  string
+	metadataJson        string
+	logStyle            string
+	submissionID        string
+	rayjobName          string
+	rayVersion          string
+	entryPoint          string
+	headCPU             string
+	headMemory          string
+	headGPU             string
+	workerCPU           string
+	workerMemory        string
+	workerGPU           string
+	namespace           string
+	entryPointMemory    int
+	entryPointGPU       float32
+	workerReplicas      int32
+	entryPointCPU       float32
+	noWait              bool
+	dryRun              bool
+	verbose             bool
 }
 
 type JobInfo struct {
@@ -104,6 +106,9 @@ var (
 
 		# Submit generated Ray job with default values and with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --runtime-env /runtimeEnv.yaml -- python my_script.py
+
+		# Submit Ray job on GCP with GPU node
+		kubectl ray job submit --name rayjob-sample --working-dir /path/to/working-dir/ --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4 --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4 -- python my_script.py
 
 		# Generate Ray job with specifications and submit Ray job with runtime Env file and working directory
 		kubectl ray job submit --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --head-gpu 1 --worker-replicas 3 --worker-cpu 1 --work-gpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
@@ -171,6 +176,8 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
+	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	return cmd
 }
@@ -301,16 +308,18 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				RayVersion: &options.rayVersion,
 				Image:      &options.image,
 				Head: &generation.Head{
-					CPU:    &options.headCPU,
-					Memory: &options.headMemory,
-					GPU:    &options.headGPU,
+					CPU:           &options.headCPU,
+					Memory:        &options.headMemory,
+					GPU:           &options.headGPU,
+					NodeSelectors: options.headNodeSelectors,
 				},
 				WorkerGroups: []generation.WorkerGroup{
 					{
-						CPU:      &options.workerCPU,
-						Memory:   &options.workerMemory,
-						GPU:      &options.workerGPU,
-						Replicas: options.workerReplicas,
+						CPU:           &options.workerCPU,
+						Memory:        &options.workerMemory,
+						GPU:           &options.workerGPU,
+						Replicas:      options.workerReplicas,
+						NodeSelectors: options.workerNodeSelectors,
 					},
 				},
 			},
