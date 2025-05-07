@@ -296,7 +296,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 				t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
 				key := targetService{namespace: service.Namespace, service: service.Name}
 				seen, exist := gotServices[key]
-				
+
 				// Check if this service is in expectedServices list
 				if !exist {
 					t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
@@ -308,7 +308,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 					t.Fatalf("ListAllRayServices returned duplicated service: namespace=%s, name=%s",
 						key.namespace, key.service)
 				}
-				
+
 				gotServices[key] = true
 			}
 		}
@@ -347,7 +347,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
 			key := targetService{namespace: service.Namespace, service: service.Name}
 			seen, exist := gotServices[key]
-			
+
 			// Check if this service is in expectedServices list
 			if !exist {
 				t.Fatalf("ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
