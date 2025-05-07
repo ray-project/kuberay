@@ -346,11 +346,13 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			seen, exist := gotServices[key]
 
 			// Check if this service is in expectedServices list
-			require.True(t, exist, "ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
+			require.True(t, exist,
+				"ListAllRayServices returned an unexpected service: namespace=%s, name=%s",
 				key.namespace, key.service)
 
 			// Check if we've already seen this service before (duplicate)
-			require.False(t, seen, "ListAllRayServices returned duplicated service: namespace=%s, name=%s",
+			require.False(t, seen,
+				"ListAllRayServices returned duplicated service: namespace=%s, name=%s",
 				key.namespace, key.service)
 
 			gotServices[key] = true
@@ -448,9 +450,9 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 
 		// Check all services created have been returned.
 		for idx := 0; idx < serviceCount; idx++ {
-			if !gotServices[idx] {
-				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
-			}
+			require.True(t, gotServices[idx],
+				"ListServices did not return expected services %s",
+				expectedServiceNames[idx])
 		}
 	})
 
@@ -483,9 +485,9 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 
 		// Check all services created have been returned.
 		for idx := 0; idx < serviceCount; idx++ {
-			if !gotServices[idx] {
-				t.Errorf("ListServices did not return expected services %s", expectedServiceNames[idx])
-			}
+			require.True(t, gotServices[idx],
+				"ListServices did not return expected services %s",
+				expectedServiceNames[idx])
 		}
 	})
 }
