@@ -221,19 +221,27 @@ type RayClusterStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
-	// ReadyWorkerReplicas indicates how many worker replicas are ready in the cluster
+	// ReadyWorkerReplicas indicates the number of worker pods currently in the Ready state in the cluster.
+	// It actually reflects the number of Ready pods, although it is named "replicas" to maintain backward compatibility.
 	// +optional
 	ReadyWorkerReplicas int32 `json:"readyWorkerReplicas,omitempty"`
-	// AvailableWorkerReplicas indicates how many replicas are available in the cluster
+	// AvailableWorkerReplicas indicates how many worker pods are currently available (i.e., running).
+	// It is named "replicas" to maintain backward compatibility.
 	// +optional
 	AvailableWorkerReplicas int32 `json:"availableWorkerReplicas,omitempty"`
-	// DesiredWorkerReplicas indicates overall desired replicas claimed by the user at the cluster level.
+	// DesiredWorkerReplicas indicates the desired total number of worker Pods at the cluster level,
+	// calculated as the sum of `replicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
 	// +optional
 	DesiredWorkerReplicas int32 `json:"desiredWorkerReplicas,omitempty"`
-	// MinWorkerReplicas indicates sum of minimum replicas of each node group.
+	// MinWorkerReplicas indicates the minimum number of worker pods across all worker groups,
+	// calculated as the sum of `minReplicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
 	// +optional
 	MinWorkerReplicas int32 `json:"minWorkerReplicas,omitempty"`
-	// MaxWorkerReplicas indicates sum of maximum replicas of each node group.
+	// MaxWorkerReplicas indicates the maximum number of worker pods across all worker groups,
+	// calculated as the sum of `maxReplicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
 	// +optional
 	MaxWorkerReplicas int32 `json:"maxWorkerReplicas,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the

@@ -2,6 +2,7 @@ package interceptor
 
 import (
 	"context"
+	"time"
 
 	"google.golang.org/grpc"
 	klog "k8s.io/klog/v2"
@@ -18,4 +19,18 @@ func APIServerInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	}
 	klog.Infof("%v handler finished", info.FullMethod)
 	return
+}
+
+// TimeoutInterceptor implements UnaryServerInterceptor that sets the timeout for the request
+func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req interface{},
+		_ *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		ctx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return handler(ctx, req)
+	}
 }

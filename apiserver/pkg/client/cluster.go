@@ -9,6 +9,8 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
+//go:generate mockgen -source=cluster.go -destination=cluster_mock.go -package=client
+
 type ClusterClientInterface interface {
 	RayClusterClient(namespace string) rayv1.RayClusterInterface
 }
