@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -830,9 +831,9 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 	for _, resourceKeyString := range sortedResourceKeys {
 		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		// Scan for resource keys of gpus
 		if _, ok := rayStartParams["num-gpus"]; !ok {
-			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+			if isGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
@@ -1004,4 +1005,15 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+func isGPUResourceKey(key string) bool {
+	// ending with "gpu" like "nvidia.com/gpu"
+	if strings.HasSuffix(key, "gpu") {
+		return true
+	}
+	// Nvidia Multi-Instance GPU in the form of "nvidia.com/mig-<slice_count>g.<memory_size>gb" like "nvidia.com/mig-2g.32gb"
+	// reference: https://github.com/NVIDIA/k8s-device-plugin#configuration-option-details
+	match, _ := regexp.MatchString(`nvidia\.com/mig-\d+g\.\d+gb$`, key)
+	return match
 }
