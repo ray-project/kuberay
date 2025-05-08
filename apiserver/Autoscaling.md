@@ -1,28 +1,53 @@
 # Creating Autoscaling clusters using API server
 
-One of the fundamental features of Ray is autoscaling. This [document] describes how to set up
-autoscaling using Ray operator. Here we will describe how to set it up using API server.
+One of Ray's key features is autoscaling. This [document] explains setting up autoscaling
+with the Ray operator. Here, we demonstrate how to configure it using the API server and
+run an example.
 
 ## Deploy KubeRay operator and API server
 
-Refer to [readme](README.md) for setting up KubRay operator and API server.
-
-```shell
-make operator-image cluster load-operator-image deploy-operator
-```
+Refer to [README](README.md) for setting up KubRay operator and API server.
 
 Alternatively, you could build and deploy the Operator and API server from local repo for
 development purpose.
 
 ```shell
-make operator-image cluster load-operator-image deploy-operator docker-image load-image deploy
+make start-local-apiserver deploy
 ```
 
-Additionally install this [ConfigMap] containing code that we will use for testing.
+## Example
 
-## Deploy Ray cluster
+This example walks through how to trigger scale-up and scale-down for RayCluster.
 
-Once they are set up, you first need to create a Ray cluster using the following commands:
+Before going through the example, remove any running Ray Clusters to ensure a successful
+run through of the example below.
+
+```sh
+kubectl delete raycluster --all
+```
+
+### Install ConfigMap
+
+Please install this [ConfigMap] which containing code for our example. Simply download
+this file and run:
+
+```sh
+kubectl apply -f detachedactor.yaml
+```
+
+Check if the config map is successfully created, you should see `ray-example` in the list:
+
+```sh
+kubectl get configmaps
+# NAME               DATA   AGE
+# default-template   7      14m
+# kube-root-ca.crt   1      16m
+# ray-example        2      8s
+```
+
+### Deploy RayCluster
+
+Before running the example, you need to first deploy a RayCluster with following command.
 
 ```shell
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
@@ -98,7 +123,29 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 }'
 ```
 
-## Validate that Ray cluster is deployed correctly
+This command performs two main operations:
+
+1. Creates a compute template `default-template` that specifies resources to use when
+   scale-up (2 CPUs and 4 GiB memory).
+
+2. Deploys a RayCluster (test-cluster) with:
+    - A head pod that manages the cluster
+    - A worker group configured to scale between 0 and 5 replicas
+
+The worker group uses the following autoscalerOptions to control scaling behavior:
+
+- **`upscalingMode: "Default"`**: Default scaling behavior. Ray will scale up only as
+needed.
+- **`idleTimeoutSeconds: 30`** If a worker pod remains idle (i.e., not running any tasks)
+for 30 seconds, it will be automatically removed.
+- **`cpu: "500m"`, `memory: "512Mi"`**: Defines the **minimum resource unit** Ray uses to
+assess scaling needs.  If no worker pod has at least this much free capacity, Ray will
+trigger a scale-up and launch a new worker pod.
+
+> **Note:** These values **do not determine the actual size** of the worker pod. The
+> pod size comes from the `computeTemplate` (in this case, 2 CPUs and 4 GiB memory).
+
+### Validate that RayCluster is deployed correctly
 
 Run:
 
@@ -109,14 +156,17 @@ kubectl get pods
 You should get something like this:
 
 ```shell
-test-cluster-head-pr25j             2/2     Running   0          2m49s
+NAME                                READY   STATUS    RESTARTS   AGE
+kuberay-operator-545586d46c-f9grr   1/1     Running   0          49m
+test-cluster-head                   2/2     Running   0          3m1s
 ```
 
-Note that only head pod is running and it has 2 containers
+Note that there is no worker for `test-cluster` as we set its initial replicas to 0. You
+will only see head pod with 2 containers for `test-cluster`.
 
-## Trigger RayCluster scale-up
+### Trigger RayCluster scale-up
 
-Create a detached actor:
+Create a detached actor to trigger scale-up with following command:
 
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
@@ -132,24 +182,26 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 }'
 ```
 
-Because we have specified `num_cpu: 0` for head node, this will cause creation of a worker node. Run:
+The `detached_actor.py` file is defined in the [ConfigMap] we installed earlier, which
+requires `num_cpus=1`. Recall that initially there is no worker pod exists, RayCluster
+needs to scale up a worker for running this actor.
 
-```shell
+Check if a worker is created. You can see a worker `test-cluster-small-wg-worker` spins
+up.
+
+```sh
 kubectl get pods
+
+# NAME                                 READY   STATUS      RESTARTS   AGE
+# create-actor-tsvfc                   0/1     Completed   0          99s
+# kuberay-operator-545586d46c-f9grr    1/1     Running     0          55m
+# test-cluster-head                    2/2     Running     0          9m37s
+# test-cluster-small-wg-worker-j54xf   1/1     Running     0          88s
 ```
 
-You should get something like this:
+### Trigger RayCluster scale-down
 
-```shell
-test-cluster-head-pr25j              2/2     Running   0          15m
-test-cluster-worker-small-wg-qrjfm   1/1     Running   0          2m48s
-```
-
-You can see that a worker node have been created.
-
-## Trigger RayCluster scale-down
-
-Run:
+Run following to delete the actor we created earlier.
 
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
@@ -165,16 +217,28 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 }'
 ```
 
-A worker Pod will be deleted after `idleTimeoutSeconds` (default 60s, we specified 30) seconds. Run:
+While actor is deleted, we do not need the worker anymore. The worker pod will be deleted
+after `idleTimeoutSeconds` (default 60, we specified 30) seconds.
 
-```shell
+List all pods to verify if the worker pod is deleted:
+
+```sh
 kubectl get pods
+
+# NAME                                READY   STATUS      RESTARTS   AGE
+# create-actor-tsvfc                  0/1     Completed   0          6m37s
+# delete-actor-89z8c                  0/1     Completed   0          83s
+# kuberay-operator-545586d46c-f9grr   1/1     Running     0          60m
+# test-cluster-head                   2/2     Running     0          14m
+
 ```
 
-And you should see only head node (worker node is deleted)
+### Clean up
 
-```shell
-test-cluster-head-pr25j             2/2     Running   0          27m
+Run following command to clean up RayCluster:
+
+```sh
+kubectl delete raycluster test-cluster
 ```
 
 [document]: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html
