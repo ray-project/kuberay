@@ -4,7 +4,7 @@ One of Ray's key features is autoscaling. This [document] explains setting up au
 with the Ray operator. Here, we demonstrate how to configure it using the API server and
 run an example.
 
-## Deploy KubeRay operator and API server
+## Setup
 
 Refer to [README](README.md) for setting up KubRay operator and API server.
 
@@ -19,7 +19,7 @@ make start-local-apiserver deploy
 
 This example walks through how to trigger scale-up and scale-down for RayCluster.
 
-Before going through the example, remove any running Ray Clusters to ensure a successful
+Before going through the example, remove any running RayClusters to ensure a successful
 run through of the example below.
 
 ```sh
@@ -28,7 +28,7 @@ kubectl delete raycluster --all
 
 ### Install ConfigMap
 
-Please install this [ConfigMap] which containing code for our example. Simply download
+Please install this [ConfigMap] which contains code for our example. Simply download
 this file and run:
 
 ```sh
@@ -40,8 +40,6 @@ Check if the config map is successfully created, you should see `ray-example` in
 ```sh
 kubectl get configmaps
 # NAME               DATA   AGE
-# default-template   7      14m
-# kube-root-ca.crt   1      16m
 # ray-example        2      8s
 ```
 

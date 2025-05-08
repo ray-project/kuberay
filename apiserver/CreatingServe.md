@@ -1,9 +1,13 @@
 # Creating a cluster with RayServe support
 
-Up until rescently the only way to create a Ray cluster supporting RayServe was by using `Create ray
-service` APIs. Although it does work, quite often you want to create cluster supporting Ray serve so
-that you can experiment with serve APIs directly. Now it is possible by adding the following
-annotation to the cluster:
+Currently, there are two ways for creating a RayCluster with RayService support:
+
+1. Create a RayCluster first, then use [Create RayService](./HttpRequestSpec.md#Create-ray-service-in-a-given-namespace)
+   APIs to create a service.
+2. Directly create cluster with RayServe support (described in this document)
+
+For creating a cluster with RayService support, simply add the following annotation when
+creating hte cluster:
 
 ```json
 "annotations" : {
@@ -11,9 +15,59 @@ annotation to the cluster:
   },
 ```
 
-the complete curl command to creation such cluster is as follows:
+## Setup
+
+Refer to [README](README.md) for setting up KubRay operator and API server.
+
+Alternatively, you could build and deploy the Operator and API server from local repo for
+development purpose.
 
 ```shell
+make start-local-apiserver deploy
+```
+
+## Example
+
+This example walks through how to create a cluster with RayService support.
+
+Before going through the example, remove any running RayClusters to ensure a successful
+run through of the example below.
+
+```sh
+kubectl delete raycluster --all
+```
+
+### Install ConfigMap
+
+Please install this [ConfigMap] which contains code for our example. Simply download
+this file and run:
+
+```sh
+kubectl apply -f code.yaml
+```
+
+Check if the config map is successfully created, you should see `ray-job-code-sample` in
+the list:
+
+```sh
+kubectl get configmaps
+# NAME                  DATA   AGE
+# ray-job-code-sample   1      13s
+```
+
+### Create RayCluster
+
+Use following command to create a compute template and a RayCluster with RayService support:
+
+```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "default-template",
+    "namespace": "default",
+    "cpu": 2,
+    "memory": 4
+  }'
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   --header 'Content-Type: application/json' \
   --data '{
@@ -69,36 +123,18 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   }'
 ```
 
-Note, that before creating a cluster you need to install this [configmap] and
-create default template using the following command:
-
-```shell
-curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "name": "default-template",
-    "namespace": "default",
-    "cpu": 2,
-    "memory": 4
-  }'
-```
-
 To confirm that the cluster is created correctly, check created services using that following command:
 
-```shell
+```sh
 kubectl get service
+# NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                                                   AGE
+# test-cluster-head-svc    ClusterIP   None            <none>        8265/TCP,52365/TCP,10001/TCP,8080/TCP,6379/TCP,8000/TCP   7s
+# test-cluster-serve-svc   ClusterIP   10.96.161.26    <none>        8000/TCP                                                  7s
 ```
 
-that should return the following:
+You should see two services created, one for head node to access dashboard and manage the
+cluster, the other for submit the serve request.
 
-```shell
-test-cluster-head-svc    ClusterIP   10.96.19.185    <none>        8265/TCP,52365/TCP,10001/TCP,8080/TCP,6379/TCP,8000/TCP
-test-cluster-serve-svc   ClusterIP   10.96.144.162   <none>        8000/TCP
-```
+Note that the 52365 port for head node service is for serve configuration.
 
-As you can see, in this case two services are created - one for the head node to be able to see the
-dashboard and configure the cluster and one for submission of the serve requests.
-
-For the head node service note that the additional port - 52365 is created for serve configuration.
-
-[configmap]: test/job/code.yaml
+[ConfigMap]: test/job/code.yaml
