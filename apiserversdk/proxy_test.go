@@ -13,21 +13,24 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
 var (
-	ln        net.Listener
-	cfg       *rest.Config
-	rayClient *rayclient.RayV1Client
-	k8sClient *k8sclient.CoreV1Client
-	testEnv   *envtest.Environment
-	lastReq   atomic.Pointer[http.Request]
+	ln                    net.Listener
+	cfg                   *rest.Config
+	rayClient             *rayclient.RayV1Client
+	k8sClient             *k8sclient.CoreV1Client
+	k8sClientWithoutProxy *k8sclient.CoreV1Client
+	testEnv               *envtest.Environment
+	lastReq               atomic.Pointer[http.Request]
 )
 
 func TestProxy(t *testing.T) {
@@ -71,6 +74,7 @@ var _ = BeforeSuite(func(_ SpecContext) {
 	proxyCfg := &rest.Config{Host: "http://" + ln.Addr().String()}
 	rayClient = rayclient.NewForConfigOrDie(proxyCfg)
 	k8sClient = k8sclient.NewForConfigOrDie(proxyCfg)
+	k8sClientWithoutProxy = k8sclient.NewForConfigOrDie(cfg)
 })
 
 var _ = AfterSuite(func() {
@@ -143,5 +147,55 @@ var _ = Describe("not match", Ordered, func() {
 	It("List Pods", func() {
 		_, err := k8sClient.Pods("default").List(context.Background(), metav1.ListOptions{})
 		Expect(err).To(MatchError(ContainSubstring("the server could not find the requested resource")))
+	})
+})
+
+var _ = Describe("kuberay service", Ordered, func() {
+	svcName := "head-svc"
+	AfterEach(func() {
+		err := k8sClientWithoutProxy.Services("default").Delete(context.Background(), svcName, metav1.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should allow proxying to KubeRay-labeled service", func() {
+		_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: svcName,
+				Labels: map[string]string{
+					utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
+		// Since envtest doesn't create a full K8s cluster but only the control plane, we cannot actually hit the pod.
+		// So we just check the request and skip checking the error which is always a 404.
+		_, _ = r.DoRaw(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+		Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy/foo/bar"))
+	})
+	It("should reject proxying to service without KubeRay label", func() {
+		_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: svcName,
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
+		_, err = r.DoRaw(context.Background())
+		Expect(err).To(MatchError(ContainSubstring("not a KubeRay service")))
 	})
 })
