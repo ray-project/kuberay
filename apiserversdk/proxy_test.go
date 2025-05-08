@@ -2,6 +2,7 @@ package apiserversdk
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -168,10 +170,9 @@ var _ = Describe("events", Ordered, func() {
 		}
 		testEvent2 := testEvent.DeepCopy()
 		testEvent2.InvolvedObject.APIVersion = ""
-		tmpK8sClient := k8sclient.NewForConfigOrDie(cfg)
-		_, err := tmpK8sClient.Events("default").Create(context.Background(), testEvent, metav1.CreateOptions{})
+		_, err := k8sClientWithoutProxy.Events("default").Create(context.Background(), testEvent, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		_, err = tmpK8sClient.Events("default").Create(context.Background(), testEvent2, metav1.CreateOptions{})
+		_, err = k8sClientWithoutProxy.Events("default").Create(context.Background(), testEvent2, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		events, err := k8sClient.Events("default").List(context.Background(), metav1.ListOptions{})
 		Expect(err).ToNot(HaveOccurred())
@@ -220,7 +221,6 @@ var _ = Describe("kuberay service", Ordered, func() {
 		// Since envtest doesn't create a full K8s cluster but only the control plane, we cannot actually hit the pod.
 		// So we just check the request and skip checking the error which is always a 404.
 		_, _ = r.DoRaw(context.Background())
-		Expect(err).ToNot(HaveOccurred())
 		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
 		Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy/foo/bar"))
 	})
@@ -239,6 +239,10 @@ var _ = Describe("kuberay service", Ordered, func() {
 
 		r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
 		_, err = r.DoRaw(context.Background())
-		Expect(err).To(MatchError(ContainSubstring("not a KubeRay service")))
+		Expect(err).To(HaveOccurred())
+		var statusErr *apierrors.StatusError
+		ok := errors.As(err, &statusErr)
+		Expect(ok).To(BeTrue())
+		Expect(statusErr.Status().Details.Causes[0].Message).To(Equal("kuberay service not found"))
 	})
 })

@@ -43,7 +43,18 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 		return nil, err
 	}
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", kuberayServiceFilterHandler) // allow accessing KubeRay dashboards and job submissions.
+
 	return mux, nil
+}
+
+func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		// Preserve existing field selectors if any
+		q.Set("fieldSelector", strings.Join(append(q["fieldSelector"], selectors...), ","))
+		r.URL.RawQuery = q.Encode()
+		handler.ServeHTTP(w, r)
+	})
 }
 
 func requireKuberayService(baseHandler http.Handler, config *rest.Config) (http.Handler, error) {
@@ -67,24 +78,15 @@ func requireKuberayService(baseHandler http.Handler, config *rest.Config) (http.
 
 		svc, err := clientset.CoreV1().Services(namespace).Get(r.Context(), serviceName, metav1.GetOptions{})
 		if err != nil {
-			http.Error(w, "service not found", http.StatusNotFound)
+			http.Error(w, "kuberay service not found", http.StatusNotFound)
 			return
 		}
+
 		if name, ok := svc.Labels[utils.KubernetesApplicationNameLabelKey]; !ok || name != utils.ApplicationName {
-			http.Error(w, "not a KubeRay service", http.StatusForbidden)
+			http.Error(w, "kuberay service not found", http.StatusNotFound)
 			return
 		}
 
 		baseHandler.ServeHTTP(w, r)
 	}), nil
-}
-
-func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		// Preserve existing field selectors if any
-		q.Set("fieldSelector", strings.Join(append(q["fieldSelector"], selectors...), ","))
-		r.URL.RawQuery = q.Encode()
-		handler.ServeHTTP(w, r)
-	})
 }
