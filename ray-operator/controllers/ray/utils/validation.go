@@ -134,6 +134,16 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+	// InteractiveMode does not support backoffLimit > 1.
+	// When a RayJob fails (e.g., due to a missing script) and retries,
+	// spec.JobId remains set, causing the new job to incorrectly transition
+	// to Running instead of Waiting or Failed.
+	// After discussion, we decided to disallow retries in InteractiveMode
+	// to avoid ambiguous state handling and unintended behavior.
+	// https://github.com/ray-project/kuberay/issues/3525
+	if rayJob.Spec.SubmissionMode == rayv1.InteractiveMode && rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+		return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
+	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {

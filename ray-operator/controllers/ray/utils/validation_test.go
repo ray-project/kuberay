@@ -680,6 +680,33 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "BackoffLimit is incompatible with InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   ptr.To[int32](1),
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "BackoffLimit is 0 and SubmissionMode is InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   ptr.To[int32](0),
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "BackoffLimit is nil and SubmissionMode is InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   nil,
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
