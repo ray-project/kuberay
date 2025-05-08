@@ -356,6 +356,8 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 }
 
 func TestValidateUpdateServiceRequest(t *testing.T) {
+	// A valid `UpdateRayServiceRequest` template for test cases.
+	// Each test clones and modifies a field to verify specific validations.
 	base := &api.UpdateRayServiceRequest{
 		Name:      "a-name",
 		Namespace: "a-namespace",
