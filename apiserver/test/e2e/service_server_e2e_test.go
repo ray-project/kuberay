@@ -293,7 +293,6 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			}
 
 			for _, service := range response.Services {
-				t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
 				key := targetService{namespace: service.Namespace, service: service.Name}
 				seen, exist := gotServices[key]
 
@@ -341,7 +340,6 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		t.Logf("Got %d services in response, expected %d", len(response.Services), totalServices)
 
 		for _, service := range response.Services {
-			t.Logf("Got service: namespace=%s, name=%s", service.Namespace, service.Name)
 			key := targetService{namespace: service.Namespace, service: service.Name}
 			seen, exist := gotServices[key]
 
