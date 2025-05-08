@@ -32,11 +32,11 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
+
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
-	mux.Handle("/apis/ray.io/v1/", handler) // forward KubeRay CR requests.
-	// TODO: add query filters to make sure only KubeRay events are queried.
-	mux.Handle("/api/v1/namespaces/{namespace}/events", handler) // allow querying KubeRay CR events.
+	mux.Handle("/apis/ray.io/v1/", handler)                                                                                    // forward KubeRay CR requests.
+	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
 	kuberayServiceFilterHandler, err := requireKuberayService(handler, config.KubernetesConfig)
 	if err != nil {
@@ -77,4 +77,14 @@ func requireKuberayService(baseHandler http.Handler, config *rest.Config) (http.
 
 		baseHandler.ServeHTTP(w, r)
 	}), nil
+}
+
+func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		// Preserve existing field selectors if any
+		q.Set("fieldSelector", strings.Join(append(q["fieldSelector"], selectors...), ","))
+		r.URL.RawQuery = q.Encode()
+		handler.ServeHTTP(w, r)
+	})
 }

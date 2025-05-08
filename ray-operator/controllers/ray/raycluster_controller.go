@@ -92,10 +92,10 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricCollector *metrics.RayClusterMetricCollector
-	HeadSidecarContainers     []corev1.Container
-	WorkerSidecarContainers   []corev1.Container
-	IsOpenShift               bool
+	RayClusterMetricManager *metrics.RayClusterMetricsManager
+	HeadSidecarContainers   []corev1.Container
+	WorkerSidecarContainers []corev1.Container
+	IsOpenShift             bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -708,8 +708,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
-		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
-		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
+		numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, worker))
+		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", numExpectedWorkerPods, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
 		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName).ToListOptions()...); err != nil {
@@ -791,10 +791,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if worker.NumOfHosts <= 0 {
 			worker.NumOfHosts = 1
 		}
-		numExpectedPods := int(workerReplicas * worker.NumOfHosts)
-		diff := numExpectedPods - len(runningPods.Items)
+		diff := numExpectedWorkerPods - len(runningPods.Items)
 
-		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
+		logger.Info("reconcilePods", "workerReplicas", numExpectedWorkerPods, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
 			// pods need to be added
@@ -1607,22 +1606,25 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	err := r.Status().Update(ctx, newInstance)
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
+	} else {
+		emitRayClusterMetrics(r.options.RayClusterMetricManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 	}
-	collectRayClusterMetrics(r.options.RayClusterMetricCollector, newInstance.Name, newInstance.Namespace, newInstance.Status, originalRayClusterInstance.Status, originalRayClusterInstance.CreationTimestamp.Time)
 
 	return inconsistent, err
 }
 
-// collectRayClusterMetrics records metrics related to the RayCluster.
-func collectRayClusterMetrics(collector *metrics.RayClusterMetricCollector, name, namespace string, newClusterStatus, oldClusterStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
-	if collector == nil {
+func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	if rayClusterMetricsManager == nil {
 		return
 	}
+	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, oldStatus, newStatus, creationTimestamp)
+}
 
-	// Record `kuberay_cluster_provisioned_duration_seconds` metric if just provisioned
-	if meta.IsStatusConditionTrue(newClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
-		!meta.IsStatusConditionTrue(oldClusterStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		collector.ObserveRayClusterProvisionedDuration(name, namespace, time.Since(creationTimestamp).Seconds())
+func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
+	if !meta.IsStatusConditionTrue(oldStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
 	}
 }
 

@@ -58,14 +58,14 @@ func TestRayJob(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Check if the RayCluster created correct number of pods
-			var desiredWorkerReplicas int32
+			var desiredWorkerPods int32
 			if rayCluster.Spec.WorkerGroupSpecs != nil {
 				for _, workerGroupSpec := range rayCluster.Spec.WorkerGroupSpecs {
-					desiredWorkerReplicas += *workerGroupSpec.Replicas
+					desiredWorkerPods += (*workerGroupSpec.Replicas * workerGroupSpec.NumOfHosts)
 				}
 			}
-			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerReplicas)))
-			g.Expect(GetRayCluster(test, namespace.Name, rayCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(desiredWorkerReplicas)))
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(HaveLen(int(desiredWorkerPods)))
+			g.Expect(GetRayCluster(test, namespace.Name, rayCluster.Name)).To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(desiredWorkerPods)))
 
 			// Check if the head pod is ready
 			g.Eventually(HeadPod(test, rayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))

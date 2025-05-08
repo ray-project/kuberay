@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -27,6 +28,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/swagger"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -36,6 +38,7 @@ var (
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
+	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	healthy            int32
 )
 
@@ -54,7 +57,8 @@ func main() {
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	go startRPCServer(resourceManager)
+	klog.Infof("Setting gRPC server timeout to %v", *grpcTimeout)
+	go startRPCServer(resourceManager, *grpcTimeout)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
 	quit := make(chan os.Signal, 1)
@@ -70,7 +74,7 @@ func main() {
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
-func startRPCServer(resourceManager *manager.ResourceManager) {
+func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.Duration) {
 	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)
@@ -86,8 +90,13 @@ func startRPCServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, interceptor.APIServerInterceptor)),
-		grpc.MaxRecvMsgSize(math.MaxInt32))
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			interceptor.TimeoutInterceptor(grpcTimeout),
+			grpc_prometheus.UnaryServerInterceptor,
+			interceptor.APIServerInterceptor,
+		)),
+		grpc.MaxRecvMsgSize(math.MaxInt32),
+	)
 	api.RegisterClusterServiceServer(s, clusterServer)
 	api.RegisterComputeTemplateServiceServer(s, templateServer)
 	api.RegisterRayJobServiceServer(s, jobServer)

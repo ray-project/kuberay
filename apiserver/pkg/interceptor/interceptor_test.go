@@ -7,10 +7,13 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	klog "k8s.io/klog/v2"
 )
 
@@ -20,9 +23,28 @@ type mockHandler struct {
 	called    bool
 }
 
-func (h *mockHandler) Handle(_ context.Context, _ interface{}) (interface{}, error) {
+// Handle simulates the behavior of a gRPC handler with an optional delay.
+// If the delay completes before the context expires, it returns "test_response" along with predefined error.
+// If the context is canceled or the deadline is exceeded before the delay completes,
+// it returns a corresponding gRPC status error instead.
+func (h *mockHandler) Handle(ctx context.Context, _ interface{}, delay time.Duration) (interface{}, error) {
 	h.called = true
-	return "test_response", h.returnErr
+
+	select {
+	case <-time.After(delay):
+		return "test_response", h.returnErr
+	case <-ctx.Done():
+		var grpcCode codes.Code
+		switch ctx.Err() {
+		case context.Canceled:
+			grpcCode = codes.Canceled
+		case context.DeadlineExceeded:
+			grpcCode = codes.DeadlineExceeded
+		default:
+			grpcCode = codes.Unknown
+		}
+		return nil, status.Error(grpcCode, ctx.Err().Error())
+	}
 }
 
 func TestAPIServerInterceptor(t *testing.T) {
@@ -61,7 +83,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 				req,
 				info,
 				func(ctx context.Context, req interface{}) (interface{}, error) {
-					return tt.handler.Handle(ctx, req)
+					return tt.handler.Handle(ctx, req, 0 /*delay*/)
 				},
 			)
 
@@ -96,7 +118,7 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		func(receivedCtx context.Context, req interface{}) (interface{}, error) {
 			// Verify context value is passed through
 			assert.Equal(t, "test_value", receivedCtx.Value(testContextKey("test_key")))
-			return handler.Handle(receivedCtx, req)
+			return handler.Handle(receivedCtx, req, 0 /*delay*/)
 		},
 	)
 }
@@ -153,7 +175,7 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 				"test_request",
 				info,
 				func(receivedCtx context.Context, req interface{}) (interface{}, error) {
-					return handler.Handle(receivedCtx, req)
+					return handler.Handle(receivedCtx, req, 0 /*delay*/)
 				},
 			)
 
@@ -189,6 +211,65 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 			}
 
 			assert.True(t, handler.called, "handler should have been called")
+		})
+	}
+}
+
+func TestTimeoutInterceptor(t *testing.T) {
+	tests := []struct {
+		expectedError  error
+		name           string
+		timeout        time.Duration
+		handlerDelay   time.Duration
+		expectedCalled bool
+	}{
+		{
+			name:           "handler completes before timeout",
+			timeout:        100 * time.Millisecond,
+			handlerDelay:   50 * time.Millisecond,
+			expectedError:  nil,
+			expectedCalled: true,
+		},
+		{
+			name:           "handler exceeds timeout",
+			timeout:        50 * time.Millisecond,
+			handlerDelay:   100 * time.Millisecond,
+			expectedError:  status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
+			expectedCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create test context and request
+			ctx := context.Background()
+			req := "test_request"
+			handler := &mockHandler{}
+
+			// Create the interceptor with the specified timeout
+			interceptor := TimeoutInterceptor(tt.timeout)
+
+			// Call the interceptor
+			resp, err := interceptor(
+				ctx,
+				req,
+				&grpc.UnaryServerInfo{FullMethod: "TestTimeoutMethod"},
+				func(ctx context.Context, req interface{}) (interface{}, error) {
+					return handler.Handle(ctx, req, tt.handlerDelay)
+				},
+			)
+
+			// Verify response and error
+			if tt.expectedError == nil {
+				// Verify handler was called
+				assert.Equal(t, tt.expectedCalled, handler.called, "handler call status should match expected")
+
+				require.NoError(t, err)
+				assert.Equal(t, "test_response", resp, "response should match expected")
+			} else {
+				require.Error(t, err)
+				require.Equal(t, tt.expectedError, err, "A matching error is expected")
+			}
 		})
 	}
 }
