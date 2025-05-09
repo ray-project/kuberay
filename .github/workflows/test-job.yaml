@@ -66,7 +66,7 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Set up Docker
-        uses: docker/setup-docker-action@v4
+        uses: docker-practice/actions-setup-docker@master
 
       - name: Build Docker Image - Apiserver
         run: |
@@ -167,7 +167,7 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Set up Docker
-        uses: docker/setup-docker-action@v4
+        uses: docker-practice/actions-setup-docker@master
 
       - name: Build Docker Image - security proxy
         run: |
@@ -245,7 +245,7 @@ jobs:
       working-directory: ${{env.working-directory}}
 
     - name: Set up Docker
-      uses: docker/setup-docker-action@v4
+      uses: docker-practice/actions-setup-docker@master
 
     - name: Build Docker Image - Operator
       run: |
@@ -343,7 +343,7 @@ jobs:
     name: Python Client Test
     steps:
       - name: Set up Docker
-        uses: docker/setup-docker-action@v4
+        uses: docker-practice/actions-setup-docker@master
 
       - name: Install Kind
         run: |
