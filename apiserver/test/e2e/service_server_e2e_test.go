@@ -282,8 +282,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			require.Nil(t, actualRPCStatus, "No RPC status expected")
 			require.NotNil(t, response, "A response is expected")
 			require.NotEmpty(t, response.Services, "A list of service is required")
-			require.Len(t, response.Services, 1)
-			t.Logf("Got %d services in response, expected %d", len(response.Services), 1)
+			require.Len(t, response.Services, 1, "Got %d services in response, expected %d", len(response.Services), 1)
 
 			pageToken = response.NextPageToken
 			if i == totalServices-1 {
@@ -335,9 +334,8 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.NotEmpty(t, response.Services, "A list of services is required")
-		require.Len(t, response.Services, totalServices)
+		require.Len(t, response.Services, totalServices, "Got %d services in response, expected %d", len(response.Services), totalServices)
 		require.Empty(t, response.NextPageToken, "Page token should be empty")
-		t.Logf("Got %d services in response, expected %d", len(response.Services), totalServices)
 
 		for _, service := range response.Services {
 			key := targetService{namespace: service.Namespace, service: service.Name}
