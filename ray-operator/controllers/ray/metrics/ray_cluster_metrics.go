@@ -31,7 +31,7 @@ func NewRayClusterMetricsManager() *RayClusterMetricsManager {
 		rayClusterHeadPodReady: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "kuberay_cluster_head_pod_ready",
-				Help: "The time, in seconds, when a RayCluster's head pod is ready",
+				Help: "Describes whether the ray cluster is ready to serve requests",
 			},
 			[]string{"name", "namespace", "condition"},
 		),
