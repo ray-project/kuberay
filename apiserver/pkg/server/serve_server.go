@@ -108,8 +108,8 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	}, nil
 }
 
-func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
-	services, err := s.resourceManager.ListAllServices(ctx)
+func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, "" /*namespace*/, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
 	}
@@ -123,7 +123,8 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAl
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListAllRayServicesResponse{
-		Services: model.FromCrdToAPIServices(services, serviceEventMap),
+		Services:      model.FromCrdToAPIServices(services, serviceEventMap),
+		NextPageToken: nextPageToken,
 	}, nil
 }
 

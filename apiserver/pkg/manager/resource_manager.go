@@ -298,24 +298,6 @@ func (r *ResourceManager) ListServices(ctx context.Context, namespace string, pa
 	return rayServices, rayServiceList.Continue, nil
 }
 
-func (r *ResourceManager) ListAllServices(ctx context.Context) ([]*rayv1api.RayService, error) {
-	rayServices := make([]*rayv1api.RayService, 0)
-
-	namespaces, err := r.getKubernetesNamespaceClient().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, util.Wrap(err, "Failed to fetch all Kubernetes namespaces")
-	}
-
-	for _, namespace := range namespaces.Items {
-		servicesByNamespace, _, err := r.ListServices(ctx, namespace.Name, "" /*pageToken*/, 0 /*pageSize*/)
-		if err != nil {
-			return nil, util.Wrap(err, "List All Rayservices failed")
-		}
-		rayServices = append(rayServices, servicesByNamespace...)
-	}
-	return rayServices, nil
-}
-
 func (r *ResourceManager) DeleteService(ctx context.Context, serviceName, namespace string) error {
 	client := r.getRayServiceClient(namespace)
 	service, err := getServiceByName(ctx, client, serviceName)
