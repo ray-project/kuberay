@@ -291,6 +291,10 @@ jobs:
       working-directory: ${{env.working-directory}}
       if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
     - name: Build MultiArch Docker Image and Push on Merge
       uses: docker/build-push-action@v5
       env:
