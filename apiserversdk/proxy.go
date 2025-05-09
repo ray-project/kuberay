@@ -38,11 +38,8 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	mux.Handle("/apis/ray.io/v1/", handler)                                                                                    // forward KubeRay CR requests.
 	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
-	kuberayServiceFilterHandler, err := requireKuberayService(handler, config.KubernetesConfig)
-	if err != nil {
-		return nil, err
-	}
-	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", kuberayServiceFilterHandler) // allow accessing KubeRay dashboards and job submissions.
+	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayService(handler, k8sClient)) // allow accessing KubeRay dashboards and job submissions.
 
 	return mux, nil
 }
@@ -57,36 +54,30 @@ func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	})
 }
 
-func requireKuberayService(baseHandler http.Handler, config *rest.Config) (http.Handler, error) {
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
+// requireKuberayService is a middleware that checks if the request is for a KubeRay service.
+// It verifies that the service exists in the specified namespace and has the label "app.kubernetes.io/name=kuberay".
+// If the service is not found or does not have the correct label, it returns a 404 Not Found error.
+func requireKuberayService(handler http.Handler, k8sClient *kubernetes.Clientset) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) < 7 {
-			http.Error(w, "invalid service proxy URL", http.StatusBadRequest)
-			return
-		}
-		namespace, rawService := parts[4], parts[6]
-		_, serviceName, _, valid := net.SplitSchemeNamePort(rawService)
+		namespace, serviceSchemeNamePort := r.PathValue("namespace"), r.PathValue("service")
+		_, serviceName, _, valid := net.SplitSchemeNamePort(serviceSchemeNamePort)
 		if !valid {
-			http.Error(w, "invalid service proxy URL", http.StatusBadRequest)
+			http.Error(w, "invalid service format: "+serviceSchemeNamePort, http.StatusBadRequest)
 			return
 		}
 
-		svc, err := clientset.CoreV1().Services(namespace).Get(r.Context(), serviceName, metav1.GetOptions{})
+		services, err := k8sClient.CoreV1().Services(namespace).List(r.Context(), metav1.ListOptions{
+			FieldSelector: "metadata.name=" + serviceName,
+			LabelSelector: "app.kubernetes.io/name=" + utils.ApplicationName,
+		})
 		if err != nil {
+			http.Error(w, "failed to list kuberay services", http.StatusInternalServerError)
+			return
+		}
+		if len(services.Items) == 0 {
 			http.Error(w, "kuberay service not found", http.StatusNotFound)
 			return
 		}
-
-		if name, ok := svc.Labels[utils.KubernetesApplicationNameLabelKey]; !ok || name != utils.ApplicationName {
-			http.Error(w, "kuberay service not found", http.StatusNotFound)
-			return
-		}
-
-		baseHandler.ServeHTTP(w, r)
-	}), nil
+		handler.ServeHTTP(w, r)
+	})
 }
