@@ -3,174 +3,151 @@ name: release-image-build
 on:
   workflow_dispatch:
 
+env:
+  REGISTRY: quay.io
+  QUAY_ORG: kuberay
+
 jobs:
+# ────────────────────────────────────────────────────────────
   release_apiserver_image:
-    env:
-      working-directory: ./apiserver
     name: Release APIServer Docker Image
     runs-on: ubuntu-22.04
+    env:
+      working-directory: ./apiserver
     steps:
-
-    - name: Error if not a tag
-      uses: actions/github-script@v7
+    # --- gate: only run on tag ------------------------------
+    - uses: actions/github-script@v7
       if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-      with:
-        script: core.setFailed('This action can only be run on tags')
+      with: { script: core.setFailed('This action can only be run on tags') }
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: v1.22
+    # --- tooling --------------------------------------------
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 0 }
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+    - uses: actions/setup-go@v5
+      with: { go-version: "1.22" }
 
     - name: Extract tag
-      id: tag
       run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
-    - name: Install kubebuilder
-      run: |
-        wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
-        sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
 
     - name: Get revision SHA
       id: vars
-      run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+    # --- build + unit‑test ----------------------------------
     - name: Get dependencies
       run: go mod download
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
     - name: Build
       run: go build ./...
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
     - name: Test
       run: go test ./pkg/... ./cmd/... -race -parallel 4
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
+    # --- multi‑arch image -----------------------------------
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with: { install: true }
 
-    - name: Build Docker Image - Apiserver
-      run: |
-        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
-        docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-
-    - name: Log in to Quay.io
-      uses: docker/login-action@v2
+    - name: Login to Quay.io
+      uses: docker/login-action@v3
       with:
-        registry: quay.io
+        registry: ${{ env.REGISTRY }}
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
-    - name: Push Apiserver to Quay.io
-      run: |
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ env.tag }};
-        docker push quay.io/kuberay/apiserver:${{ env.tag }}
+    - name: Build & Push APIServer (multi‑arch)
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ env.working-directory }}
+        file: ${{ env.working-directory }}/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        provenance: false
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/apiserver:${{ steps.vars.outputs.sha_short }}
+          ${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/apiserver:${{ env.tag }}
+        cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/apiserver:buildcache
+        cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/apiserver:buildcache,mode=max
 
+# ────────────────────────────────────────────────────────────
   release_operator_image:
+    name: Release Operator Docker Image
+    runs-on: ubuntu-22.04
     env:
       working-directory: ./ray-operator
-    name: Release Operator Docker Images
-    runs-on: ubuntu-22.04
     steps:
-
-    - name: Error if not a tag
-      uses: actions/github-script@v7
+    # --- gate: only run on tag ------------------------------
+    - uses: actions/github-script@v7
       if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-      with:
-        script: core.setFailed('This action can only be run on tags')
+      with: { script: core.setFailed('This action can only be run on tags') }
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: v1.22
+    # --- tooling --------------------------------------------
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 0 }
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+    - uses: actions/setup-go@v5
+      with: { go-version: "1.22" }
 
     - name: Extract tag
-      id: tag
       run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
-    - name: Install kubebuilder
-      run: |
-        wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
-        sudo mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
 
     - name: Get revision SHA
       id: vars
-      run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+    # --- build + unit‑test ----------------------------------
     - name: Get dependencies
       run: go mod download
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
     - name: Build
       run: make build
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
     - name: Test
       run: make test
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Operator
-      run: |
-        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
-      working-directory: ${{env.working-directory}}
-
-    - name: Log in to Quay.io
-      uses: docker/login-action@v2
-      with:
-        registry: quay.io
-        username: ${{ secrets.QUAY_USERNAME }}
-        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
-
-    # Build operators inside the gh runner vm directly and then copy the go binaries to docker images using the Dockerfile.buildx
-    - name: Build linux/amd64 Operator go binary
-      env:
-        CGO_ENABLED: 1
-        GOOS: linux
-        GOARCH: amd64
-      run: |
-        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
-      working-directory: ${{env.working-directory}}
+    # --- cross‑compile binaries (optional, keep original) ---
+    - name: Build linux/amd64 Operator binary
+      env: { CGO_ENABLED: 1, GOOS: linux, GOARCH: amd64 }
+      run: CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
+      working-directory: ${{ env.working-directory }}
 
     - name: Build linux/arm64 Operator binary
-      env:
-        CC: aarch64-linux-gnu-gcc
-        CGO_ENABLED: 1
-        GOOS: linux
-        GOARCH: arm64
+      env: { CC: aarch64-linux-gnu-gcc, CGO_ENABLED: 1, GOOS: linux, GOARCH: arm64 }
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         CC=$CC CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
-      working-directory: ${{env.working-directory}}
+      working-directory: ${{ env.working-directory }}
 
-    - name: Build MultiArch Image
-      uses: docker/build-push-action@v5
-      env:
-        PUSH: true
-        REPO_ORG: kuberay
-        REPO_NAME: operator
+    # --- multi‑arch image -----------------------------------
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with: { install: true }
+
+    - name: Login to Quay.io
+      uses: docker/login-action@v3
       with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+    - name: Build & Push Operator (multi‑arch)
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ env.working-directory }}
+        file: ${{ env.working-directory }}/Dockerfile.buildx
         platforms: linux/amd64,linux/arm64
-        context: ${{env.working-directory}}
-        file: ${{env.working-directory}}/Dockerfile.buildx
-        push: ${{env.PUSH}}
+        push: true
         provenance: false
         tags: |
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
-          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}
+          ${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/operator:${{ steps.vars.outputs.sha_short }}
+          ${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/operator:${{ env.tag }}
+        cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/operator:buildcache
+        cache-to:   type=registry,ref=${{ env.REGISTRY }}/${{ env.QUAY_ORG }}/operator:buildcache,mode=max
