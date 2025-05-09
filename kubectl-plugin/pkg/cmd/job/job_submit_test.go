@@ -36,40 +36,60 @@ func TestRayJobSubmitValidate(t *testing.T) {
 
 	fakeDir := t.TempDir()
 
-	rayYaml := `apiVersion: ray.io/v1
-kind: RayJob
-metadata:
-  name: rayjob-sample
-spec:
-  submissionMode: 'InteractiveMode'`
-
-	rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
-
-	file, err := os.Create(rayJobYamlPath)
-	require.NoError(t, err)
-
-	_, err = file.Write([]byte(rayYaml))
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
-		opts        *SubmitJobOptions
+		yamlContent string
 		expectError string
 	}{
 		{
 			name: "Successful submit job validation with RayJob",
-			opts: &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
-			},
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'`,
+		},
+		{
+			name: "BackoffLimit co-exist with InteractiveMode",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'
+  backoffLimit: 1`,
+			expectError: "BackoffLimit is incompatible with InteractiveMode",
+		},
+		{
+			name: "BackoffLimit is set to 0 with InteractiveMode",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'
+  backoffLimit: 0`,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
+			rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
+
+			file, err := os.Create(rayJobYamlPath)
+			require.NoError(t, err)
+			_, err = file.Write([]byte(tc.yamlContent))
+			require.NoError(t, err)
+
+			opts := &SubmitJobOptions{
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				fileName:   rayJobYamlPath,
+				workingDir: "Fake/File/Path",
+			}
+
+			err = opts.Validate()
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {

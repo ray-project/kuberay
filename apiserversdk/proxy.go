@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"k8s.io/client-go/rest"
 )
@@ -26,12 +27,22 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
+
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
-	mux.Handle("/apis/ray.io/v1/", handler) // forward KubeRay CR requests.
-	// TODO: add query filters to make sure only KubeRay events are queried.
-	mux.Handle("/api/v1/namespaces/{namespace}/events", handler) // allow querying KubeRay CR events.
+	mux.Handle("/apis/ray.io/v1/", handler)                                                                                    // forward KubeRay CR requests.
+	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 	// TODO: check whether the service belongs to KubeRay first.
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", handler) // allow accessing KubeRay dashboards and job submissions.
 	return mux, nil
+}
+
+func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		// Preserve existing field selectors if any
+		q.Set("fieldSelector", strings.Join(append(q["fieldSelector"], selectors...), ","))
+		r.URL.RawQuery = q.Encode()
+		handler.ServeHTTP(w, r)
+	})
 }
