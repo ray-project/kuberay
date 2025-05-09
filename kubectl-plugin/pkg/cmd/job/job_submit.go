@@ -3,13 +3,13 @@ package job
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +35,8 @@ const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
 	portforwardtimeout = 60.0
+	jobIDTimeout       = 60.0
+	jobIDPollInterval  = 1.0
 )
 
 type SubmitJobOptions struct {
@@ -71,6 +73,13 @@ type SubmitJobOptions struct {
 	noWait             bool
 	dryRun             bool
 	verbose            bool
+}
+
+type JobInfo struct {
+	SubmissionID   string  `json:"submission_id"`
+	Entrypoint     string  `json:"entrypoint"`
+	Type           string  `json:"type"`
+	SubmissionTime float64 `json:"start_time"`
 }
 
 var (
@@ -448,7 +457,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.submissionID != "" {
 		rayJobID = options.submissionID
 	}
-	// Make channel for retrieving rayJobID from output
+	// Create a channel to receive rayJobID from the API
 	rayJobIDChan := make(chan string)
 
 	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
@@ -456,15 +465,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	go func() {
 		for {
 			currStdToken := rayCmdStdOutScanner.Text()
-			// Running under assumption that scanner does not break up ray job name
-			if currStdToken != "" && rayJobID == "" && strings.Contains(currStdToken, "raysubmit") {
-				regexExp := regexp.MustCompile(`'([^']*raysubmit[^']*)'`)
-				// Search for RayJob name. Returns at least two string, first one has single quotes and second string does not have single quotes
-				match := regexExp.FindStringSubmatch(currStdToken)
-				if len(match) > 1 {
-					rayJobIDChan <- match[1]
-				}
-			}
 			if currStdToken != "" {
 				fmt.Println(currStdToken)
 			}
@@ -484,6 +484,27 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			if !scanNotDone {
 				break
 			}
+		}
+	}()
+
+	// Poll the API for the rayJobID
+	go func() {
+		pollStart := time.Now()
+		for {
+			jobID, err := options.getJobIDViaAPI(ctx)
+			if err == nil {
+				rayJobIDChan <- jobID
+				break
+			}
+			if time.Since(pollStart).Seconds() > jobIDTimeout {
+				if killErr := cmd.Process.Kill(); killErr != nil {
+					fmt.Printf("Failed to kill process: %v\n", killErr)
+				}
+				fmt.Println("Failed to get job ID from API")
+				break
+			}
+			sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
+			time.Sleep(sleepDur)
 		}
 	}()
 
@@ -568,6 +589,42 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	raySubmitCmd = append(raySubmitCmd, entryPointSanitized...)
 
 	return raySubmitCmd, nil
+}
+
+// Get the job ID from the dashboard API
+func (options *SubmitJobOptions) getJobIDViaAPI(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr+"/api/jobs/", nil)
+	if err != nil {
+		return "", fmt.Errorf("create request for /api/jobs/: %w", err)
+	}
+
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET /api/jobs/: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("jobs list API returned status %d", resp.StatusCode)
+	}
+
+	var jobs []JobInfo
+	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
+		return "", fmt.Errorf("decode jobs list: %w", err)
+	}
+	if len(jobs) == 0 {
+		return "", fmt.Errorf("no jobs returned")
+	}
+
+	// Basically, there is only one job in the list, so we can just return the first one.
+	for _, j := range jobs {
+		if j.Type == "SUBMISSION" && j.Entrypoint == options.entryPoint {
+			return j.SubmissionID, nil
+		}
+	}
+	return "", fmt.Errorf("no matching submission job found")
 }
 
 // Decode RayJob YAML if we decide to submit job using kube client
