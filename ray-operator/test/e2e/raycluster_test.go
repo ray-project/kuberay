@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"os/exec"
 	"testing"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -203,9 +203,8 @@ func TestRayClusterScalingDown(t *testing.T) {
 
 	LogWithTimestamp(test.T(), "Removing finalizers from pods")
 	for _, pod := range allPods {
-		//nolint:gosec // pod name is safe
-		cmd := exec.Command("kubectl", "patch", "--namespace", namespace.Name, "pod", pod.Name, "-p", `{"metadata":{"finalizers":[]}}`, "--type=merge")
-		err = cmd.Run()
+		patchBytes := []byte(`{"metadata":{"finalizers":[]}}`)
+		_, err := test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), pod.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 		g.Expect(err).NotTo(HaveOccurred(), "Failed to remove finalizer from pod %s/%s", namespace.Name, pod.Name)
 	}
 }
