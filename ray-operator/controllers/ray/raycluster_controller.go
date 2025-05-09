@@ -1621,6 +1621,7 @@ func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsMa
 		return
 	}
 	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, oldStatus, newStatus, creationTimestamp)
+	emitRayClusterHeadPodReady(rayClusterMetricsManager, clusterName, namespace, newStatus)
 }
 
 func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
@@ -1629,6 +1630,11 @@ func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClus
 		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
 		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
 	}
+}
+
+func emitRayClusterHeadPodReady(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, newStatus rayv1.RayClusterStatus) {
+	ready := meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.HeadPodReady))
+	RayClusterMetricsObserver.ObserveRayClusterHeadPodReady(clusterName, namespace, ready)
 }
 
 // sumGPUs sums the GPUs in the given resource list.

@@ -39,6 +39,18 @@ func (m *MockRayClusterMetricsObserver) EXPECT() *MockRayClusterMetricsObserverM
 	return m.recorder
 }
 
+// ObserveRayClusterHeadPodReady mocks base method.
+func (m *MockRayClusterMetricsObserver) ObserveRayClusterHeadPodReady(name, namespace string, ready bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ObserveRayClusterHeadPodReady", name, namespace, ready)
+}
+
+// ObserveRayClusterHeadPodReady indicates an expected call of ObserveRayClusterHeadPodReady.
+func (mr *MockRayClusterMetricsObserverMockRecorder) ObserveRayClusterHeadPodReady(name, namespace, ready any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObserveRayClusterHeadPodReady", reflect.TypeOf((*MockRayClusterMetricsObserver)(nil).ObserveRayClusterHeadPodReady), name, namespace, ready)
+}
+
 // ObserveRayClusterProvisionedDuration mocks base method.
 func (m *MockRayClusterMetricsObserver) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
 	m.ctrl.T.Helper()
