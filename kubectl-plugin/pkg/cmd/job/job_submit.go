@@ -76,10 +76,9 @@ type SubmitJobOptions struct {
 }
 
 type JobInfo struct {
-	SubmissionID   string  `json:"submission_id"`
-	Entrypoint     string  `json:"entrypoint"`
-	Type           string  `json:"type"`
-	SubmissionTime float64 `json:"start_time"`
+	SubmissionID string `json:"submission_id"`
+	Entrypoint   string `json:"entrypoint"`
+	Type         string `json:"type"`
 }
 
 var (
