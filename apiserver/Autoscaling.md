@@ -145,18 +145,13 @@ trigger a scale-up and launch a new worker pod.
 
 ### Validate that RayCluster is deployed correctly
 
-Run:
+Run following command to get list of pods running. You should see something like below:
 
-```shell
+```sh
 kubectl get pods
-```
-
-You should get something like this:
-
-```shell
-NAME                                READY   STATUS    RESTARTS   AGE
-kuberay-operator-545586d46c-f9grr   1/1     Running   0          49m
-test-cluster-head                   2/2     Running   0          3m1s
+# NAME                                READY   STATUS    RESTARTS   AGE
+# kuberay-operator-545586d46c-f9grr   1/1     Running   0          49m
+# test-cluster-head                   2/2     Running   0          3m1s
 ```
 
 Note that there is no worker for `test-cluster` as we set its initial replicas to 0. You
