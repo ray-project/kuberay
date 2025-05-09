@@ -528,6 +528,21 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("Error occurred with Ray job submit: %w", err)
 	}
+	// Check if the job is finished
+	watcher, err := k8sClients.RayClient().RayV1().
+		RayJobs(options.namespace).
+		Watch(ctx, v1.ListOptions{
+			FieldSelector: "metadata.name=" + options.RayJob.GetName(),
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to watch RayJob: %w", err)
+	}
+	for event := range watcher.ResultChan() {
+		job := event.Object.(*rayv1.RayJob)
+		if job.Status.JobStatus == "SUCCEEDED" {
+			break
+		}
+	}
 	return nil
 }
 
