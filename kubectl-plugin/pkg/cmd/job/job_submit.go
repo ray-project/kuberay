@@ -526,6 +526,10 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("Error occurred with Ray job submit: %w", err)
 	}
+	if options.noWait {
+		fmt.Printf("Ray job submitted with ID %s\n", rayJobID)
+		return nil
+	}
 	// Wait for the Ray job to finish
 	watcher, err := k8sClients.RayClient().RayV1().
 		RayJobs(options.namespace).
