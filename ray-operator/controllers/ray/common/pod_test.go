@@ -1635,6 +1635,17 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			expected: "ray start  --num-gpus=1 ",
 		},
 		{
+			name:           "WorkerNode with MIG GPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"nvidia.com/mig-2g.32gb": resource.MustParse("1"),
+				},
+			},
+			expected: "ray start  --num-gpus=1 ",
+		},
+		{
 			name:           "WorkerNode with TPU",
 			nodeType:       rayv1.WorkerNode,
 			rayStartParams: map[string]string{},
@@ -1745,6 +1756,52 @@ func TestGenerateRayStartCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsGPUResourceKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		resourceKey string
+		expected    bool
+	}{
+		{
+			name:        "nvidia gpu",
+			resourceKey: "nvidia.com/gpu",
+			expected:    true,
+		},
+		{
+			name:        "amd gpu",
+			resourceKey: "amd.com/gpu",
+			expected:    true,
+		},
+		{
+			name:        "nvidia MIG",
+			resourceKey: "nvidia.com/mig-12g.128gb",
+			expected:    true,
+		},
+		{
+			name:        "nvidia MIG bad format",
+			resourceKey: "nvidia.com/gpu-mig-12g.128gb",
+			expected:    false,
+		},
+		{
+			name:        "cpu",
+			resourceKey: "cpu",
+			expected:    false,
+		},
+		{
+			name:        "memory",
+			resourceKey: "memory",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isGPUResourceKey(tt.resourceKey)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
