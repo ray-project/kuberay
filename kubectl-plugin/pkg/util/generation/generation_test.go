@@ -62,6 +62,9 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 				},
 			},
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 	}
 
 	result := testRayClusterConfig.GenerateRayClusterApplyConfig()
@@ -78,7 +81,8 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 			Annotations: annotations,
 		},
 		Spec: &rayv1ac.RayClusterSpecApplyConfiguration{
-			RayVersion: ptr.To(util.RayVersion),
+			EnableInTreeAutoscaling: ptr.To(true),
+			RayVersion:              ptr.To(util.RayVersion),
 			HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
 				RayStartParams: map[string]string{"dashboard-host": "1.2.3.4", "num-cpus": "0"},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
@@ -112,8 +116,15 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 										Name:          ptr.To("client"),
 									},
 								},
+								Env: []corev1ac.EnvVarApplyConfiguration{
+									{
+										Name:  ptr.To("RAY_enable_autoscaler_v2"),
+										Value: ptr.To("1"),
+									},
+								},
 							},
 						},
+						RestartPolicy: ptr.To(corev1.RestartPolicyNever),
 					},
 				},
 			},
@@ -144,7 +155,8 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 									},
 								},
 							},
-							NodeSelector: map[string]string{"app": "ray", "env": "dev"},
+							NodeSelector:  map[string]string{"app": "ray", "env": "dev"},
+							RestartPolicy: ptr.To(corev1.RestartPolicyNever),
 						},
 					},
 				},
@@ -281,6 +293,9 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			"american": "goldfinch",
 			"piping":   "plover",
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV1,
+		},
 		RayVersion: ptr.To(util.RayVersion),
 		Image:      ptr.To(util.RayImage),
 		Head: &Head{
@@ -316,6 +331,7 @@ metadata:
   name: test-ray-cluster
   namespace: default
 spec:
+  enableInTreeAutoscaling: true
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
@@ -434,6 +450,9 @@ func TestGenerateResources(t *testing.T) {
 
 func TestGenerateRayClusterSpec(t *testing.T) {
 	testRayClusterConfig := RayClusterConfig{
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 		RayVersion:     ptr.To("1.2.3"),
 		Image:          ptr.To("rayproject/ray:1.2.3"),
 		ServiceAccount: ptr.To("my-service-account"),
@@ -474,7 +493,8 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	}
 
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
-		RayVersion: ptr.To("1.2.3"),
+		EnableInTreeAutoscaling: ptr.To(true),
+		RayVersion:              ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
 			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
@@ -511,12 +531,19 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 									Name:          ptr.To("client"),
 								},
 							},
+							Env: []corev1ac.EnvVarApplyConfiguration{
+								{
+									Name:  ptr.To("RAY_enable_autoscaler_v2"),
+									Value: ptr.To("1"),
+								},
+							},
 						},
 					},
 					NodeSelector: map[string]string{
 						"head-selector1": "foo",
 						"head-selector2": "bar",
 					},
+					RestartPolicy: ptr.To(corev1.RestartPolicyNever),
 				},
 			},
 		},
@@ -548,6 +575,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 							"worker-selector1": "baz",
 							"worker-selector2": "qux",
 						},
+						RestartPolicy: ptr.To(corev1.RestartPolicyNever),
 					},
 				},
 			},
@@ -574,6 +602,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 								},
 							},
 						},
+						RestartPolicy: ptr.To(corev1.RestartPolicyNever),
 					},
 				},
 			},

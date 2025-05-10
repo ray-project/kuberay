@@ -214,6 +214,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		workerMemory: "1Gi",
 		workerGPU:    "1",
 		workerTPU:    "0",
+		autoscaler:   generation.AutoscalerV2,
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
@@ -268,6 +269,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 				"--worker-node-selectors", fmt.Sprintf("app=ray,env=dev,%s=tpu-v5,%s=2x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
 				"--labels", "app=ray,env=dev",
 				"--annotations", "ttl-hours=24,owner=chthulu",
+				"--autoscaler", "v2",
 				"--dry-run",
 				"--wait",
 				"--timeout", "10s",
