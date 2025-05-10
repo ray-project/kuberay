@@ -233,7 +233,7 @@ func main() {
 	var rayClusterMetricManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	if config.EnableMetrics {
-		rayClusterMetricManager = metrics.NewRayClusterMetricsManager()
+		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(utils.NewRayclusterLister(mgr.GetClient()))
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricManager,

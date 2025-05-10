@@ -16,6 +16,7 @@ COPY controllers/ controllers/
 COPY pkg/features pkg/features
 COPY pkg/utils pkg/utils
 COPY pkg/webhooks pkg/webhooks
+COPY pkg/client pkg/client
 
 # Build
 USER root
