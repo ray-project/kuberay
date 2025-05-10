@@ -90,12 +90,12 @@
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Build and start apiserver
     - pushd ../apiserver
-    - KIND_CLUSTER_NAME=kind KIND=kind make install
+    - KIND_CLUSTER_NAME=kind KIND=kind make install-e2e
     - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
     # Run e2e tests and print KubeRay api server logs if tests fail
     - echo "--- START:Running e2e apiserver (nightly operator) tests"
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - E2E_API_SERVER_URL="http://docker:31888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T - && exit 1)
+    - E2E_API_SERVER_URL="http://localhost:8888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T - && exit 1)
     - echo "--- END:Apiserver e2e (nightly operator) tests finished"

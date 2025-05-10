@@ -59,6 +59,10 @@ help: ## Display this help.
 .PHONY: start-local-apiserver
 start-local-apiserver: operator-image cluster load-operator-image deploy-operator install ## Build and start apiserver from scratch.
 
+# Build and start apiserver and curl from scratch.
+.PHONY: start-local-apiserver-e2e
+start-local-apiserver-e2e: operator-image cluster load-operator-image deploy-operator install-e2e
+
 .PHONY: clear-local-apiserver
 clear-local-apiserver: clean-cluster ## Clear local apiserver.
 
@@ -111,7 +115,7 @@ e2e-test: ## Run end to end tests using a pre-exiting cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 .PHONY: local-e2e-test
-local-e2e-test: start-local-apiserver load-ray-test-image e2e-test clean-cluster ## Run end to end tests on a newly created kind cluster with all components deployed.
+local-e2e-test: start-local-apiserver-e2e load-ray-test-image e2e-test clean-cluster ## Run end to end tests on a newly created kind cluster with all components deployed.
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
@@ -176,6 +180,9 @@ load-ray-test-image: ## Load the ray test images.
 docker-image: test ## Build image for the api server.
 	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
+curl-docker-image: test ## Build image for the api server.
+	$(ENGINE) build -t ${IMG} -f Dockerfile ..
+
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
@@ -185,9 +192,19 @@ install: kustomize docker-image load-image  ## Install the kuberay api server wi
 	cd deploy/local/insecure && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
+# Install apiserver and curl for e2e test
+.PHONY: install-e2e
+install-e2e: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
+	cd deploy/local/e2e && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
+	$(KUSTOMIZE) build deploy/local/e2e | kubectl create -f -
+
 .PHONY: uninstall
 uninstall: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
+
+.PHONY: uninstall-e2e
+uninstall-e2e: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build deploy/local/e2e | kubectl delete -f -
 
 .PHONY: install-secure
 install-secure: kustomize docker-image security-proxy-image load-image load-security-proxy-image  ## Install the kuberay api server with security to the K8s cluster specified in ~/.kube/config.
