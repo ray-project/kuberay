@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD013 -->
-# Securing API server
+# Setup API Server with Security
 
 Currently, the KubeRay API server deployed on a publicly accessible cluster is directly exposed to the internet with no authentication/authorization. To protect its endpoint we need to introduce security.
 The solution is based on the architecture below:

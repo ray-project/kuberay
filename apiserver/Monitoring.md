@@ -1,4 +1,4 @@
-# Monitoring of the API server and created Ray clusters
+# Monitoring of the API server and created RayClusters
 
 In order to ensure a proper functioning of the API server and created RayClusters, it is
 typically necessary to monitor them. This document describes how to monitor both API
