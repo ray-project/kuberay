@@ -93,3 +93,13 @@ spec:
                 cpu: 32
                 memory: 32Gi
                 nvidia.com/gpu: "4"
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hf-token
+type: Opaque
+stringData:
+  hf_token: <your-hf-access-token-value>
