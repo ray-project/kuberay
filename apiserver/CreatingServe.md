@@ -7,7 +7,7 @@ Currently, there are two ways for creating a RayCluster with RayService support:
 2. Directly create cluster with RayServe support (described in this document)
 
 For creating a cluster with RayService support, simply add the following annotation when
-creating hte cluster:
+creating the cluster:
 
 ```json
 "annotations" : {
