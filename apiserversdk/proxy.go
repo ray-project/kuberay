@@ -39,7 +39,12 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
-	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayService(handler, k8sClient)) // allow accessing KubeRay dashboards and job submissions.
+	requireKuberayServiceHandler := requireKuberayService(handler, k8sClient)
+	// This pattern allows accessing KubeRay dashboards and job submissions.
+	// Note: We register both "/proxy" and "/proxy/" to handle requests with and without trailing slashes.
+	// See https://pkg.go.dev/net/http#hdr-Trailing_slash_redirection-ServeMux
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", requireKuberayServiceHandler)
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayServiceHandler)
 
 	return mux, nil
 }

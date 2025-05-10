@@ -196,53 +196,68 @@ var _ = Describe("not match", Ordered, func() {
 
 var _ = Describe("kuberay service", Ordered, func() {
 	svcName := "head-svc"
+
 	AfterEach(func() {
-		err := k8sClientWithoutProxy.Services("default").Delete(context.Background(), svcName, metav1.DeleteOptions{})
-		Expect(err).ToNot(HaveOccurred())
+		_ = k8sClientWithoutProxy.Services("default").Delete(context.Background(), svcName, metav1.DeleteOptions{})
 	})
 
-	It("should allow proxying to KubeRay-labeled service", func() {
-		_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: svcName,
-				Labels: map[string]string{
-					utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+	Context("when a service has the KubeRay label", func() {
+		BeforeEach(func() {
+			_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: svcName,
+					Labels: map[string]string{
+						utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+					},
 				},
-			},
-			Spec: corev1.ServiceSpec{
-				Ports: []corev1.ServicePort{
-					{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
+					},
 				},
-			},
-		}, metav1.CreateOptions{})
-		Expect(err).ToNot(HaveOccurred())
+			}, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-		r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
 		// Since envtest doesn't create a full K8s cluster but only the control plane, we cannot actually hit the pod.
 		// So we just check the request and skip checking the error which is always a 404.
-		_, _ = r.DoRaw(context.Background())
-		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
-		Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy/foo/bar"))
+		It("should allow proxying to KubeRay-labeled service", func() {
+			r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
+			_, _ = r.DoRaw(context.Background()) // Expect 404 due to envtest limitation
+			Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+			Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy/foo/bar"))
+		})
+		It("should allow proxying to KubeRay-labeled service without trailing slash", func() {
+			r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "", nil)
+			_, _ = r.DoRaw(context.Background()) // Expect 404 due to envtest limitation
+			Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+			Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy"))
+		})
 	})
-	It("should reject proxying to service without KubeRay label", func() {
-		_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: svcName,
-			},
-			Spec: corev1.ServiceSpec{
-				Ports: []corev1.ServicePort{
-					{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
-				},
-			},
-		}, metav1.CreateOptions{})
-		Expect(err).ToNot(HaveOccurred())
 
-		r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
-		_, err = r.DoRaw(context.Background())
-		Expect(err).To(HaveOccurred())
-		var statusErr *apierrors.StatusError
-		ok := errors.As(err, &statusErr)
-		Expect(ok).To(BeTrue())
-		Expect(statusErr.Status().Details.Causes[0].Message).To(Equal("kuberay service not found"))
+	Context("when a service lacks the KubeRay label", func() {
+		BeforeEach(func() {
+			_, err := k8sClientWithoutProxy.Services("default").Create(context.Background(), &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: svcName,
+				},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						{Name: "http", Port: 80, TargetPort: intstr.FromInt(80)},
+					},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should reject proxying to service without KubeRay label", func() {
+			r := k8sClient.Services("default").ProxyGet("http", svcName, "80", "foo/bar", nil)
+			_, err := r.DoRaw(context.Background())
+			Expect(err).To(HaveOccurred())
+			var statusErr *apierrors.StatusError
+			ok := errors.As(err, &statusErr)
+			Expect(ok).To(BeTrue())
+			Expect(statusErr.Status().Details.Causes[0].Message).To(Equal("kuberay service not found"))
+		})
 	})
 })
