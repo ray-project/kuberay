@@ -1,7 +1,7 @@
 package util
 
 const (
-	RayVersion = "2.41.0"
+	RayVersion = "2.45.0"
 	RayImage   = "rayproject/ray:" + RayVersion
 
 	RayClusterLabelKey   = "ray.io/cluster"
