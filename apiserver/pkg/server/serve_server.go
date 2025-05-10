@@ -164,7 +164,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 	}
 
 	if request.Service.User == "" {
-		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("User who created the Service is empty. Please specify a valid value.")
 	}
 
 	return ValidateClusterSpec(request.Service.ClusterSpec)
@@ -172,7 +172,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 
 func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 	if request.Name == "" {
-		return util.NewInvalidInputError("Service name is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("Name is empty. Please specify a valid value.")
 	}
 	if request.Namespace == "" {
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
@@ -191,7 +191,7 @@ func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 	}
 
 	if request.Service.User == "" {
-		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("User who updated the Service is empty. Please specify a valid value.")
 	}
 
 	return ValidateClusterSpec(request.Service.ClusterSpec)
