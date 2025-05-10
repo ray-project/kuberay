@@ -19,13 +19,6 @@ We will provide a detailed example on how to create this highly available API Se
 
 Refer to [README](README.md) for setting up KubRay operator and API server.
 
-Alternatively, you could build and deploy the Operator and API server from local repo for
-development purpose.
-
-```shell
-make start-local-apiserver deploy
-```
-
 ## Example
 
 Before going through the example, remove any running RayClusters to ensure a successful

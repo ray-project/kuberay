@@ -8,13 +8,6 @@ run an example.
 
 Refer to [README](README.md) for setting up KubRay operator and API server.
 
-Alternatively, you could build and deploy the Operator and API server from local repo for
-development purpose.
-
-```shell
-make start-local-apiserver deploy
-```
-
 ## Example
 
 This example walks through how to trigger scale-up and scale-down for RayCluster.
