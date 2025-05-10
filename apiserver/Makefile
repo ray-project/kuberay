@@ -163,9 +163,9 @@ endif
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
 ifneq ($(SECURITY_IMAGE_TAG), latest)
-	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
+	$(ENGINE) pull quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 endif
-	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(KIND) load docker-image quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images.
