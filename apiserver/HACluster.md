@@ -289,6 +289,14 @@ kubectl port-forward pod/ha-cluster-head 8265:8265
 You can see one pod marked as "DEAD" in the Cluster pane and the actor in Actors pane
 still running.
 
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+```
+
 [RedisYAML]: test/cluster/redis/redis.yaml
 [Secret]: test/cluster/redis/redis_passwrd.yaml
 [ConfigMap]: test/cluster/code_configmap.yaml

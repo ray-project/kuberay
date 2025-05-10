@@ -73,7 +73,7 @@ Now you can point your browser to `http://localhost:9090/` to get a PromQL panel
 typing `apiserver` in the search bar, and you will see all of the API server metrics in
 Prometheus.
 
-## Monitoring of the Ray Cluster created by the API server
+### Monitoring of the Ray Cluster created by the API server
 
 Ray provides
 [documentation](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
@@ -94,3 +94,13 @@ pane from the top bar, you should be able to see `podMonitor/prometheus-system/r
 
 Also take a look at the Ray [documentation](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
 for additional monitoring features, including Recording rules, Alerts and Grafana integration.
+
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+# Remove prometheus stack from helm
+helm uninstall kube-prometheus-stack -n prometheus-system
+```

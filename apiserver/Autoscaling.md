@@ -221,10 +221,10 @@ kubectl get pods
 
 ### Clean up
 
-Run following command to clean up RayCluster:
-
 ```sh
-kubectl delete raycluster test-cluster
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
 ```
 
 [document]: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html

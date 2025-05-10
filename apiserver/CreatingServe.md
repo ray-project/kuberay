@@ -130,4 +130,12 @@ cluster, the other for submit the serve request.
 
 Note that the 52365 port for head node service is for serve configuration.
 
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+```
+
 [ConfigMap]: test/job/code.yaml

@@ -14,7 +14,12 @@ them via Ingress.
 Note that job submission APIs will only work if you are running API server within Kubernetes
 cluster. Local Development option of the API server will not work.
 
-The first step is to deploy KubeRay operator and API server.
+Before going through the example, remove any running RayClusters to ensure a successful
+run through of the example below.
+
+```sh
+kubectl delete raycluster --all
+```
 
 ### Deploy KubeRay operator and API server
 
@@ -236,6 +241,14 @@ curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-c
 ```
 
 You can validate the job deletion by listing jobs again. You should see an empty list.
+
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+```
 
 [Job Submission APIs]: https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html
 [ConfigMap]: test/job/code.yaml

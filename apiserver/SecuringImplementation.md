@@ -92,3 +92,11 @@ curl --silent -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templa
   "memory": 4
 }'
 ```
+
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+```
