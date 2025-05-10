@@ -17,7 +17,7 @@ You could build and start apiserver from scratch on your local environment in on
 make start-local-apiserver
 ```
 
-apiserver supports HTTP request, so you could easily check whether it's started successfully by issuing two simple curl requests.
+Apiserver supports HTTP request, so you could easily check whether it's started successfully by issuing two simple curl requests.
 
 ```sh
 # Create complete template.
@@ -48,27 +48,9 @@ helm version
 
 #### Install KubeRay Operator
 
-- Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
-
-  ```sh
-    # Install the KubeRay helm repo
-    helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-
-    # Install KubeRay Operator v1.1.0.
-    helm install kuberay-operator kuberay/kuberay-operator --version v1.1.0
-
-    # Check the KubeRay Operator Pod in `default` namespace
-    kubectl get pods
-    # NAME                                             READY   STATUS    RESTARTS   AGE
-    # kuberay-operator-7456c6b69b-t6pt7                1/1     Running   0          172m
-  ```
+Follow [this document](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy) to install the latest stable KubeRay operator.
 
 #### Install KubeRay APIServer
-
-```text
-Please note that examples show here will only work with the nightly builds of the api-server. `v1.0.0` does not yet contain critical fixes
-to the api server that would allow Kuberay Serve endpoints to work properly
-```
 
 - Install a stable version via Helm repository (only supports KubeRay v0.4.0+)
 
@@ -136,7 +118,7 @@ kubectl get pods
 
 After the deployment we may use the `{{baseUrl}}` to access the service. See [swagger support section](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) to get the complete definitions of APIs.
 
-- (default) for nodeport access, use port `31888` for connection
+- (default) for NodePort access, use port `31888` for connection
 
 - for ingress access, you will need to create your own ingress
 
@@ -212,8 +194,18 @@ Kuberay API server has support for Swagger UI. The swagger page can be reached a
 
 - [localhost:31888/swagger-ui](localhost:31888/swagger-ui) for local kind deployments
 - [localhost:8888/swagger-ui](localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
-- `<host name>:31888/swagger-ui` for nodeport deployments
+- `<host name>:31888/swagger-ui` for NodePort deployments
 
 ## HTTP definition endpoints
 
-apiserver supports HTTP requests, for detailed specification checkout [full spec doc](HttpRequestSpec.md).
+Apiserver supports HTTP requests, for detailed specification checkout [full spec doc](HttpRequestSpec.md).
+
+## Advanced Usage
+
+- [Creating Autoscaling clusters using API server](./Autoscaling.md)
+- [Creating a cluster with RayServe support](./CreatingServe.md)
+- [Setting Up a Highly Available Cluster via the API Server](./HACluster.md)
+- [RayJob Submission using API server](./JobSubmission.md)
+- [Monitoring API server and created RayClusters](./Monitoring.md)
+- [Setup API Server with Security](./SecuringImplementation.md)
+- [Different Volumes support for RayCluster by the API server](./Volumes.md)
