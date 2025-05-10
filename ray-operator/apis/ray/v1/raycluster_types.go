@@ -154,6 +154,9 @@ type AutoscalerOptions struct {
 	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
+	// Version is the version of the Ray autoscaler.
+	// +optional
+	Version *Version `json:"version,omitempty"`
 	// Optional list of environment variables to set in the autoscaler container.
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
@@ -167,6 +170,9 @@ type AutoscalerOptions struct {
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative
 type UpscalingMode string
+
+// +kubebuilder:validation:Enum=v1;v2
+type Version string
 
 // The overall state of the Ray cluster.
 type ClusterState string
