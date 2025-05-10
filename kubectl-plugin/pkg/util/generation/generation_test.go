@@ -122,7 +122,7 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 					GroupName:      ptr.To("default-group"),
 					Replicas:       ptr.To(int32(3)),
 					NumOfHosts:     ptr.To(int32(2)),
-					RayStartParams: map[string]string{"metrics-export-port": "8080", "dagon": "azathoth", "shoggoth": "cthulhu"},
+					RayStartParams: map[string]string{"dagon": "azathoth", "shoggoth": "cthulhu"},
 					Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 						Spec: &corev1ac.PodSpecApplyConfiguration{
 							Containers: []corev1ac.ContainerApplyConfiguration{
@@ -176,6 +176,10 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 					Memory:     ptr.To("10Gi"),
 					GPU:        ptr.To("0"),
 					TPU:        ptr.To("0"),
+					RayStartParams: map[string]string{
+						"dagon":    "azathoth",
+						"shoggoth": "cthulhu",
+					},
 				},
 			},
 		},
@@ -198,7 +202,6 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			RayClusterSpec: &rayv1ac.RayClusterSpecApplyConfiguration{
 				RayVersion: ptr.To(util.RayVersion),
 				HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-					RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
 					Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 						Spec: &corev1ac.PodSpecApplyConfiguration{
 							Containers: []corev1ac.ContainerApplyConfiguration{
@@ -240,7 +243,7 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 						GroupName:      ptr.To("default-group"),
 						Replicas:       ptr.To(int32(3)),
 						NumOfHosts:     ptr.To(int32(2)),
-						RayStartParams: map[string]string{"metrics-export-port": "8080"},
+						RayStartParams: map[string]string{"dagon": "azathoth", "shoggoth": "cthulhu"},
 						Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 							Spec: &corev1ac.PodSpecApplyConfiguration{
 								Containers: []corev1ac.ContainerApplyConfiguration{
@@ -287,6 +290,9 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			CPU:    ptr.To("1"),
 			Memory: ptr.To("5Gi"),
 			GPU:    ptr.To("1"),
+			RayStartParams: map[string]string{
+				"num-cpus": "0",
+			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
@@ -318,7 +324,7 @@ metadata:
 spec:
   headGroupSpec:
     rayStartParams:
-      dashboard-host: 0.0.0.0
+      num-cpus: "0"
     template:
       spec:
         containers:
@@ -342,8 +348,6 @@ spec:
   rayVersion: %s
   workerGroupSpecs:
   - groupName: default-group
-    rayStartParams:
-      metrics-export-port: "8080"
     replicas: 3
     numOfHosts: 2
     template:
@@ -459,7 +463,8 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 				GPU:        ptr.To("0"),
 				TPU:        ptr.To("0"),
 				RayStartParams: map[string]string{
-					"metrics-export-port": "8080",
+					"dagon":    "azathoth",
+					"shoggoth": "cthulhu",
 				},
 				NodeSelectors: map[string]string{
 					"worker-selector1": "baz",
@@ -476,7 +481,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
 		RayVersion: ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
+			RayStartParams: map[string]string{"softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 				Spec: &corev1ac.PodSpecApplyConfiguration{
 					ServiceAccountName: ptr.To("my-service-account"),
@@ -522,10 +527,13 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 		},
 		WorkerGroupSpecs: []rayv1ac.WorkerGroupSpecApplyConfiguration{
 			{
-				GroupName:      ptr.To("default-group"),
-				NumOfHosts:     ptr.To(int32(1)),
-				Replicas:       ptr.To(int32(3)),
-				RayStartParams: map[string]string{"metrics-export-port": "8080"},
+				GroupName:  ptr.To("default-group"),
+				NumOfHosts: ptr.To(int32(1)),
+				Replicas:   ptr.To(int32(3)),
+				RayStartParams: map[string]string{
+					"dagon":    "azathoth",
+					"shoggoth": "cthulhu",
+				},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
 						ServiceAccountName: ptr.To("my-service-account"),
@@ -554,9 +562,6 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 			{
 				GroupName: ptr.To("worker-group-2"),
 				Replicas:  ptr.To(int32(0)),
-				RayStartParams: map[string]string{
-					"metrics-export-port": "8080",
-				},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
 						ServiceAccountName: ptr.To("my-service-account"),

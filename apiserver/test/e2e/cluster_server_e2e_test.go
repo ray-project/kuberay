@@ -337,7 +337,6 @@ func TestCreateClusterEndpoint(t *testing.T) {
 							ComputeTemplate: tCtx.GetComputeTemplateName(),
 							Image:           tCtx.GetRayImage(),
 							ServiceType:     "NodePort",
-							RayStartParams:  map[string]string{},
 						},
 						WorkerGroupSpec: []*api.WorkerGroupSpec{},
 					},
