@@ -27,6 +27,7 @@ type KuberayAPIServerClient struct {
 	// Store http request handling function for unit test purpose.
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
+	maxRetry           int
 }
 
 type KuberayAPIServerClientError struct {
@@ -47,7 +48,7 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *KuberayAPIServerClient {
+func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry int) *KuberayAPIServerClient {
 	client := &KuberayAPIServerClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
@@ -65,6 +66,7 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 			DiscardUnknown: false,
 			Resolver:       nil,
 		},
+		maxRetry: maxRetry,
 	}
 	client.executeHttpRequest = client.executeRequest
 	return client
@@ -638,29 +640,49 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 }
 
 func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
-	response, err := krc.httpClient.Do(httpRequest)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
-	}
-	defer func() {
-		if closeErr := response.Body.Close(); closeErr != nil {
-			klog.Errorf("Failed to close http response body because %+v", closeErr)
-		}
-	}()
-	bodyBytes, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read response body bytes: %w", err)
-	}
-	if response.StatusCode != http.StatusOK {
-		status, err := krc.extractStatus(bodyBytes)
+	// Record the last error and status got
+	var lastErr error
+	var lastStatus *rpcStatus.Status
+
+	for attempt := 0; attempt < krc.maxRetry; attempt++ {
+		response, err := krc.httpClient.Do(httpRequest)
 		if err != nil {
-			return nil, nil, err
+			lastStatus = nil
+			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
+			continue
 		}
-		return nil, status, &KuberayAPIServerClientError{
-			HTTPStatusCode: response.StatusCode,
+
+		defer func() {
+			if closeErr := response.Body.Close(); closeErr != nil {
+				klog.Errorf("Failed to close http response body because %+v", closeErr)
+			}
+		}()
+
+		bodyBytes, err := io.ReadAll(response.Body)
+		if err != nil {
+			lastStatus = nil
+			lastErr = fmt.Errorf("failed to read response body bytes: %w", err)
+			continue
 		}
+
+		if response.StatusCode != http.StatusOK {
+			status, err := krc.extractStatus(bodyBytes)
+			if err != nil {
+				lastStatus = nil
+				lastErr = err
+				continue
+			}
+
+			lastStatus = status
+			lastErr = &KuberayAPIServerClientError{
+				HTTPStatusCode: response.StatusCode,
+			}
+			continue
+		}
+
+		return bodyBytes, nil, nil
 	}
-	return bodyBytes, nil, nil
+	return nil, lastStatus, lastErr
 }
 
 func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
