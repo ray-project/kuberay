@@ -37,6 +37,7 @@ const (
 	portforwardtimeout = 60.0
 	jobIDTimeout       = 60.0
 	jobIDPollInterval  = 1.0
+	jobFinishTimeout   = 120.0
 )
 
 type SubmitJobOptions struct {
@@ -496,9 +497,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				break
 			}
 			if time.Since(pollStart).Seconds() > jobIDTimeout {
-				if killErr := cmd.Process.Kill(); killErr != nil {
-					fmt.Printf("Failed to kill process: %v\n", killErr)
-				}
 				fmt.Println("Failed to get job ID from API")
 				break
 			}
@@ -528,22 +526,65 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if err != nil {
 		return fmt.Errorf("Error occurred with Ray job submit: %w", err)
 	}
-	// Check if the job is finished
+	// Wait for the Ray job to finish
 	watcher, err := k8sClients.RayClient().RayV1().
 		RayJobs(options.namespace).
 		Watch(ctx, v1.ListOptions{
 			FieldSelector: "metadata.name=" + options.RayJob.GetName(),
 		})
 	if err != nil {
-		return fmt.Errorf("Failed to watch RayJob: %w", err)
+		return fmt.Errorf("failed to watch RayJob: %w", err)
 	}
-	for event := range watcher.ResultChan() {
-		job := event.Object.(*rayv1.RayJob)
-		if job.Status.JobStatus == "SUCCEEDED" {
-			break
+	defer watcher.Stop()
+
+	fmt.Println("Waiting for job to finish...")
+	timeoutCh := time.After(time.Duration(jobFinishTimeout) * time.Second)
+
+	for {
+		select {
+		case evt, ok := <-watcher.ResultChan():
+			if !ok {
+				fmt.Fprintf(options.ioStreams.ErrOut,
+					"RayJob %s watch ended without a clear terminal state\n", options.RayJob.GetName())
+				return nil
+			}
+
+			job, ok := evt.Object.(*rayv1.RayJob)
+			if !ok {
+				fmt.Fprintf(options.ioStreams.ErrOut, "unexpected watch event type %T\n", evt.Object)
+				continue
+			}
+
+			status := job.Status.JobStatus
+			jobID := job.Status.JobId
+			if jobID == "" {
+				jobID = "unknown"
+			}
+			fmt.Printf("Current status: %s (RayJob: %s, JobID: %s)\n",
+				status, job.GetName(), jobID)
+
+			switch status {
+			case rayv1.JobStatusSucceeded, rayv1.JobStatusStopped:
+				return nil
+			case rayv1.JobStatusFailed:
+				if msg := job.Status.Message; msg != "" {
+					return fmt.Errorf("job failed: %s", msg)
+				}
+				return fmt.Errorf("job failed with status %s", status)
+			default:
+				fmt.Printf("Job is in state %s\n", status)
+			}
+
+		case <-timeoutCh:
+			fmt.Printf("Deleting RayJob %s due to timeout...\n", options.RayJob.GetName())
+			if err := k8sClients.RayClient().RayV1().
+				RayJobs(options.namespace).
+				Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{}); err != nil {
+				return fmt.Errorf("failed to clean up RayJob after timeout: %w", err)
+			}
+			return fmt.Errorf("timed out waiting for job to finish")
 		}
 	}
-	return nil
 }
 
 func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
