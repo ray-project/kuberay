@@ -232,6 +232,18 @@ var _ = Describe("kuberay service", Ordered, func() {
 			_, _ = r.DoRaw(context.Background()) // Expect 404 due to envtest limitation
 			Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
 			Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy"))
+
+			// Also test Post method to ensure trailing slash issue is handled correctly
+			restClient := k8sClient.RESTClient()
+			_, _ = restClient.Post().
+				Namespace("default").
+				Resource("services").
+				Name("http:head-svc:80").
+				SubResource("proxy").
+				DoRaw(context.Background())
+
+			Expect(lastReq.Load().Method).To(Equal(http.MethodPost))
+			Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy"))
 		})
 	})
 
