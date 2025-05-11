@@ -168,9 +168,9 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 }'
 ```
 
-The `detached_actor.py` file is defined in the [ConfigMap] we installed earlier, which
-requires `num_cpus=1`. Recall that initially there is no worker pod exists, RayCluster
-needs to scale up a worker for running this actor.
+The `detached_actor.py` file is defined in the [ConfigMap] we installed earlier and
+mounted to the head node, which requires `num_cpus=1`. Recall that initially there is no
+worker pod exists, RayCluster needs to scale up a worker for running this actor.
 
 Check if a worker is created. You can see a worker `test-cluster-small-wg-worker` spins
 up.

@@ -240,7 +240,8 @@ exists and functions after the head node deletion and restoration, we can confir
 GCS data is restored correctly.
 
 Run following command for creating a detached actor. Please change `ha-cluster-head` to
-your head node's name:
+your head node's name. Note that the `detached_actor.py` file is defined in the
+[ConfigMap] we installed earlier and mounted to the head node:
 
 ```sh
 kubectl exec -it ha-cluster-head -- python3 /home/ray/samples/detached_actor.py

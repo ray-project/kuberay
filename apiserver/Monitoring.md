@@ -2,7 +2,7 @@
 
 In order to ensure a proper functioning of the API server and created RayClusters, it is
 typically necessary to monitor them. This document describes how to monitor both API
-server and created clusters with Prometheus and Grafana
+server and created clusters with Prometheus and Grafana.
 
 Current implementation of the API server provides a flag `collectMetricsFlag` that defines whether to collect and
 expose Prometheus metrics, which is by default set to `true`. To disable metrics collection, this flag needs to

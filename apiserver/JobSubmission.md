@@ -204,7 +204,8 @@ This should return the list of the submissions, that looks as follows:
 ```json
 {
    "submissions":[
-      { "entrypoint":"python /home/ray/samples/sample_code.py",
+      {
+         "entrypoint":"python /home/ray/samples/sample_code.py",
          "jobId":"02000000",
          "submissionId":"raysubmit_KWZLwme56esG3Wcr",
          "status":"SUCCEEDED",
