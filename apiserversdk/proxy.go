@@ -40,8 +40,8 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
 	requireKuberayServiceHandler := requireKuberayService(handler, k8sClient)
-	// This pattern allows accessing KubeRay dashboards and job submissions.
-	// Note: We register both "/proxy" and "/proxy/" to handle requests with and without trailing slashes.
+	// These two patterns allow accessing KubeRay dashboards and job submissions.
+	// Note: We also register "/proxy" to handle requests without trailing slashes.
 	// See https://pkg.go.dev/net/http#hdr-Trailing_slash_redirection-ServeMux
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", requireKuberayServiceHandler)
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayServiceHandler)
@@ -59,8 +59,7 @@ func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	})
 }
 
-// requireKuberayService is a middleware that checks if the request is for a KubeRay service.
-// It verifies that the service exists in the specified namespace and has the label "app.kubernetes.io/name=kuberay".
+// requireKuberayService verifies that the requested service has the label "app.kubernetes.io/name=kuberay".
 // If the service is not found or does not have the correct label, it returns a 404 Not Found error.
 func requireKuberayService(handler http.Handler, k8sClient *kubernetes.Clientset) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
