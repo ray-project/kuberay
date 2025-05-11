@@ -545,13 +545,16 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas*numOfHosts)
 }
 
-func TestCalculateMinReplicas(t *testing.T) {
+func TestCalculateReplicas(t *testing.T) {
 	suspend := true
 
 	tests := []struct {
 		name     string
 		specs    []rayv1.WorkerGroupSpec
-		expected int32
+		expected struct {
+			minReplicas int32
+			maxReplicas int32
+		}
 	}{
 		{
 			name: "Single group with one host",
@@ -559,9 +562,16 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 2,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 2,
+				maxReplicas: 3,
+			},
 		},
 		{
 			name: "Single group with four hosts",
@@ -569,9 +579,16 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  4,
 					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 8,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 8,
+				maxReplicas: 12,
+			},
 		},
 		{
 			name: "Two worker groups: one with a single host, one with two hosts",
@@ -579,13 +596,21 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](4),
+					MaxReplicas: ptr.To[int32](4),
 				},
 				{
 					NumOfHosts:  2,
 					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 10,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 10,
+				maxReplicas: 10,
+			},
 		},
 		{
 			name: "Two groups with suspended",
@@ -593,87 +618,23 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](3),
 					Suspend:     &suspend,
 				},
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](1),
-					Suspend:     &suspend,
-				},
-			},
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cluster := &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					WorkerGroupSpecs: tt.specs,
-				},
-			}
-			assert.Equal(t, tt.expected, CalculateMinReplicas(cluster))
-		})
-	}
-}
-
-func TestCalculateMaxReplicas(t *testing.T) {
-	suspend := true
-
-	tests := []struct {
-		name     string
-		specs    []rayv1.WorkerGroupSpec
-		expected int32
-	}{
-		{
-			name: "Single group with one host",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 3,
-		},
-		{
-			name: "Single group with four hosts",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  4,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 12,
-		},
-		{
-			name: "Two worker groups: one with a single host, one with two hosts",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](4),
-				},
-				{
-					NumOfHosts:  2,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 10,
-		},
-		{
-			name: "Two groups with suspended",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](3),
-					Suspend:     &suspend,
-				},
-				{
-					NumOfHosts:  1,
 					MaxReplicas: ptr.To[int32](1),
 					Suspend:     &suspend,
 				},
 			},
-			expected: 0,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 0,
+				maxReplicas: 0,
+			},
 		},
 	}
 
@@ -684,7 +645,11 @@ func TestCalculateMaxReplicas(t *testing.T) {
 					WorkerGroupSpecs: tt.specs,
 				},
 			}
-			assert.Equal(t, tt.expected, CalculateMaxReplicas(cluster))
+
+			// Check min replicas
+			assert.Equal(t, tt.expected.minReplicas, CalculateMinReplicas(cluster))
+			// Check max replicas
+			assert.Equal(t, tt.expected.maxReplicas, CalculateMaxReplicas(cluster))
 		})
 	}
 }
