@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -144,39 +143,37 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
+	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
 		test.Ctx(),
 		rayService,
 		metav1.UpdateOptions{},
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	timeout := time.NewTimer(TestTimeoutMedium)
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer func() {
-		ticker.Stop()
-		timeout.Stop()
-	}()
+	updateTimestamp := rayService.Status.LastUpdateTime
 
-	for {
-		select {
-		case <-timeout.C:
-			g.Expect(fmt.Sprintf("Time out after %v", TestTimeoutMedium)).To(BeEmpty())
-		case <-ticker.C:
+	// Wait active RayCluster has been terminated
+	g.Eventually(func() string {
+		_, err := GetRayCluster(test, activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)
+		if err == nil {
+			return ""
+		}
+		return err.Error()
+	}, TestTimeoutMedium).Should(ContainSubstring(fmt.Sprintf("rayclusters.ray.io \"%s\" not found", activeRayClusterBeforeUpdate.Name)))
+
+	events, err := RayServiceEvents(test, rayService)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// event UpdatedServeApplications or FailedToUpdateServeApplications should not occur on activeRayClusterBeforeUpdate after RayService update.
+	for _, event := range events {
+		if event.CreationTimestamp.Before(updateTimestamp) {
+			continue
 		}
 
-		stdout, _, err := CurlRayClusterDashboard(test, activeRayClusterBeforeUpdate, curlPod, curlContainerName, utils.DeployPathV2)
-		if err != nil &&
-			(strings.Contains(err.Error(), "exit code 52") ||
-				strings.Contains(err.Error(), "exit code 6")) {
-			// which is "curl: (52) Empty reply from server" or "curl: (6) Couldn't resolve host"
-			// it implies the ray cluster is terminated.
-			break
+		if event.Reason != string(utils.UpdatedServeApplications) && event.Reason != string(utils.FailedToUpdateServeApplications) {
+			continue
 		}
 
-		// Except the errors above, it should not occur.
-		g.Expect(err).NotTo(HaveOccurred())
-
-		g.Expect(stdout.String()).NotTo(ContainSubstring("\"price\": 456"), "new price should not be updated on the old ray cluster")
+		g.Expect(event.Message).NotTo(ContainSubstring(fmt.Sprintf("RayCluster %s/%s", activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)), "unexpected event %v", event)
 	}
 }

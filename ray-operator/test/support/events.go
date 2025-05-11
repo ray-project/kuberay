@@ -8,6 +8,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // Based on https://github.com/apache/incubator-kie-kogito-operator/blob/28b2d3dc945e48659b199cca33723568b848f72e/test/pkg/framework/logging.go
@@ -127,4 +130,16 @@ func getWhitespaceStr(size int) string {
 		whiteSpaceStr += " "
 	}
 	return whiteSpaceStr
+}
+
+func RayServiceEvents(t Test, rayService *rayv1.RayService) ([]corev1.Event, error) {
+	t.T().Helper()
+	events, err := t.Client().Core().CoreV1().Events(rayService.Namespace).List(t.Ctx(), metav1.ListOptions{
+		// FieldSelector: fmt.Sprintf("involvedObject.name=%s", rayService.Name),
+		FieldSelector: fields.OneTermEqualSelector("involvedObject.name", rayService.Name).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return events.Items, nil
 }
