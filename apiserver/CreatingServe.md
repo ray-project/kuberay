@@ -128,7 +128,8 @@ kubectl get service
 You should see two services created, one for head node to access dashboard and manage the
 cluster, the other for submit the serve request.
 
-Note that the 52365 port for head node service is for serve configuration.
+Note that we set the 52365 port for dashboard agent in the above curl command, which is
+used internally by Ray Serve.
 
 ### Clean up
 

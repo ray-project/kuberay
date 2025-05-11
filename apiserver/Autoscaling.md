@@ -40,7 +40,7 @@ kubectl get configmaps
 
 Before running the example, you need to first deploy a RayCluster with following command.
 
-```shell
+```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json' \
 --data '{
