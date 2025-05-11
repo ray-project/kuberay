@@ -38,34 +38,12 @@ func newFakeRayClusters() []*rayv1.RayCluster {
 					{Kind: "RayJob"},
 				},
 			},
-			Status: rayv1.RayClusterStatus{
-				State: "Running",
-				Conditions: []metav1.Condition{
-					{
-						Type:   string(rayv1.RayClusterProvisioned),
-						Status: metav1.ConditionTrue,
-					},
-				},
-			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-ray-cluster-2",
 				Namespace:       "default",
 				OwnerReferences: []metav1.OwnerReference{},
-			},
-			Status: rayv1.RayClusterStatus{
-				State: "Running",
-				Conditions: []metav1.Condition{
-					{
-						Type:   string(rayv1.RayClusterProvisioned),
-						Status: metav1.ConditionTrue,
-					},
-					{
-						Type:   string(rayv1.HeadPodReady),
-						Status: metav1.ConditionTrue,
-					},
-				},
 			},
 		},
 	}
@@ -86,6 +64,6 @@ func TestRayClusterMetricsManager(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), `kuberay_cluster_info{condition="RayClusterProvisioned",name="test-ray-cluster",namespace="default",owner_kind="RayJob",status="Running"} 1`)
-	assert.Contains(t, rr.Body.String(), `kuberay_cluster_info{condition="RayClusterProvisioned",name="test-ray-cluster-2",namespace="default",owner_kind="none",status="Running"} 1`)
+	assert.Contains(t, rr.Body.String(), `kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob"} 1`)
+	assert.Contains(t, rr.Body.String(), `kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="none"} 1`)
 }

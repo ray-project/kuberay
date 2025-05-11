@@ -5,7 +5,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayclusterlister "github.com/ray-project/kuberay/ray-operator/pkg/client/listers/ray/v1"
 )
 
@@ -33,7 +32,7 @@ func NewRayClusterMetricsManager(lister rayclusterlister.RayClusterLister) *RayC
 		rayClusterInfo: prometheus.NewDesc(
 			"kuberay_cluster_info",
 			"Information about Ray clusters with their current state",
-			[]string{"name", "namespace", "status", "condition", "owner_kind"},
+			[]string{"name", "namespace", "owner_kind"},
 			nil,
 		),
 		lister: lister,
@@ -71,20 +70,12 @@ func (c *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayClust
 		ownerKind = cluster.OwnerReferences[0].Kind
 	}
 
-	condition := utils.RelevantRayClusterCondition(*cluster)
-	conditionType := ""
-	if condition != nil {
-		conditionType = condition.Type
-	}
-
 	ch <- prometheus.MustNewConstMetric(
 		c.rayClusterInfo,
 		prometheus.GaugeValue,
 		1,
 		cluster.Name,
 		cluster.Namespace,
-		string(cluster.Status.State),
-		conditionType,
 		ownerKind,
 	)
 }
