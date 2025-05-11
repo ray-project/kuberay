@@ -3672,3 +3672,17 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestSetDefaults(t *testing.T) {
+	setupTest(t)
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.RayStartParams = nil
+	cluster.Spec.WorkerGroupSpecs[0].RayStartParams = nil
+
+	setDefaults(cluster)
+
+	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
+	}
+}
