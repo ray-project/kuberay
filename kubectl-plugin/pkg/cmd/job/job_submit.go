@@ -655,6 +655,22 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 		raySubmitCmd = append(raySubmitCmd, "--verbose")
 	}
 
+	if len(options.headNodeSelectors) > 0 {
+		headNodeSelectors := []string{}
+		for key, value := range options.headNodeSelectors {
+			headNodeSelectors = append(headNodeSelectors, fmt.Sprintf("%s=%s", key, value))
+		}
+		raySubmitCmd = append(raySubmitCmd, "--head-node-selectors", strings.Join(headNodeSelectors, ","))
+	}
+
+	if len(options.workerNodeSelectors) > 0 {
+		workerNodeSelectors := []string{}
+		for key, value := range options.workerNodeSelectors {
+			workerNodeSelectors = append(workerNodeSelectors, fmt.Sprintf("%s=%s", key, value))
+		}
+		raySubmitCmd = append(raySubmitCmd, "--worker-node-selectors", strings.Join(workerNodeSelectors, ","))
+	}
+
 	raySubmitCmd = append(raySubmitCmd, "--working-dir", options.workingDir)
 
 	raySubmitCmd = append(raySubmitCmd, "--")
