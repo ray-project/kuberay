@@ -161,6 +161,12 @@ func TestRaySubmitCmd(t *testing.T) {
 	fakeSubmitJobOptions.noWait = true
 	fakeSubmitJobOptions.headers = "{\"requestHeaders\": {\"header\": \"header\"}}"
 	fakeSubmitJobOptions.verify = "True"
+	fakeSubmitJobOptions.headNodeSelectors = map[string]string{
+		"cloud.google.com/gke-nodepool": "my-head-pool",
+	}
+	fakeSubmitJobOptions.workerNodeSelectors = map[string]string{
+		"cloud.google.com/gke-accelerator": "nvidia-l4",
+	}
 	fakeSubmitJobOptions.workingDir = "/fake/working/dir"
 	fakeSubmitJobOptions.entryPoint = "python fake_python_script.py"
 
@@ -191,6 +197,10 @@ func TestRaySubmitCmd(t *testing.T) {
 		"{\"requestHeaders\": {\"header\": \"header\"}}",
 		"--verify",
 		"True",
+		"--head-node-selectors",
+		"cloud.google.com/gke-nodepool=my-head-pool",
+		"--worker-node-selectors",
+		"cloud.google.com/gke-accelerator=nvidia-l4",
 		"--working-dir",
 		"/fake/working/dir",
 		"--",
@@ -199,4 +209,49 @@ func TestRaySubmitCmd(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedCmd, actualCmd)
+}
+
+func TestNewJobSubmitCommandFlags(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	cmd := NewJobSubmitCommand(cmdFactory, testStreams)
+
+	assert.Equal(t, "submit [OPTIONS] -f/--filename RAYJOB_YAML -- ENTRYPOINT", cmd.Use)
+	assert.Equal(t, "Submit Ray job to Ray cluster", cmd.Short)
+	assert.Contains(t, cmd.Long, "Submit Ray job to Ray cluster as one would using Ray CLI")
+	assert.Contains(t, cmd.Example, "kubectl ray job submit")
+
+	flags := cmd.Flags()
+
+	// Check if all flags are properly set
+	assert.NotNil(t, flags.Lookup("filename"))
+	assert.NotNil(t, flags.Lookup("submission-id"))
+	assert.NotNil(t, flags.Lookup("runtime-env"))
+	assert.NotNil(t, flags.Lookup("working-dir"))
+	assert.NotNil(t, flags.Lookup("headers"))
+	assert.NotNil(t, flags.Lookup("runtime-env-json"))
+	assert.NotNil(t, flags.Lookup("verify"))
+	assert.NotNil(t, flags.Lookup("entrypoint-resources"))
+	assert.NotNil(t, flags.Lookup("metadata-json"))
+	assert.NotNil(t, flags.Lookup("log-style"))
+	assert.NotNil(t, flags.Lookup("log-color"))
+	assert.NotNil(t, flags.Lookup("entrypoint-num-cpus"))
+	assert.NotNil(t, flags.Lookup("entrypoint-num-gpus"))
+	assert.NotNil(t, flags.Lookup("entrypoint-memory"))
+	assert.NotNil(t, flags.Lookup("no-wait"))
+	assert.NotNil(t, flags.Lookup("name"))
+	assert.NotNil(t, flags.Lookup("ray-version"))
+	assert.NotNil(t, flags.Lookup("image"))
+	assert.NotNil(t, flags.Lookup("head-cpu"))
+	assert.NotNil(t, flags.Lookup("head-memory"))
+	assert.NotNil(t, flags.Lookup("head-gpu"))
+	assert.NotNil(t, flags.Lookup("worker-replicas"))
+	assert.NotNil(t, flags.Lookup("worker-cpu"))
+	assert.NotNil(t, flags.Lookup("worker-memory"))
+	assert.NotNil(t, flags.Lookup("worker-gpu"))
+	assert.NotNil(t, flags.Lookup("dry-run"))
+	assert.NotNil(t, flags.Lookup("verbose"))
+	assert.NotNil(t, flags.Lookup("head-node-selectors"))
+	assert.NotNil(t, flags.Lookup("worker-node-selectors"))
 }
