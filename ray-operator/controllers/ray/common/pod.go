@@ -37,6 +37,7 @@ const (
 	NeuronCoreRayResourceName          = "neuron_cores"
 	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
+	autoscalerV2EnvVar                 = "RAY_enable_autoscaler_v2"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -192,6 +193,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
+
+		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
+			setAutoscalerV2EnvVars(&podTemplate)
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
@@ -207,6 +213,33 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	return podTemplate
+}
+
+// setAutoscalerV2EnvVars sets env vars for autoscaler v2 in the head node
+func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
+	if podTemplate.Spec.Containers[utils.RayContainerIndex].Env == nil {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
+	}
+
+	// find the index of the env var
+	index := -1
+	for i, env := range podTemplate.Spec.Containers[utils.RayContainerIndex].Env {
+		if env.Name == autoscalerV2EnvVar {
+			index = i
+			break
+		}
+	}
+
+	// if the env var is not found, add it
+	if index == -1 {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+			Name:  autoscalerV2EnvVar,
+			Value: "true",
+		})
+	} else {
+		// if the env var is found, update the value
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env[index].Value = "true"
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -308,6 +341,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			ContainerPort: int32(utils.DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
+	}
+
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
 	return podTemplate

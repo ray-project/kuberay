@@ -156,7 +156,7 @@ type AutoscalerOptions struct {
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
 	// Version is the version of the Ray autoscaler.
 	// +optional
-	Version *Version `json:"version,omitempty"`
+	Version *AutoscalerVersion `json:"version,omitempty"`
 	// Optional list of environment variables to set in the autoscaler container.
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
@@ -172,7 +172,7 @@ type AutoscalerOptions struct {
 type UpscalingMode string
 
 // +kubebuilder:validation:Enum=v1;v2
-type Version string
+type AutoscalerVersion string
 
 // The overall state of the Ray cluster.
 type ClusterState string

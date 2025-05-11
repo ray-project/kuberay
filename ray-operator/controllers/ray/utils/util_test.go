@@ -910,6 +910,42 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	assert.True(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
 }
 
+func TestIsAutoscalingV2Enabled(t *testing.T) {
+	tests := map[string]struct {
+		spec     *rayv1.RayClusterSpec
+		expected bool
+	}{
+		"should be false when spec is nil": {
+			spec:     nil,
+			expected: false,
+		},
+		"should be false when autoscaler options is nil": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: nil,
+			},
+			expected: false,
+		},
+		"should be false when autoscaler options is not v2": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersion("v1"))},
+			},
+			expected: false,
+		},
+		"should be true when autoscaler options is v2": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersion("v2"))},
+			},
+			expected: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsAutoscalingV2Enabled(tc.spec))
+		})
+	}
+}
+
 func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 	tests := []struct {
 		name     string
