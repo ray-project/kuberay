@@ -393,7 +393,7 @@ func TestValidateUpdateServiceRequest(t *testing.T) {
 
 	tests := []struct {
 		expectedError error
-		mutate        func(r *api.UpdateRayServiceRequest)
+		mutate        func(r *api.UpdateRayServiceRequest) // mutate applies a change to the base request to simulate each test scenario
 		name          string
 	}{
 		{
@@ -446,7 +446,6 @@ func TestValidateUpdateServiceRequest(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			req := proto.Clone(base).(*api.UpdateRayServiceRequest)
 			tc.mutate(req)
