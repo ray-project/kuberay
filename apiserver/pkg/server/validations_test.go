@@ -402,7 +402,7 @@ func TestValidateUpdateServiceRequest(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "A update service request with no name",
+			name: "An update service request with no name",
 			mutate: func(r *api.UpdateRayServiceRequest) {
 				r.Name = ""
 			},
@@ -416,28 +416,28 @@ func TestValidateUpdateServiceRequest(t *testing.T) {
 			expectedError: util.NewInvalidInputError("Namespace is empty. Please specify a valid value."),
 		},
 		{
-			name: "A update service request with a nill service spec",
+			name: "An update service request with a nill service spec",
 			mutate: func(r *api.UpdateRayServiceRequest) {
 				r.Service = nil
 			},
 			expectedError: util.NewInvalidInputError("Service is empty, please input a valid payload."),
 		},
 		{
-			name: "A update service request with mismatching namespaces",
+			name: "An update service request with mismatching namespaces",
 			mutate: func(r *api.UpdateRayServiceRequest) {
 				r.Service.Namespace = "another-namespace"
 			},
 			expectedError: util.NewInvalidInputError("The namespace in the request is different from the namespace in the service definition."),
 		},
 		{
-			name: "A update service request with no name",
+			name: "An update service request with no name",
 			mutate: func(r *api.UpdateRayServiceRequest) {
 				r.Service.Name = ""
 			},
 			expectedError: util.NewInvalidInputError("Service name is empty. Please specify a valid value."),
 		},
 		{
-			name: "A update service request with no user name",
+			name: "An update service request with no user name",
 			mutate: func(r *api.UpdateRayServiceRequest) {
 				r.Service.User = ""
 			},
