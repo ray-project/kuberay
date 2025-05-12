@@ -1067,7 +1067,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 
 			if tc.expectedAutoscalerV2EnvVar {
 				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  autoscalerV2EnvVar,
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
 				})
 			}
@@ -1922,7 +1922,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 			},
 			expectedEnvVars: []corev1.EnvVar{
 				{
-					Name:  autoscalerV2EnvVar,
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
 				},
 			},
@@ -1948,7 +1948,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 					Value: "conclave",
 				},
 				{
-					Name:  autoscalerV2EnvVar,
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
 				},
 			},
@@ -1964,7 +1964,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 									Value: "smoke",
 								},
 								{
-									Name:  autoscalerV2EnvVar,
+									Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 									Value: "false",
 								},
 							},
@@ -1978,7 +1978,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 					Value: "smoke",
 				},
 				{
-					Name:  autoscalerV2EnvVar,
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
 				},
 			},
@@ -1990,7 +1990,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 						{
 							Env: []corev1.EnvVar{
 								{
-									Name:  autoscalerV2EnvVar,
+									Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 									Value: "true",
 								},
 								{
@@ -2004,7 +2004,7 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 			},
 			expectedEnvVars: []corev1.EnvVar{
 				{
-					Name:  autoscalerV2EnvVar,
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
 				},
 				{

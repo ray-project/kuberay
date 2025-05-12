@@ -495,6 +495,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 		},
 	}
 	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
+		GroupName: "worker-group-1",
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "ray-worker"}},
@@ -520,7 +521,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 			featureGate:  false,
 			expectError:  true,
-			errorMessage: "suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled",
+			errorMessage: fmt.Sprintf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroupSpecSuspended.GroupName),
 		},
 		{
 			name: "suspend without autoscaler",
@@ -545,7 +546,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 			featureGate:  true,
 			expectError:  true,
-			errorMessage: "suspending worker groups is not currently supported with Autoscaler enabled",
+			errorMessage: fmt.Sprintf("worker group %s cannot be suspended with Autoscaler enabled", workerGroupSpecSuspended.GroupName),
 		},
 	}
 
@@ -556,6 +557,187 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
+	tests := map[string]struct {
+		expectedErr string
+		spec        rayv1.RayClusterSpec
+	}{
+		"should return error if autoscaler is enabled and any worker group is suspended": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{},
+							},
+						},
+					},
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{},
+								},
+							},
+						},
+						Suspend: ptr.To(true),
+					},
+				},
+			},
+			expectedErr: "worker group worker-group-1 cannot be suspended with Autoscaler enabled",
+		},
+		fmt.Sprintf("should return error if autoscaler v2 is enabled and head Pod has env var %s", RAY_ENABLE_AUTOSCALER_V2): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Env: []corev1.EnvVar{
+										{
+											Name:  RAY_ENABLE_AUTOSCALER_V2,
+											Value: "true",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErr: fmt.Sprintf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"should return error if autoscaler v2 is enabled and head Pod has a restartPolicy other than Never": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{},
+							},
+						},
+					},
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never when using autoscaler V2",
+		},
+		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{},
+							},
+							RestartPolicy: corev1.RestartPolicyNever,
+						},
+					},
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{},
+								},
+								RestartPolicy: corev1.RestartPolicyNever,
+							},
+						},
+					},
+					{
+						GroupName: "worker-group-2",
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{},
+								},
+								RestartPolicy: corev1.RestartPolicyAlways,
+							},
+						},
+					},
+				},
+			},
+			expectedErr: "restartPolicy for worker group worker-group-2 should be Never when using autoscaler V2",
+		},
+		"should not return error if autoscaler configs are valid": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{},
+							},
+							RestartPolicy: corev1.RestartPolicyNever,
+						},
+					},
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{},
+								},
+								RestartPolicy: corev1.RestartPolicyNever,
+							},
+						},
+					},
+					{
+						GroupName: "worker-group-2",
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{},
+								},
+								RestartPolicy: corev1.RestartPolicyNever,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	defer func() {
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
+	}()
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tc.spec, map[string]string{})
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectedErr)
 			} else {
 				require.NoError(t, err)
 			}

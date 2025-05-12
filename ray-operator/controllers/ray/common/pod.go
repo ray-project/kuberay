@@ -37,7 +37,6 @@ const (
 	NeuronCoreRayResourceName          = "neuron_cores"
 	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
-	autoscalerV2EnvVar                 = "RAY_enable_autoscaler_v2"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -224,7 +223,7 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	// find the index of the env var
 	index := -1
 	for i, env := range podTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if env.Name == autoscalerV2EnvVar {
+		if env.Name == utils.RAY_ENABLE_AUTOSCALER_V2 {
 			index = i
 			break
 		}
@@ -233,7 +232,7 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	// if the env var is not found, add it
 	if index == -1 {
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
-			Name:  autoscalerV2EnvVar,
+			Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 			Value: "true",
 		})
 	} else {

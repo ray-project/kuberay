@@ -4,6 +4,7 @@ import (
 	errstd "errors"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -86,7 +87,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if !features.Enabled(features.RayJobDeletionPolicy) {
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
+				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroup.GroupName)
 			}
 		}
 	}
@@ -95,7 +96,23 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
-				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
+				return fmt.Errorf("worker group %s cannot be suspended with Autoscaler enabled", workerGroup.GroupName)
+			}
+		}
+
+		if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && EnvVarExists(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
+			return fmt.Errorf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2)
+		}
+
+		if IsAutoscalingV2Enabled(spec) {
+			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+				return fmt.Errorf("restartPolicy for head Pod should be Never when using autoscaler V2")
+			}
+
+			for _, workerGroup := range spec.WorkerGroupSpecs {
+				if workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+					return fmt.Errorf("restartPolicy for worker group %s should be Never when using autoscaler V2", workerGroup.GroupName)
+				}
 			}
 		}
 	}
