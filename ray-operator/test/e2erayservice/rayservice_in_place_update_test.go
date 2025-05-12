@@ -1,7 +1,6 @@
 package e2erayservice
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -152,13 +151,18 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	updateTimestamp := rayService.Status.LastUpdateTime
-
 	// Wait active RayCluster has been terminated
 	g.Eventually(func() bool {
 		_, err := GetRayCluster(test, activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)
 		return k8sApiErrors.IsNotFound(err)
 	}, TestTimeoutMedium).Should(BeTrue())
+
+	// Make sure the serveConfig is updated to new ray cluster.
+	g.Eventually(func(g Gomega) {
+		// curl /fruit
+		stdout, _ := CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		g.Expect(stdout.String()).To(Equal("912"))
+	}, TestTimeoutShort).Should(Succeed())
 
 	events, err := test.Client().Core().CoreV1().Events(rayService.Namespace).List(test.Ctx(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("involvedObject.name", rayService.Name).String(),
@@ -166,17 +170,14 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// event UpdatedServeApplications or FailedToUpdateServeApplications should not occur on activeRayClusterBeforeUpdate after RayService update.
+	count := 0
 	for _, event := range events.Items {
-		if event.CreationTimestamp.Before(updateTimestamp) {
-			continue
-		}
-
 		if event.Reason != string(utils.UpdatedServeApplications) && event.Reason != string(utils.FailedToUpdateServeApplications) {
 			continue
 		}
-
-		g.Expect(event.Message).NotTo(ContainSubstring(fmt.Sprintf("RayCluster %s/%s", activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)), "unexpected event %v", event)
+		count++
 	}
+	g.Expect(count).To(Equal(2))
 }
 
 func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing.T) {
