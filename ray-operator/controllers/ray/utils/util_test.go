@@ -927,13 +927,13 @@ func TestIsAutoscalingV2Enabled(t *testing.T) {
 		},
 		"should be false when autoscaler options is not v2": {
 			spec: &rayv1.RayClusterSpec{
-				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersion("v1"))},
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV1)},
 			},
 			expected: false,
 		},
 		"should be true when autoscaler options is v2": {
 			spec: &rayv1.RayClusterSpec{
-				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersion("v2"))},
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV2)},
 			},
 			expected: true,
 		},

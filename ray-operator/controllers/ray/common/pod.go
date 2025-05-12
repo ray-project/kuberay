@@ -220,25 +220,10 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
 	}
 
-	// find the index of the env var
-	index := -1
-	for i, env := range podTemplate.Spec.Containers[utils.RayContainerIndex].Env {
-		if env.Name == utils.RAY_ENABLE_AUTOSCALER_V2 {
-			index = i
-			break
-		}
-	}
-
-	// if the env var is not found, add it
-	if index == -1 {
-		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
-			Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
-			Value: "true",
-		})
-	} else {
-		// if the env var is found, update the value
-		podTemplate.Spec.Containers[utils.RayContainerIndex].Env[index].Value = "true"
-	}
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+		Value: "true",
+	})
 }
 
 func getEnableInitContainerInjection() bool {

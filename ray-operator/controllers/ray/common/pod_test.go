@@ -1024,7 +1024,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-		Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
 
 	ctx := context.Background()
@@ -1254,7 +1254,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-		Version: ptr.To(rayv1.AutoscalerVersion("v2")),
+		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
 
 	ctx := context.Background()
@@ -1950,66 +1950,6 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 				{
 					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
-				},
-			},
-		},
-		"Pod with autoscaler v2 env var set to false should have the value updated to true": {
-			podTemplate: &corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Env: []corev1.EnvVar{
-								{
-									Name:  "white",
-									Value: "smoke",
-								},
-								{
-									Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
-									Value: "false",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedEnvVars: []corev1.EnvVar{
-				{
-					Name:  "white",
-					Value: "smoke",
-				},
-				{
-					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
-					Value: "true",
-				},
-			},
-		},
-		"Pod with autoscaler v2 env var set to true should not have changes": {
-			podTemplate: &corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Env: []corev1.EnvVar{
-								{
-									Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
-									Value: "true",
-								},
-								{
-									Name:  "mass",
-									Value: "pudding",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedEnvVars: []corev1.EnvVar{
-				{
-					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
-					Value: "true",
-				},
-				{
-					Name:  "mass",
-					Value: "pudding",
 				},
 			},
 		},
