@@ -3673,6 +3673,58 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	}
 }
 
+func TestEmitRayClusterHeadPodReady(t *testing.T) {
+	clusterName := "test-ray-cluster"
+	clusterNamespace := "default"
+
+	testCases := []struct {
+		name         string
+		status       rayv1.RayClusterStatus
+		headPodReady bool
+	}{
+		{
+			name:         "simulate headPod not ready",
+			headPodReady: false,
+			status: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+		},
+		{
+			name:         "simulate headPod ready",
+			headPodReady: true,
+			status: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.HeadPodReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayClusterMetricsObserver(ctrl)
+			mockCollector.EXPECT().
+				ObserveRayClusterHeadPodReady(
+					clusterName,
+					clusterNamespace,
+					mock.MatchedBy(func(headPodStatus bool) bool {
+						return headPodStatus == tc.headPodReady
+					}),
+				).Times(1)
+
+			emitRayClusterHeadPodReady(mockCollector, clusterName, clusterNamespace, tc.status)
+		})
+	}
+}
+
 func TestSetDefaults(t *testing.T) {
 	setupTest(t)
 	cluster := testRayCluster.DeepCopy()

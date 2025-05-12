@@ -1632,8 +1632,8 @@ func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClus
 	}
 }
 
-func emitRayClusterHeadPodReady(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, newStatus rayv1.RayClusterStatus) {
-	ready := meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.HeadPodReady))
+func emitRayClusterHeadPodReady(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, status rayv1.RayClusterStatus) {
+	ready := meta.IsStatusConditionTrue(status.Conditions, string(rayv1.HeadPodReady))
 	RayClusterMetricsObserver.ObserveRayClusterHeadPodReady(clusterName, namespace, ready)
 }
 

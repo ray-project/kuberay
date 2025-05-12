@@ -56,6 +56,6 @@ func (c *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, na
 }
 
 func (c *RayClusterMetricsManager) ObserveRayClusterHeadPodReady(name, namespace string, ready bool) {
-	c.rayClusterHeadPodReady.DeleteLabelValues(name, namespace, strconv.FormatBool(!ready))
+	c.rayClusterHeadPodReady.WithLabelValues(name, namespace, strconv.FormatBool(!ready)).Set(0)
 	c.rayClusterHeadPodReady.WithLabelValues(name, namespace, strconv.FormatBool(ready)).Set(1)
 }
