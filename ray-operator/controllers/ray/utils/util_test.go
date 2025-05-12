@@ -878,7 +878,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 
 	cluster = &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			EnableInTreeAutoscaling: ptr.To[bool](true),
+			EnableInTreeAutoscaling: ptr.To(true),
 		},
 	}
 	assert.True(t, IsAutoscalingEnabled(&cluster.Spec))
@@ -890,7 +890,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	job = &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RayClusterSpec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To[bool](true),
+				EnableInTreeAutoscaling: ptr.To(true),
 			},
 		},
 	}
@@ -903,7 +903,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	service = &rayv1.RayService{
 		Spec: rayv1.RayServiceSpec{
 			RayClusterSpec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To[bool](true),
+				EnableInTreeAutoscaling: ptr.To(true),
 			},
 		},
 	}
