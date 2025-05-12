@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"strconv"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -22,7 +24,7 @@ func NewRayServiceMetricsManager() *RayServiceMetricsManager {
 				Name: "kuberay_service_ready",
 				Help: "RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
 			},
-			[]string{"name", "namespace"},
+			[]string{"name", "namespace", "condition"},
 		),
 	}
 	return collector
@@ -39,9 +41,6 @@ func (c *RayServiceMetricsManager) Collect(ch chan<- prometheus.Metric) {
 }
 
 func (c *RayServiceMetricsManager) ObserveRayServiceReady(name, namespace string, ready bool) {
-	if ready {
-		c.RayServiceReady.WithLabelValues(name, namespace).Set(1)
-		return
-	}
-	c.RayServiceReady.WithLabelValues(name, namespace).Set(0)
+	c.RayServiceReady.WithLabelValues(name, namespace, strconv.FormatBool(!ready)).Set(0)
+	c.RayServiceReady.WithLabelValues(name, namespace, strconv.FormatBool(ready)).Set(1)
 }
