@@ -646,7 +646,7 @@ func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
 }
 
 func IsAutoscalingV2Enabled(spec *rayv1.RayClusterSpec) bool {
-	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == "v2"
+	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV2
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.

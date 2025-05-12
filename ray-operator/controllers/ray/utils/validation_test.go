@@ -580,19 +580,19 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			},
 			expectedErr: fmt.Sprintf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2),
 		},
-		"should return error if autoscaler v2 is enabled and head Pod has a restartPolicy other than Never": {
+		"should return error if autoscaler v2 is enabled and head Pod has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, nil),
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
 				},
 			},
-			expectedErr: "restartPolicy for head Pod should be Never when using autoscaler V2",
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
 		},
-		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never": {
+		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
@@ -612,7 +612,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "restartPolicy for worker group worker-group-2 should be Never when using autoscaler V2",
+			expectedErr: "restartPolicy for worker group worker-group-2 should be Never or unset when using autoscaler V2",
 		},
 		"should not return error if autoscaler configs are valid": {
 			spec: rayv1.RayClusterSpec{
@@ -621,12 +621,12 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					Template: podTemplateSpec(nil, nil),
 				},
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
 						GroupName: "worker-group-1",
-						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+						Template:  podTemplateSpec(nil, nil),
 					},
 					{
 						GroupName: "worker-group-2",

@@ -105,13 +105,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 
 		if IsAutoscalingV2Enabled(spec) {
-			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-				return fmt.Errorf("restartPolicy for head Pod should be Never when using autoscaler V2")
+			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+				return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using autoscaler V2")
 			}
 
 			for _, workerGroup := range spec.WorkerGroupSpecs {
-				if workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-					return fmt.Errorf("restartPolicy for worker group %s should be Never when using autoscaler V2", workerGroup.GroupName)
+				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V2", workerGroup.GroupName)
 				}
 			}
 		}
