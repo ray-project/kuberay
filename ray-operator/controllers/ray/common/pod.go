@@ -242,7 +242,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         podTemplate.Spec.Containers[utils.RayContainerIndex].Command,
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -285,6 +285,9 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
+		}
+		if !isOverwriteRayContainerCmd(instance) {
+			initContainer.Command = []string{"/bin/bash", "-lc", "--"}
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}

@@ -1187,6 +1187,55 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	}
 }
 
+func TestDefaultWorkerPodTemplateWithOverwriteContainerCmd(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = make(map[string]string)
+	}
+	cluster.Annotations[utils.RayOverwriteContainerCmdAnnotationKey] = "true"
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0].DeepCopy()
+	worker.Template.Spec.Containers[utils.RayContainerIndex].Command = []string{"overwrite", "container", "cmd"}
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	initContainers := podTemplateSpec.Spec.InitContainers
+	var waitGCSReadyContainer corev1.Container
+	for _, container := range initContainers {
+		if container.Name == "wait-gcs-ready" {
+			waitGCSReadyContainer = container
+			break
+		}
+	}
+	assert.Equal(t, "wait-gcs-ready", waitGCSReadyContainer.Name)
+	assert.Equal(t, []string{"overwrite", "container", "cmd"}, waitGCSReadyContainer.Command)
+}
+
+func TestDefaultWorkerPodTemplateWithoutOverwriteContainerCmd(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0].DeepCopy()
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	initContainers := podTemplateSpec.Spec.InitContainers
+	var waitGCSReadyContainer corev1.Container
+	for _, container := range initContainers {
+		if container.Name == "wait-gcs-ready" {
+			waitGCSReadyContainer = container
+			break
+		}
+	}
+	assert.Equal(t, "wait-gcs-ready", waitGCSReadyContainer.Name)
+	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, waitGCSReadyContainer.Command)
+}
+
 func TestDefaultInitContainer(t *testing.T) {
 	ctx := context.Background()
 	// A default init container to check the health of GCS is expected to be added.
