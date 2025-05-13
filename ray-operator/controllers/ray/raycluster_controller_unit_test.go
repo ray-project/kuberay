@@ -339,7 +339,7 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    ptr.To[int32](expectReplicaNum),
+					Replicas:    ptr.To(expectReplicaNum),
 					MinReplicas: ptr.To[int32](0),
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
@@ -1938,7 +1938,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	setupTest(t)
 
-	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To[bool](true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To(true)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
@@ -3670,5 +3670,19 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 				creationTime,
 			)
 		})
+	}
+}
+
+func TestSetDefaults(t *testing.T) {
+	setupTest(t)
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.RayStartParams = nil
+	cluster.Spec.WorkerGroupSpecs[0].RayStartParams = nil
+
+	setDefaults(cluster)
+
+	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
 	}
 }

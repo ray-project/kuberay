@@ -501,7 +501,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 		},
 	}
-	workerGroupSpecSuspended.Suspend = ptr.To[bool](true)
+	workerGroupSpecSuspended.Suspend = ptr.To(true)
 
 	tests := []struct {
 		rayCluster   *rayv1.RayCluster
@@ -540,7 +540,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec:           headGroupSpec,
 					WorkerGroupSpecs:        []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
-					EnableInTreeAutoscaling: ptr.To[bool](true),
+					EnableInTreeAutoscaling: ptr.To(true),
 				},
 			},
 			featureGate:  true,
@@ -680,6 +680,33 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "BackoffLimit is incompatible with InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   ptr.To[int32](1),
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "BackoffLimit is 0 and SubmissionMode is InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   ptr.To[int32](0),
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "BackoffLimit is nil and SubmissionMode is InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				BackoffLimit:   nil,
+				SubmissionMode: rayv1.InteractiveMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -731,7 +758,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			spec: rayv1.RayJobSpec{
 				DeletionPolicy: ptr.To(rayv1.DeleteWorkersDeletionPolicy),
 				RayClusterSpec: &rayv1.RayClusterSpec{
-					EnableInTreeAutoscaling: ptr.To[bool](true),
+					EnableInTreeAutoscaling: ptr.To(true),
 					HeadGroupSpec:           headGroupSpecWithOneContainer,
 				},
 			},

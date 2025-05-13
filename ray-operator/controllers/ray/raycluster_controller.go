@@ -170,6 +170,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	setDefaults(instance)
+
 	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
 		logger.Error(err, "The RayCluster metadata is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterMetadata),
@@ -1039,6 +1041,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
+
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
@@ -1639,4 +1642,17 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	}
 
 	return totalGPUs
+}
+
+// setDefaults sets some default values for the RayCluster
+func setDefaults(instance *rayv1.RayCluster) {
+	if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+		instance.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	}
+
+	for i := range instance.Spec.WorkerGroupSpecs {
+		if instance.Spec.WorkerGroupSpecs[i].RayStartParams == nil {
+			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
+		}
+	}
 }

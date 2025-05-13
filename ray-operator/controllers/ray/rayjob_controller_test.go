@@ -54,7 +54,6 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 			RayClusterSpec: &rayv1.RayClusterSpec{
 				RayVersion: support.GetRayVersion(),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
@@ -92,11 +91,10 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 				},
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						Replicas:       ptr.To[int32](3),
-						MinReplicas:    ptr.To[int32](0),
-						MaxReplicas:    ptr.To[int32](10000),
-						GroupName:      "small-group",
-						RayStartParams: map[string]string{},
+						Replicas:    ptr.To[int32](3),
+						MinReplicas: ptr.To[int32](0),
+						MaxReplicas: ptr.To[int32](10000),
+						GroupName:   "small-group",
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
@@ -542,7 +540,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			namespace := "default"
 			activeDeadlineSeconds := int32(3)
 			rayJob := rayJobTemplate("rayjob-deadline", namespace)
-			rayJob.Spec.ActiveDeadlineSeconds = ptr.To[int32](activeDeadlineSeconds)
+			rayJob.Spec.ActiveDeadlineSeconds = ptr.To(activeDeadlineSeconds)
 
 			It("Verify RayJob spec", func() {
 				// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).

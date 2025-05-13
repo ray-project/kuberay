@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
@@ -229,6 +230,7 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 		{
 			name: "A valid create service request V2",
 			request: &api.CreateRayServiceRequest{
+				Namespace: "a-namespace",
 				Service: &api.RayService{
 					Name:                               "a-name",
 					Namespace:                          "a-namespace",
@@ -257,7 +259,6 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 						},
 					},
 				},
-				Namespace: "a-namespace",
 			},
 			expectedError: nil,
 		},
@@ -309,7 +310,7 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 					User:      "",
 				},
 			},
-			expectedError: util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value."),
+			expectedError: util.NewInvalidInputError("User who created the Service is empty. Please specify a valid value."),
 		},
 		{
 			name: "A create service with no service graph or V2 config",
@@ -349,6 +350,111 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 				require.NoError(t, actualError, "No error expected.")
 			} else {
 				require.EqualError(t, actualError, tc.expectedError.Error(), "A matching error is expected")
+			}
+		})
+	}
+}
+
+func TestValidateUpdateServiceRequest(t *testing.T) {
+	// A valid `UpdateRayServiceRequest` template for test cases.
+	// Each test clones and modifies a field to verify specific validations.
+	base := &api.UpdateRayServiceRequest{
+		Name:      "a-name",
+		Namespace: "a-namespace",
+		Service: &api.RayService{
+			Name:                               "a-name",
+			Namespace:                          "a-namespace",
+			User:                               "a-user",
+			ServeConfig_V2:                     "some yaml",
+			ServiceUnhealthySecondThreshold:    900,
+			DeploymentUnhealthySecondThreshold: 300,
+			ClusterSpec: &api.ClusterSpec{
+				HeadGroupSpec: &api.HeadGroupSpec{
+					ComputeTemplate: "a compute template name",
+					EnableIngress:   false,
+					RayStartParams: map[string]string{
+						"dashboard-host":      "0.0.0.0",
+						"metrics-export-port": "8080",
+					},
+					Volumes: []*api.Volume{},
+				},
+				WorkerGroupSpec: []*api.WorkerGroupSpec{
+					{
+						GroupName:       "group 1",
+						ComputeTemplate: "a-template",
+						Replicas:        1,
+						MinReplicas:     1,
+						MaxReplicas:     1,
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		expectedError error
+		mutate        func(r *api.UpdateRayServiceRequest) // mutate applies a change to the base request to simulate each test scenario
+		name          string
+	}{
+		{
+			name:          "A valid update service request V2",
+			mutate:        func(_ *api.UpdateRayServiceRequest) {},
+			expectedError: nil,
+		},
+		{
+			name: "An update service request with no name",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Name = ""
+			},
+			expectedError: util.NewInvalidInputError("Name is empty. Please specify a valid value."),
+		},
+		{
+			name: "An empty update service request",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Namespace = ""
+			},
+			expectedError: util.NewInvalidInputError("Namespace is empty. Please specify a valid value."),
+		},
+		{
+			name: "An update service request with a nill service spec",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Service = nil
+			},
+			expectedError: util.NewInvalidInputError("Service is empty, please input a valid payload."),
+		},
+		{
+			name: "An update service request with mismatching namespaces",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Service.Namespace = "another-namespace"
+			},
+			expectedError: util.NewInvalidInputError("The namespace in the request is different from the namespace in the service definition."),
+		},
+		{
+			name: "An update service request with no name",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Service.Name = ""
+			},
+			expectedError: util.NewInvalidInputError("Service name is empty. Please specify a valid value."),
+		},
+		{
+			name: "An update service request with no user name",
+			mutate: func(r *api.UpdateRayServiceRequest) {
+				r.Service.User = ""
+			},
+			expectedError: util.NewInvalidInputError("User who updated the Service is empty. Please specify a valid value."),
+		},
+	}
+	// Execute tests sequentially
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := proto.Clone(base).(*api.UpdateRayServiceRequest)
+			tc.mutate(req)
+
+			err := server.ValidateUpdateServiceRequest(req)
+			if tc.expectedError == nil {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.expectedError.Error())
 			}
 		})
 	}

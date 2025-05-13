@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -255,17 +256,11 @@ func TestAddEmptyDirVolumes(t *testing.T) {
 func TestGetHeadPort(t *testing.T) {
 	headStartParams := make(map[string]string)
 	actualResult := GetHeadPort(headStartParams)
-	expectedResult := "6379"
-	if !(actualResult == expectedResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, "6379", actualResult)
 
 	headStartParams["port"] = "9999"
 	actualResult = GetHeadPort(headStartParams)
-	expectedResult = "9999"
-	if actualResult != expectedResult {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, "9999", actualResult)
 }
 
 func getEnvVar(container corev1.Container, envName string) *corev1.EnvVar {
@@ -279,20 +274,14 @@ func getEnvVar(container corev1.Container, envName string) *corev1.EnvVar {
 
 func checkContainerEnv(t *testing.T, container corev1.Container, envName string, expectedValue string) {
 	env := getEnvVar(container, envName)
-	if env != nil {
-		if env.Value != "" {
-			if env.Value != expectedValue {
-				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.Value)
-			}
-		} else {
-			// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
-			// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
-			if env.ValueFrom.FieldRef.FieldPath != expectedValue {
-				t.Fatalf("Expected `%v` but got `%v`", expectedValue, env.ValueFrom.FieldRef.FieldPath)
-			}
-		}
+	require.NotNil(t, env)
+
+	if env.Value != "" {
+		assert.Equal(t, expectedValue, env.Value)
 	} else {
-		t.Fatalf("Couldn't find `%v` env on pod.", envName)
+		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
+		// See https://pkg.go.dev/k8s.io/api/core/v1#EnvVar for more details.
+		assert.Equal(t, expectedValue, env.ValueFrom.FieldRef.FieldPath)
 	}
 }
 
@@ -674,35 +663,19 @@ func TestBuildPod(t *testing.T) {
 	}
 
 	// Check labels.
-	actualResult := pod.Labels[utils.RayClusterLabelKey]
-	expectedResult := cluster.Name
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-	actualResult = pod.Labels[utils.RayNodeTypeLabelKey]
-	expectedResult = string(rayv1.HeadNode)
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-	actualResult = pod.Labels[utils.RayNodeGroupLabelKey]
-	expectedResult = utils.RayNodeHeadGroupLabelValue
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, cluster.Name, pod.Labels[utils.RayClusterLabelKey])
+	assert.Equal(t, string(rayv1.HeadNode), pod.Labels[utils.RayNodeTypeLabelKey])
+	assert.Equal(t, utils.RayNodeHeadGroupLabelValue, pod.Labels[utils.RayNodeGroupLabelKey])
 
 	// Check volumes.
 	actualVolumes := pod.Spec.Volumes
 	expectedVolumes := volumesNoAutoscaler
-	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedVolumes, actualVolumes)
-	}
+	assert.True(t, reflect.DeepEqual(actualVolumes, expectedVolumes))
 
 	// Check volume mounts.
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsNoAutoscaler
-	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
-	}
+	assert.True(t, reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts))
 
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -735,9 +708,7 @@ func TestBuildPod(t *testing.T) {
 
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
-	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
-	}
+	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
 	// Check Envs
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
@@ -775,9 +746,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
 	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
-	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
-	}
+	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
 	// testing worker pod
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -787,9 +756,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
 	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
-	if !reflect.DeepEqual(expectedCommandArg, actualCommandArg) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedCommandArg, actualCommandArg)
-	}
+	assert.Equal(t, expectedCommandArg, actualCommandArg)
 }
 
 func TestBuildPod_WithOverwriteCommand(t *testing.T) {
@@ -831,52 +798,27 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.GetCRDType(""), "")
 
-	actualResult := pod.Labels[utils.RayClusterLabelKey]
-	expectedResult := cluster.Name
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-	actualResult = pod.Labels[utils.RayNodeTypeLabelKey]
-	expectedResult = string(rayv1.HeadNode)
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
-	actualResult = pod.Labels[utils.RayNodeGroupLabelKey]
-	expectedResult = utils.RayNodeHeadGroupLabelValue
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, cluster.Name, pod.Labels[utils.RayClusterLabelKey])
+	assert.Equal(t, string(rayv1.HeadNode), pod.Labels[utils.RayNodeTypeLabelKey])
+	assert.Equal(t, utils.RayNodeHeadGroupLabelValue, pod.Labels[utils.RayNodeGroupLabelKey])
 
 	// verify no-monitoring is set. conversion only happens in BuildPod so we can only check it here.
-	expectedResult = "--no-monitor"
-	if !strings.Contains(pod.Spec.Containers[0].Args[0], expectedResult) {
-		t.Fatalf("Expected `%v` in `%v` but doesn't have the config", expectedResult, pod.Spec.Containers[0].Args[0])
-	}
+	assert.Contains(t, pod.Spec.Containers[0].Args[0], "--no-monitor")
 
 	actualVolumes := pod.Spec.Volumes
 	expectedVolumes := volumesWithAutoscaler
-	if !reflect.DeepEqual(actualVolumes, expectedVolumes) {
-		t.Fatalf("Expected `%v` but got `%v`", actualVolumes, expectedVolumes)
-	}
+	assert.True(t, reflect.DeepEqual(actualVolumes, expectedVolumes))
 
 	actualVolumeMounts := pod.Spec.Containers[0].VolumeMounts
 	expectedVolumeMounts := volumeMountsWithAutoscaler
-	if !reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedVolumeMounts, actualVolumeMounts)
-	}
+	assert.True(t, reflect.DeepEqual(actualVolumeMounts, expectedVolumeMounts))
 
 	// Make sure autoscaler container was formatted correctly.
-	numContainers := len(pod.Spec.Containers)
-	expectedNumContainers := 2
-	if !(numContainers == expectedNumContainers) {
-		t.Fatalf("Expected `%v` container but got `%v`", expectedNumContainers, numContainers)
-	}
+	assert.Len(t, pod.Spec.Containers, 2)
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
 	expectedContainer := autoscalerContainer
-	if !reflect.DeepEqual(expectedContainer, actualContainer) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
-	}
+	assert.True(t, reflect.DeepEqual(expectedContainer, actualContainer))
 }
 
 func TestBuildPod_WithCreatedByRayService(t *testing.T) {
@@ -980,9 +922,7 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	expectedContainer.SecurityContext = &customSecurityContext
 	index := getAutoscalerContainerIndex(pod)
 	actualContainer := pod.Spec.Containers[index]
-	if !reflect.DeepEqual(expectedContainer, actualContainer) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedContainer, actualContainer)
-	}
+	assert.True(t, reflect.DeepEqual(expectedContainer, actualContainer))
 }
 
 func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
@@ -994,27 +934,14 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 	// autoscaler container is injected into head pod
-	actualContainerCount := len(podTemplateSpec.Spec.Containers)
-	expectedContainerCount := 2
-	if !reflect.DeepEqual(expectedContainerCount, actualContainerCount) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedContainerCount, actualContainerCount)
-	}
+	assert.Len(t, podTemplateSpec.Spec.Containers, 2)
 
-	actualResult := podTemplateSpec.Spec.ServiceAccountName
-	expectedResult := cluster.Name
-
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, cluster.Name, podTemplateSpec.Spec.ServiceAccountName)
 
 	// Repeat ServiceAccountName check with long cluster name.
 	cluster.Name = longString(t) // 200 chars long
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	actualResult = podTemplateSpec.Spec.ServiceAccountName
-	expectedResult = shortString(t) // 50 chars long, truncated by utils.CheckName
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, shortString(t), podTemplateSpec.Spec.ServiceAccountName)
 }
 
 func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
@@ -1054,11 +981,7 @@ func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	actualResult := pod.Spec.ServiceAccountName
-	expectedResult := ""
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, "", pod.Spec.ServiceAccountName)
 }
 
 // If a service account is specified in the RayCluster and EnableInTreeAutoscaling is set to false,
@@ -1070,11 +993,7 @@ func TestHeadPodTemplate_WithServiceAccountNoAutoscaling(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	actualResult := pod.Spec.ServiceAccountName
-	expectedResult := serviceAccount
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, serviceAccount, pod.Spec.ServiceAccountName)
 }
 
 // If a service account is specified in the RayCluster and EnableInTreeAutoscaling is set to true,
@@ -1087,11 +1006,7 @@ func TestHeadPodTemplate_WithServiceAccount(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	actualResult := pod.Spec.ServiceAccountName
-	expectedResult := serviceAccount
-	if !reflect.DeepEqual(expectedResult, actualResult) {
-		t.Fatalf("Expected `%v` but got `%v`", expectedResult, actualResult)
-	}
+	assert.Equal(t, serviceAccount, pod.Spec.ServiceAccountName)
 }
 
 func splitAndSort(s string) []string {
@@ -1144,9 +1059,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// DefaultHeadPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)))
 	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
 	metricsPort := corev1.ContainerPort{
 		Name:          utils.MetricsPortName,
@@ -1155,9 +1068,7 @@ func TestDefaultHeadPodTemplateWithConfigurablePorts(t *testing.T) {
 	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort))
 }
 
 func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
@@ -1171,9 +1082,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)))
 	customMetricsPort := int32(utils.DefaultMetricsPort) + 1
 	metricsPort := corev1.ContainerPort{
 		Name:          utils.MetricsPortName,
@@ -1182,9 +1091,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// Verify the custom metrics port exists.
-	if err := containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort))
 }
 
 func TestDefaultInitContainer(t *testing.T) {
@@ -1635,6 +1542,17 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			expected: "ray start  --num-gpus=1 ",
 		},
 		{
+			name:           "WorkerNode with MIG GPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"nvidia.com/mig-2g.32gb": resource.MustParse("1"),
+				},
+			},
+			expected: "ray start  --num-gpus=1 ",
+		},
+		{
 			name:           "WorkerNode with TPU",
 			nodeType:       rayv1.WorkerNode,
 			rayStartParams: map[string]string{},
@@ -1745,6 +1663,52 @@ func TestGenerateRayStartCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := generateRayStartCommand(context.TODO(), tt.nodeType, tt.rayStartParams, tt.resource)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsGPUResourceKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		resourceKey string
+		expected    bool
+	}{
+		{
+			name:        "nvidia gpu",
+			resourceKey: "nvidia.com/gpu",
+			expected:    true,
+		},
+		{
+			name:        "amd gpu",
+			resourceKey: "amd.com/gpu",
+			expected:    true,
+		},
+		{
+			name:        "nvidia MIG",
+			resourceKey: "nvidia.com/mig-12g.128gb",
+			expected:    true,
+		},
+		{
+			name:        "nvidia MIG bad format",
+			resourceKey: "nvidia.com/gpu-mig-12g.128gb",
+			expected:    false,
+		},
+		{
+			name:        "cpu",
+			resourceKey: "cpu",
+			expected:    false,
+		},
+		{
+			name:        "memory",
+			resourceKey: "memory",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isGPUResourceKey(tt.resourceKey)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

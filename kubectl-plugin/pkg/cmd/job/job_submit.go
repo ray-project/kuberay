@@ -226,6 +226,16 @@ func (options *SubmitJobOptions) Validate() error {
 		if submissionMode != rayv1.InteractiveMode {
 			return fmt.Errorf("Submission mode of the Ray Job must be set to 'InteractiveMode'")
 		}
+		// InteractiveMode does not support backoffLimit > 1.
+		// When a RayJob fails (e.g., due to a missing script) and retries,
+		// spec.JobId remains set, causing the new job to incorrectly transition
+		// to Running instead of Waiting or Failed.
+		// After discussion, we decided to disallow retries in InteractiveMode
+		// to avoid ambiguous state handling and unintended behavior.
+		// https://github.com/ray-project/kuberay/issues/3525
+		if submissionMode == rayv1.InteractiveMode && options.RayJob.Spec.BackoffLimit != nil && *options.RayJob.Spec.BackoffLimit > 0 {
+			return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
+		}
 
 		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
 		if options.runtimeEnv == "" && options.runtimeEnvJson == "" && runtimeEnvYaml != "" {
