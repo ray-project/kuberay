@@ -277,7 +277,7 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		},
 		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+			IdleTimeoutSeconds: ptr.To(int32(60)),
 			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
@@ -406,7 +406,7 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+	IdleTimeoutSeconds: ptr.To(int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 	Image:              ptr.To("Some Image"),
 	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
