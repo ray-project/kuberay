@@ -172,7 +172,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	// event UpdatedServeApplications or FailedToUpdateServeApplications should not occur on activeRayClusterBeforeUpdate after RayService update.
 	count := 0
 	for _, event := range events.Items {
-		if event.Reason != string(utils.UpdatedServeApplications) && event.Reason != string(utils.FailedToUpdateServeApplications) {
+		if event.Reason != string(utils.UpdatedServeApplications) {
 			continue
 		}
 		count++
