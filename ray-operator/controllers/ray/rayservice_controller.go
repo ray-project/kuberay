@@ -224,9 +224,9 @@ func emitRayServiceMetrics(rayServiceMetricsManager *metrics.RayServiceMetricsMa
 	emitRayServiceReady(rayServiceMetricsManager, rayServiceName, rayServiceNamespace, rayServiceStatus)
 }
 
-func emitRayServiceReady(rayServiceMetricsManager *metrics.RayServiceMetricsManager, rayServiceName, rayServiceNamespace string, rayServiceStatus rayv1.RayServiceStatuses) {
+func emitRayServiceReady(RayServiceMetricsObserver metrics.RayServiceMetricsObserver, rayServiceName, rayServiceNamespace string, rayServiceStatus rayv1.RayServiceStatuses) {
 	ready := meta.IsStatusConditionTrue(rayServiceStatus.Conditions, string(rayv1.RayServiceReady))
-	rayServiceMetricsManager.ObserveRayServiceReady(rayServiceName, rayServiceNamespace, ready)
+	RayServiceMetricsObserver.ObserveRayServiceReady(rayServiceName, rayServiceNamespace, ready)
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {

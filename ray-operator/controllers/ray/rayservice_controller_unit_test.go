@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +23,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
@@ -1275,6 +1278,58 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
 			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
 			assert.Equal(t, tt.expected, isEnabled)
+		})
+	}
+}
+
+func TestEmitRayServiceReady(t *testing.T) {
+	rayServiceName := "test-ray-service"
+	rayServiceNamespace := "default"
+
+	testCases := []struct {
+		name   string
+		status rayv1.RayServiceStatuses
+		ready  bool
+	}{
+		{
+			name:  "simulate RayService not ready",
+			ready: false,
+			status: rayv1.RayServiceStatuses{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceReady),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+		},
+		{
+			name:  "simulate RayService ready",
+			ready: true,
+			status: rayv1.RayServiceStatuses{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceReady),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayServiceMetricsObserver(ctrl)
+			mockCollector.EXPECT().
+				ObserveRayServiceReady(
+					rayServiceName,
+					rayServiceNamespace,
+					mock.MatchedBy(func(ready bool) bool {
+						return ready == tc.ready
+					}),
+				).Times(1)
+
+			emitRayServiceReady(mockCollector, rayServiceName, rayServiceNamespace, tc.status)
 		})
 	}
 }
