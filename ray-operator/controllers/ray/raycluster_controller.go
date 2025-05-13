@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -1025,6 +1026,26 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		}
 	}
 
+	// The worker pod should be created after the head pod
+	podList := &corev1.PodList{}
+	err := r.Client.List(ctx, podList, &client.ListOptions{
+		Namespace: instance.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			utils.RayIDLabelKey: utils.GenerateIdentifier(instance.Name, rayv1.HeadNode),
+		}),
+	})
+	if err != nil {
+		logger.Error(err, "List head pod error")
+		return err
+	}
+	if len(podList.Items) < 1 {
+		logger.Info("Head pod is not created, waiting ")
+		return fmt.Errorf("Head pod is not created, waiting ")
+	}
+	if podList.Items[0].Status.Phase == corev1.PodPending {
+		logger.Info("Head pod is pending, waiting it to be running ")
+		return fmt.Errorf("Head pod is pending, waiting it to be running ")
+	}
 	replica := pod
 	if err := r.Create(ctx, &replica); err != nil {
 		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
