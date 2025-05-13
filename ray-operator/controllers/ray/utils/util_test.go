@@ -215,9 +215,7 @@ func TestCheckRouteName(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			name := CheckRouteName(context.Background(), tc.routeName, tc.namespace)
-			if name != tc.want {
-				t.Fatalf("got %s, want %s", name, tc.want)
-			}
+			assert.Equal(t, tc.want, name)
 		})
 	}
 }
@@ -343,10 +341,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := GetHeadGroupServiceAccountName(tc.input)
-			if got != tc.want {
-				t.Fatalf("got %s, want %s", got, tc.want)
-			}
+			assert.Equal(t, tc.want, GetHeadGroupServiceAccountName(tc.input))
 		})
 	}
 }
