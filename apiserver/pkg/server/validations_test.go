@@ -295,8 +295,7 @@ func TestValidateCreateServiceRequest(t *testing.T) {
 			mutate: func(base *api.CreateRayServiceRequest) *api.CreateRayServiceRequest {
 				clone := proto.Clone(base).(*api.CreateRayServiceRequest)
 				clone.Service.ServeConfig_V2 = ""
-				// To trigger the ClusterSpec check, ensure other fields are valid up to that point.
-				clone.Service.ClusterSpec = nil // This will be caught by ValidateClusterSpec
+				clone.Service.ClusterSpec = nil
 				return clone
 			},
 			expectedError: util.NewInvalidInputError("A ClusterSpec object is required. Please specify one."),
