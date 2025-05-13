@@ -233,7 +233,10 @@ var _ = Describe("kuberay service", Ordered, func() {
 			Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
 			Expect(lastReq.Load().RequestURI).To(Equal("/api/v1/namespaces/default/services/http:head-svc:80/proxy"))
 
-			// Also test Post method to ensure trailing slash issue is handled correctly
+			// We register both "/proxy" and "/proxy/" to prevent implicit redirects.
+			// This test make sure trailing slash issue is handled correctly.
+			// Without explicitly handling "/proxy", a request to it will be redirected to "/proxy/".
+			// Also, a POST request to "/proxy" will be changed from POST to GET, and drops the body.
 			restClient := k8sClient.RESTClient()
 			_, _ = restClient.Post().
 				Namespace("default").

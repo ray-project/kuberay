@@ -40,8 +40,8 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
 	requireKuberayServiceHandler := requireKuberayService(handler, k8sClient)
-	// These two patterns allow accessing KubeRay dashboards and job submissions.
-	// Note: We also register "/proxy" to handle requests without trailing slashes.
+	// Allow accessing KubeRay dashboards and job submissions.
+	// Note: We also register "/proxy" to avoid the trailing slash redirection
 	// See https://pkg.go.dev/net/http#hdr-Trailing_slash_redirection-ServeMux
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", requireKuberayServiceHandler)
 	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayServiceHandler)
