@@ -3,7 +3,6 @@ package job
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -28,6 +27,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
@@ -41,12 +41,12 @@ const (
 )
 
 type SubmitJobOptions struct {
-	ioStreams          *genericiooptions.IOStreams
 	cmdFactory         cmdutil.Factory
+	dashboardClient    utils.RayDashboardClientInterface
+	ioStreams          *genericiooptions.IOStreams
 	RayJob             *rayv1.RayJob
-	namespace          string
-	submissionID       string
-	entryPoint         string
+	logColor           string
+	image              string
 	fileName           string
 	workingDir         string
 	runtimeEnv         string
@@ -57,20 +57,21 @@ type SubmitJobOptions struct {
 	entryPointResource string
 	metadataJson       string
 	logStyle           string
-	logColor           string
+	submissionID       string
 	rayjobName         string
 	rayVersion         string
-	image              string
+	entryPoint         string
 	headCPU            string
 	headMemory         string
 	headGPU            string
 	workerCPU          string
 	workerMemory       string
 	workerGPU          string
-	entryPointCPU      float32
-	entryPointGPU      float32
+	namespace          string
 	entryPointMemory   int
+	entryPointGPU      float32
 	workerReplicas     int32
+	entryPointCPU      float32
 	noWait             bool
 	dryRun             bool
 	verbose            bool
@@ -427,6 +428,12 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	fmt.Printf("Portforwarding started on %s\n", dashboardAddr)
 
+	// Initialize dashboard client after port-forwarding is ready
+	options.dashboardClient = &utils.RayDashboardClient{}
+	if err := options.dashboardClient.InitClient(portforwardctx, strings.TrimPrefix(dashboardAddr, "http://"), nil); err != nil {
+		return fmt.Errorf("failed to initialize dashboard client: %w", err)
+	}
+
 	// Submitting ray job to cluster
 	raySubmitCmd, err := options.raySubmitCmd()
 	if err != nil {
@@ -491,13 +498,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	go func() {
 		pollStart := time.Now()
 		for {
-			jobID, err := options.getJobIDViaAPI(ctx)
+			jobID, err := options.getJobIDViaAPI(portforwardctx)
 			if err == nil {
 				rayJobIDChan <- jobID
 				break
 			}
 			if time.Since(pollStart).Seconds() > jobIDTimeout {
 				fmt.Println("Failed to get job ID from API")
+				close(rayJobIDChan)
 				break
 			}
 			sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
@@ -567,15 +575,20 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			fmt.Printf("Current status: %s (RayJob: %s, JobID: %s)\n",
 				status, job.GetName(), jobID)
 
-			switch status {
-			case rayv1.JobStatusSucceeded, rayv1.JobStatusStopped:
-				return nil
-			case rayv1.JobStatusFailed:
-				if msg := job.Status.Message; msg != "" {
-					return fmt.Errorf("job failed: %s", msg)
+			if rayv1.IsJobTerminal(status) {
+				switch status {
+				case rayv1.JobStatusSucceeded, rayv1.JobStatusStopped:
+					fmt.Printf("Job %s finished with status %s.\n", jobID, status)
+					return nil
+				case rayv1.JobStatusFailed:
+					if msg := job.Status.Message; msg != "" {
+						return fmt.Errorf("job %s failed: %s", jobID, msg)
+					}
+					return fmt.Errorf("job %s failed with status %s", jobID, status)
+				default:
+					return fmt.Errorf("job %s is in an unexpected terminal state %s", jobID, status)
 				}
-				return fmt.Errorf("job failed with status %s", status)
-			default:
+			} else {
 				fmt.Printf("Job is in state %s\n", status)
 			}
 
@@ -652,38 +665,20 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 
 // Get the job ID from the dashboard API
 func (options *SubmitJobOptions) getJobIDViaAPI(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr+"/api/jobs/", nil)
+	jobs, err := options.dashboardClient.ListJobs(ctx)
 	if err != nil {
-		return "", fmt.Errorf("create request for /api/jobs/: %w", err)
+		return "", fmt.Errorf("failed to list jobs via dashboard client: %w", err)
 	}
 
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("GET /api/jobs/: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("jobs list API returned status %d", resp.StatusCode)
-	}
-
-	var jobs []JobInfo
-	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
-		return "", fmt.Errorf("decode jobs list: %w", err)
-	}
-	if len(jobs) == 0 {
-		return "", fmt.Errorf("no jobs returned")
+	if jobs == nil || len(*jobs) == 0 {
+		return "", fmt.Errorf("no jobs returned from dashboard")
 	}
 
 	// Basically, there is only one job in the list, so we can just return the first one.
-	for _, j := range jobs {
-		if j.Type == "SUBMISSION" && j.Entrypoint == options.entryPoint {
-			return j.SubmissionID, nil
-		}
+	for _, job := range *jobs {
+		return job.SubmissionId, nil
 	}
-	return "", fmt.Errorf("no matching submission job found")
+	return "", fmt.Errorf("no jobs found from dashboard")
 }
 
 // Decode RayJob YAML if we decide to submit job using kube client
