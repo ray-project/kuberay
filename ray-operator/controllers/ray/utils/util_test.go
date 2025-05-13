@@ -545,7 +545,7 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas*numOfHosts)
 }
 
-func TestCalculateReplicas(t *testing.T) {
+func TestCalculateMinAndMaxReplicas(t *testing.T) {
 	suspend := true
 
 	tests := []struct {
