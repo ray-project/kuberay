@@ -192,6 +192,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
+
+		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
+			setAutoscalerV2EnvVars(&podTemplate)
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
@@ -207,6 +212,18 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	return podTemplate
+}
+
+// setAutoscalerV2EnvVars sets env vars for autoscaler v2 in the head node
+func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
+	if podTemplate.Spec.Containers[utils.RayContainerIndex].Env == nil {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
+	}
+
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+		Value: "true",
+	})
 }
 
 func getEnableInitContainerInjection() bool {
@@ -308,6 +325,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			ContainerPort: int32(utils.DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
+	}
+
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
 	return podTemplate

@@ -944,6 +944,66 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	assert.Equal(t, shortString(t), podTemplateSpec.Spec.ServiceAccountName)
 }
 
+func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
+	clusterNoAutoscaling := instance.DeepCopy()
+	clusterAutoscalingV1 := instance.DeepCopy()
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2 := instance.DeepCopy()
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV2),
+	}
+
+	ctx := context.Background()
+	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+
+	tests := map[string]struct {
+		expectedRestartPolicy      corev1.RestartPolicy
+		cluster                    rayv1.RayCluster
+		expectedHeadContainers     int
+		expectedAutoscalerV2EnvVar bool
+	}{
+		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
+			cluster:                    *clusterNoAutoscaling,
+			expectedHeadContainers:     1,
+			expectedAutoscalerV2EnvVar: false,
+			expectedRestartPolicy:      "",
+		},
+		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
+			cluster:                    *clusterAutoscalingV1,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: false,
+			expectedRestartPolicy:      "",
+		},
+		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
+			cluster:                    *clusterAutoscalingV2,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedRestartPolicy:      corev1.RestartPolicyNever,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, tc.cluster, tc.cluster.Spec.HeadGroupSpec, podName, "6379")
+
+			// if autoscaling is enabled, the head pod should have the autoscaler container appended for a total of 2 containers
+			if utils.IsAutoscalingEnabled(&tc.cluster.Spec) {
+				assert.Len(t, podTemplateSpec.Spec.Containers, tc.expectedHeadContainers)
+			}
+
+			if tc.expectedAutoscalerV2EnvVar {
+				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "true",
+				})
+			}
+
+			assert.Equal(t, tc.expectedRestartPolicy, podTemplateSpec.Spec.RestartPolicy)
+		})
+	}
+}
+
 func TestHeadPodTemplate_AutoscalerImage(t *testing.T) {
 	ctx := context.Background()
 
@@ -1092,6 +1152,46 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
 	// Verify the custom metrics port exists.
 	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort))
+}
+
+func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
+	clusterNoAutoscaling := instance.DeepCopy()
+	clusterAutoscalingV1 := instance.DeepCopy()
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2 := instance.DeepCopy()
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV2),
+	}
+
+	ctx := context.Background()
+	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + utils.FormatInt32(0))
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
+
+	tests := map[string]struct {
+		expectedRestartPolicy corev1.RestartPolicy
+		cluster               rayv1.RayCluster
+	}{
+		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
+			cluster:               *clusterNoAutoscaling,
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
+			cluster:               *clusterAutoscalingV1,
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
+			cluster:               *clusterAutoscalingV2,
+			expectedRestartPolicy: corev1.RestartPolicyNever,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, tc.cluster, tc.cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379")
+			assert.Equal(t, tc.expectedRestartPolicy, podTemplateSpec.Spec.RestartPolicy)
+		})
+	}
 }
 
 func TestDefaultInitContainer(t *testing.T) {
@@ -1710,6 +1810,62 @@ func TestIsGPUResourceKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isGPUResourceKey(tt.resourceKey)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSetAutoscalerV2EnvVars(t *testing.T) {
+	tests := map[string]struct {
+		podTemplate     *corev1.PodTemplateSpec
+		expectedEnvVars []corev1.EnvVar
+	}{
+		"Pod without env vars should have autoscaler v2 env var set to true": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "true",
+				},
+			},
+		},
+		"Pod without autoscaler v2 env var should have autoscaler v2 env var set to true": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Env: []corev1.EnvVar{
+								{
+									Name:  "papal",
+									Value: "conclave",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  "papal",
+					Value: "conclave",
+				},
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "true",
+				},
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			setAutoscalerV2EnvVars(tc.podTemplate)
+			assert.Equal(t, tc.expectedEnvVars, tc.podTemplate.Spec.Containers[0].Env)
 		})
 	}
 }

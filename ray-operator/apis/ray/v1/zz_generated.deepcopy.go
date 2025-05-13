@@ -65,6 +65,11 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 		*out = new(UpscalingMode)
 		**out = **in
 	}
+	if in.Version != nil {
+		in, out := &in.Version, &out.Version
+		*out = new(AutoscalerVersion)
+		**out = **in
+	}
 	if in.Env != nil {
 		in, out := &in.Env, &out.Env
 		*out = make([]corev1.EnvVar, len(*in))

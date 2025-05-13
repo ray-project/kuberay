@@ -645,6 +645,10 @@ func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
 		*spec.EnableInTreeAutoscaling
 }
 
+func IsAutoscalingV2Enabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV2
+}
+
 // Check if the RayCluster has GCS fault tolerance enabled.
 func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
 	v, ok := annotations[RayFTEnabledAnnotationKey]

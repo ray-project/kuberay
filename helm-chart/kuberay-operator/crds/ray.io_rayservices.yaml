@@ -253,6 +253,11 @@ spec:
                         - Aggressive
                         - Conservative
                         type: string
+                      version:
+                        enum:
+                        - v1
+                        - v2
+                        type: string
                       volumeMounts:
                         items:
                           properties:
