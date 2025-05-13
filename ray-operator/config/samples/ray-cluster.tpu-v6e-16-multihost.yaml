@@ -5,7 +5,6 @@ metadata:
 spec:
   rayVersion: '2.45.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
@@ -36,7 +35,6 @@ spec:
     minReplicas: 0
     maxReplicas: 1
     numOfHosts: 4
-    rayStartParams: {}
     template:
       spec:
         containers:

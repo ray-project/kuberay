@@ -10,7 +10,6 @@ spec:
   rayVersion: '2.45.0' # should match the Ray version in the image of the containers
   # Ray head Pod template
   headGroupSpec:
-    rayStartParams: {}
     # Pod template
     template:
       spec:
@@ -45,7 +44,6 @@ spec:
     minReplicas: 0
     maxReplicas: 10
     groupName: small-group
-    rayStartParams: {}
     template:
       spec:
         containers:

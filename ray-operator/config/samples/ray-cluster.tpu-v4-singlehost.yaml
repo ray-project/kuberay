@@ -8,7 +8,6 @@ metadata:
 spec:
   rayVersion: '2.45.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
@@ -43,7 +42,6 @@ spec:
               - containerPort: 8000
                 name: serve
   workerGroupSpecs:
-  - rayStartParams: {}
     replicas: 1
     minReplicas: 1
     maxReplicas: 1

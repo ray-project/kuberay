@@ -18,7 +18,6 @@ spec:
   rayClusterSpec:
     rayVersion: '2.45.0'
     headGroupSpec:
-      rayStartParams: {}
       # Pod template
       template:
         spec:
@@ -44,7 +43,6 @@ spec:
         minReplicas: 1
         maxReplicas: 5
         groupName: small-group
-        rayStartParams: {}
         # Pod template
         template:
           spec:

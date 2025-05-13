@@ -18,7 +18,6 @@ metadata:
 spec:
   rayVersion: '2.45.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
@@ -33,7 +32,6 @@ spec:
               memory: "2Gi"
   workerGroupSpecs:
     - groupName: worker
-      rayStartParams: {}
       replicas: 2
       minReplicas: 2
       maxReplicas: 2

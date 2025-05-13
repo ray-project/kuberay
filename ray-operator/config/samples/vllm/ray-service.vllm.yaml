@@ -48,7 +48,6 @@ spec:
       minReplicas: 0
       maxReplicas: 4
       groupName: gpu-group
-      rayStartParams: {}
       template:
         spec:
           containers:

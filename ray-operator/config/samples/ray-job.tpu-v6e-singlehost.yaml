@@ -12,7 +12,6 @@ spec:
   rayClusterSpec:
     rayVersion: '2.45.0'
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
@@ -38,7 +37,6 @@ spec:
         maxReplicas: 1
         numOfHosts: 1
         groupName: tpu-group
-        rayStartParams: {}
         template:
           spec:
             securityContext:

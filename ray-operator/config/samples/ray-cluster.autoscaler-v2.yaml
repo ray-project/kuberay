@@ -75,7 +75,6 @@ spec:
     minReplicas: 0
     maxReplicas: 10
     groupName: small-group
-    rayStartParams: {}
     # Pod template
     template:
       spec:

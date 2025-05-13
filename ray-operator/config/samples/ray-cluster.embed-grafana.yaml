@@ -5,7 +5,6 @@ metadata:
 spec:
   # Ray head pod configuration
   headGroupSpec:
-    rayStartParams: {}
     # pod template
     template:
       metadata:
@@ -53,7 +52,6 @@ spec:
     minReplicas: 1
     maxReplicas: 10
     groupName: small-group
-    rayStartParams: {}
     #pod template
     template:
       spec:

@@ -102,7 +102,6 @@ spec:
     #  - raycluster-complete-worker-small-group-bdtwh
     #  - raycluster-complete-worker-small-group-hv457
     #  - raycluster-complete-worker-small-group-k8tj7
-    rayStartParams: {}
     # Pod template
     template:
       spec:

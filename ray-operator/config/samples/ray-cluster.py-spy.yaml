@@ -6,7 +6,6 @@ spec:
   rayVersion: '2.45.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
-    rayStartParams: {}
     #pod template
     template:
       spec:

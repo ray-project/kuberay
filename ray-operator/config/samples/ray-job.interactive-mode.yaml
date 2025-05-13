@@ -14,7 +14,6 @@ spec:
   jobId: ""
   rayClusterSpec:
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
@@ -37,7 +36,6 @@ spec:
     rayVersion: 2.45.0
     workerGroupSpecs:
       - groupName: default-group
-        rayStartParams: {}
         replicas: 1
         template:
           spec:

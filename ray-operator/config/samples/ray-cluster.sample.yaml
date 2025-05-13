@@ -9,7 +9,6 @@ spec:
   rayVersion: '2.45.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
-    rayStartParams: {}
     #pod template
     template:
       spec:
@@ -37,7 +36,6 @@ spec:
       maxReplicas: 5
       # logical group name, for this called small-group, also can be functional
       groupName: workergroup
-      rayStartParams: {}
       #pod template
       template:
         spec:
