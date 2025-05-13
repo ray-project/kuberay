@@ -35,7 +35,7 @@ export const ResourceQuotaAlert: React.FC<ResourceQuotaAlertProps> = ({
         snackBar.showSnackBar(
           "Resource quota exceeded",
           <>
-            Your job is pending due to a resource quota error. 
+            Your job is pending due to a resource quota error.
           </>,
           "danger"
         );

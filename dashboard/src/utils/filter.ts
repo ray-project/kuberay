@@ -82,7 +82,7 @@ export const filterCluster = (
         return false;
       }
       // if the label is not rayllmbatchinference or rayjob, then it's a notebook
-      // this relies on roblox flags 
+      // this relies on roblox flags
       if (
         roblox &&
         ((typeFilter == 2 && !clusterIsRayJob(cluster))
