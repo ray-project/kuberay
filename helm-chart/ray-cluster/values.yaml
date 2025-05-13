@@ -58,7 +58,6 @@ head:
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
   restartPolicy: ""
-  rayStartParams: {}
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -141,7 +140,6 @@ worker:
   labels: {}
   serviceAccountName: ""
   restartPolicy: ""
-  rayStartParams: {}
   initContainers: []
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
@@ -220,7 +218,6 @@ additionalWorkerGroups:
     labels: {}
     serviceAccountName: ""
     restartPolicy: ""
-    rayStartParams: {}
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.
     containerEnv: []
