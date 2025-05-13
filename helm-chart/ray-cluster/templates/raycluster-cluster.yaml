@@ -38,7 +38,6 @@ spec:
         {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:
@@ -165,7 +164,6 @@ spec:
       {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:
@@ -293,7 +291,6 @@ spec:
         {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:

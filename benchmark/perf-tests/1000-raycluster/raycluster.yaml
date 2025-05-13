@@ -37,7 +37,6 @@ spec:
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
-    rayStartParams: {}
     template:
       spec:
         containers:

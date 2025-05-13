@@ -18,7 +18,8 @@ metadata:
 spec:
   rayVersion: '2.46.0'
   headGroupSpec:
-    rayStartParams: {}
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+    # rayStartParams: {}
     template:
       spec:
         containers:
@@ -33,10 +34,11 @@ spec:
               memory: "2Gi"
   workerGroupSpecs:
   - groupName: worker
-    rayStartParams: {}
     replicas: 2
     minReplicas: 2
     maxReplicas: 2
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+    # rayStartParams: {}
     template:
       spec:
         containers:

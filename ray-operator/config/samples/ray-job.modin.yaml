@@ -10,7 +10,8 @@ spec:
   rayClusterSpec:
     rayVersion: "2.46.0"
     headGroupSpec:
-      rayStartParams: {}
+      # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+      # rayStartParams: {}
       template:
         spec:
           containers:

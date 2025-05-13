@@ -13,7 +13,8 @@ spec:
   jobId: ""
   rayClusterSpec:
     headGroupSpec:
-      rayStartParams: {}
+      # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+      # rayStartParams: {}
       template:
         spec:
           containers:
@@ -36,8 +37,9 @@ spec:
     rayVersion: 2.46.0
     workerGroupSpecs:
     - groupName: default-group
-      rayStartParams: {}
       replicas: 1
+      # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+      # rayStartParams: {}
       template:
         spec:
           containers:
