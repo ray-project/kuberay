@@ -36,20 +36,20 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
 	mux.Handle("/apis/ray.io/v1/", handler)                                                                                    // forward KubeRay CR requests.
-	mux.Handle("GET /api/v1/namespaces/{namespace}/events", WithFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
+	mux.Handle("GET /api/v1/namespaces/{namespace}/events", withFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
-	requireKuberayServiceHandler := requireKuberayService(handler, k8sClient)
+	requireKubeRayServiceHandler := requireKubeRayService(handler, k8sClient)
 	// Allow accessing KubeRay dashboards and job submissions.
 	// Note: We also register "/proxy" to avoid the trailing slash redirection
 	// See https://pkg.go.dev/net/http#hdr-Trailing_slash_redirection-ServeMux
-	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", requireKuberayServiceHandler)
-	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKuberayServiceHandler)
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy", requireKubeRayServiceHandler)
+	mux.Handle("/api/v1/namespaces/{namespace}/services/{service}/proxy/", requireKubeRayServiceHandler)
 
 	return mux, nil
 }
 
-func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
+func withFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		// Preserve existing field selectors if any
@@ -59,9 +59,9 @@ func WithFieldSelector(handler http.Handler, selectors ...string) http.Handler {
 	})
 }
 
-// requireKuberayService verifies that the requested service has the label "app.kubernetes.io/name=kuberay".
+// requireKubeRayService verifies that the requested service has the label "app.kubernetes.io/name=kuberay".
 // If the service is not found or does not have the correct label, it returns a 404 Not Found error.
-func requireKuberayService(handler http.Handler, k8sClient *kubernetes.Clientset) http.Handler {
+func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		namespace, serviceSchemeNamePort := r.PathValue("namespace"), r.PathValue("service")
 		_, serviceName, _, valid := net.SplitSchemeNamePort(serviceSchemeNamePort)
@@ -69,7 +69,6 @@ func requireKuberayService(handler http.Handler, k8sClient *kubernetes.Clientset
 			http.Error(w, "invalid service format: "+serviceSchemeNamePort, http.StatusBadRequest)
 			return
 		}
-
 		services, err := k8sClient.CoreV1().Services(namespace).List(r.Context(), metav1.ListOptions{
 			FieldSelector: "metadata.name=" + serviceName,
 			LabelSelector: "app.kubernetes.io/name=" + utils.ApplicationName,
