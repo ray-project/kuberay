@@ -10,26 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayclusterlister "github.com/ray-project/kuberay/ray-operator/pkg/client/listers/ray/v1"
 )
 
-type fakeRayClusterLister struct {
-	clusters []*rayv1.RayCluster
-}
-
-func (f *fakeRayClusterLister) List(_ labels.Selector) ([]*rayv1.RayCluster, error) {
-	return f.clusters, nil
-}
-
-func (f *fakeRayClusterLister) RayClusters(_ string) rayclusterlister.RayClusterNamespaceLister {
-	return nil
-}
-
-func newFakeRayClusters() []*rayv1.RayCluster {
-	return []*rayv1.RayCluster{
+func newFakeRayClusters() []rayv1.RayCluster {
+	return []rayv1.RayCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-ray-cluster",
@@ -51,9 +39,11 @@ func newFakeRayClusters() []*rayv1.RayCluster {
 
 func TestRayClusterMetricsManager(t *testing.T) {
 	clusters := newFakeRayClusters()
-	lister := &fakeRayClusterLister{clusters: clusters}
-	manager := NewRayClusterMetricsManager(lister)
+	k8sScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(k8sScheme))
 
+	client := fake.NewClientBuilder().WithScheme(k8sScheme).WithObjects(&clusters[0], &clusters[1]).Build()
+	manager := NewRayClusterMetricsManager(client)
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(manager)
 
