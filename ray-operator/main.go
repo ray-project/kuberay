@@ -234,6 +234,7 @@ func main() {
 
 	var rayClusterMetricManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
+	var rayServiceMetricManager *metrics.RayServiceMetricsManager
 	if config.EnableMetrics {
 		mgrClient := mgr.GetClient()
 		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
@@ -241,9 +242,10 @@ func main() {
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricManager,
 			rayJobMetricsManager,
+			rayServiceMetricManager,
 		)
 	}
-
+	
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
@@ -252,7 +254,12 @@ func main() {
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+
+	rayServiceOptions := ray.RayServiceReconcilerOptions{
+		RayServiceMetricsManager: rayServiceMetricManager,
+	}
+
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, rayServiceOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
