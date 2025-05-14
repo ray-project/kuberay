@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/prometheus/client_golang/prometheus"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 //go:generate mockgen -destination=mocks/ray_cluster_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayClusterMetricsObserver
@@ -14,6 +14,7 @@ type RayClusterMetricsObserver interface {
 	ObserveRayClusterProvisionedDuration(name, namespace string, duration float64)
 }
 
+// RayClusterMetricsManager implements the prometheus.Collector and RayClusterMetricsObserver interface to collect ray cluster metrics.
 type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 	rayClusterInfo                       *prometheus.Desc
@@ -52,7 +53,7 @@ func (c *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
 	c.rayClusterProvisionedDurationSeconds.Collect(ch)
 
 	var rayClusterList rayv1.RayClusterList
-	err := c.client.List(context.TODO(), &rayClusterList)
+	err := c.client.List(context.Background(), &rayClusterList)
 	if err != nil {
 		return
 	}
@@ -67,7 +68,7 @@ func (c *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, na
 }
 
 func (c *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
-	ownerKind := "none"
+	ownerKind := "None"
 	if len(cluster.OwnerReferences) > 0 {
 		ownerKind = cluster.OwnerReferences[0].Kind
 	}
