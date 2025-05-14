@@ -27,23 +27,27 @@ Follow [this
 document](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy)
 to install the latest stable KubeRay operator from the Helm repository.
 
+## Important: Switch directory to `apiserversdk/`
+
+All the following guidance require you to switch your working directory to the
+`apiserversdk/`.
+
+```sh
+cd apiserversdk
+```
+
 ## Step 3: Deploy a RayCluster custom resource
 
 Once the KubeRay operator is running, you are ready to deploy a RayCluster. While we are using APIServer, we can do this
 with curl. The following command will create a RayCluster CR in your current cluster:
 
 ```sh
-curl -X POST 'https://127.0.0.1:37435/apis/ray.io/v1/namespaces/default/rayclusters' \
---cert /tmp/client.crt \
---key /tmp/client.key \
---cacert /tmp/ca.crt \
+curl -X POST 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters' \
 --header 'Content-Type: application/json' \
---data  @api-example/raycluster.json
+--data  @docs/api-example/raycluster.json
 ```
 
 Once the RayCluster CR has been created, you can view it by running:
-
-- With kubectl:
 
 ```sh
 kubectl get rayclusters
@@ -51,20 +55,8 @@ kubectl get rayclusters
 # raycluster-kuberay   1                                     2      3G       0               89s
 ```
 
-- With KubeRay APIServer:
-
-```sh
-curl -s 'https://127.0.0.1:37435/apis/ray.io/v1/namespaces/default/rayclusters' \
-  --cert /tmp/client.crt \
-  --key /tmp/client.key \
-  --cacert /tmp/ca.crt \
-  | jq -r '.items[].metadata.name'
-```
-
 The KubeRay operator detects the RayCluster object and starts your Ray cluster by creating head and worker pods. To view
 Ray cluster’s pods, run the following command:
-
-- With kubectl
 
 ```sh
 # View the pods in the RayCluster named "raycluster-kuberay"
@@ -75,17 +67,29 @@ kubectl get pods --selector=ray.io/cluster=raycluster-kuberay
 # raycluster-kuberay-workergroup-worker-65zl8   1/1     Running   0          56s
 ```
 
-- With KubeRay APIServer
+## Step 4: Modify Created RayCluster
+
+To modify the created RayCluster, we can use the `PATCH` method of the KubeRay APIServer.
+The following command adds an `annotation` to the raycluster-kuberay resource:
 
 ```sh
-curl -s https://127.0.0.1:37435/api/v1/namespaces/default/pods\?labelSelector=ray.io/cluster=raycluster-kuberay \
-    --cert /tmp/client.crt \
-    --key /tmp/client.key \
-    --cacert /tmp/ca.crt  \
-    | jq -r '.items[].metadata.name'
+curl -X PATCH 'http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay' \
+--header 'Content-Type: application/merge-patch+json' \
+--data '{
+  "metadata": {
+    "annotations": {
+      "example.com/purpose": "model-training"
+    }
+  }
+}'
+```
 
-# raycluster-kuberay-head-wbjzx
-# raycluster-kuberay-workergroup-worker-ss5zl
+You can verify if the `annotation` is added with following command. You should see the
+annotaions you added in the output:
+
+```sh
+kubectl get raycluster raycluster-kuberay -o jsonpath='{.metadata.annotations}'
+# {"example.com/purpose":"model-training"}
 ```
 
 ## Step 4: Delete the RayCluster
@@ -94,10 +98,7 @@ To delete the RayCluster with KubeRay APIServer, execute the following command. 
 the RayCluster we created earlier. You should see the "Success" status after the execution:
 
 ```sh
-curl -X DELETE 'https://127.0.0.1:37435/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay' \
-  --cert /tmp/client.crt \
-  --key /tmp/client.key \
-  --cacert /tmp/ca.crt
+curl -X DELETE 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay'
 
 # {
 #   "kind": "Status",
