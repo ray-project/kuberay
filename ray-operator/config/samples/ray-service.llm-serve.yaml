@@ -2,7 +2,6 @@ apiVersion: ray.io/v1
 kind: RayService
 metadata:
   name: ray-serve-llm
-  namespace: ray-serve
 spec:
   serveConfigV2: |
     applications:
@@ -30,7 +29,6 @@ spec:
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
-        dashboard-host: "0.0.0.0"
       template:
         spec:
           containers:
