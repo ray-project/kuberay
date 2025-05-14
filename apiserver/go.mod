@@ -1,14 +1,12 @@
 module github.com/ray-project/kuberay/apiserver
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.24.2
 
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/ray-project/kuberay/proto v0.0.0-20220703232803-3e7749d17400
-	github.com/ray-project/kuberay/ray-operator v0.0.0-20220703232803-3e7749d17400
+	github.com/ray-project/kuberay/ray-operator v1.3.1
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.72.0
 	google.golang.org/protobuf v1.36.6
@@ -28,6 +26,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/onsi/gomega v1.37.0
+	github.com/ray-project/kuberay/apiserversdk v0.0.0-00010101000000-000000000000
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
@@ -91,6 +90,7 @@ require (
 )
 
 replace (
+	github.com/ray-project/kuberay/apiserversdk => ../apiserversdk
 	github.com/ray-project/kuberay/proto => ../proto
 	github.com/ray-project/kuberay/ray-operator => ../ray-operator
 )

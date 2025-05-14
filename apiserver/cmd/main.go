@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
@@ -29,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/swagger"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	"github.com/ray-project/kuberay/apiserversdk"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -144,8 +146,22 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", runtimeMux)
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
+	kubernetesConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(),
+		&clientcmd.ConfigOverrides{},
+	).ClientConfig()
+	if err != nil {
+		klog.Fatalf("Failed to load kubeconfig: %v", err)
+	}
+
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
-	topMux := http.NewServeMux()
+	topMux, err := apiserversdk.NewMux(apiserversdk.MuxConfig{
+		KubernetesConfig: kubernetesConfig,
+	})
+	if err != nil {
+		klog.Fatalf("Failed to create API server mux: %v", err)
+	}
+
 	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
 	topMux.Handle("/", runtimeMux)
 	topMux.Handle("/metrics", promhttp.Handler())
