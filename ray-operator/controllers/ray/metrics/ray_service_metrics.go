@@ -1,0 +1,59 @@
+package metrics
+
+import (
+	"context"
+
+	"github.com/prometheus/client_golang/prometheus"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+)
+
+//go:generate mockgen -destination=mocks/ray_service_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayServiceMetricsObserver
+
+// RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
+type RayServiceMetricsManager struct {
+	rayServiceInfo *prometheus.Desc
+	client         ctrlclient.Client
+}
+
+// NewRayServiceMetricsManager creates a new RayServiceMetricsManager instance.
+func NewRayServiceMetricsManager(client ctrlclient.Client) *RayServiceMetricsManager {
+	collector := &RayServiceMetricsManager{
+		rayServiceInfo: prometheus.NewDesc(
+			"kuberay_service_info",
+			"RayServiceInfo contains the information of the RayService.",
+			[]string{"name", "namespace"},
+			nil,
+		),
+		client: client,
+	}
+	return collector
+}
+
+// Describe implements prometheus.Collector interface Describe method.
+func (c *RayServiceMetricsManager) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.rayServiceInfo
+}
+
+// Collect implements prometheus.Collector interface Collect method.
+func (c *RayServiceMetricsManager) Collect(ch chan<- prometheus.Metric) {
+	var rayServiceList rayv1.RayServiceList
+	if err := c.client.List(context.Background(), &rayServiceList); err != nil {
+		return
+	}
+
+	for _, rayService := range rayServiceList.Items {
+		c.collectRayServiceInfo(&rayService, ch)
+	}
+}
+
+func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayService, ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(
+		c.rayServiceInfo,
+		prometheus.GaugeValue,
+		1,
+		service.Name,
+		service.Namespace,
+	)
+}
