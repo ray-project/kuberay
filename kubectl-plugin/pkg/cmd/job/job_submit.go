@@ -484,7 +484,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			}
 		}()
 
-		// Wait till rayJobID is populated or an error occurs
+		// Wait till rayJobID is populated or the timeout occurs
 		jobID, ok := <-rayJobIDChan
 		if !ok {
 			return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v", jobIDTimeout)
