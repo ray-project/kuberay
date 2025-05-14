@@ -462,10 +462,35 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	var rayJobID string
 	if options.submissionID != "" {
 		rayJobID = options.submissionID
+	} else {
+		// Create a channel to receive rayJobID from the API
+		rayJobIDChan := make(chan string)
+
+		// Poll the API for the rayJobID
+		go func() {
+			pollStart := time.Now()
+			for {
+				jobID, err := options.getJobIDViaAPI(portforwardctx)
+				if err == nil {
+					rayJobIDChan <- jobID
+					break
+				}
+				if time.Since(pollStart).Seconds() > jobIDTimeout {
+					close(rayJobIDChan)
+					break
+				}
+				sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
+				time.Sleep(sleepDur)
+			}
+		}()
+
+		// Wait till rayJobID is populated or an error occurs
+		jobID, ok := <-rayJobIDChan
+		if !ok {
+			return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v", jobIDTimeout)
+		}
+		rayJobID = jobID
 	}
-	// Create a channel to receive rayJobID from the API and an error channel
-	rayJobIDChan := make(chan string)
-	errChan := make(chan error, 1)
 
 	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
 	rayCmdStdErrScanner := bufio.NewScanner(rayCmdStdErr)
@@ -493,37 +518,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			}
 		}
 	}()
-
-	// Poll the API for the rayJobID
-	go func() {
-		pollStart := time.Now()
-		for {
-			jobID, err := options.getJobIDViaAPI(portforwardctx)
-			if err == nil {
-				rayJobIDChan <- jobID
-				break
-			}
-			if time.Since(pollStart).Seconds() > jobIDTimeout {
-				errChan <- fmt.Errorf("time out waiting for job ID from API after %v", jobIDTimeout)
-				close(rayJobIDChan)
-				break
-			}
-			sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
-			time.Sleep(sleepDur)
-		}
-	}()
-
-	// Wait till rayJobID is populated or an error occurs
-	select {
-	case jobID := <-rayJobIDChan:
-		if jobID != "" {
-			rayJobID = jobID
-		}
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf(("submit failed: %w"), err)
-		}
-	}
 
 	// Add annotation to RayJob with the correct Ray job ID and update the CR
 	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
