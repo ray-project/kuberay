@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
@@ -146,10 +146,7 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", runtimeMux)
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
-	kubernetesConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(),
-		&clientcmd.ConfigOverrides{},
-	).ClientConfig()
+	kubernetesConfig, err := config.GetConfig()
 	if err != nil {
 		klog.Fatalf("Failed to load kubeconfig: %v", err)
 	}
