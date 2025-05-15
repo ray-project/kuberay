@@ -571,7 +571,8 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	return existingGateway, nil
 }
 
-// createHTTPRoute creates a HTTPRoute object based on a given RayService instance
+// createHTTPRoute creates a desired HTTPRoute object based on a given RayService instance with
+// weights based on TrafficRoutedPercent.
 func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
@@ -624,12 +625,12 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	}
 
 	// Wait IntervalSeconds in between migrating StepSizePercent traffic
-	intervalSeconds := time.Duration(*options.IntervalSeconds)
+	intervalSeconds := time.Duration(*options.IntervalSeconds) * time.Second
 	lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
 	if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= intervalSeconds {
 		// Increment weights by StepSizePercent traffic
-		oldClusterWeight = ptr.To(*oldClusterWeight - *options.StepSizePercent)
-		newClusterWeight = ptr.To(*newClusterWeight - *options.StepSizePercent)
+		oldClusterWeight = ptr.To(max(*oldClusterWeight-*options.StepSizePercent, 0))
+		newClusterWeight = ptr.To(min(*newClusterWeight+*options.StepSizePercent, 100))
 
 		// Set LastTrafficMigratedTime
 		pendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
