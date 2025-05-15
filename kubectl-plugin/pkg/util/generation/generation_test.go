@@ -62,6 +62,9 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 				},
 			},
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 	}
 
 	result := testRayClusterConfig.GenerateRayClusterApplyConfig()
@@ -78,6 +81,10 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 			Annotations: annotations,
 		},
 		Spec: &rayv1ac.RayClusterSpecApplyConfiguration{
+			EnableInTreeAutoscaling: ptr.To(true),
+			AutoscalerOptions: &rayv1ac.AutoscalerOptionsApplyConfiguration{
+				Version: ptr.To(rayv1.AutoscalerVersionV2),
+			},
 			RayVersion: ptr.To(util.RayVersion),
 			HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
 				RayStartParams: map[string]string{"dashboard-host": "1.2.3.4", "num-cpus": "0"},
@@ -284,6 +291,9 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			"american": "goldfinch",
 			"piping":   "plover",
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV1,
+		},
 		RayVersion: ptr.To(util.RayVersion),
 		Image:      ptr.To(util.RayImage),
 		Head: &Head{
@@ -322,6 +332,9 @@ metadata:
   name: test-ray-cluster
   namespace: default
 spec:
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    version: v1
   headGroupSpec:
     rayStartParams:
       num-cpus: "0"
@@ -438,6 +451,9 @@ func TestGenerateResources(t *testing.T) {
 
 func TestGenerateRayClusterSpec(t *testing.T) {
 	testRayClusterConfig := RayClusterConfig{
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 		RayVersion:     ptr.To("1.2.3"),
 		Image:          ptr.To("rayproject/ray:1.2.3"),
 		ServiceAccount: ptr.To("my-service-account"),
@@ -479,6 +495,10 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	}
 
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
+		EnableInTreeAutoscaling: ptr.To(true),
+		AutoscalerOptions: &rayv1ac.AutoscalerOptionsApplyConfiguration{
+			Version: ptr.To(rayv1.AutoscalerVersionV2),
+		},
 		RayVersion: ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
 			RayStartParams: map[string]string{"softmax": "GELU"},
