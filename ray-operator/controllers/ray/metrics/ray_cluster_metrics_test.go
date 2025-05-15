@@ -75,6 +75,22 @@ func TestRayClusterMetricsManager(t *testing.T) {
 			for _, label := range tc.expectedLabels {
 				assert.Contains(t, body, label)
 			}
+
+			if len(tc.clusters) > 0 {
+				err = client.Delete(t.Context(), &tc.clusters[0])
+				require.NoError(t, err)
+			}
+
+			rr2 := httptest.NewRecorder()
+			handler.ServeHTTP(rr2, req)
+
+			assert.Equal(t, http.StatusOK, rr2.Code)
+			body2 := rr2.Body.String()
+
+			assert.NotContains(t, body2, tc.expectedLabels[0])
+			for _, label := range tc.expectedLabels[1:] {
+				assert.Contains(t, body2, label)
+			}
 		})
 	}
 }
