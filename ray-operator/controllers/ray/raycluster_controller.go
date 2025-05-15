@@ -135,7 +135,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
-		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -1182,7 +1181,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
-
 	if r.BatchSchedulerMgr != nil {
 		r.BatchSchedulerMgr.ConfigureReconciler(b)
 	}
