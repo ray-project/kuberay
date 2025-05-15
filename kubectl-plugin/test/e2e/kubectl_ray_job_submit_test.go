@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"encoding/json"
 	"os/exec"
 	"path"
+
 	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,6 +18,7 @@ const (
 	kubectlRayJobWorkingDir  = "./testdata/rayjob-submit-working-dir/"
 	entrypointSampleFileName = "entrypoint-python-sample.py"
 	runtimeEnvSampleFileName = "runtime-env-sample.yaml"
+	rayJobName               = "rayjob-sample"
 )
 
 var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
@@ -46,21 +49,21 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 
 		// Use kubectl to check status of the rayjob
 		// Retrieve Job ID
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobId}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobId}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(cmdOutputJobID).To(Equal(string(output)))
 
 		// Retrieve Job Status
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobStatus}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobStatus}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(string(output)).To(Equal("SUCCEEDED"))
 
 		// Retrieve Job Deployment Status
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobDeploymentStatus}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobDeploymentStatus}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
@@ -84,24 +87,87 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 
 		// Use kubectl to check status of the rayjob
 		// Retrieve Job ID
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobId}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobId}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(cmdOutputJobID).To(Equal(string(output)))
 
 		// Retrieve Job Status
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobStatus}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobStatus}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(string(output)).To(Equal("SUCCEEDED"))
 
 		// Retrieve Job Deployment Status
-		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", "rayjob-sample", "-o", "jsonpath={.status.jobDeploymentStatus}")
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobDeploymentStatus}")
 		output, err = cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(string(output)).To(Equal("Complete"))
+	})
+
+	It("succeed in submitting RayJob with headNodeSelectors and workerNodeSelectors", func() {
+		killKubectlCmd := exec.Command("pkill", "-9", "kubectl")
+		_ = killKubectlCmd.Run()
+		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
+
+		cmd := exec.Command(
+			"kubectl", "ray", "job", "submit",
+			"--namespace", namespace,
+			"--name", rayJobName,
+			"--runtime-env", runtimeEnvFilePath,
+			"--head-cpu", "1",
+			"--head-memory", "2Gi",
+			"--worker-cpu", "1",
+			"--worker-memory", "2Gi",
+			"--head-node-selectors", "kubernetes.io/os=linux",
+			"--worker-node-selectors", "kubernetes.io/os=linux",
+			"--",
+			"python",
+			entrypointSampleFileName,
+		)
+		output, err := cmd.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred())
+		// Retrieve the Job ID from the output
+		regexExp := regexp.MustCompile(`'([^']*raysubmit[^']*)'`)
+		matches := regexExp.FindStringSubmatch(string(output))
+		Expect(len(matches)).To(BeNumerically(">=", 2))
+		cmdOutputJobID := matches[1]
+		// Use kubectl to check status of the rayjob
+		// Retrieve Job ID
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobId}")
+		output, err = cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cmdOutputJobID).To(Equal(string(output)))
+		// Retrieve Job Status
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobStatus}")
+		output, err = cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(output)).To(Equal("SUCCEEDED"))
+		// Retrieve Job Deployment Status
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.status.jobDeploymentStatus}")
+		output, err = cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(output)).To(Equal("Complete"))
+
+		// Retrieve Job Head Node Selectors
+		var headNodeSelector map[string]string
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.spec.rayClusterSpec.headGroupSpec.template.spec.nodeSelector}")
+		output, err = cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred())
+		err = json.Unmarshal(output, &headNodeSelector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(headNodeSelector["kubernetes.io/os"]).To(Equal("linux"))
+		
+		// Retrieve Job Worker Node Selectors
+		var workerNodeSelector map[string]string
+		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.spec.rayClusterSpec.workerGroupSpecs[0].template.spec.nodeSelector}")
+		output, err = cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred())
+		err = json.Unmarshal(output, &workerNodeSelector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(workerNodeSelector["kubernetes.io/os"]).To(Equal("linux"))
 	})
 })
