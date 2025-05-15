@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/prometheus/client_golang/prometheus"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -18,11 +18,11 @@ type RayClusterMetricsObserver interface {
 type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 	rayClusterInfo                       *prometheus.Desc
-	client                               ctrlclient.Client
+	client                               client.Client
 }
 
 // NewRayClusterMetricsManager creates a new RayClusterManager instance.
-func NewRayClusterMetricsManager(client ctrlclient.Client) *RayClusterMetricsManager {
+func NewRayClusterMetricsManager(client client.Client) *RayClusterMetricsManager {
 	manager := &RayClusterMetricsManager{
 		rayClusterProvisionedDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
