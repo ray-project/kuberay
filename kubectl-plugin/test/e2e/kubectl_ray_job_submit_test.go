@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path"
-
 	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -160,7 +159,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		err = json.Unmarshal(output, &headNodeSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(headNodeSelector["kubernetes.io/os"]).To(Equal("linux"))
-		
+
 		// Retrieve Job Worker Node Selectors
 		var workerNodeSelector map[string]string
 		cmd = exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", rayJobName, "-o", "jsonpath={.spec.rayClusterSpec.workerGroupSpecs[0].template.spec.nodeSelector}")
