@@ -83,7 +83,7 @@ fields (e.g. `metadata.name`, `status.phase`).
 GET /apis/ray.io/v1/namespaces/default/rayclusters?fieldSelector=metadata.name%3Draycluster-prod
 ```
 
-- **Combined selectors**: You can combine label and field selectors using `&`
+- Combined selectors: You can combine label and field selectors using `&`
 
 ```sh
 # Get the RayCluster named raycluster-prod that also has the label env=prod.
