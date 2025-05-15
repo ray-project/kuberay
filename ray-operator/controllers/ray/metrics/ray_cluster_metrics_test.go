@@ -19,9 +19,9 @@ import (
 
 func TestRayClusterMetricsManager(t *testing.T) {
 	tests := []struct {
-		name           string
-		clusters       []rayv1.RayCluster
-		expectedLabels []string
+		name            string
+		clusters        []rayv1.RayCluster
+		expectedMetrics []string
 	}{
 		{
 			name: "two clusters, one with owner, one without",
@@ -43,7 +43,7 @@ func TestRayClusterMetricsManager(t *testing.T) {
 					},
 				},
 			},
-			expectedLabels: []string{
+			expectedMetrics: []string{
 				`kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob"} 1`,
 				`kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="None"} 1`,
 			},
@@ -72,7 +72,7 @@ func TestRayClusterMetricsManager(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
-			for _, label := range tc.expectedLabels {
+			for _, label := range tc.expectedMetrics {
 				assert.Contains(t, body, label)
 			}
 
@@ -87,8 +87,8 @@ func TestRayClusterMetricsManager(t *testing.T) {
 			assert.Equal(t, http.StatusOK, rr2.Code)
 			body2 := rr2.Body.String()
 
-			assert.NotContains(t, body2, tc.expectedLabels[0])
-			for _, label := range tc.expectedLabels[1:] {
+			assert.NotContains(t, body2, tc.expectedMetrics[0])
+			for _, label := range tc.expectedMetrics[1:] {
 				assert.Contains(t, body2, label)
 			}
 		})

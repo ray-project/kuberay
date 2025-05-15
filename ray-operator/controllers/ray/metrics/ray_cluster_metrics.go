@@ -3,8 +3,10 @@ package metrics
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -19,6 +21,7 @@ type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 	rayClusterInfo                       *prometheus.Desc
 	client                               client.Client
+	log                                  logr.Logger
 }
 
 // NewRayClusterMetricsManager creates a new RayClusterManager instance.
@@ -38,43 +41,45 @@ func NewRayClusterMetricsManager(client client.Client) *RayClusterMetricsManager
 			nil,
 		),
 		client: client,
+		log:    logf.Log.WithName("raycluster-metrics"),
 	}
 	return manager
 }
 
 // Describe implements prometheus.Collector interface Describe method.
-func (c *RayClusterMetricsManager) Describe(ch chan<- *prometheus.Desc) {
-	c.rayClusterProvisionedDurationSeconds.Describe(ch)
-	ch <- c.rayClusterInfo
+func (r *RayClusterMetricsManager) Describe(ch chan<- *prometheus.Desc) {
+	r.rayClusterProvisionedDurationSeconds.Describe(ch)
+	ch <- r.rayClusterInfo
 }
 
 // Collect implements prometheus.Collector interface Collect method.
-func (c *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
-	c.rayClusterProvisionedDurationSeconds.Collect(ch)
+func (r *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
+	r.rayClusterProvisionedDurationSeconds.Collect(ch)
 
 	var rayClusterList rayv1.RayClusterList
-	err := c.client.List(context.Background(), &rayClusterList)
+	err := r.client.List(context.Background(), &rayClusterList)
 	if err != nil {
+		r.log.Error(err, "Failed to list RayClusters")
 		return
 	}
 
 	for _, rayCluster := range rayClusterList.Items {
-		c.collectRayClusterInfo(&rayCluster, ch)
+		r.collectRayClusterInfo(&rayCluster, ch)
 	}
 }
 
-func (c *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
-	c.rayClusterProvisionedDurationSeconds.WithLabelValues(name, namespace).Set(duration)
+func (r *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, namespace string, duration float64) {
+	r.rayClusterProvisionedDurationSeconds.WithLabelValues(name, namespace).Set(duration)
 }
 
-func (c *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
+func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
 	ownerKind := "None"
 	if len(cluster.OwnerReferences) > 0 {
 		ownerKind = cluster.OwnerReferences[0].Kind
 	}
 
 	ch <- prometheus.MustNewConstMetric(
-		c.rayClusterInfo,
+		r.rayClusterInfo,
 		prometheus.GaugeValue,
 		1,
 		cluster.Name,
