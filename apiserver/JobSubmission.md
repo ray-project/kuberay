@@ -41,65 +41,14 @@ kubectl apply -f code_configmap.yaml
 
 Execute the following commands to deploy the RayCluster:
 
-```shell
+```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "name": "default-template",
-    "namespace": "default",
-    "cpu": 2,
-    "memory": 4
-  }'
+    --header 'Content-Type: application/json' \
+    --data @docs/api-example/compute_template.json
 
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   --header 'Content-Type: application/json' \
-  --data '{
-    "name": "test-cluster",
-    "namespace": "default",
-    "user": "boris",
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "NodePort",
-        "rayStartParams": {
-          "dashboard-host": "0.0.0.0",
-          "metrics-export-port": "8080"
-        },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-job-code-sample",
-            "items": {"sample_code.py" : "sample_code.py"}
-          }
-        ]
-      },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 1,
-          "maxReplicas": 1,
-          "rayStartParams": {
-            "node-ip-address": "$MY_POD_IP"
-          },
-          "volumes": [
-            {
-              "name": "code-sample",
-              "mountPath": "/home/ray/samples",
-              "volumeType": "CONFIGMAP",
-              "source": "ray-job-code-sample",
-              "items": {"sample_code.py" : "sample_code.py"}
-            }
-          ]
-        }
-      ]
-    }
-  }'
+  --data @docs/api-example/jobsubmission_clusters.json
 ```
 
 To check if the RayCluster setup correctly, list all pods with following command. You can
@@ -116,14 +65,14 @@ kubectl get pods
 
 Once the cluster is up and running, you can submit a job to the cluster using the following command:
 
-```shell
+```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster' \
-  --header 'Content-Type: application/json' \
-  --data '{
+    --header 'Content-Type: application/json' \
+    --data '{
     "entrypoint": "python /home/ray/samples/sample_code.py",
     "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
     "numCpus": ".5"
-  }'
+    }'
 ```
 
 This should return the following:
@@ -226,7 +175,7 @@ This should return the list of the submissions, that looks as follows:
 Job can be stopped using the following command. Please change the `<submissionID>` to the
 one returned during job creation.
 
-```shell
+```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
   --header 'Content-Type: application/json'
 ```
@@ -236,7 +185,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-clu
 Finally, you can delete job using the following command. Please change the `<submissionID>` to the
 one returned during job creation.
 
-```shell
+```sh
 curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
   --header 'Content-Type: application/json'
 ```

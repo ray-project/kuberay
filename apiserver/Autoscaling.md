@@ -19,13 +19,22 @@ run through of the example below.
 kubectl delete raycluster --all
 ```
 
+### IMPORTANT: Change your working directory to `apiserver/`
+
+All the following guidance require you to switch your working directory to the KubeRay
+`apiserver`:
+
+```sh
+cd apiserver/
+```
+
 ### Install ConfigMap
 
 Please install this [ConfigMap] which contains code for our example. Simply download
 this file and run:
 
 ```sh
-kubectl apply -f detachedactor.yaml
+kubectl apply -f test/cluster/cluster/detachedactor.yaml
 ```
 
 Check if the config map is successfully created, you should see `ray-example` in the list:
@@ -41,77 +50,15 @@ kubectl get configmaps
 Before running the example, you need to first deploy a RayCluster with following command.
 
 ```sh
+# Create compute tempalte
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json' \
---data '{
-  "name": "default-template",
-  "namespace": "default",
-  "cpu": 2,
-  "memory": 4
-}'
+--data  @docs/api-example/compute_template.json
+
+# Create RayCluster
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --header 'Content-Type: application/json' \
---data '{
-  "name": "test-cluster",
-  "namespace": "default",
-  "user": "boris",
-  "clusterSpec": {
-    "enableInTreeAutoscaling": true,
-    "autoscalerOptions": {
-        "upscalingMode": "Default",
-        "idleTimeoutSeconds": 30,
-        "cpu": "500m",
-        "memory": "512Mi"
-    },
-    "headGroupSpec": {
-      "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.9.0-py310",
-      "serviceType": "NodePort",
-      "rayStartParams": {
-         "dashboard-host": "0.0.0.0",
-         "metrics-export-port": "8080",
-         "num-cpus": "0"
-       },
-       "volumes": [
-         {
-           "name": "code-sample",
-           "mountPath": "/home/ray/samples",
-           "volumeType": "CONFIGMAP",
-           "source": "ray-example",
-           "items": {
-            "detached_actor.py": "detached_actor.py",
-            "terminate_detached_actor.py": "terminate_detached_actor.py"
-           }
-         }
-       ]
-    },
-    "workerGroupSpec": [
-      {
-        "groupName": "small-wg",
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "replicas": 0,
-        "minReplicas": 0,
-        "maxReplicas": 5,
-        "rayStartParams": {
-           "node-ip-address": "$MY_POD_IP"
-         },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-example",
-            "items": {
-                "detached_actor.py": "detached_actor.py",
-                "terminate_detached_actor.py": "terminate_detached_actor.py"
-            }
-          }
-        ]
-      }
-    ]
-  }
-}'
+--data @docs/api-example/autoscaling_clusters.json
 ```
 
 This command performs two main operations:

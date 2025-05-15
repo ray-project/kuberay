@@ -30,13 +30,22 @@ run through of the example below.
 kubectl delete raycluster --all
 ```
 
+### IMPORTANT: Change your working directory to `apiserver/`
+
+All the following guidance require you to switch your working directory to the KubeRay
+`apiserver`:
+
+```sh
+cd apiserver/
+```
+
 ### Install ConfigMap
 
 Please install this [ConfigMap] which contains code for our example. Simply download
 this file and run:
 
 ```sh
-kubectl apply -f code.yaml
+kubectl apply -f test/job/code.yaml
 ```
 
 Check if the config map is successfully created, you should see `ray-job-code-sample` in
@@ -53,67 +62,15 @@ kubectl get configmaps
 Use following command to create a compute template and a RayCluster with RayService support:
 
 ```sh
+cur
+# Create compute tempalte
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "name": "default-template",
-    "namespace": "default",
-    "cpu": 2,
-    "memory": 4
-  }'
+--header 'Content-Type: application/json' \
+--data  @docs/api-example/compute_template.json
+
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   --header 'Content-Type: application/json' \
-  --data '{
-    "name": "test-cluster",
-    "namespace": "default",
-    "user": "boris",
-    "annotations" : {
-      "ray.io/enable-serve-service": "true"
-    },
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "ClusterIP",
-        "rayStartParams": {
-           "dashboard-host": "0.0.0.0",
-           "metrics-export-port": "8080",
-           "dashboard-agent-listen-port": "52365"
-         },
-         "volumes": [
-           {
-             "name": "code-sample",
-             "mountPath": "/home/ray/samples",
-             "volumeType": "CONFIGMAP",
-             "source": "ray-job-code-sample",
-             "items": {"sample_code.py" : "sample_code.py"}
-           }
-         ]
-      },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 0,
-          "maxReplicas": 5,
-          "rayStartParams": {
-             "node-ip-address": "$MY_POD_IP"
-           },
-          "volumes": [
-            {
-              "name": "code-sample",
-              "mountPath": "/home/ray/samples",
-              "volumeType": "CONFIGMAP",
-              "source": "ray-job-code-sample",
-              "items": {"sample_code.py" : "sample_code.py"}
-            }
-          ]
-        }
-      ]
-    }
-  }'
+  --data @docs/api-example/create_serving_clusters.json
 ```
 
 To confirm that the cluster is created correctly, check created services using that following command:

@@ -67,30 +67,20 @@ helm install apiserver kuberay-apiserver
 
 Once the API server is installed, execute the following command:
 
-```shell
+```sh
 curl --silent -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
---header 'Content-Type: application/json' \
---data '{
-  "name": "default-template",
-  "namespace": "default",
-  "cpu": 2,
-  "memory": 4
-}'
+    --header 'Content-Type: application/json' \
+    --data @docs/api-example/compute_template.json
 ```
 
 This fails with result `Unauthorised`. To make it work we need to add an authorization
 header to the request:
 
-```shell
+```sh
 curl --silent -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
---header 'Content-Type: application/json' \
---header 'Authorization: 12345' \
---data '{
-  "name": "default-template",
-  "namespace": "default",
-  "cpu": 2,
-  "memory": 4
-}'
+    --header 'Content-Type: application/json' \
+    --header 'Authorization: 12345' \
+    --data @docs/api-example/compute_template.json
 ```
 
 ### Clean up
