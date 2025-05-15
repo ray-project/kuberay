@@ -113,53 +113,22 @@ type RayServiceSpec struct {
 
 // RayServiceStatuses defines the observed state of RayService
 type RayServiceStatuses struct {
-	// Represents the latest available observations of a RayService's current state.
-	// +patchMergeKey=type
-	// +patchStrategy=merge
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-	// LastUpdateTime represents the timestamp when the RayService status was last updated.
-	// +optional
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// Deprecated: `ServiceStatus` is deprecated - use `Conditions` instead. `Running` means the RayService is ready to
-	// serve requests. An empty `ServiceStatus` means the RayService is not ready to serve requests. The definition of
-	// `ServiceStatus` is equivalent to the `RayServiceReady` condition.
-	// +optional
-	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
-	// +optional
-	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
-	// Pending Service Status indicates a RayCluster will be created or is being created.
-	// +optional
-	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
-	// NumServeEndpoints indicates the number of Ray Pods that are actively serving or have been selected by the serve service.
-	// Ray Pods without a proxy actor or those that are unhealthy will not be counted.
-	// +optional
-	NumServeEndpoints int32 `json:"numServeEndpoints,omitempty"`
-	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
-	// RayService's generation, which is updated on mutation by the API Server.
-	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	ActiveServiceStatus  RayServiceStatus   `json:"activeServiceStatus,omitempty"`
+	PendingServiceStatus RayServiceStatus   `json:"pendingServiceStatus,omitempty"`
+	LastUpdateTime       *metav1.Time       `json:"lastUpdateTime,omitempty"`
+	ServiceStatus        ServiceStatus      `json:"serviceStatus,omitempty"`
+	Conditions           []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	ObservedGeneration   int64              `json:"observedGeneration,omitempty"`
+	NumServeEndpoints    int32              `json:"numServeEndpoints,omitempty"`
 }
 
 type RayServiceStatus struct {
-	// Important: Run "make" to regenerate code after modifying this file
-	// +optional
-	Applications map[string]AppStatus `json:"applicationStatuses,omitempty"`
-	// +optional
-	RayClusterName string `json:"rayClusterName,omitempty"`
-	// +optional
-	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
-	// Defaults to 100%.
-	// +kubebuilder:default:=100
-	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
-	// Represents the percentage weight of traffic routed to the RayCluster associated with this RayServiceStatus.
-	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
-	// Represents the last time the RayService controller migrated traffic during an IncrementalUpgrade.
-	LastTrafficMigratedTime *metav1.Time     `json:"lastTrafficMigratedTime,omitempty"`
-	RayClusterName          string           `json:"rayClusterName,omitempty"`
-	RayClusterStatus        RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	Applications            map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	TargetCapacity          *int32               `json:"targetCapacity,omitempty"`
+	TrafficRoutedPercent    *int32               `json:"trafficRoutedPercent,omitempty"`
+	LastTrafficMigratedTime *metav1.Time         `json:"lastTrafficMigratedTime,omitempty"`
+	RayClusterName          string               `json:"rayClusterName,omitempty"`
+	RayClusterStatus        RayClusterStatus     `json:"rayClusterStatus,omitempty"`
 }
 
 type AppStatus struct {
@@ -210,11 +179,9 @@ const (
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`
+	Status            RayServiceStatuses `json:"status,omitempty"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec RayServiceSpec `json:"spec,omitempty"`
-	// +optional
-	Status RayServiceStatuses `json:"status,omitempty"`
+	Spec              RayServiceSpec `json:"spec,omitempty"`
 }
 
 //+kubebuilder:object:root=true

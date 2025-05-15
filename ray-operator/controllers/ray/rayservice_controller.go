@@ -11,16 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/utils/lru"
-	"k8s.io/utils/ptr"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-
-	cmap "github.com/orcaman/concurrent-map/v2"
-
 	"github.com/go-logr/logr"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/lru"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
