@@ -92,7 +92,7 @@ kubectl get raycluster raycluster-kuberay -o jsonpath='{.metadata.annotations}'
 # {"example.com/purpose":"model-training"}
 ```
 
-## Step 4: Delete the RayCluster
+## Step 5: Delete the RayCluster
 
 To delete the RayCluster with KubeRay APIServer, execute the following command. The `raycluster-kuberay` is the name of
 the RayCluster we created earlier. You should see the "Success" status after the execution:
@@ -120,7 +120,7 @@ You can then verify if the RayCluster is removed. The following command should p
 kubectl get rayclusters
 ```
 
-## Step 5: Clean up
+## Step 6: Clean up
 
 ```sh
 kind delete cluster

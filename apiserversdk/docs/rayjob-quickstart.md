@@ -108,7 +108,7 @@ kubectl logs -l=job-name=rayjob-sample
 # 2025-05-14 05:40:55,688 SUCC cli.py:65 -- -----------------------------------
 ```
 
-### Step 1.3: Delete the RayJob
+### Step 1.4: Delete the RayJob
 
 To delete the RayJob with KubeRay APIServer, execute the following command. The `rayjob-sample` is the name of
 the RayJob we created.
