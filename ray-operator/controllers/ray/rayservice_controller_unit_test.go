@@ -1517,7 +1517,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	}{
 		{
 			name: "creates new HTTPRoute if Spec.HTTPRoute is nil",
-			setupHTTPRoute: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
+			setupHTTPRoute: func(_ *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
 				rs.Spec.HTTPRoute = nil
 				return nil
 			},
@@ -1604,7 +1604,7 @@ func TestReconcileGateway(t *testing.T) {
 	}{
 		{
 			name: "creates new Gateway if Spec.Gateway is missing during incremental upgrade",
-			setupGateway: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
+			setupGateway: func(_ *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
 				rs.Spec.Gateway = nil
 				return nil
 			},

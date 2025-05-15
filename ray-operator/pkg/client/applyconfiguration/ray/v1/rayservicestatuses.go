@@ -11,11 +11,11 @@ import (
 // RayServiceStatusesApplyConfiguration represents a declarative configuration of the RayServiceStatuses type for use
 // with apply.
 type RayServiceStatusesApplyConfiguration struct {
-	ActiveServiceStatus  *RayServiceStatusApplyConfiguration                     `json:"activeServiceStatus,omitempty"`
-	PendingServiceStatus *RayServiceStatusApplyConfiguration                     `json:"pendingServiceStatus,omitempty"`
 	LastUpdateTime       *metav1.Time                                            `json:"lastUpdateTime,omitempty"`
 	ServiceStatus        *rayv1.ServiceStatus                                    `json:"serviceStatus,omitempty"`
 	Conditions           []applyconfigurationsmetav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	ActiveServiceStatus  *RayServiceStatusApplyConfiguration                     `json:"activeServiceStatus,omitempty"`
+	PendingServiceStatus *RayServiceStatusApplyConfiguration                     `json:"pendingServiceStatus,omitempty"`
 	ObservedGeneration   *int64                                                  `json:"observedGeneration,omitempty"`
 	NumServeEndpoints    *int32                                                  `json:"numServeEndpoints,omitempty"`
 }
@@ -24,22 +24,6 @@ type RayServiceStatusesApplyConfiguration struct {
 // apply.
 func RayServiceStatuses() *RayServiceStatusesApplyConfiguration {
 	return &RayServiceStatusesApplyConfiguration{}
-}
-
-// WithActiveServiceStatus sets the ActiveServiceStatus field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ActiveServiceStatus field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithActiveServiceStatus(value *RayServiceStatusApplyConfiguration) *RayServiceStatusesApplyConfiguration {
-	b.ActiveServiceStatus = value
-	return b
-}
-
-// WithPendingServiceStatus sets the PendingServiceStatus field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PendingServiceStatus field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithPendingServiceStatus(value *RayServiceStatusApplyConfiguration) *RayServiceStatusesApplyConfiguration {
-	b.PendingServiceStatus = value
-	return b
 }
 
 // WithLastUpdateTime sets the LastUpdateTime field in the declarative configuration to the given value
@@ -68,6 +52,22 @@ func (b *RayServiceStatusesApplyConfiguration) WithConditions(values ...*applyco
 		}
 		b.Conditions = append(b.Conditions, *values[i])
 	}
+	return b
+}
+
+// WithActiveServiceStatus sets the ActiveServiceStatus field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ActiveServiceStatus field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithActiveServiceStatus(value *RayServiceStatusApplyConfiguration) *RayServiceStatusesApplyConfiguration {
+	b.ActiveServiceStatus = value
+	return b
+}
+
+// WithPendingServiceStatus sets the PendingServiceStatus field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PendingServiceStatus field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithPendingServiceStatus(value *RayServiceStatusApplyConfiguration) *RayServiceStatusesApplyConfiguration {
+	b.PendingServiceStatus = value
 	return b
 }
 
