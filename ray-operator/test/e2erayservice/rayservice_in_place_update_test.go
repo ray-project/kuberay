@@ -169,7 +169,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// event UpdatedServeApplications or FailedToUpdateServeApplications should not occur on activeRayClusterBeforeUpdate after RayService update.
+	// event UpdatedServeApplications should occure exactly twice during the entire test.
 	count := 0
 	for _, event := range events.Items {
 		if event.Reason != string(utils.UpdatedServeApplications) {
@@ -256,7 +256,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing
 	}, TestTimeoutShort).Should(Succeed())
 
 	// RayCluster is not changed
-	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, activeRayClusterBeforeUpdate.Name)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(RayClusterState(activeRayClusterBeforeUpdate)).To(Equal(rayv1.Ready))
+	activeRayClusterAfterUpdate, err2 := GetRayCluster(test, namespace.Name, activeRayClusterBeforeUpdate.Name)
+	g.Expect(err2).NotTo(HaveOccurred())
+	g.Expect(activeRayClusterAfterUpdate).To(Equal(activeRayClusterBeforeUpdate))
 }
