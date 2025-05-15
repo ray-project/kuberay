@@ -10145,7 +10145,6 @@ spec:
                         type: object
                     type: object
                   targetCapacity:
-                    default: 100
                     format: int32
                     type: integer
                   trafficRoutedPercent:
@@ -10188,9 +10187,6 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
               lastUpdateTime:
                 format: date-time
                 type: string
@@ -10338,7 +10334,6 @@ spec:
                         type: object
                     type: object
                   targetCapacity:
-                    default: 100
                     format: int32
                     type: integer
                   trafficRoutedPercent:
