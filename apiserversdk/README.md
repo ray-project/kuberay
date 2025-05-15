@@ -32,5 +32,66 @@ KubeRay Helm charts are hosted on the [ray-project/kuberay-helm](https://github.
 
 ## Usage
 
-> Emphasis here that the interface is the same as k9s apiserver, add some overview
-> template for CRUD
+The KubeRay ApiServer exposes a RESTful API that mirrors the Kubernetes API Server. You
+can interact with it using Kubernetes-style endpoints and request patterns for creating,
+retrieving, updating, and deleting custom resources such as `RayCluster` and `RayJob`.
+
+### API Structure
+
+The KubeRay API follows standard Kubernetes conventions. The structure of the endpoint
+path depends on whether you are interacting with custom resources (e.g. `RayCluster`) or
+core Kubernetes resources.
+
+#### Custom Resources
+
+For custom resources defined by CRDs (e.g. `RayCluster`, `RayJob`, etc.), the endpoint format is:
+
+```sh
+<baseURL>/apis/<group>/<version>/namespaces/<namespace>/<resourceType>/<resourceName>
+```
+
+For Ray's CRDs:
+
+- `group` = `ray.io`
+- `version` = `v1`
+- `namespace` = your target Kubernetes namespace (e.g., `default`)
+- `resourceType` = Custom resource type (e.g. `rayclusters`, `rayjobs`, `rayserve`)
+- `resourceName` = name of the resource.
+
+#### Core Kubernetes Resources
+
+For built-in Kubernetes resources (e.g. `ConfigMap`), the endpoint format is:
+
+```sh
+<baseURL>/api/v1/namespaces/<namespace>/<resourceType>/<resourceName>
+```
+
+- `namespace`: The target namespace
+- `resourceType`: Core resource type (e.g. `pods`, `configmaps`, `services`)
+- `resourceName`: Name of the resource
+
+### Label and Field Selectors
+
+When listing resources (using `GET` on a collection endpoint), you can filter results using selectors:
+
+- Label selector: label selector filters resources by their labels.
+
+```sh
+# Get all RayClusters with the label key=value
+GET /apis/ray.io/v1/namespaces/default/rayclusters?labelSelector=key%3Dvalue
+```
+
+- Field selector: field selector filters resources based on the value their resource
+fields (e.g. `metadata.name`, `status.phase`).
+
+```sh
+# Retrieve the RayCluster where the name is raycluster-prod
+GET /apis/ray.io/v1/namespaces/default/rayclusters?fieldSelector=metadata.name%3Draycluster-prod
+```
+
+- **Combined selectors**: You can combine label and field selectors using `&`
+
+```sh
+# Get the RayCluster named raycluster-prod that also has the label env=prod.
+GET /apis/ray.io/v1/namespaces/default/rayclusters?labelSelector=env%3Dprod&fieldSelector=metadata.name%3Draycluster-prod
+```
