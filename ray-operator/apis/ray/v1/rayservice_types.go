@@ -113,11 +113,11 @@ type RayServiceSpec struct {
 
 // RayServiceStatuses defines the observed state of RayService
 type RayServiceStatuses struct {
-	ActiveServiceStatus  RayServiceStatus   `json:"activeServiceStatus,omitempty"`
-	PendingServiceStatus RayServiceStatus   `json:"pendingServiceStatus,omitempty"`
 	LastUpdateTime       *metav1.Time       `json:"lastUpdateTime,omitempty"`
 	ServiceStatus        ServiceStatus      `json:"serviceStatus,omitempty"`
 	Conditions           []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	ActiveServiceStatus  RayServiceStatus   `json:"activeServiceStatus,omitempty"`
+	PendingServiceStatus RayServiceStatus   `json:"pendingServiceStatus,omitempty"`
 	ObservedGeneration   int64              `json:"observedGeneration,omitempty"`
 	NumServeEndpoints    int32              `json:"numServeEndpoints,omitempty"`
 }
@@ -179,9 +179,9 @@ const (
 // RayService is the Schema for the rayservices API
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`
-	Status            RayServiceStatuses `json:"status,omitempty"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RayServiceSpec `json:"spec,omitempty"`
+	Spec              RayServiceSpec     `json:"spec,omitempty"`
+	Status            RayServiceStatuses `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

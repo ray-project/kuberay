@@ -1344,18 +1344,19 @@ func makeIncrementalUpgradeRayService(
 
 func TestCreateGateway(t *testing.T) {
 	tests := []struct {
-		name              string
-		rayService        *rayv1.RayService
-		expectErr         bool
-		expectedName      string
-		expectedClass     string
-		expectedListeners int
+		rayService          *rayv1.RayService
+		name                string
+		expectedGatewayName string
+		expectedClass       string
+		expectedListeners   int
+		expectErr           bool
 	}{
 		{
-			name:              "valid gateway creation",
-			rayService:        makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(10)), ptr.To(int32(80)), &metav1.Time{Time: time.Now()}),
-			expectErr:         false,
-			expectedName:      "incremental-ray-service-gateway",
+			name:                "valid gateway creation",
+			expectedGatewayName: "incremental-ray-service-gateway",
+			rayService:          makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(10)), ptr.To(int32(80)), &metav1.Time{Time: time.Now()}),
+			expectErr:           false,
+
 			expectedClass:     "gateway-class",
 			expectedListeners: 1,
 		},
@@ -1377,7 +1378,7 @@ func TestCreateGateway(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, gw)
-				assert.Equal(t, tt.expectedName, gw.Name)
+				assert.Equal(t, tt.expectedGatewayName, gw.Name)
 				assert.Equal(t, tt.rayService.Namespace, gw.Namespace)
 				assert.Equal(t, gwv1.ObjectName(tt.expectedClass), gw.Spec.GatewayClassName)
 				assert.Len(t, gw.Spec.Listeners, tt.expectedListeners)
@@ -1509,23 +1510,23 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		setupHTTPRoute func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute
-		expectedName   string
-		expectedWeight int32
+		name              string
+		setupHTTPRoute    func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute
+		expectedRouteName string
+		expectedWeight    int32
 	}{
 		{
 			name: "creates new HTTPRoute if Spec.HTTPRoute is nil",
-			setupHTTPRoute: func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
+			setupHTTPRoute: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
 				rs.Spec.HTTPRoute = nil
 				return nil
 			},
-			expectedName:   "httproute-incremental-ray-service",
-			expectedWeight: 80,
+			expectedRouteName: "httproute-incremental-ray-service",
+			expectedWeight:    80,
 		},
 		{
 			name: "updates existing HTTPRoute if spec differs",
-			setupHTTPRoute: func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
+			setupHTTPRoute: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
 				desired, err := r.createHTTPRoute(ctx, rs)
 				require.NoError(t, err)
 
@@ -1535,20 +1536,20 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				rs.Spec.HTTPRoute = existing
 				return desired
 			},
-			expectedName:   "httproute-incremental-ray-service",
-			expectedWeight: 80,
+			expectedRouteName: "httproute-incremental-ray-service",
+			expectedWeight:    80,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupHTTPRoute(t, &reconciler, rayService)
+			tt.setupHTTPRoute(&reconciler, rayService)
 
 			route, err := reconciler.reconcileHTTPRoute(ctx, rayService)
 			require.NoError(t, err)
 			require.NotNil(t, route)
 
-			assert.Equal(t, tt.expectedName, route.Name)
+			assert.Equal(t, tt.expectedRouteName, route.Name)
 			assert.Equal(t, namespace, route.Namespace)
 			require.Len(t, route.Spec.Rules, 1)
 			require.Len(t, route.Spec.Rules[0].BackendRefs, 2)
@@ -1596,24 +1597,24 @@ func TestReconcileGateway(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		setupGateway         func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway
-		expectedName         string
+		setupGateway         func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway
+		expectedGatewayName  string
 		expectedClass        string
 		expectedNumListeners int
 	}{
 		{
-			name: "creates new Gateway if Spec.Gateway is nil",
-			setupGateway: func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
+			name: "creates new Gateway if Spec.Gateway is missing during incremental upgrade",
+			setupGateway: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
 				rs.Spec.Gateway = nil
 				return nil
 			},
-			expectedName:         "incremental-ray-service-gateway",
+			expectedGatewayName:  "incremental-ray-service-gateway",
 			expectedClass:        "gateway-class",
 			expectedNumListeners: 1,
 		},
 		{
-			name: "updates existing Gateway if spec differs",
-			setupGateway: func(t *testing.T, r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
+			name: "update existing Gateway if desired Gateway spec differs",
+			setupGateway: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
 				desired, err := r.createGateway(rs)
 				require.NoError(t, err)
 
@@ -1622,7 +1623,7 @@ func TestReconcileGateway(t *testing.T) {
 				rs.Spec.Gateway = existing
 				return existing
 			},
-			expectedName:         "incremental-ray-service-gateway",
+			expectedGatewayName:  "incremental-ray-service-gateway",
 			expectedClass:        "gateway-class",
 			expectedNumListeners: 1,
 		},
@@ -1630,13 +1631,13 @@ func TestReconcileGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupGateway(t, &reconciler, rayService)
+			tt.setupGateway(&reconciler, rayService)
 
 			gw, err := reconciler.reconcileGateway(ctx, rayService)
 			require.NoError(t, err)
 			require.NotNil(t, gw)
 
-			assert.Equal(t, tt.expectedName, gw.Name)
+			assert.Equal(t, tt.expectedGatewayName, gw.Name)
 			assert.Equal(t, namespace, gw.Namespace)
 			assert.Equal(t, gwv1.ObjectName(tt.expectedClass), gw.Spec.GatewayClassName)
 			assert.Len(t, gw.Spec.Listeners, tt.expectedNumListeners)

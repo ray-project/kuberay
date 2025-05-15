@@ -1014,12 +1014,12 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 
 func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 	tests := []struct {
-		name              string
-		spec              rayv1.RayServiceSpec
 		maxSurgePercent   *int32
 		stepSizePercent   *int32
 		intervalSeconds   *int32
+		name              string
 		gatewayClassName  string
+		spec              rayv1.RayServiceSpec
 		enableAutoscaling bool
 		expectError       bool
 	}{
