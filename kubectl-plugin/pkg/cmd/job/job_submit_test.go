@@ -30,7 +30,7 @@ func TestRayJobSubmitComplete(t *testing.T) {
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 }
 
-func TestRayJobSubmitValidate(t *testing.T) {
+func TestRayJobSubmitWithYamlValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
@@ -71,6 +71,29 @@ spec:
   submissionMode: 'InteractiveMode'
   backoffLimit: 0`,
 		},
+		{
+			name: "shutdownAfterJobFinishes is false and ttlSecondsAfterFinished is not zero",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: false
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+			expectError: "ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true",
+		},
+		{
+			name: "shutdownAfterJobFinishes is false and ttlSecondsAfterFinished is not zero",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -90,6 +113,52 @@ spec:
 			}
 
 			err = opts.Validate()
+			if tc.expectError != "" {
+				require.EqualError(t, err, tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	test := []struct {
+		name                     string
+		rayjobName               string
+		expectError              string
+		ttlSecondsAfterFinished  int32
+		shutdownAfterJobFinishes bool
+	}{
+		{
+			name:                     "shutdownAfterJobFinishes is false and ttlSecondsAfterFinished is not zero",
+			rayjobName:               "rayjob-sample",
+			shutdownAfterJobFinishes: false,
+			ttlSecondsAfterFinished:  10,
+			expectError:              "ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true",
+		},
+		{
+			name:                     "shutdownAfterJobFinishes is true and ttlSecondsAfterFinished is not zero",
+			rayjobName:               "rayjob-sample",
+			shutdownAfterJobFinishes: true,
+			ttlSecondsAfterFinished:  10,
+		},
+	}
+
+	for _, tc := range test {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &SubmitJobOptions{
+				cmdFactory:               cmdFactory,
+				ioStreams:                &testStreams,
+				rayjobName:               tc.rayjobName,
+				workingDir:               "Fake/File/Path",
+				shutdownAfterJobFinishes: tc.shutdownAfterJobFinishes,
+				ttlSecondsAfterFinished:  tc.ttlSecondsAfterFinished,
+			}
+			err := opts.Validate()
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {
