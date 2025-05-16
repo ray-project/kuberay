@@ -486,14 +486,18 @@ func (krc *KuberayAPIServerClient) ListRayServices(request *api.ListRayServicesR
 	return response, nil, nil
 }
 
-// Finds all ray services in a given namespace.
-func (krc *KuberayAPIServerClient) ListAllRayServices() (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
+// Finds all ray services in all namespaces.
+func (krc *KuberayAPIServerClient) ListAllRayServices(request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, *rpcStatus.Status, error) {
 	getURL := krc.baseURL + "/apis/v1/services"
 	httpRequest, err := http.NewRequestWithContext(context.TODO(), "GET", getURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create http request for url '%s': %w", getURL, err)
 	}
 
+	q := httpRequest.URL.Query()
+	q.Set("pageSize", strconv.FormatInt(int64(request.PageSize), 10))
+	q.Set("pageToken", request.PageToken)
+	httpRequest.URL.RawQuery = q.Encode()
 	httpRequest.Header.Add("Accept", "application/json")
 
 	bodyBytes, status, err := krc.executeHttpRequest(httpRequest, getURL)

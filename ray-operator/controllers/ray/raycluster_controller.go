@@ -135,7 +135,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
-		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -169,6 +168,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
 		return ctrl.Result{}, nil
 	}
+
+	setDefaults(instance)
 
 	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
 		logger.Error(err, "The RayCluster metadata is invalid")
@@ -1039,6 +1040,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
+
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
@@ -1179,7 +1181,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
-
 	if r.BatchSchedulerMgr != nil {
 		r.BatchSchedulerMgr.ConfigureReconciler(b)
 	}
@@ -1639,4 +1640,17 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	}
 
 	return totalGPUs
+}
+
+// setDefaults sets some default values for the RayCluster
+func setDefaults(instance *rayv1.RayCluster) {
+	if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+		instance.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	}
+
+	for i := range instance.Spec.WorkerGroupSpecs {
+		if instance.Spec.WorkerGroupSpecs[i].RayStartParams == nil {
+			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
+		}
+	}
 }

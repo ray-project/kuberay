@@ -62,6 +62,9 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 				},
 			},
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 	}
 
 	result := testRayClusterConfig.GenerateRayClusterApplyConfig()
@@ -78,6 +81,10 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 			Annotations: annotations,
 		},
 		Spec: &rayv1ac.RayClusterSpecApplyConfiguration{
+			EnableInTreeAutoscaling: ptr.To(true),
+			AutoscalerOptions: &rayv1ac.AutoscalerOptionsApplyConfiguration{
+				Version: ptr.To(rayv1.AutoscalerVersionV2),
+			},
 			RayVersion: ptr.To(util.RayVersion),
 			HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
 				RayStartParams: map[string]string{"dashboard-host": "1.2.3.4", "num-cpus": "0"},
@@ -122,7 +129,7 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 					GroupName:      ptr.To("default-group"),
 					Replicas:       ptr.To(int32(3)),
 					NumOfHosts:     ptr.To(int32(2)),
-					RayStartParams: map[string]string{"metrics-export-port": "8080", "dagon": "azathoth", "shoggoth": "cthulhu"},
+					RayStartParams: map[string]string{"dagon": "azathoth", "shoggoth": "cthulhu"},
 					Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 						Spec: &corev1ac.PodSpecApplyConfiguration{
 							Containers: []corev1ac.ContainerApplyConfiguration{
@@ -176,6 +183,10 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 					Memory:     ptr.To("10Gi"),
 					GPU:        ptr.To("0"),
 					TPU:        ptr.To("0"),
+					RayStartParams: map[string]string{
+						"dagon":    "azathoth",
+						"shoggoth": "cthulhu",
+					},
 				},
 			},
 		},
@@ -198,7 +209,6 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			RayClusterSpec: &rayv1ac.RayClusterSpecApplyConfiguration{
 				RayVersion: ptr.To(util.RayVersion),
 				HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-					RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
 					Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 						Spec: &corev1ac.PodSpecApplyConfiguration{
 							Containers: []corev1ac.ContainerApplyConfiguration{
@@ -240,7 +250,7 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 						GroupName:      ptr.To("default-group"),
 						Replicas:       ptr.To(int32(3)),
 						NumOfHosts:     ptr.To(int32(2)),
-						RayStartParams: map[string]string{"metrics-export-port": "8080"},
+						RayStartParams: map[string]string{"dagon": "azathoth", "shoggoth": "cthulhu"},
 						Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 							Spec: &corev1ac.PodSpecApplyConfiguration{
 								Containers: []corev1ac.ContainerApplyConfiguration{
@@ -281,12 +291,18 @@ func TestConvertRayClusterApplyConfigToYaml(t *testing.T) {
 			"american": "goldfinch",
 			"piping":   "plover",
 		},
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV1,
+		},
 		RayVersion: ptr.To(util.RayVersion),
 		Image:      ptr.To(util.RayImage),
 		Head: &Head{
 			CPU:    ptr.To("1"),
 			Memory: ptr.To("5Gi"),
 			GPU:    ptr.To("1"),
+			RayStartParams: map[string]string{
+				"num-cpus": "0",
+			},
 		},
 		WorkerGroups: []WorkerGroup{
 			{
@@ -316,9 +332,12 @@ metadata:
   name: test-ray-cluster
   namespace: default
 spec:
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    version: v1
   headGroupSpec:
     rayStartParams:
-      dashboard-host: 0.0.0.0
+      num-cpus: "0"
     template:
       spec:
         containers:
@@ -342,8 +361,6 @@ spec:
   rayVersion: %s
   workerGroupSpecs:
   - groupName: default-group
-    rayStartParams:
-      metrics-export-port: "8080"
     replicas: 3
     numOfHosts: 2
     template:
@@ -434,6 +451,9 @@ func TestGenerateResources(t *testing.T) {
 
 func TestGenerateRayClusterSpec(t *testing.T) {
 	testRayClusterConfig := RayClusterConfig{
+		Autoscaler: &Autoscaler{
+			Version: AutoscalerV2,
+		},
 		RayVersion:     ptr.To("1.2.3"),
 		Image:          ptr.To("rayproject/ray:1.2.3"),
 		ServiceAccount: ptr.To("my-service-account"),
@@ -459,7 +479,8 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 				GPU:        ptr.To("0"),
 				TPU:        ptr.To("0"),
 				RayStartParams: map[string]string{
-					"metrics-export-port": "8080",
+					"dagon":    "azathoth",
+					"shoggoth": "cthulhu",
 				},
 				NodeSelectors: map[string]string{
 					"worker-selector1": "baz",
@@ -474,9 +495,13 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 	}
 
 	expected := &rayv1ac.RayClusterSpecApplyConfiguration{
+		EnableInTreeAutoscaling: ptr.To(true),
+		AutoscalerOptions: &rayv1ac.AutoscalerOptionsApplyConfiguration{
+			Version: ptr.To(rayv1.AutoscalerVersionV2),
+		},
 		RayVersion: ptr.To("1.2.3"),
 		HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
-			RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "softmax": "GELU"},
+			RayStartParams: map[string]string{"softmax": "GELU"},
 			Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 				Spec: &corev1ac.PodSpecApplyConfiguration{
 					ServiceAccountName: ptr.To("my-service-account"),
@@ -522,10 +547,13 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 		},
 		WorkerGroupSpecs: []rayv1ac.WorkerGroupSpecApplyConfiguration{
 			{
-				GroupName:      ptr.To("default-group"),
-				NumOfHosts:     ptr.To(int32(1)),
-				Replicas:       ptr.To(int32(3)),
-				RayStartParams: map[string]string{"metrics-export-port": "8080"},
+				GroupName:  ptr.To("default-group"),
+				NumOfHosts: ptr.To(int32(1)),
+				Replicas:   ptr.To(int32(3)),
+				RayStartParams: map[string]string{
+					"dagon":    "azathoth",
+					"shoggoth": "cthulhu",
+				},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
 						ServiceAccountName: ptr.To("my-service-account"),
@@ -554,9 +582,6 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 			{
 				GroupName: ptr.To("worker-group-2"),
 				Replicas:  ptr.To(int32(0)),
-				RayStartParams: map[string]string{
-					"metrics-export-port": "8080",
-				},
 				Template: &corev1ac.PodTemplateSpecApplyConfiguration{
 					Spec: &corev1ac.PodSpecApplyConfiguration{
 						ServiceAccountName: ptr.To("my-service-account"),

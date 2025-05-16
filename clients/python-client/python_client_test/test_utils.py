@@ -283,25 +283,6 @@ class TestUtils(unittest.TestCase):
 
 
     def test_delete_worker_group(self):
-        cluster = self.director.build_small_cluster(name="small-cluster")
-        actual = cluster["metadata"]["name"]
-        expected = "small-cluster"
-        self.assertEqual(actual, expected)
-
-        cluster, succeeded = self.utils.delete_worker_group(
-            cluster,
-            group_name="small-cluster-workers",
-        )
-        self.assertEqual(succeeded, True)
-        self.assertEqual(len(cluster["spec"]["workerGroupSpecs"]),0)
-
-        # deleting the same worker group again should fail
-        with self.assertRaises(AssertionError):
-            cluster, succeeded = self.utils.delete_worker_group(
-                cluster,
-                group_name="small-cluster-workers",
-            )
-    def test_delete_worker_group(self):
         """
         Test delete_worker_group
         """

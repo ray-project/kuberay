@@ -481,8 +481,8 @@ func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1
 		succeededCount++
 	}
 
-	rayJob.Status.Failed = ptr.To[int32](failedCount)
-	rayJob.Status.Succeeded = ptr.To[int32](succeededCount)
+	rayJob.Status.Failed = ptr.To(failedCount)
+	rayJob.Status.Succeeded = ptr.To(succeededCount)
 
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
 		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
@@ -692,7 +692,7 @@ func (r *RayJobReconciler) suspendWorkerGroups(ctx context.Context, rayJobInstan
 	}
 
 	for i := range cluster.Spec.WorkerGroupSpecs {
-		cluster.Spec.WorkerGroupSpecs[i].Suspend = ptr.To[bool](true)
+		cluster.Spec.WorkerGroupSpecs[i].Suspend = ptr.To(true)
 	}
 
 	if err := r.Update(ctx, &cluster); err != nil {
