@@ -53,7 +53,7 @@ metadata:
     app.kubernetes.io/component: kuberay-apiserver
 
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app.kubernetes.io/name: kuberay
     app.kubernetes.io/component: kuberay-apiserver
@@ -61,9 +61,11 @@ spec:
     - name: http
       port: 8888
       targetPort: 8888
+      nodePort: 31888
     - name: rpc
       port: 8887
       targetPort: 8887
+      nodePort: 31887
 
 ---
 apiVersion: v1

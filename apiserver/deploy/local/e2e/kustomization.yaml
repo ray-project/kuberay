@@ -28,3 +28,15 @@ patches:
     kind: Deployment
     name: kuberay-apiserver
     version: v1
+- patch: |-
+    - op: replace
+      path: /spec/type
+      value: ClusterIP
+    - op: remove
+      path: /spec/ports/0/nodePort
+    - op: remove
+      path: /spec/ports/1/nodePort
+  target:
+    kind: Service
+    name: kuberay-apiserver
+    version: v1
