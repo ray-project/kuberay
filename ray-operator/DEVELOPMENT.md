@@ -157,7 +157,7 @@ ok   github.com/ray-project/kuberay/ray-operator/controllers/utils 0.015s covera
 The e2e tests can be run by executing the following command:
 
 ```bash
-# Reinstall the kuberay-operator to make sure it use the latest nightly image you just built.
+# Reinstall the kuberay-operator to make sure it uses the latest nightly image you just built.
 helm uninstall kuberay-operator
 helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 make test-e2e
@@ -244,7 +244,7 @@ Run tests on your local environment
 
 ### Generating API Reference
 
-We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documenation for more details.
+We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documentation for more details.
 
 Generate API refernece:
 
@@ -289,7 +289,7 @@ python3 ../scripts/rbac-check.py
 
 ### Building Multi architecture images locally
 
-Most of image repositories supports multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct the image with a matching architectures. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
+Most image repositories support multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct image with a matching architecture. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
 Verify Buildx installation and make sure it does not return error
 
 ```console

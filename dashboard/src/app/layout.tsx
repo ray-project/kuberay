@@ -1,6 +1,6 @@
 "use client";
 // Tailwind global styles have conflicts with Joy UI. For example,
-// button background is overriden to be transparent.
+// button background is overridden to be transparent.
 // See https://github.com/tailwindlabs/tailwindcss/issues/7500
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { Box } from "@mui/joy";
