@@ -238,14 +238,13 @@ func main() {
 	if config.EnableMetrics {
 		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(ctx, mgr.GetClient())
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
-		rayServiceMetricManager = metrics.NewRayServiceMetricsManager(mgr.GetClient())
+		rayServiceMetricManager = metrics.NewRayServiceMetricsManager(ctx, mgr.GetClient())
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricManager,
 			rayJobMetricsManager,
 			rayServiceMetricManager,
 		)
 	}
-	
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,
