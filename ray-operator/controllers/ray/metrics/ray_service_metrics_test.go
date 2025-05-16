@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-func TestRayClusterMetricsManager(t *testing.T) {
+func TestRayServiceMetricsManager(t *testing.T) {
 	testCases := []struct {
 		name         string
 		rayServices  []rayv1.RayService
@@ -55,7 +56,7 @@ func TestRayClusterMetricsManager(t *testing.T) {
 				services[i] = &tc.rayServices[i]
 			}
 			client := fake.NewClientBuilder().WithScheme(k8sScheme).WithObjects(services...).Build()
-			manager := NewRayServiceMetricsManager(client)
+			manager := NewRayServiceMetricsManager(context.Background(), client)
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
@@ -69,6 +70,22 @@ func TestRayClusterMetricsManager(t *testing.T) {
 			body := rr.Body.String()
 			for _, info := range tc.expectedInfo {
 				assert.Contains(t, body, info)
+			}
+
+			if len(tc.rayServices) > 0 {
+				err := client.Delete(t.Context(), &tc.rayServices[0])
+				require.NoError(t, err)
+			}
+
+			rr2 := httptest.NewRecorder()
+			handler.ServeHTTP(rr2, req)
+
+			assert.Equal(t, http.StatusOK, rr2.Code)
+			body2 := rr2.Body.String()
+
+			assert.NotContains(t, body2, tc.expectedInfo[0])
+			for _, info := range tc.expectedInfo[1:] {
+				assert.Contains(t, body2, info)
 			}
 		})
 	}

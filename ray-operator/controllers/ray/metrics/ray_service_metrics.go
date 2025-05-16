@@ -3,8 +3,10 @@ package metrics
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -14,11 +16,12 @@ import (
 // RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
 	rayServiceInfo *prometheus.Desc
-	client         ctrlclient.Client
+	client         client.Client
+	log            logr.Logger
 }
 
 // NewRayServiceMetricsManager creates a new RayServiceMetricsManager instance.
-func NewRayServiceMetricsManager(client ctrlclient.Client) *RayServiceMetricsManager {
+func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *RayServiceMetricsManager {
 	collector := &RayServiceMetricsManager{
 		rayServiceInfo: prometheus.NewDesc(
 			"kuberay_service_info",
@@ -27,6 +30,7 @@ func NewRayServiceMetricsManager(client ctrlclient.Client) *RayServiceMetricsMan
 			nil,
 		),
 		client: client,
+		log:    ctrl.LoggerFrom(ctx),
 	}
 	return collector
 }
