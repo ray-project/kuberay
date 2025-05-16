@@ -180,9 +180,6 @@ load-ray-test-image: ## Load the ray test images.
 docker-image: test ## Build image for the api server.
 	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
-curl-docker-image: test ## Build image for the api server.
-	$(ENGINE) build -t ${IMG} -f Dockerfile ..
-
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
@@ -203,7 +200,7 @@ uninstall: ## Remove the kuberay api server without security server from the K8s
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
 
 .PHONY: uninstall-e2e
-uninstall-e2e: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
+uninstall-e2e: ## Remove the kuberay api server for e2e from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/e2e | kubectl delete -f -
 
 .PHONY: install-secure
