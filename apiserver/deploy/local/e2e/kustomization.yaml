@@ -28,6 +28,7 @@ patches:
     kind: Deployment
     name: kuberay-apiserver
     version: v1
+# Replace NodePort with ClusterIP as we do not need to receive requests from outside the Kubernetes cluster
 - patch: |-
     - op: replace
       path: /spec/type
