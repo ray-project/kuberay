@@ -5,10 +5,11 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 //go:generate mockgen -destination=mocks/ray_cluster_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayClusterMetricsObserver
@@ -25,7 +26,7 @@ type RayClusterMetricsManager struct {
 }
 
 // NewRayClusterMetricsManager creates a new RayClusterManager instance.
-func NewRayClusterMetricsManager(client client.Client) *RayClusterMetricsManager {
+func NewRayClusterMetricsManager(ctx context.Context, client client.Client) *RayClusterMetricsManager {
 	manager := &RayClusterMetricsManager{
 		rayClusterProvisionedDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -34,14 +35,20 @@ func NewRayClusterMetricsManager(client client.Client) *RayClusterMetricsManager
 			},
 			[]string{"name", "namespace"},
 		),
+		// rayClusterInfo is a gauge metric that indicates the metadata information about RayCluster custom resources.
+		// The `owner_kind` label indicates the CRD type that originated the RayCluster.
+		// Possible values for `owner_kind`:
+		// - None: Created by a RayCluster CRD
+		// - RayJob: Created by a RayJob CRD
+		// - RayService: Created by a RayService CRD
 		rayClusterInfo: prometheus.NewDesc(
 			"kuberay_cluster_info",
-			"Metadata information about Ray clusters",
+			"Metadata information about RayCluster custom resources",
 			[]string{"name", "namespace", "owner_kind"},
 			nil,
 		),
 		client: client,
-		log:    logf.Log.WithName("raycluster-metrics"),
+		log:    ctrl.LoggerFrom(ctx),
 	}
 	return manager
 }
@@ -74,8 +81,8 @@ func (r *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, na
 
 func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
 	ownerKind := "None"
-	if len(cluster.OwnerReferences) > 0 {
-		ownerKind = cluster.OwnerReferences[0].Kind
+	if v, ok := cluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok {
+		ownerKind = v
 	}
 
 	ch <- prometheus.MustNewConstMetric(

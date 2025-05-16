@@ -230,10 +230,12 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
+	ctx := ctrl.SetupSignalHandler()
+
 	var rayClusterMetricManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	if config.EnableMetrics {
-		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(mgr.GetClient())
+		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(ctx, mgr.GetClient())
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricManager,
@@ -241,7 +243,6 @@ func main() {
 		)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:   config.HeadSidecarContainers,
 		WorkerSidecarContainers: config.WorkerSidecarContainers,

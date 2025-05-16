@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,16 +31,16 @@ func TestRayClusterMetricsManager(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-ray-cluster",
 						Namespace: "default",
-						OwnerReferences: []metav1.OwnerReference{
-							{Kind: "RayJob"},
+						Labels: map[string]string{
+							"ray.io/originated-from-crd": "RayJob",
 						},
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "test-ray-cluster-2",
-						Namespace:       "default",
-						OwnerReferences: []metav1.OwnerReference{},
+						Name:      "test-ray-cluster-2",
+						Namespace: "default",
+						Labels:    map[string]string{},
 					},
 				},
 			},
@@ -60,7 +61,7 @@ func TestRayClusterMetricsManager(t *testing.T) {
 				objs[i] = &tc.clusters[i]
 			}
 			client := fake.NewClientBuilder().WithScheme(k8sScheme).WithObjects(objs...).Build()
-			manager := NewRayClusterMetricsManager(client)
+			manager := NewRayClusterMetricsManager(context.Background(), client)
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
