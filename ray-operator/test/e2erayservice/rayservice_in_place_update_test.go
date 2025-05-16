@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 
@@ -151,11 +150,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Wait active RayCluster has been terminated
-	g.Eventually(func() bool {
-		_, err := GetRayCluster(test, activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)
-		return k8sApiErrors.IsNotFound(err)
-	}, TestTimeoutMedium).Should(BeTrue())
+	waitingForRayClusterSwitch(g, test, rayService, activeRayClusterBeforeUpdate.Name)
 
 	// Make sure the serveConfig is updated to new ray cluster.
 	g.Eventually(func(g Gomega) {
