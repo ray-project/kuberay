@@ -41,18 +41,17 @@ spec:
     http_options:
       port: 9000
   rayClusterConfig:
-    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.45.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
       # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
-      rayStartParams: {}
       # Pod template
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.45.0
               resources:
                 limits:
                   cpu: 2
@@ -67,13 +66,12 @@ spec:
         maxReplicas: 5
         # logical group name, for this called small-group, also can be functional
         groupName: small-group
-        rayStartParams: {}
         # Pod template
         template:
           spec:
             containers:
               - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.41.0
+                image: rayproject/ray:2.45.0
                 resources:
                   limits:
                     cpu: "1"

@@ -5,7 +5,6 @@ metadata:
 spec:
   # Ray head pod configuration
   headGroupSpec:
-    rayStartParams: {}
     # pod template
     template:
       metadata:
@@ -13,7 +12,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -53,13 +52,12 @@ spec:
     minReplicas: 1
     maxReplicas: 10
     groupName: small-group
-    rayStartParams: {}
     #pod template
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs

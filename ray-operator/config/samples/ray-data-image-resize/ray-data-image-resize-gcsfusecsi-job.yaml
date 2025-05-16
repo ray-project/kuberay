@@ -27,7 +27,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.41.0
+          - image: rayproject/ray:2.45.0
             name: ray-head
             ports:
             - containerPort: 6379
@@ -66,7 +66,6 @@ spec:
     - groupName: worker-group
       maxReplicas: 3
       minReplicas: 1
-      rayStartParams: {}
       replicas: 3
       template:
         metadata:
@@ -77,7 +76,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.41.0
+          - image: rayproject/ray:2.45.0
             name: ray-worker
             resources:
               requests:

@@ -20,7 +20,6 @@ spec:
             TPU_CHIPS: "8"
   rayClusterConfig:
     headGroupSpec:
-      rayStartParams: {}
       template:
         metadata:
           annotations:
@@ -76,7 +75,6 @@ spec:
       minReplicas: 1
       maxReplicas: 1
       numOfHosts: 1
-      rayStartParams: {}
       template:
         metadata:
           annotations:

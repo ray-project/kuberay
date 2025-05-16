@@ -60,7 +60,7 @@ spec:
         serviceAccountName: kube-rbac-proxy
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -120,12 +120,11 @@ spec:
     minReplicas: 1
     maxReplicas: 5
     groupName: worker-group
-    rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           resources:
             limits:
               cpu: 1

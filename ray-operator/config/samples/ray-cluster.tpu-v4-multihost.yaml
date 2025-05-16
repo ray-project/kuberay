@@ -6,14 +6,13 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v4-multihost
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.45.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -47,7 +46,6 @@ spec:
               - containerPort: 8081
                 name: mxla
   workerGroupSpecs:
-  - rayStartParams: {}
     replicas: 1
     minReplicas: 1
     maxReplicas: 1
@@ -57,7 +55,7 @@ spec:
       spec:
         containers:
           - name: ray-worker
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:

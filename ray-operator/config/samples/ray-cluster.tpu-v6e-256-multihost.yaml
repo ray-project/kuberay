@@ -3,14 +3,13 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v6e-multihost
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.45.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:
@@ -36,12 +35,11 @@ spec:
     minReplicas: 0
     maxReplicas: 1
     numOfHosts: 64
-    rayStartParams: {}
     template:
       spec:
         containers:
           - name: ray-worker
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             imagePullPolicy: IfNotPresent
             resources:
               limits:
