@@ -25,7 +25,7 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 	collector := &RayServiceMetricsManager{
 		rayServiceInfo: prometheus.NewDesc(
 			"kuberay_service_info",
-			"RayServiceInfo contains the information of the RayService.",
+			"Metadata information about RayService custom resources",
 			[]string{"name", "namespace"},
 			nil,
 		),
@@ -44,6 +44,7 @@ func (c *RayServiceMetricsManager) Describe(ch chan<- *prometheus.Desc) {
 func (c *RayServiceMetricsManager) Collect(ch chan<- prometheus.Metric) {
 	var rayServiceList rayv1.RayServiceList
 	if err := c.client.List(context.Background(), &rayServiceList); err != nil {
+		c.log.Error(err, "Failed to list RayServices")
 		return
 	}
 
