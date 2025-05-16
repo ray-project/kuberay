@@ -212,11 +212,11 @@ func TrimJobName(jobName string) string {
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
-	maxLenght := 63
+	maxLength := 63
 
-	if len(s) > maxLenght {
+	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}

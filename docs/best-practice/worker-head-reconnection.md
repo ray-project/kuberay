@@ -8,7 +8,7 @@ For a `RayCluster` with a head and several workers, if a worker is crashed, it w
 ## Explanation
 
 > **note**
-It was an issue that only happened with old version In the Kuberay version under 0.3.0, we recommand you try the latest version
+It was an issue that only happened with old version In the Kuberay version under 0.3.0, we recommend you try the latest version
 
 When the head pod was deleted, it will be recreated with a new IP by KubeRay controller，and the GCS server address is changed accordingly. The Raylets of all workers will try to get GCS address from Redis in `ReconnectGcsServer`, but the redis_clients always use the previous head IP, so they will always fail to get new GCS address. The Raylets will not exit until max retries are reached. There are two configurations determining this long delay:
 
