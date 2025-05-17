@@ -197,19 +197,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 		newRayService, err = test.Client().Ray().RayV1().RayServices(newRayService.Namespace).Update(test.Ctx(), newRayService, metav1.UpdateOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", newRayService.Namespace, newRayService.Name)
-		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
-
-		// Assert that the active RayCluster is eventually different
-		LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to switch to a new cluster", newRayService.Namespace, newRayService.Name)
-		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) string {
-			return rayService.Status.ActiveServiceStatus.RayClusterName
-		}, Not(Equal(rayClusterName))))
-
-		LogWithTimestamp(test.T(), "Verifying RayService %s/%s UpgradeInProgress condition to be false", newRayService.Namespace, newRayService.Name)
-		rayService, err = GetRayService(test, namespace.Name, "test-rayservice")
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceUpgrading(rayService)).To(BeFalse())
+		waitingForRayClusterSwitch(g, test, newRayService, rayClusterName)
 	}()
 
 	// Run Locust test
