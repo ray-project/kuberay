@@ -1,111 +1,78 @@
 # Job Submission using API server
 
-Ray provides very convinient and powerful [Job Submission APIs]. The issue is that it needs to
+Ray provides very convenient and powerful [Job Submission APIs]. The issue is that it needs to
 access cluster's dashboard Ingress, which currently does not have any security implementations.
 Alternatively you can use Ray cluster head service for this, but in this case your Ray job
-management code has to run in the same kubernetes cluster as Ray. Job submission implementation in
+management code has to run in the same Kubernetes cluster as Ray. Job submission implementation in
 the API server leverages already exposed URL of the API server to locate cluster and use its head
 service to implement Job management functionality. Because you can access API server running on the
-remote kubernetes cluster you can use these APIs for managing remote Ray clusters without exposing
+remote Kubernetes cluster you can use these APIs for managing remote Ray clusters without exposing
 them via Ingress.
 
 ## Using Job Submission APIs
 
-Note that job submission APIs will only work if you are running API server within kubernetes
+Note that job submission APIs will only work if you are running API server within Kubernetes
 cluster. Local Development option of the API server will not work.
 
-The first step is to deploy KubeRay operator and API server.
+Before going through the example, remove any running RayClusters to ensure a successful
+run through of the example below.
+
+```sh
+kubectl delete raycluster --all
+```
 
 ### Deploy KubeRay operator and API server
 
-Reffer to [readme](README.md) for setting up KubRay operator and API server.
+Refer to [README](README.md) for setting up KubeRay operator and API server.
 
-```shell
-make operator-image cluster load-operator-image deploy-operator
-```
-
-Once they are set up, you first need to create a Ray cluster using the following commands:
-
-### Deploy Ray cluster
-
-Execute the following commands:
-
-```shell
-curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "name": "default-template",
-    "namespace": "default",
-    "cpu": 2,
-    "memory": 4
-  }'
-
-curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "name": "test-cluster",
-    "namespace": "default",
-    "user": "boris",
-    "clusterSpec": {
-      "headGroupSpec": {
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "serviceType": "NodePort",
-        "rayStartParams": {
-          "dashboard-host": "0.0.0.0",
-          "metrics-export-port": "8080"
-        },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-job-code-sample",
-            "items": {"sample_code.py" : "sample_code.py"}
-          }
-        ]
-      },
-      "workerGroupSpec": [
-        {
-          "groupName": "small-wg",
-          "computeTemplate": "default-template",
-          "image": "rayproject/ray:2.9.0-py310",
-          "replicas": 1,
-          "minReplicas": 1,
-          "maxReplicas": 1,
-          "rayStartParams": {
-            "node-ip-address": "$MY_POD_IP"
-          },
-          "volumes": [
-            {
-              "name": "code-sample",
-              "mountPath": "/home/ray/samples",
-              "volumeType": "CONFIGMAP",
-              "source": "ray-job-code-sample",
-              "items": {"sample_code.py" : "sample_code.py"}
-            }
-          ]
-        }
-      ]
-    }
-  }'
-```
+### Install ConfigMap
 
 Note that this cluster is mounting a volume from a configmap. This config map should be created
 prior to cluster creation using [this YAML].
+
+We will use this [ConfigMap] which contains code for our example. Please download the
+config map and deploy it with following command:
+
+```sh
+kubectl apply -f code_configmap.yaml
+```
+
+### Deploy RayCluster
+
+Execute the following commands to deploy the RayCluster:
+
+```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
+    --header 'Content-Type: application/json' \
+    --data @docs/api-example/compute_template.json
+
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
+  --header 'Content-Type: application/json' \
+  --data @docs/api-example/jobsubmission_clusters.json
+```
+
+To check if the RayCluster setup correctly, list all pods with following command. You can
+see a head and worker node for `test-cluster` running:
+
+```sh
+kubectl get pods
+# NAME                                 READY   STATUS    RESTARTS   AGE
+# test-cluster-head                    1/1     Running   0          4m9s
+# test-cluster-small-wg-worker-c8t2w   1/1     Running   0          4m9s
+```
 
 ### Submit Ray Job
 
 Once the cluster is up and running, you can submit a job to the cluster using the following command:
 
-```shell
+```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster' \
-  --header 'Content-Type: application/json' \
-  --data '{
+    --header 'Content-Type: application/json' \
+    --data '{
     "entrypoint": "python /home/ray/samples/sample_code.py",
     "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
     "numCpus": ".5"
-  }'
+    }'
 ```
 
 This should return the following:
@@ -120,11 +87,11 @@ Note that the `submissionId` value that you will get is different
 
 ### Get job details
 
-Once the job is submitted, the following command can be used to get job's details. Note that
-submission ID returned during job creation should be used here.
+Once the job is submitted, the following command can be used to get job's details. Please
+change the `<submissionID>` to the one returned during job creation.
 
 ```shell
-curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
+curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
   --header 'Content-Type: application/json'
 ```
 
@@ -134,7 +101,7 @@ This should return JSON similar to the one below
 {
    "entrypoint":"python /home/ray/samples/sample_code.py",
    "jobId":"02000000",
-   "submissionId":"raysubmit_KWZLwme56esG3Wcr",
+   "submissionId":"<submissionID>",
    "status":"SUCCEEDED",
    "message":"Job finished successfully.",
    "startTime":"1699442662879",
@@ -148,11 +115,11 @@ This should return JSON similar to the one below
 
 ### Get Job log
 
-You can also get job execution log using the following command. Note that submission ID returned
-during job creation should be used here.
+You can also get job execution log using the following command. Please change the
+`<submissionID>` to the one returned during job creation.
 
 ```shell
-curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/log/raysubmit_KWZLwme56esG3Wcr' \
+curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/log/<submissionID>' \
   --header 'Content-Type: application/json'
 ```
 
@@ -169,7 +136,7 @@ test_counter got 4
 test_counter got 5
 ```
 
-Note that this command always returns execution log from the begining (no streaming support) till
+Note that this command always returns execution log from the beginning (no streaming support) till
 the current moment.
 
 ### List jobs
@@ -205,25 +172,33 @@ This should return the list of the submissions, that looks as follows:
 
 ### Stop Job
 
-Execution of the job can be stoped using the following command. Note that submission ID returned
-during job creation should be used here.
+Job can be stopped using the following command. Please change the `<submissionID>` to the
+one returned during job creation.
 
-```shell
-curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
+```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
   --header 'Content-Type: application/json'
 ```
 
 ### Delete Job
 
-Finally, you can delete job using the following command. Note that submission ID returned during job
-creation should be used here.
+Finally, you can delete job using the following command. Please change the `<submissionID>` to the
+one returned during job creation.
 
-```shell
-curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/raysubmit_KWZLwme56esG3Wcr' \
+```sh
+curl -X DELETE 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
   --header 'Content-Type: application/json'
 ```
 
-You can validate job deletion by looking at the Ray dashboard (jobs pane) and ensuring that it was removed
+You can validate the job deletion by listing jobs again. You should see an empty list.
+
+### Clean up
+
+```sh
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
+```
 
 [Job Submission APIs]: https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html
-[this YAML]: /test/job/code.yaml
+[ConfigMap]: test/job/code.yaml
