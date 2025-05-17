@@ -92,10 +92,10 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricManager *metrics.RayClusterMetricsManager
-	HeadSidecarContainers   []corev1.Container
-	WorkerSidecarContainers []corev1.Container
-	IsOpenShift             bool
+	RayClusterMetricsManager *metrics.RayClusterMetricsManager
+	HeadSidecarContainers    []corev1.Container
+	WorkerSidecarContainers  []corev1.Container
+	IsOpenShift              bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -1608,7 +1608,7 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	} else {
-		emitRayClusterMetrics(r.options.RayClusterMetricManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
+		emitRayClusterMetrics(r.options.RayClusterMetricsManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 	}
 
 	return inconsistent, err
