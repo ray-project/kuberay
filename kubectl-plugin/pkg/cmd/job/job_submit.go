@@ -40,40 +40,42 @@ const (
 )
 
 type SubmitJobOptions struct {
-	cmdFactory         cmdutil.Factory
-	dashboardClient    utils.RayDashboardClientInterface
-	ioStreams          *genericiooptions.IOStreams
-	RayJob             *rayv1.RayJob
-	logColor           string
-	image              string
-	fileName           string
-	workingDir         string
-	runtimeEnv         string
-	headers            string
-	verify             string
-	cluster            string
-	runtimeEnvJson     string
-	entryPointResource string
-	metadataJson       string
-	logStyle           string
-	submissionID       string
-	rayjobName         string
-	rayVersion         string
-	entryPoint         string
-	headCPU            string
-	headMemory         string
-	headGPU            string
-	workerCPU          string
-	workerMemory       string
-	workerGPU          string
-	namespace          string
-	entryPointMemory   int
-	entryPointGPU      float32
-	workerReplicas     int32
-	entryPointCPU      float32
-	noWait             bool
-	dryRun             bool
-	verbose            bool
+	cmdFactory               cmdutil.Factory
+	dashboardClient          utils.RayDashboardClientInterface
+	ioStreams                *genericiooptions.IOStreams
+	RayJob                   *rayv1.RayJob
+	logColor                 string
+	image                    string
+	fileName                 string
+	workingDir               string
+	runtimeEnv               string
+	headers                  string
+	verify                   string
+	cluster                  string
+	runtimeEnvJson           string
+	entryPointResource       string
+	metadataJson             string
+	logStyle                 string
+	submissionID             string
+	rayjobName               string
+	rayVersion               string
+	entryPoint               string
+	headCPU                  string
+	headMemory               string
+	headGPU                  string
+	workerCPU                string
+	workerMemory             string
+	workerGPU                string
+	namespace                string
+	entryPointMemory         int
+	entryPointGPU            float32
+	workerReplicas           int32
+	entryPointCPU            float32
+	noWait                   bool
+	dryRun                   bool
+	verbose                  bool
+	shutdownAfterJobFinishes bool
+	ttlSecondsAfterFinished  int32
 }
 
 type JobInfo struct {
@@ -171,6 +173,8 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
+	cmd.Flags().BoolVar(&options.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "Shutdown the cluster after the job finishes")
+	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished. Only works when filename is not provided")
 
 	return cmd
 }
@@ -254,8 +258,17 @@ func (options *SubmitJobOptions) Validate() error {
 			}
 			options.runtimeEnvJson = string(runtimeJson)
 		}
+
+		if !options.RayJob.Spec.ShutdownAfterJobFinishes && options.RayJob.Spec.TTLSecondsAfterFinished != 0 {
+			return fmt.Errorf("ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true")
+		}
+
 	} else if strings.TrimSpace(options.rayjobName) == "" {
 		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
+	} else if options.fileName == "" {
+		if !options.shutdownAfterJobFinishes && options.ttlSecondsAfterFinished != 0 {
+			return fmt.Errorf("ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true")
+		}
 	}
 
 	if options.workingDir == "" {
@@ -289,9 +302,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.fileName == "" {
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
-			RayJobName:     options.rayjobName,
-			Namespace:      options.namespace,
-			SubmissionMode: "InteractiveMode",
+			RayJobName:               options.rayjobName,
+			Namespace:                options.namespace,
+			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
+			SubmissionMode:           "InteractiveMode",
 			// Prior to kuberay 1.2.2, the entry point is required. To maintain
 			// backwards compatibility with 1.2.x, we submit the entry point
 			// here, even though it will be ignored.

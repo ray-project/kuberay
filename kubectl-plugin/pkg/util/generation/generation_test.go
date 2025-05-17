@@ -164,9 +164,11 @@ func TestGenerateRayClusterApplyConfig(t *testing.T) {
 
 func TestGenerateRayJobApplyConfig(t *testing.T) {
 	testRayJobYamlObject := RayJobYamlObject{
-		RayJobName:     "test-ray-job",
-		Namespace:      "default",
-		SubmissionMode: "InteractiveMode",
+		RayJobName:               "test-ray-job",
+		Namespace:                "default",
+		SubmissionMode:           "InteractiveMode",
+		TTLSecondsAfterFinished:  100,
+		ShutdownAfterJobFinishes: true,
 		RayClusterConfig: RayClusterConfig{
 			RayVersion: ptr.To(util.RayVersion),
 			Image:      ptr.To(util.RayImage),
@@ -204,8 +206,10 @@ func TestGenerateRayJobApplyConfig(t *testing.T) {
 			Namespace: ptr.To("default"),
 		},
 		Spec: &rayv1ac.RayJobSpecApplyConfiguration{
-			SubmissionMode: ptr.To(rayv1.JobSubmissionMode(testRayJobYamlObject.SubmissionMode)),
-			Entrypoint:     ptr.To(""),
+			SubmissionMode:           ptr.To(rayv1.JobSubmissionMode(testRayJobYamlObject.SubmissionMode)),
+			Entrypoint:               ptr.To(""),
+			TTLSecondsAfterFinished:  ptr.To(int32(100)),
+			ShutdownAfterJobFinishes: ptr.To(true),
 			RayClusterSpec: &rayv1ac.RayClusterSpecApplyConfiguration{
 				RayVersion: ptr.To(util.RayVersion),
 				HeadGroupSpec: &rayv1ac.HeadGroupSpecApplyConfiguration{
