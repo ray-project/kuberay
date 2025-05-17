@@ -566,6 +566,12 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 		Value: rayJobInstance.Status.JobId,
 	})
 
+	// Copy labels from RayJob to submitter pod template
+	submitterTemplate.ObjectMeta.Labels = make(map[string]string)
+	for k, v := range rayJobInstance.Labels {
+		submitterTemplate.ObjectMeta.Labels[k] = v
+	}
+
 	return submitterTemplate, nil
 }
 
@@ -576,15 +582,27 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
+
+	// Create labels for the job and ensure they're applied to the pod template
+	jobLabels := mergeLabels(rayJobInstance.Labels, map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: rayJobInstance.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+		utils.KubernetesCreatedByLabelKey:     utils.ComponentName,
+	})
+
+	submitterTemplate.ObjectMeta = metav1.ObjectMeta{
+		Name:        rayJobInstance.Name,
+		Namespace:   rayJobInstance.Namespace,
+		Labels:      jobLabels,
+		Annotations: rayJobInstance.Annotations,
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      rayJobInstance.Name,
-			Namespace: rayJobInstance.Namespace,
-			Labels: map[string]string{
-				utils.RayOriginatedFromCRNameLabelKey: rayJobInstance.Name,
-				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
-				utils.KubernetesCreatedByLabelKey:     utils.ComponentName,
-			},
+			Name:        rayJobInstance.Name,
+			Namespace:   rayJobInstance.Namespace,
+			Labels:      jobLabels,
+			Annotations: rayJobInstance.Annotations,
 		},
 		Spec: batchv1.JobSpec{
 			// Reduce the number of retries, which defaults to 6, so the ray job submission command
@@ -911,4 +929,15 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
+}
+
+// mergeLabels merges multiple maps of labels, with the rightmost map taking precedence.
+func mergeLabels(maps ...map[string]string) map[string]string {
+	result := make(map[string]string)
+	for _, m := range maps {
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+	return result
 }
