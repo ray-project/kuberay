@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRayResourceTypeCompletionFunc(t *testing.T) {
@@ -21,14 +22,5 @@ func checkCompletion(t *testing.T, comps, expectedComps []string, directive, exp
 	sort.Strings(comps)
 	sort.Strings(expectedComps)
 
-	if len(expectedComps) != len(comps) {
-		t.Fatalf("expected completions\n%v\nbut got\n%v", expectedComps, comps)
-	}
-
-	for i := range comps {
-		if expectedComps[i] != comps[i] {
-			t.Errorf("expected completions\n%v\nbut got\n%v", expectedComps, comps)
-			break
-		}
-	}
+	require.ElementsMatch(t, expectedComps, comps)
 }

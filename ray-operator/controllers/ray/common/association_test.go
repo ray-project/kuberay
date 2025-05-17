@@ -23,12 +23,8 @@ func TestRayServiceServeServiceNamespacedName(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, *instanceWithWrongSvc)
 	require.NoError(t, err)
 	namespaced := RayServiceServeServiceNamespacedName(serviceInstance)
-	if namespaced.Name != svc.Name {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Name, namespaced.Name)
-	}
-	if namespaced.Namespace != svc.Namespace {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Namespace, namespaced.Namespace)
-	}
+	assert.Equal(t, svc.Name, namespaced.Name)
+	assert.Equal(t, svc.Namespace, namespaced.Namespace)
 }
 
 func TestRayServiceServeServiceNamespacedNameForUserSpecifiedServeService(t *testing.T) {
@@ -42,15 +38,9 @@ func TestRayServiceServeServiceNamespacedNameForUserSpecifiedServeService(t *tes
 	require.NoError(t, err)
 
 	namespaced := RayServiceServeServiceNamespacedName(testRayServiceWithServeService)
-	if namespaced.Namespace != svc.Namespace {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Namespace, namespaced.Namespace)
-	}
-	if namespaced.Name != svc.Name {
-		t.Fatalf("Expected `%v` but got `%v`", svc.Name, namespaced.Name)
-	}
-	if namespaced.Name != "user-custom-name" {
-		t.Fatalf("Expected `%v` but got `%v`", "user-custom-name", namespaced.Name)
-	}
+	assert.Equal(t, svc.Namespace, namespaced.Namespace)
+	assert.Equal(t, svc.Name, namespaced.Name)
+	assert.Equal(t, "user-custom-name", namespaced.Name)
 }
 
 // TestRayClusterServeServiceNamespacedName tests the function for generating a NamespacedName for a RayCluster's serve service

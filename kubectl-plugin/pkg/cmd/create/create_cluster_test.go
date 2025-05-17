@@ -184,9 +184,7 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 			cmd := NewCreateClusterCommand(cmdFactory, testStreams)
 			cmd.SetArgs(tc.args)
 			// Parse the flags before checking for incompatible flags
-			if err := cmd.Flags().Parse(tc.args); err != nil {
-				t.Fatalf("failed to parse flags: %v", err)
-			}
+			require.NoError(t, cmd.Flags().Parse(tc.args), "failed to parse flags")
 			err := flagsIncompatibleWithConfigFilePresent(cmd)
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)

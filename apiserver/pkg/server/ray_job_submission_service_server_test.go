@@ -170,12 +170,11 @@ func TestConvertNodeInfo(t *testing.T) {
 	unixStart := time.Date(2025, 5, 3, 0, 0, 0, 0, time.UTC).Unix()
 	unixEnd := time.Date(2025, 5, 3, 0, 0, 0, 0, time.UTC).Unix()
 	// Prevent overflow when converting negative int64 to uint64
-	if unixStart < 0 || unixEnd < 0 {
-		t.Fatalf("Start or end time is negative, invalid Unix timestamp: start=%d, end=%d", unixStart, unixEnd)
-	}
+	require.GreaterOrEqual(t, unixStart, int64(0), "start time is negative, invalid Unix timestamp: start=%d", unixStart)
+	require.GreaterOrEqual(t, unixEnd, int64(0), "end time is negative, invalid Unix timestamp: end=%d", unixEnd)
 
-	startTime := uint64(unixStart)
-	endTime := uint64(unixEnd)
+	startTime := uint64(unixStart) //nolint:gosec // we've already checked the timestamp is non-negative
+	endTime := uint64(unixEnd)     //nolint:gosec // we've already checked the timestamp is non-negative
 
 	metadata := map[string]string{
 		"foo": "boo",

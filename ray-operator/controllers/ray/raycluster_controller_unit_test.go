@@ -527,9 +527,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 			numRandomDelete := expectedNumWorkersToDelete - (len(tc.workersToDelete) - len(nonExistentPodSet))
 			assert.Equal(t, tc.numRandomDelete, numRandomDelete)
@@ -624,9 +622,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 		})
 	}
@@ -674,10 +670,8 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	assert.Len(t, podList.Items, int(localExpectReplicaNum),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Fatalf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
+	for _, pod := range podList.Items {
+		assert.NotContainsf(t, workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 	}
 }
 
@@ -1157,16 +1151,6 @@ func TestReconcileHeadlessService(t *testing.T) {
 	})
 	require.NoError(t, err, "Fail to get service list")
 	assert.Len(t, serviceList.Items, 1, "Service list len is wrong")
-}
-
-func contains(slice []string, item string) bool {
-	set := make(map[string]struct{}, len(slice))
-	for _, s := range slice {
-		set[s] = struct{}{}
-	}
-
-	_, ok := set[item]
-	return ok
 }
 
 func getNotFailedPodItemNum(podList corev1.PodList) int {

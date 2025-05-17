@@ -5,6 +5,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -305,9 +306,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			redisPassword := ""
-			if tc.redisPasswordEnv != "" && tc.redisPasswordInRayStartParams != "" && tc.redisPasswordInRayStartParams != "$REDIS_PASSWORD" {
-				t.Fatalf("redisPasswordEnv and redisPasswordInRayStartParams are both set")
-			}
+			require.False(t, tc.redisPasswordEnv != "" && tc.redisPasswordInRayStartParams != "" && tc.redisPasswordInRayStartParams != "$REDIS_PASSWORD", "redisPasswordEnv and redisPasswordInRayStartParams are both set")
 
 			switch {
 			case tc.redisPasswordEnv != "":
