@@ -1,4 +1,4 @@
-# KubeRay APIServer SDK Installation
+# KubeRay APIServer Installation
 
 ## Step 1: Create a Kubernetes cluster
 
@@ -15,21 +15,21 @@ Follow [this
 document](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy)
 to install the latest stable KubeRay operator from the Helm repository.
 
-## Step 3: Install APIServer SDK with Helm
+## Step 3: Install APIServer with Helm
 
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
-# Install KubeRay APIServer SDK
-helm install kuberay-apiserver-sdk kuberay/kuberay-apiserver-sdk --version 1.0.0
+# Install KubeRay APIServer
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 ```
 
 ## Step 4: Validate installation
 
-Check that the KubeRay API Server SDK is running in the "default" namespaces.
+Check that the KubeRay API Server is running in the "default" namespaces.
 
 ```sh
 kubectl get pods
 # NAME                            READY   STATUS    RESTARTS   AGE
-# kuberay-apiserver-sdk-xxxxxx    1/1     Running   0          17s
+# kuberay-apiserver-xxxxxx    1/1     Running   0          17s
 ```
