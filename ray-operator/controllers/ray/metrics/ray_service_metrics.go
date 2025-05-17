@@ -11,8 +11,6 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-//go:generate mockgen -destination=mocks/ray_service_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayServiceMetricsObserver
-
 // RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
 	rayServiceInfo *prometheus.Desc

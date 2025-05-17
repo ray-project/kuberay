@@ -232,33 +232,29 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	var rayClusterMetricManager *metrics.RayClusterMetricsManager
+	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
-	var rayServiceMetricManager *metrics.RayServiceMetricsManager
+	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
 	if config.EnableMetrics {
-		rayClusterMetricManager = metrics.NewRayClusterMetricsManager(ctx, mgr.GetClient())
+		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgr.GetClient())
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
-		rayServiceMetricManager = metrics.NewRayServiceMetricsManager(ctx, mgr.GetClient())
+		rayServiceMetricsManager = metrics.NewRayServiceMetricsManager(ctx, mgr.GetClient())
 		ctrlmetrics.Registry.MustRegister(
-			rayClusterMetricManager,
+			rayClusterMetricsManager,
 			rayJobMetricsManager,
-			rayServiceMetricManager,
+			rayServiceMetricsManager,
 		)
 	}
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:   config.HeadSidecarContainers,
-		WorkerSidecarContainers: config.WorkerSidecarContainers,
-		IsOpenShift:             utils.GetClusterType(),
-		RayClusterMetricManager: rayClusterMetricManager,
+		HeadSidecarContainers:    config.HeadSidecarContainers,
+		WorkerSidecarContainers:  config.WorkerSidecarContainers,
+		IsOpenShift:              utils.GetClusterType(),
+		RayClusterMetricsManager: rayClusterMetricsManager,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	rayServiceOptions := ray.RayServiceReconcilerOptions{
-		RayServiceMetricsManager: rayServiceMetricManager,
-	}
-
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, rayServiceOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
