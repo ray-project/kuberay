@@ -11,7 +11,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
+// RayServiceMetricsManager implements the prometheus.Collector interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
 	rayServiceInfo *prometheus.Desc
 	client         client.Client
