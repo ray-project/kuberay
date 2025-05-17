@@ -9,6 +9,8 @@ COPY proto/go.mod proto/go.mod
 COPY proto/go.sum proto/go.sum
 COPY ray-operator/go.mod ray-operator/go.mod
 COPY ray-operator/go.sum ray-operator/go.sum
+COPY apiserversdk/go.mod apiserversdk/go.mod
+COPY apiserversdk/go.sum apiserversdk/go.sum
 
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
@@ -18,6 +20,7 @@ RUN cd apiserver && go mod download && cd ..
 COPY proto/ proto/
 COPY ray-operator/ ray-operator/
 COPY apiserver/ apiserver/
+COPY apiserversdk/ apiserversdk/
 
 WORKDIR /workspace/apiserver
 
