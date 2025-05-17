@@ -1,6 +1,8 @@
 package e2erayservice
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -164,15 +166,28 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// event UpdatedServeApplications should occure exactly twice during the entire test.
+	var rayClusterNames []string
+	regex, errReg := regexp.Compile(fmt.Sprintf("Updated serve applications to the RayCluster %s\\/(rayservice-sample-\\w{5})$", rayService.Namespace))
+	g.Expect(errReg).NotTo(HaveOccurred())
+
+	// event UpdatedServeApplications should occur exactly twice during the entire test.
+	// TODO: It is possible that events are be aggregated.
 	count := 0
 	for _, event := range events.Items {
 		if event.Reason != string(utils.UpdatedServeApplications) {
 			continue
 		}
+		matches := regex.FindStringSubmatch(event.Message)
+
+		// if the regrex matches, it would be length of 2 or 0.
+		g.Expect(matches).NotTo(BeEmpty())
+		rayClusterNames = append(rayClusterNames, matches[1])
 		count++
 	}
 	g.Expect(count).To(Equal(2))
+
+	// make sure two event are from different RayClusters.
+	g.Expect(rayClusterNames[0]).NotTo(Equal(rayClusterNames[1]))
 }
 
 func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing.T) {
