@@ -70,6 +70,11 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client) *Kuberay
 	return client
 }
 
+// Setter function for setting executeHttpRequest method
+func (krc *KuberayAPIServerClient) SetExecuteHttpRequest(fn func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)) {
+	krc.executeHttpRequest = fn
+}
+
 // CreateComputeTemplate creates a new compute template.
 func (krc *KuberayAPIServerClient) CreateComputeTemplate(request *api.CreateComputeTemplateRequest) (*api.ComputeTemplate, *rpcStatus.Status, error) {
 	createURL := krc.baseURL + "/apis/v1/namespaces/" + request.Namespace + "/compute_templates"
