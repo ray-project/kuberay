@@ -56,7 +56,6 @@ type RayServiceReconciler struct {
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 	dashboardClientFunc          func() utils.RayDashboardClientInterface
 	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
-	options                      RayServiceReconcilerOptions
 }
 
 type RayServiceReconcilerOptions struct {
@@ -64,7 +63,7 @@ type RayServiceReconcilerOptions struct {
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, options RayServiceReconcilerOptions, provider utils.ClientProvider) *RayServiceReconciler {
+func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayServiceReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	httpProxyClientFunc := provider.GetHttpProxyClient(mgr)
 	return &RayServiceReconciler{
@@ -76,7 +75,6 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, options Ray
 
 		dashboardClientFunc: dashboardClientFunc,
 		httpProxyClientFunc: httpProxyClientFunc,
-		options:             options,
 	}
 }
 
@@ -213,14 +211,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
 	}
-	emitRayServiceMetrics(r.options.RayServiceMetricsManager)
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
-}
-
-func emitRayServiceMetrics(rayServiceMetricsManager *metrics.RayServiceMetricsManager) {
-	if rayServiceMetricsManager == nil {
-		return
-	}
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
