@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -1187,4 +1188,208 @@ func TestCalculateResources(t *testing.T) {
 			assert.Equal(t, deepCopyCluster, tt.cluster)
 		})
 	}
+}
+
+// helper function to return a Gateway object with GatewayStatus Conditions for testing.
+func makeGatewayWithCondition(accepted bool) *gwv1.Gateway {
+	var conditions []metav1.Condition
+	if accepted {
+		conditions = []metav1.Condition{
+			{
+				Type:   string(gwv1.GatewayConditionAccepted),
+				Status: metav1.ConditionTrue,
+			},
+		}
+	}
+	return &gwv1.Gateway{
+		Status: gwv1.GatewayStatus{
+			Conditions: conditions,
+		},
+	}
+}
+
+func TestIsGatewayReady(t *testing.T) {
+	tests := []struct {
+		gateway  *gwv1.Gateway
+		name     string
+		expected bool
+	}{
+		{
+			name:     "missing Gateway instance",
+			gateway:  nil,
+			expected: false,
+		},
+		{
+			name:     "Gateway created but missing accepted condition",
+			gateway:  makeGatewayWithCondition(false),
+			expected: false,
+		},
+		{
+			name:     "Gateway created with accepted condition",
+			gateway:  makeGatewayWithCondition(true),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, IsGatewayReady(tt.gateway))
+		})
+	}
+}
+
+// helper function to return a HTTPRoute with HTTPRouteStatus for testing
+func makeHTTPRouteWithParentRef(
+	parentRefName string,
+	namespace string,
+	accepted bool,
+) *gwv1.HTTPRoute {
+	var status metav1.ConditionStatus
+	if accepted {
+		status = metav1.ConditionTrue
+	} else {
+		status = metav1.ConditionFalse
+	}
+
+	return &gwv1.HTTPRoute{
+		Status: gwv1.HTTPRouteStatus{
+			RouteStatus: gwv1.RouteStatus{
+				Parents: []gwv1.RouteParentStatus{
+					{
+						ParentRef: gwv1.ParentReference{
+							Name:      gwv1.ObjectName(parentRefName),
+							Namespace: ptr.To(gwv1.Namespace(namespace)),
+						},
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(gwv1.GatewayConditionAccepted),
+								Status: status,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestIsHTTPRouteReady(t *testing.T) {
+	gateway := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-gateway", Namespace: "test-ns"},
+	}
+
+	tests := []struct {
+		httpRoute *gwv1.HTTPRoute
+		name      string
+		expected  bool
+	}{
+		{
+			name:      "missing HTTPRoute",
+			httpRoute: nil,
+			expected:  false,
+		},
+		{
+			name:      "ParentRef does not match",
+			httpRoute: makeHTTPRouteWithParentRef("not-a-match", "other-test-ns", true),
+			expected:  false,
+		},
+		{
+			name:      "matching ParentRef with accepted condition",
+			httpRoute: makeHTTPRouteWithParentRef("test-gateway", "test-ns", true),
+			expected:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, IsHTTPRouteReady(gateway, tt.httpRoute))
+		})
+	}
+}
+
+func TestIsIncrementalUpgradeEnabled(t *testing.T) {
+	tests := []struct {
+		spec     *rayv1.RayServiceSpec
+		name     string
+		expected bool
+	}{
+		{
+			name:     "missing UpgradeStrategy Type",
+			spec:     &rayv1.RayServiceSpec{},
+			expected: false,
+		},
+		{
+			name: "UpgradeStrategy Type is IncrementalUpgrade",
+			spec: &rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.IncrementalUpgrade),
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsIncrementalUpgradeEnabled(tc.spec))
+		})
+	}
+}
+
+func TestGetRayServiceIncrementalUpgradeOptions(t *testing.T) {
+	upgradeOptions := &rayv1.IncrementalUpgradeOptions{GatewayClassName: "gateway-class"}
+
+	tests := []struct {
+		rayServiceSpec  *rayv1.RayServiceSpec
+		expectedOptions *rayv1.IncrementalUpgradeOptions
+		name            string
+	}{
+		{
+			name:            "RayServiceSpec is nil, return nil IncrementalUpgradeOptions",
+			rayServiceSpec:  nil,
+			expectedOptions: nil,
+		},
+		{
+			name:            "UpgradeStrategy is nil, return nil IncrementalUpgradeOptions",
+			rayServiceSpec:  &rayv1.RayServiceSpec{},
+			expectedOptions: nil,
+		},
+		{
+			name: "Valid IncrementalUpgradeOptions",
+			rayServiceSpec: &rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					IncrementalUpgradeOptions: upgradeOptions,
+				},
+			},
+			expectedOptions: upgradeOptions,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualOptions := GetRayServiceIncrementalUpgradeOptions(tt.rayServiceSpec)
+			assert.Equal(t, tt.expectedOptions, actualOptions)
+		})
+	}
+}
+
+func TestGetGatewayListenersForServeService(t *testing.T) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "serve-service",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Port: 8000}, // default port
+				{Port: 8500}, // some other port
+			},
+		},
+	}
+
+	listeners := GetGatewayListenersForServeService(svc)
+	assert.Len(t, listeners, 2)
+	assert.Equal(t, gwv1.PortNumber(8000), listeners[0].Port)
+	assert.Equal(t, gwv1.PortNumber(8500), listeners[1].Port)
+	assert.Equal(t, gwv1.SectionName("serve-service-listener"), listeners[0].Name)
+	assert.Equal(t, gwv1.HTTPProtocolType, listeners[0].Protocol)
 }
