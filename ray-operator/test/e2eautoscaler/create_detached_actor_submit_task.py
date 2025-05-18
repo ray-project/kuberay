@@ -1,3 +1,5 @@
+"""This script create an actor that will continuously submits tasks to simulate user workload"""
+
 import ray
 import sys
 import argparse
@@ -23,17 +25,10 @@ def task():
     resources={"CustomResource": args.num_custom_resources},
 )
 class Actor:
-    def __init__(self):
-        self.running = True
-
     def submit_tasks(self, num_tasks):
-        while self.running:
+        while True:
             futures = [task.remote() for _ in range(num_tasks)]
             ray.get(futures)  # wait for current batch to complete before next batch
-            time.sleep(0.1)
-
-    def stop(self):
-        self.running = False
 
 
 ray.init(namespace="default_namespace")
