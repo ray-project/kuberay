@@ -4,11 +4,11 @@ import argparse
 import time
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--num-cpus', type=float, default=1)
-parser.add_argument('--num-gpus', type=float, default=0)
-parser.add_argument('--num-custom-resources', type=float, default=0)
-parser.add_argument('--tasks-per-batch', type=int, default=10)
-parser.add_argument('--task-duration', type=float, default=1)  # seconds
+parser.add_argument("--num-cpus", type=float, default=1)
+parser.add_argument("--num-gpus", type=float, default=0)
+parser.add_argument("--num-custom-resources", type=float, default=0)
+parser.add_argument("--tasks-per-batch", type=int, default=10)
+parser.add_argument("--task-duration", type=float, default=1)
 args = parser.parse_args()
 
 
@@ -16,12 +16,15 @@ args = parser.parse_args()
 def task():
     time.sleep(args.task_duration)
 
-@ray.remote(num_cpus=args.num_cpus, num_gpus=args.num_gpus,
-            resources={"CustomResource": args.num_custom_resources} if args.num_custom_resources > 0 else {})
+
+@ray.remote(
+    num_cpus=args.num_cpus,
+    num_gpus=args.num_gpus,
+    resources={"CustomResource": args.num_custom_resources},
+)
 class Actor:
     def __init__(self):
         self.running = True
-
 
     def submit_tasks(self, num_tasks):
         while self.running:
@@ -35,5 +38,4 @@ class Actor:
 
 ray.init(namespace="default_namespace")
 actor = Actor.options(lifetime="detached").remote()
-# Start submitting tasks asynchronously
 actor.submit_tasks.remote(args.tasks_per_batch)

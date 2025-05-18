@@ -435,11 +435,11 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
-				// Check that replicas is set to the expected count
+				// Check that replicas is set to the updatedMax
 				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.updatedMax)))
 
-				// Verify that the Autoscaler scales up/down to expected Pod count
+				// Verify that the Autoscaler scales up/down to updatedMax Pod count
 				// Should wait for a while for tasks in the cluster to finish before scaling down
 				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutShort).
 					Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.updatedMax)))
