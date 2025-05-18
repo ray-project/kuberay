@@ -91,6 +91,21 @@ func CurlRayServicePod(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
+func CurlRayClusterDashboard(t Test,
+	rayCluster *rayv1.RayCluster,
+	curlPod *corev1.Pod,
+	curlPodContainerName,
+	dashboardPath string,
+) (bytes.Buffer, bytes.Buffer, error) {
+	cmd := []string{
+		"curl",
+		"-X", "GET",
+		"-H", "Content-Type: application/json",
+		fmt.Sprintf("%s-head-svc.%s.svc.cluster.local:8265%s", rayCluster.Name, rayCluster.Namespace, dashboardPath),
+	}
+	return ExecPodCmdReturnError(t, curlPod, curlPodContainerName, cmd)
+}
+
 func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
       - name: fruit_app

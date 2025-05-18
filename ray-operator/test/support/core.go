@@ -103,6 +103,43 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	return stdout, stderr
 }
 
+func ExecPodCmdReturnError(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer, error) {
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: containerName,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, clientgoscheme.ParameterCodec)
+
+	cfg := t.Client().Config()
+	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
+	require.NoError(t.T(), err)
+	// Capture the output streams
+	var stdout, stderr bytes.Buffer
+	// Execute the command in the pod
+	err = exec.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+	if err != nil {
+		LogWithTimestamp(t.T(), "Executing command: %s", cmd)
+		LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
+		LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
+	}
+
+	return stdout, stderr, err
+}
+
 func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {
 	cfg := t.Client().Config()
 

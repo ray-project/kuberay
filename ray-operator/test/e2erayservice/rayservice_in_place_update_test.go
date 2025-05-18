@@ -1,15 +1,13 @@
 package e2erayservice
 
 import (
-	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -145,6 +143,15 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
+	// apply a non-existed-finalizer to the active ray cluster to avoiding be removed before checking the serveConfigV2
+	activeRayClusterBeforeUpdate.Finalizers = append(activeRayClusterBeforeUpdate.Finalizers, "no-existed-finalizer")
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(
+		test.Ctx(),
+		activeRayClusterBeforeUpdate,
+		metav1.UpdateOptions{},
+	)
+	g.Expect(err).NotTo(HaveOccurred())
+
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
 		test.Ctx(),
 		rayService,
@@ -161,33 +168,36 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 		g.Expect(stdout.String()).To(Equal("912"))
 	}, TestTimeoutShort).Should(Succeed())
 
-	events, err := test.Client().Core().CoreV1().Events(rayService.Namespace).List(test.Ctx(), metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector("involvedObject.name", rayService.Name).String(),
-	})
+	// Make sure the old ray cluster is not updated.
+	stdout, _, err = CurlRayClusterDashboard(test, activeRayClusterBeforeUpdate, curlPod, curlContainerName, utils.DeployPathV2)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(stdout.String()).NotTo(ContainSubstring("\"price\": 456"), "new price should not be updated on the old ray cluster")
+
+	// get fresh old RayCluster
+	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	var rayClusterNames []string
-	regex, errReg := regexp.Compile(fmt.Sprintf("Updated serve applications to the RayCluster %s\\/(rayservice-sample-\\w{5})$", rayService.Namespace))
-	g.Expect(errReg).NotTo(HaveOccurred())
-
-	// event UpdatedServeApplications should occur exactly twice during the entire test.
-	// TODO: It is possible that events are be aggregated.
-	count := 0
-	for _, event := range events.Items {
-		if event.Reason != string(utils.UpdatedServeApplications) {
+	// remove the non-existed-finalizer
+	finalizers := activeRayClusterBeforeUpdate.Finalizers
+	activeRayClusterBeforeUpdate.Finalizers = activeRayClusterBeforeUpdate.Finalizers[:0]
+	for _, finalizer := range finalizers {
+		if finalizer == "no-existed-finalizer" {
 			continue
 		}
-		matches := regex.FindStringSubmatch(event.Message)
-
-		// if the regrex matches, it would be length of 2 or 0.
-		g.Expect(matches).NotTo(BeEmpty())
-		rayClusterNames = append(rayClusterNames, matches[1])
-		count++
+		activeRayClusterBeforeUpdate.Finalizers = append(activeRayClusterBeforeUpdate.Finalizers, finalizer)
 	}
-	g.Expect(count).To(Equal(2))
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(
+		test.Ctx(),
+		activeRayClusterBeforeUpdate,
+		metav1.UpdateOptions{},
+	)
+	g.Expect(err).NotTo(HaveOccurred())
 
-	// make sure two event are from different RayClusters.
-	g.Expect(rayClusterNames[0]).NotTo(Equal(rayClusterNames[1]))
+	// make sure the old ray cluster is removed
+	g.Eventually(func() bool {
+		_, err = GetRayCluster(test, activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)
+		return k8sApiErrors.IsNotFound(err)
+	}, TestTimeoutMedium).Should(BeTrue())
 }
 
 func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing.T) {
