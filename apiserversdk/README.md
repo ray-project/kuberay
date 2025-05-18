@@ -1,23 +1,23 @@
-# KubeRay APIServer SDK
+# KubeRay APIServer
 
-The KubeRay APIServer SDK provides an HTTP proxy to the Kubernetes API server with the same
+The KubeRay APIServer provides an HTTP proxy to the Kubernetes APIserver with the same
 interface. Users can directly use Kubernetes OpenAPI Spec and KubeRay CRD to create, query,
 update, and delete Ray resources. It contains following highlight features:
 
-1. Compatible with Existing Kubernetes Clients and API Interface, where users can use
-   existing Kubernetes clients to interact with the proxy provided by APIServer SDK.
-2. Provide APIServer SDK as a Go library for users to build their proxies with custom HTTP middleware functions.
+1. Compatible with existing Kubernetes clients and API interface, where users can use
+   existing Kubernetes clients to interact with the proxy provided by APIServer.
+2. Provide APIServer as a Go library for users to build their proxies with custom HTTP middleware functions.
 
-## When to use APIServer SDK
+## When to use APIServer
 
-You can considering using APIServer SDK if:
+You can consider using APIServer if:
 
 - You want to manage Ray clusters in Kubernetes via HTTP/REST (e.g., from a UI, SDK, or CLI).
 - You want to create templates or default values to simplify the configuration setup.
 
 ## Installation
 
-Please follow the [Installation](./Installation.md) guide to install the APIServer SDK.
+Please follow the [Installation](./Installation.md) guide to install the APIServer.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ Please follow the [Installation](./Installation.md) guide to install the APIServ
 
 ## Usage
 
-The KubeRay ApiServer exposes a RESTful API that mirrors the Kubernetes API Server. You
+The KubeRay APIServer exposes a RESTful API that mirrors the Kubernetes APIServer. You
 can interact with it using Kubernetes-style endpoints and request patterns for creating,
 retrieving, updating, and deleting custom resources such as `RayCluster` and `RayJob`.
 

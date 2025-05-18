@@ -26,7 +26,7 @@ helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 
 ## Step 4: Validate installation
 
-Check that the KubeRay API Server is running in the "default" namespaces.
+Check that the KubeRay APIServer is running in the "default" namespaces.
 
 ```sh
 kubectl get pods

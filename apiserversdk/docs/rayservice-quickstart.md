@@ -22,28 +22,23 @@ cluster, you can skip this step.
 kind create cluster --image=kindest/node:v1.26.0
 ```
 
-## Step 2: Install KubeRay operator and API Server SDK
+## Step 2: Install KubeRay operator and APIServer
 
-Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and API Server
-SDK from the Helm repository.
+Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and APIServer
+ from the Helm repository.
 
-## Important: Switch directory to `apiserversdk/`
-
-All the following guidance require you to switch your working directory to the
-`apiserversdk/`.
-
-```sh
-cd apiserversdk
-```
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the `apiserversdk/`.
 
 ## Step 3: Install a RayService
 
 The RayService can be created with follow curl command:
 
 ```sh
-curl -X POST 'localhost:31888/apis/ray.io/v1/namespaces/default/rayservices' \
---header 'Content-Type: application/json' \
---data  @docs/api-example/rayservice.json
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/master/ray-operator/config/samples/ray-service.sample.yaml | \
+curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/rayservices \
+  -H "Content-Type: application/yaml" \
+  --data-binary @-
 ```
 
 Once the RayService CR has been created, you can view it by running:
@@ -119,15 +114,18 @@ inference, etc.).
 
 Once the RayService is ready, we can try to send requests to our serve applications. In
 our example, we created two applications, namely `calc` and `fruit`. To interact with
-them, use following commands:
+them, we need to run a curl pod first:
+
+```sh
+kubectl run curl --image=radial/busyboxplus:curl --command -- tail -f /dev/null
+```
+
+Then, we can use following commands to interact with the applications:
 
 - Interact with `calc`:
 
 ```sh
-curl -sS -X POST \
-    -H "Content-Type: application/json" \
-    --data '["MUL", 3]' \
-    http://localhost:31888/api/v1/namespaces/default/services/rayservice-sample-serve-svc:8000/proxy/calc/
+kubectl exec curl -- curl -sS -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc:8000/calc/ -d '["MUL", 3]'
 
 # Expected output:
 # 15 pizzas please!
@@ -136,10 +134,7 @@ curl -sS -X POST \
 - Interact with `fruit`:
 
 ```sh
-curl -sS -X POST \
-    -H "Content-Type: application/json" \
-    --data '["MANGO", 2]' \
-    http://localhost:31888/api/v1/namespaces/default/services/rayservice-sample-serve-svc:8000/proxy/fruit/
+kubectl exec curl -- curl -sS -X POST -H 'Content-Type: application/json' rayservice-sample-serve-svc:8000/fruit/ -d '["MANGO", 2]'
 
 # Expected output:
 # 6

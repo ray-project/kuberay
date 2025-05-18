@@ -2,7 +2,7 @@
 
 The guidance on managing the Ray clusters with Kubernetes can be found
 [here](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html). This guide goes
-through how to manage and interact with Ray clusters with KubeRay APIServer.
+through how to manage and interact via Ray clusters with KubeRay APIServer.
 
 ## Preperation
 
@@ -21,19 +21,13 @@ cluster, you can skip this step.
 kind create cluster --image=kindest/node:v1.26.0
 ```
 
-## Step 2: Install KubeRay operator and API Server SDK
+## Step 2: Install KubeRay operator and APIServer
 
-Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and API Server
-SDK from the Helm repository.
+Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and APIServer
+from the Helm repository.
 
-## Important: Switch directory to `apiserversdk/`
-
-All the following guidance require you to switch your working directory to the
-`apiserversdk/`.
-
-```sh
-cd apiserversdk
-```
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the `apiserversdk/`.
 
 ## Step 3: Deploy a RayCluster custom resource
 
@@ -41,9 +35,10 @@ Once the KubeRay operator is running, you are ready to deploy a RayCluster. Whil
 with curl. The following command will create a RayCluster CR in your current cluster:
 
 ```sh
-curl -X POST 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters' \
---header 'Content-Type: application/json' \
---data  @docs/api-example/raycluster.json
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/master/ray-operator/config/samples/ray-cluster.sample.yaml | \
+curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters \
+  -H "Content-Type: application/yaml" \
+  --data-binary @-
 ```
 
 Once the RayCluster CR has been created, you can view it by running:
@@ -73,7 +68,7 @@ The following command adds an `annotation` to the raycluster-kuberay resource:
 
 ```sh
 curl -X PATCH 'http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay' \
---header 'Content-Type: application/merge-patch+json' \
+-H 'Content-Type: application/merge-patch+json' \
 --data '{
   "metadata": {
     "annotations": {

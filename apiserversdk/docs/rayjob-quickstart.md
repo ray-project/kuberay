@@ -4,7 +4,7 @@ RayJob automatically creates the RayCluster, submits the job when ready, and can
 job finishes. You can find a detailed introduction to RayJob and how to manage it using Kubernetes in [this
 guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/rayjob-quick-start.html).
 
-This document focus on explaining how to manage and interact with RayJob using the KubeRay API Server.
+This document focus on explaining how to manage and interact with RayJob using the KubeRay APIServer.
 
 ## Preparation
 
@@ -21,19 +21,13 @@ cluster, you can skip this step.
 kind create cluster --image=kindest/node:v1.26.0
 ```
 
-### Step 0.2: Install KubeRay operator and API Server SDK
+### Step 0.2: Install KubeRay operator and APIServer
 
-Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and API Server
-SDK from the Helm repository.
+Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and APIServer
+ from the Helm repository.
 
-### Important: Switch directory to `apiserversdk/`
-
-All the following guidance require you to switch your working directory to the
-`apiserversdk/`.
-
-```sh
-cd apiserversdk
-```
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the `apiserversdk/`.
 
 ## Scenario 1: Create RayJob without setting `shutdownAfterJobFinishes`
 
@@ -42,16 +36,25 @@ it created after the job finished.
 
 ### Step 1.1: Install a RayJob
 
-Once the KubeRay operator is running, we can install a RayJob through APIServer with following command:
+Please install the ConfigMap first which contains code for our example:
 
 ```sh
-curl -X POST 'http://localhost:31888/api/v1/namespaces/default/configmaps' \
-  --header 'Content-Type: application/json' \
-  --data @docs/api-example/rayjob-configmap.json
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/v1.3.0/ray-operator/config/samples/ray-job.sample.yaml \
+    | awk 'BEGIN{d=-1} /^---/{d++; next} d==0' \
+    | kubectl apply -f -
+```
 
-curl -X POST 'localhost:31888/apis/ray.io/v1/namespaces/default/rayjobs' \
---header 'Content-Type: application/json' \
---data  @docs/api-example/rayjob.json
+Note that APIServer does not provide access to built-in Kubernetes resources by default,
+we should use `kubectl` for creating the `ConfigMap` here
+
+Then, we can install a RayJob through APIServer with following command:
+
+```sh
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/v1.3.0/ray-operator/config/samples/ray-job.sample.yaml \
+  | awk 'BEGIN{d=-1} /^---/{d++; next} d==-1' \
+  | curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/rayjobs \
+    -H "Content-Type: application/yaml" \
+    --data-binary @-
 ```
 
 ### Step 1.2: Check RayJob Status
@@ -113,7 +116,7 @@ To delete the RayJob with KubeRay APIServer, execute the following command. The 
 the RayJob we created.
 
 ```sh
-curl -X DELETE 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/rayjob-sample'
+curl -X DELETE 'localhost:31888/apis/ray.io/v1/namespaces/default/rayjobs/rayjob-sample'
 ```
 
 You can then see that both RayJob and RayCluster are removed. Following commands will
@@ -133,6 +136,18 @@ The RayJob in this example will delete the RayCluster once the job finished.
 
 ### Step 2.1: Install a RayJob with `shutdownAfterJobFinishes` set to true
 
+Please install the ConfigMap first which contains code for our example:
+
+```sh
+# Note: If you already installed the ConfigMap, you can skip this command
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/v1.3.0/ray-operator/config/samples/ray-job.shutdown.yaml \
+    | awk 'BEGIN{d=-1} /^---/{d++; next} d==0' \
+    | kubectl apply -f -
+```
+
+Note that APIServer does not provide access to built-in Kubernetes resources by default,
+we should use `kubectl` for creating the `ConfigMap` here
+
 Use following commands to install the RayJob. The RayJob here has two additional settings:
 
 - **shutdownAfterJobFinishes: true**: Tell KubeRay operator to delete the RayCluster after
@@ -141,14 +156,11 @@ job finished.
 finishes.
 
 ```sh
-# Note: If you already installed the ConfigMap, you can skip this command
-curl -X POST 'http://localhost:31888/api/v1/namespaces/default/configmaps' \
-  --header 'Content-Type: application/json' \
-  --data @docs/api-example/rayjob-configmap.json
-
-curl -X POST 'localhost:31888/apis/ray.io/v1/namespaces/default/rayjobs' \
---header 'Content-Type: application/json' \
---data  @docs/api-example/rayjob-shutdownAfterJobFinishes.json
+curl -s https://raw.githubusercontent.com/ray-project/kuberay/v1.3.0/ray-operator/config/samples/ray-job.shutdown.yaml \
+  | awk 'BEGIN{d=-1} /^---/{d++; next} d==-1' \
+  | curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/rayjobs \
+    -H "Content-Type: application/yaml" \
+    --data-binary @-
 ```
 
 ### Step 2.2: Check RayJob Status
