@@ -27,9 +27,6 @@ kind create cluster --image=kindest/node:v1.26.0
 Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay operator and APIServer
  from the Helm repository.
 
-> [!IMPORTANT]
-> All the following guidance require you to switch your working directory to the `apiserversdk/`.
-
 ## Step 3: Install a RayService
 
 The RayService can be created with follow curl command:
