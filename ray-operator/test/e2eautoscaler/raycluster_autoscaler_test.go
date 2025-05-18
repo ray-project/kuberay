@@ -368,30 +368,26 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 		actorCount       int
 	}{
 		{
-			name:             "Scale up maxReplicas from 3 to 5",
-			initialMax:       3,
-			updatedMax:       5,
-			actorCount:       5,
-			expectedReplicas: 5,
+			name:       "Scale up maxReplicas from 3 to 5",
+			initialMax: 3,
+			updatedMax: 5,
 		},
 		{
-			name:             "Scale down maxReplicas from 3 to 1",
-			initialMax:       3,
-			updatedMax:       1,
-			actorCount:       3,
-			expectedReplicas: 1,
+			name:       "Scale down maxReplicas from 3 to 1",
+			initialMax: 3,
+			updatedMax: 1,
 		},
 	}
 
 	for _, tc := range tests {
 		for _, rtc := range replicaTests {
-			t.Run(rtc.name, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s(%s)", tc.name, rtc.name), func(t *testing.T) {
 				test := With(t)
 				g := gomega.NewWithT(t)
 
 				namespace := test.NewTestNamespace()
 
-				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))
+				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor_submit_task.py"))
 				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -416,8 +412,21 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
+				// Wait for RayCluster to become ready and verify the number of available initial worker replicas (1)
 				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 					Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+
+				headPod, err := GetHeadPod(test, rayCluster)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+
+				// Create a detached actor that will keep submitting tasks, which is used to trigger scale up
+				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor_submit_task.py"})
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.initialMax)))
+				// Verify that the Autoscaler scales up/down to initialMax Pod count
+				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).
+					To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.initialMax)))
 
 				// Update maxReplicas
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
@@ -426,22 +435,14 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
-				// Trigger autoscaling with actors
-				headPod, err := GetHeadPod(test, rayCluster)
-				g.Expect(err).NotTo(gomega.HaveOccurred())
-
-				for i := 0; i < rtc.actorCount; i++ {
-					ExecPodCmd(test, headPod, common.RayHeadContainer,
-						[]string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
-				}
+				// Check that replicas is set to the expected count
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.updatedMax)))
 
 				// Verify that the Autoscaler scales up/down to expected Pod count
-				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
-					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.expectedReplicas)))
-
-				// Check that replicas is set to the expected count
-				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).
-					To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.expectedReplicas)))
+				// Should wait for a while for tasks in the cluster to finish before scaling down
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutShort).
+					Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.updatedMax)))
 			})
 		}
 	}
