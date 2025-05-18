@@ -50,3 +50,9 @@ func deployTestRayCluster(ns string) {
 	err = cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 }
+
+func KillPortForwardOn8265() {
+	cmd := exec.Command("pkill", "-f", "kubectl port-forward.*8265")
+	// Ignore the error if no process is found
+	_ = cmd.Run()
+}
