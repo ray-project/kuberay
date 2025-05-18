@@ -441,3 +441,70 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 	})
 }
+
+func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
+	for _, tc := range tests {
+
+		test := With(t)
+		g := gomega.NewWithT(t)
+
+		// Create a namespace
+		namespace := test.NewTestNamespace()
+
+		// Scripts for creating and terminating detached actors to trigger autoscaling
+		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+		test.T().Run(tc.name, func(_ *testing.T) {
+			groupName := "gpu-group"
+
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(3).
+					WithGroupName(groupName).
+					// This group has GPU resources
+					WithRayStartParams(map[string]string{"num-cpus": "1", "num-gpus": "1"}).
+					WithTemplate(tc.WorkerPodTemplateGetter()))
+
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster-gpu-for-cpu", namespace.Name).
+				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for RayCluster to become ready and verify the number of available worker replicas
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Create a detached actor that only needs CPU resources (explicitly set num-gpus=0)
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "cpu_actor", "--num-cpus=1"})
+
+			// Verify that the autoscaler creates a GPU node for this CPU-only task
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+
+			// Verify that the created node is from the GPU worker group
+			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(1))
+
+			// Terminate the actor, and the worker should be deleted
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "cpu_actor"})
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+		})
+	}
+}
