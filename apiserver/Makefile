@@ -190,7 +190,7 @@ install: kustomize docker-image load-image  ## Install the kuberay api server wi
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl create -f -
 
 # Install apiserver and curl for e2e test
-.PHONY: install-e2e
+.PHONY: install-apiserver-e2e
 install-e2e: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
 	cd deploy/local/e2e && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
 	$(KUSTOMIZE) build deploy/local/e2e | kubectl create -f -
@@ -199,7 +199,7 @@ install-e2e: kustomize docker-image load-image  ## Install the kuberay api serve
 uninstall: ## Remove the kuberay api server without security server from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
 
-.PHONY: uninstall-e2e
+.PHONY: uninstall-apiserver-e2e
 uninstall-e2e: ## Remove the kuberay api server for e2e from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/e2e | kubectl delete -f -
 
