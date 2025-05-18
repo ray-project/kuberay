@@ -491,7 +491,7 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-			// Create a detached actor that only needs CPU resources (explicitly set num-gpus=0)
+			// Create a detached actor that only needs CPU resources
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "cpu_actor", "--num-cpus=1"})
 
 			// Verify that the autoscaler creates a GPU node for this CPU-only task
