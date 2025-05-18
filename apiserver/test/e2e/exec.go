@@ -115,7 +115,7 @@ func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url st
 	)
 
 	// The http status code will be added in the end of the response body.
-	// E.g. {code: 14, message: something}HTTP_STATUS:200
+	// E.g. {foo: boo, ...}HTTP_STATUS:200
 	command := []string{"curl", "-s", "-L", "-w", "HTTP_STATUS:%{http_code}", "-H", "Accept: application/json", "-X", method}
 
 	if jsonBody != "" {
