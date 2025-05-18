@@ -76,7 +76,7 @@ curl -X PATCH 'http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclust
 ```
 
 You can verify if the `annotation` is added with following command. You should see the
-annotaions you added in the output:
+annotations you added in the output:
 
 ```sh
 kubectl get raycluster raycluster-kuberay -o jsonpath='{.metadata.annotations}'
