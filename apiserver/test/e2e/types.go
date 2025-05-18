@@ -94,7 +94,7 @@ func withHttpClient() contextOption {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
 
-		remoteExecClient, err := NewRemoteExecuteClient()
+		remoteExecClient, err := newRemoteExecuteClient()
 		if err != nil {
 			return err
 		}

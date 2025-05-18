@@ -28,13 +28,15 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 )
 
+// RemoteExecuteClient allows executing HTTP requests against a service running inside a Kubernetes pod
+// by using `kubectl exec`-style command execution, without requiring a NodePort for external access.
 type RemoteExecuteClient struct {
-	KubeClient  kubernetes.Interface
-	RestConfig  *rest.Config
-	unmarshaler *protojson.UnmarshalOptions
+	KubeClient  kubernetes.Interface        // Kubernetes client interface for API operations
+	RestConfig  *rest.Config                // Kubernetes REST config for executing remote commands
+	unmarshaler *protojson.UnmarshalOptions // Protobuf JSON unmarshaler for decoding API error responses
 }
 
-func NewRemoteExecuteClient() (*RemoteExecuteClient, error) {
+func newRemoteExecuteClient() (*RemoteExecuteClient, error) {
 	kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
@@ -57,6 +59,8 @@ func NewRemoteExecuteClient() (*RemoteExecuteClient, error) {
 	}, nil
 }
 
+// executeRequest executes an HTTP request by forwarding it to a Kubernetes pod using `kubectl exec`. It extracts the
+// request body, locates the target pod, and invokes a curl command inside the pod to perform the request
 func (rec *RemoteExecuteClient) executeRequest(httpRequest *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 	method := httpRequest.Method
 	var body string
@@ -75,7 +79,7 @@ func (rec *RemoteExecuteClient) executeRequest(httpRequest *http.Request, _ stri
 	}
 
 	// call curl execution inside pod
-	bodyBytes, status, err := rec.ExecCommandWithCurlInPod(pod, httpRequest.URL.String(), method, body)
+	bodyBytes, status, err := rec.execCommandWithCurlInPod(pod, httpRequest.URL.String(), method, body)
 	if err != nil {
 		return nil, status, err
 	}
@@ -83,7 +87,8 @@ func (rec *RemoteExecuteClient) executeRequest(httpRequest *http.Request, _ stri
 	return bodyBytes, nil, nil
 }
 
-// Internal method to Find the KubeRay apiserver pod
+// findPod locates the KubeRay API server pod by using a label selector. It assumes a single API server pod is running
+// in the given namespace
 func (rec *RemoteExecuteClient) findPod(namespace string) (*corev1.Pod, error) {
 	selector := labels.Set(map[string]string{
 		util.KubernetesComponentLabelKey: util.ComponentName,
@@ -102,12 +107,15 @@ func (rec *RemoteExecuteClient) findPod(namespace string) (*corev1.Pod, error) {
 	return &targetPod, nil
 }
 
-func (rec *RemoteExecuteClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url string, method string, jsonBody string) ([]byte, *rpcStatus.Status, error) {
+// execCommandWithCurlInPod executes a curl command inside the specified pod's container by `kubectl exec`
+func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url string, method string, jsonBody string) ([]byte, *rpcStatus.Status, error) {
 	var (
 		execOut bytes.Buffer
 		execErr bytes.Buffer
 	)
 
+	// The http status code will be added in the end of the response body.
+	// E.g. {code: 14, message: something}HTTP_STATUS:200
 	command := []string{"curl", "-s", "-L", "-w", "HTTP_STATUS:%{http_code}", "-H", "Accept: application/json", "-X", method}
 
 	if jsonBody != "" {
@@ -156,10 +164,11 @@ func (rec *RemoteExecuteClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url st
 	}
 
 	if execErr.Len() > 0 {
-		return nil, nil, fmt.Errorf("stderr: %s", execErr.String())
+		return nil, nil, fmt.Errorf("failed to POST to %s: stderr=%q, stdout=%q", url, execErr.String(), execOut.String())
 	}
 
-	// extract status code
+	// Split the http status code (in the end of the response) out from the response body
+	// Expected output: [{"foo": "boo", ... } 200]
 	parts := strings.Split(execOut.String(), "HTTP_STATUS:")
 	if len(parts) != 2 {
 		return nil, nil, fmt.Errorf("unexpected curl output format")
@@ -184,6 +193,7 @@ func (rec *RemoteExecuteClient) ExecCommandWithCurlInPod(pod *corev1.Pod, url st
 	return bodyBytes, nil, nil
 }
 
+// extractStatus unmarshals a gRPC status from the API server's response body
 func (rec *RemoteExecuteClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
 	status := &rpcStatus.Status{}
 	err := rec.unmarshaler.Unmarshal(bodyBytes, status)
