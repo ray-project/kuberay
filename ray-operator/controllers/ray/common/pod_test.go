@@ -790,6 +790,34 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	assert.Equal(t, []string{"I am worker again"}, workerContainer.Args)
 }
 
+func TestBuildPod_WithNonLoginBashCommand(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		// When the value of the annotation is "true", KubeRay will not generate the command and args for the container.
+		// Instead, it will use the command and args specified by the use.
+		utils.RayNonLoginBashCmdAnnotationKey: "true",
+	}
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
+	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, headContainer.Command)
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
+	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, workerContainer.Command)
+
+	initContainer := workerPod.Spec.InitContainers[0]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, initContainer.Command)
+}
+
 func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	ctx := context.Background()
 	cluster := instance.DeepCopy()
@@ -819,6 +847,40 @@ func TestBuildPod_WithAutoscalerEnabled(t *testing.T) {
 	actualContainer := pod.Spec.Containers[index]
 	expectedContainer := autoscalerContainer
 	assert.True(t, reflect.DeepEqual(expectedContainer, actualContainer))
+}
+
+func TestBuildPod_WithNonLoginBashCommand_WithAutoscalerEnabled(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		// When the value of the annotation is "true", KubeRay will not generate the command and args for the container.
+		// Instead, it will use the command and args specified by the use.
+		utils.RayNonLoginBashCmdAnnotationKey: "true",
+	}
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
+	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, headContainer.Command)
+
+	assert.Len(t, headPod.Spec.Containers, 2)
+	index := getAutoscalerContainerIndex(headPod)
+	actualContainer := headPod.Spec.Containers[index]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, actualContainer.Command)
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
+	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, workerContainer.Command)
+
+	initContainer := workerPod.Spec.InitContainers[0]
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, initContainer.Command)
 }
 
 func TestBuildPod_WithCreatedByRayService(t *testing.T) {

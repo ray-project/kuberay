@@ -45,6 +45,10 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// If this annotation is set to "true", the KubeRay operator will use the bash without `-l` in command.
+	// This is useful for some container images that do not want PATH being overwrite.
+	RayNonLoginBashCmdAnnotationKey = "ray.io/non-login-bash-cmd"
+
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 

@@ -44,6 +44,11 @@ var customAcceleratorToRayResourceMap = map[string]string{
 	TPUContainerResourceName:        TPURayResourceName,
 }
 
+var (
+	containerCommandWithLoginBash    = []string{"/bin/bash", "-lc", "--"}
+	containerCommandWithNonLoginBash = []string{"/bin/bash", "-c", "--"}
+)
+
 // Get the port required to connect to the Ray cluster by worker nodes and drivers
 // started within the cluster.
 // For Ray >= 1.11.0 this is the GCS server port. For Ray < 1.11.0 it is the Redis port.
@@ -52,6 +57,12 @@ func GetHeadPort(headStartParams map[string]string) string {
 		return value
 	}
 	return strconv.Itoa(utils.DefaultGcsServerPort)
+}
+
+// Check if the Ray cluster is using a non-login bash command.
+func isUseNonLoginBashCmd(instance rayv1.RayCluster) bool {
+	v, ok := instance.Annotations[utils.RayNonLoginBashCmdAnnotationKey]
+	return ok && strings.ToLower(v) == "true"
 }
 
 // Check if overwrites the container command.
@@ -67,6 +78,10 @@ func initTemplateAnnotations(instance rayv1.RayCluster, podTemplate *corev1.PodT
 
 	if isOverwriteRayContainerCmd(instance) {
 		podTemplate.Annotations[utils.RayOverwriteContainerCmdAnnotationKey] = "true"
+	}
+
+	if isUseNonLoginBashCmd(instance) {
+		podTemplate.Annotations[utils.RayNonLoginBashCmdAnnotationKey] = "true"
 	}
 }
 
@@ -189,6 +204,9 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+		if isUseNonLoginBashCmd(instance) {
+			autoscalerContainer.Command = containerCommandWithNonLoginBash
+		}
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -259,7 +277,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         containerCommandWithLoginBash,
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -302,6 +320,9 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
+		}
+		if isUseNonLoginBashCmd(instance) {
+			initContainer.Command = containerCommandWithNonLoginBash
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
@@ -465,7 +486,10 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = containerCommandWithLoginBash
+		if v, ok := podTemplateSpec.Annotations[utils.RayNonLoginBashCmdAnnotationKey]; ok && strings.ToLower(v) == "true" {
+			pod.Spec.Containers[utils.RayContainerIndex].Command = containerCommandWithNonLoginBash
+		}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -532,11 +556,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				Value: "v1",
 			},
 		},
-		Command: []string{
-			"/bin/bash",
-			"-lc",
-			"--",
-		},
+		Command: containerCommandWithLoginBash,
 		Args: []string{
 			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},
