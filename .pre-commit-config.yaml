@@ -3,7 +3,7 @@
 exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
 
 default_language_version:
-  golang: 1.23.2
+  golang: 1.24.2
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -40,13 +40,13 @@ repos:
       - id: golangci-lint
         name: golangci-lint
         entry: ./scripts/lint.sh
-        types: [ go ]
+        types: [go]
         language: golang
         require_serial: true
         always_run: true
         pass_filenames: false
         additional_dependencies:
-          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.3
+          - github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - id: generate-crd-schema
         name: generate CRD schemas for use of kubeconform
         entry: ./scripts/generate-crd-schema.sh
@@ -73,3 +73,15 @@ repos:
         name: Markdown linting
         args:
           - --ignore=.github/pull_request_template.md
+          - --disable=MD033
+
+  - repo: https://github.com/norwoodj/helm-docs
+    rev: v1.14.2
+    hooks:
+      - id: helm-docs-built
+        args:
+          # Make the tool search for charts only under the `helm-chart` directory
+          - --chart-search-root=helm-chart
+          - --chart-to-generate=helm-chart/kuberay-operator
+          - --template-files=README.md.gotmpl
+          - --sort-values-order=file

@@ -9,9 +9,20 @@ networking:
 # https://blog.scottlowe.org/2019/07/30/adding-a-name-to-kubernetes-api-server-certificate/
 nodes:
 - role: control-plane
+  image: kindest/node:v1.25.0@sha256:428aaa17ec82ccde0131cb2d1ca6547d13cf5fdabcc0bbecf749baa935387cbf
   kubeadmConfigPatches:
   - |
     kind: ClusterConfiguration
     apiServer:
       certSANs:
         - "docker"
+  # These ports are required for the KubeRay API server e2e tests.
+  # The KubeRay API server is exposed via a NodePort service,
+  # and these extraPortMappings allow the tests to send requests to it from outside the kind cluster.
+  extraPortMappings:
+  - containerPort: 31888
+    hostPort: 31888
+    listenAddress: "0.0.0.0"
+  - containerPort: 31887
+    hostPort: 31887
+    listenAddress: "0.0.0.0"

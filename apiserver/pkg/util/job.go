@@ -3,11 +3,11 @@ package util
 import (
 	"fmt"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -95,6 +95,9 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 	if apiJob.EntrypointResources != "" {
 		// Entry point resources
 		rayJob.Spec.EntrypointResources = apiJob.EntrypointResources
+	}
+	if apiJob.ActiveDeadlineSeconds > 0 {
+		rayJob.Spec.ActiveDeadlineSeconds = &apiJob.ActiveDeadlineSeconds
 	}
 
 	return &RayJob{rayJob}, nil

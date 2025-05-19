@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,10 @@ import (
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 )
 
 // Mocked NewSPDYExecutor
@@ -113,7 +115,10 @@ func (dre *FakeRemoteExecutor) CreateExecutor(_ *rest.Config, url *url.URL) (rem
 }
 
 func TestRayClusterLogComplete(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 	cmd := &cobra.Command{Use: "log"}
+	cmd.Flags().StringP("namespace", "n", "", "")
 
 	tests := []struct {
 		name                 string
@@ -170,8 +175,7 @@ func TestRayClusterLogComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-			fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+			fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
 			fakeClusterLogOptions.nodeType = tc.nodeType
 			err := fakeClusterLogOptions.Complete(cmd, tc.args)
 			if tc.hasErr {
@@ -187,6 +191,7 @@ func TestRayClusterLogComplete(t *testing.T) {
 
 func TestRayClusterLogValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	tempDir := t.TempDir()
 	tempFile, err := os.CreateTemp(tempDir, "temp-file")
@@ -199,71 +204,57 @@ func TestRayClusterLogValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "should error when no K8s context is set",
-			opts: &ClusterLogOptions{
-				// Use fake config to bypass the config flag checks
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
 			name: "Test validation when node type is `random-string`",
 			opts: &ClusterLogOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				outputDir:     tempDir,
-				ResourceName:  "fake-cluster",
-				nodeType:      "random-string",
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory:   cmdFactory,
+				outputDir:    tempDir,
+				ResourceName: "fake-cluster",
+				nodeType:     "random-string",
+				ioStreams:    &testStreams,
 			},
 			expectError: "unknown node type `random-string`",
 		},
 		{
 			name: "Successful validation call",
 			opts: &ClusterLogOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				outputDir:     tempDir,
-				ResourceName:  "fake-cluster",
-				nodeType:      headNodeType,
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory:   cmdFactory,
+				outputDir:    tempDir,
+				ResourceName: "fake-cluster",
+				nodeType:     headNodeType,
+				ioStreams:    &testStreams,
 			},
 			expectError: "",
 		},
 		{
 			name: "Validate output directory when no out-dir is set.",
 			opts: &ClusterLogOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				outputDir:     "",
-				ResourceName:  "fake-cluster",
-				nodeType:      headNodeType,
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory:   cmdFactory,
+				outputDir:    "",
+				ResourceName: "fake-cluster",
+				nodeType:     headNodeType,
+				ioStreams:    &testStreams,
 			},
 			expectError: "",
 		},
 		{
 			name: "Failed validation call with output directory not exist",
 			opts: &ClusterLogOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				outputDir:     "randomPath-here",
-				ResourceName:  "fake-cluster",
-				nodeType:      headNodeType,
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory:   cmdFactory,
+				outputDir:    "randomPath-here",
+				ResourceName: "fake-cluster",
+				nodeType:     headNodeType,
+				ioStreams:    &testStreams,
 			},
 			expectError: "Directory does not exist. Failed with: stat randomPath-here: no such file or directory",
 		},
 		{
 			name: "Failed validation call with output directory is file",
 			opts: &ClusterLogOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				outputDir:     tempFile.Name(),
-				ResourceName:  "fake-cluster",
-				nodeType:      headNodeType,
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory:   cmdFactory,
+				outputDir:    tempFile.Name(),
+				ResourceName: "fake-cluster",
+				nodeType:     headNodeType,
+				ioStreams:    &testStreams,
 			},
 			expectError: "Path is not a directory. Please input a directory and try again",
 		},
@@ -293,8 +284,9 @@ func TestRayClusterLogRun(t *testing.T) {
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+	fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
 	// Uses the mocked executor
 	fakeClusterLogOptions.Executor = &FakeRemoteExecutor{}
 	fakeClusterLogOptions.ResourceName = "test-cluster"
@@ -417,8 +409,9 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	defer os.RemoveAll(fakeDir)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-	fakeClusterLogOptions := NewClusterLogOptions(testStreams)
+	fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
 	fakeClusterLogOptions.ResourceName = "test-cluster"
 	fakeClusterLogOptions.outputDir = fakeDir
 

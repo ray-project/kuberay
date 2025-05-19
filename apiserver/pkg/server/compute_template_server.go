@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type ComputeTemplateServerOptions struct {
@@ -18,9 +19,9 @@ type ComputeTemplateServerOptions struct {
 // implements `type ComputeTemplateServiceServer interface` in runtime_grpc.pb.go
 // ComputeTemplateServer is the server API for ClusterRuntimeService.
 type ComputeTemplateServer struct {
+	api.UnimplementedComputeTemplateServiceServer
 	resourceManager *manager.ResourceManager
 	options         *ComputeTemplateServerOptions
-	api.UnimplementedComputeTemplateServiceServer
 }
 
 func (s *ComputeTemplateServer) CreateComputeTemplate(ctx context.Context, request *api.CreateComputeTemplateRequest) (*api.ComputeTemplate, error) {
@@ -71,7 +72,7 @@ func (s *ComputeTemplateServer) ListComputeTemplates(ctx context.Context, reques
 	}, nil
 }
 
-func (s *ComputeTemplateServer) ListAllComputeTemplates(ctx context.Context, request *api.ListAllComputeTemplatesRequest) (*api.ListAllComputeTemplatesResponse, error) {
+func (s *ComputeTemplateServer) ListAllComputeTemplates(ctx context.Context, _ *api.ListAllComputeTemplatesRequest) (*api.ListAllComputeTemplatesResponse, error) {
 	runtimes, err := s.resourceManager.ListAllComputeTemplates(ctx)
 	if err != nil {
 		return nil, util.Wrap(err, "List all compute templates from all namespaces failed.")

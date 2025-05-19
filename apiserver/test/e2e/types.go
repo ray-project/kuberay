@@ -10,8 +10,7 @@ import (
 	"time"
 
 	petnames "github.com/dustinkirkland/golang-petname"
-	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
-	api "github.com/ray-project/kuberay/proto/go_client"
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -19,19 +18,20 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
 // GenericEnd2EndTest struct allows for reuse in setting up and running tests
 type GenericEnd2EndTest[I proto.Message] struct {
-	Name          string
 	Input         I
 	ExpectedError error
+	Name          string
 }
 
 // End2EndTestingContext provides a common set of values and methods that
@@ -171,7 +171,7 @@ func withNamespace() contextOption {
 		// register an automatic deletion of the namespace at test's end
 		t.Cleanup(func() {
 			err := tCtx.k8client.CoreV1().Namespaces().Delete(tCtx.ctx, tCtx.namespaceName, metav1.DeleteOptions{})
-			assert.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
+			require.NoErrorf(t, err, "No error expected when deleting namespace '%s'", tCtx.namespaceName)
 		})
 		return nil
 	}
@@ -227,7 +227,7 @@ func (e2etc *End2EndTestingContext) GetRayVersion() string {
 	return e2etc.rayVersion
 }
 
-func (e2etc *End2EndTestingContext) GetRayApiServerClient() *kuberayHTTP.KuberayAPIServerClient {
+func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
 	return e2etc.kuberayAPIServerClient
 }
 
@@ -245,16 +245,14 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 		ComputeTemplate: &api.ComputeTemplate{
 			Name:      e2etc.computeTemplateName,
 			Namespace: e2etc.namespaceName,
-			Cpu:       2,
-			Memory:    4,
+			Cpu:       ComputeTemplateCPUForE2E,
+			Memory:    CompTemplateMemGiBForE2E,
 		},
 		Namespace: e2etc.namespaceName,
 	}
 
-	_, status, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
-	if !assert.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName) {
-		t.Fatalf("Received status of %v when attempting to create compute template", status)
-	}
+	_, _, err := e2etc.kuberayAPIServerClient.CreateComputeTemplate(computeTemplateRequest)
+	require.NoErrorf(t, err, "No error expected while creating a compute template (%s, %s)", e2etc.namespaceName, e2etc.computeTemplateName)
 }
 
 func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
@@ -262,14 +260,12 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 		Name:      e2etc.computeTemplateName,
 		Namespace: e2etc.namespaceName,
 	}
-	status, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
-	if !assert.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName) {
-		t.Fatalf("Received status of %v when attempting to create compute template", status)
-	}
+	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
+	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
 }
 
-func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string) (*api.Cluster, string) {
-	configMapName := e2etc.CreateConfigMap(t, configMapValues)
+func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, expectedConditions []rayv1api.RayClusterConditionType, name ...string) (*api.Cluster, string) {
+	configMapName := e2etc.CreateConfigMap(t, configMapValues, name...)
 	t.Cleanup(func() {
 		e2etc.DeleteConfigMap(t, configMapName)
 	})
@@ -277,9 +273,13 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	for k := range configMapValues {
 		items[k] = k
 	}
-	actualCluster, status, err := e2etc.kuberayAPIServerClient.CreateCluster(&api.CreateClusterRequest{
+	clusterName := e2etc.clusterName
+	if len(name) > 0 {
+		clusterName = name[0]
+	}
+	actualCluster, _, err := e2etc.kuberayAPIServerClient.CreateCluster(&api.CreateClusterRequest{
 		Cluster: &api.Cluster{
-			Name:        e2etc.clusterName,
+			Name:        clusterName,
 			Namespace:   e2etc.namespaceName,
 			User:        "3cpo",
 			Environment: api.Cluster_DEV,
@@ -298,7 +298,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 							MountPath:  "/home/ray/samples",
 							VolumeType: api.Volume_CONFIGMAP,
 							Name:       "code-sample",
-							Source:     e2etc.configMapName,
+							Source:     configMapName,
 							Items:      items,
 						},
 					},
@@ -320,7 +320,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 								MountPath:  "/home/ray/samples",
 								VolumeType: api.Volume_CONFIGMAP,
 								Name:       "code-sample",
-								Source:     e2etc.configMapName,
+								Source:     configMapName,
 								Items:      items,
 							},
 						},
@@ -330,20 +330,9 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 		},
 		Namespace: e2etc.namespaceName,
 	})
-	if !assert.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, e2etc.clusterName) {
-		t.Fatalf("Received status of %v when attempting to create a cluster", status)
-	}
-	// wait for the cluster to be in a running state for 3 minutes
-	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(actualCluster.Name)
-		if err00 != nil {
-			return true, err00
-		}
-		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, e2etc.GetRayClusterName())
-		return rayCluster.Status.State == rayv1api.Ready, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", e2etc.GetRayClusterName(), err)
+	require.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName)
+
+	waitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
 	return actualCluster, configMapName
 }
 
@@ -356,15 +345,15 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(clusterName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayCluster, err := e2etc.GetRayClusterByName(clusterName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting for ray cluster: '%s' to be deleted, err %v", clusterName, err)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName string) {
@@ -377,15 +366,15 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := e2etc.GetRayServiceByName(serviceName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayService, err := e2etc.GetRayServiceByName(serviceName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
-		t.Logf("Found service state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting to delete ray service: '%s', err %v", serviceName, err)
+		t.Logf("Found service state of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName string) {
@@ -398,27 +387,32 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := e2etc.GetRayJobByName(rayJobName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayJob, err := e2etc.GetRayJobByName(rayJobName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
-		t.Logf("Found job state of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, rayJobName)
-		return false, nil
-	})
+		t.Logf("Found job state of '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 	require.NoErrorf(t, err, "No error expected when waiting to delete ray job: '%s', err %v", rayJobName, err)
 }
 
-func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[string]string) string {
+func (e2etc *End2EndTestingContext) CreateConfigMap(t *testing.T, values map[string]string, name ...string) string {
+	configMapName := e2etc.configMapName
+	if len(name) > 0 {
+		configMapName = name[0]
+	}
 	cm := &corev1.ConfigMap{
 		TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{Name: e2etc.configMapName, Namespace: e2etc.namespaceName},
+		ObjectMeta: metav1.ObjectMeta{Name: configMapName, Namespace: e2etc.namespaceName},
 		Immutable:  new(bool),
 		Data:       values,
 	}
 	_, err := e2etc.k8client.CoreV1().ConfigMaps(e2etc.namespaceName).Create(e2etc.ctx, cm, metav1.CreateOptions{})
-	require.NoErrorf(t, err, "No error expected when creating config map '%s' in namespace '%s'", e2etc.configMapName, e2etc.namespaceName)
-	return e2etc.configMapName
+	require.NoErrorf(t, err, "No error expected when creating config map '%s' in namespace '%s'", configMapName, e2etc.namespaceName)
+	return configMapName
 }
 
 func (e2etc *End2EndTestingContext) DeleteConfigMap(t *testing.T, configMapName string) {

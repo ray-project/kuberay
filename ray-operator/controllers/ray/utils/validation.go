@@ -4,8 +4,10 @@ import (
 	errstd "errors"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -23,6 +25,9 @@ func ValidateRayClusterStatus(instance *rayv1.RayCluster) error {
 func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayClusterNameLength {
 		return fmt.Errorf("RayCluster name should be no more than %d characters", MaxRayClusterNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayCluster name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }
@@ -82,7 +87,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if !features.Enabled(features.RayJobDeletionPolicy) {
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				return fmt.Errorf("suspending worker groups is currently available when the RayJobDeletionPolicy feature gate is enabled")
+				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroup.GroupName)
 			}
 		}
 	}
@@ -91,7 +96,23 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
 				// TODO (rueian): This can be supported in future Ray. We should check the RayVersion once we know the version.
-				return fmt.Errorf("suspending worker groups is not currently supported with Autoscaler enabled")
+				return fmt.Errorf("worker group %s cannot be suspended with Autoscaler enabled", workerGroup.GroupName)
+			}
+		}
+
+		if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && EnvVarExists(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env) {
+			return fmt.Errorf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2)
+		}
+
+		if IsAutoscalingV2Enabled(spec) {
+			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+				return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using autoscaler V2")
+			}
+
+			for _, workerGroup := range spec.WorkerGroupSpecs {
+				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V2", workerGroup.GroupName)
+				}
 			}
 		}
 	}
@@ -108,6 +129,9 @@ func ValidateRayJobStatus(rayJob *rayv1.RayJob) error {
 func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayJobNameLength {
 		return fmt.Errorf("RayJob name should be no more than %d characters", MaxRayJobNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayJob name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }
@@ -126,6 +150,16 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
+	}
+	// InteractiveMode does not support backoffLimit > 1.
+	// When a RayJob fails (e.g., due to a missing script) and retries,
+	// spec.JobId remains set, causing the new job to incorrectly transition
+	// to Running instead of Waiting or Failed.
+	// After discussion, we decided to disallow retries in InteractiveMode
+	// to avoid ambiguous state handling and unintended behavior.
+	// https://github.com/ray-project/kuberay/issues/3525
+	if rayJob.Spec.SubmissionMode == rayv1.InteractiveMode && rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+		return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
@@ -175,6 +209,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayServiceNameLength {
 		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
 	}
 	return nil
 }

@@ -7,9 +7,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -17,29 +14,29 @@ import (
 	"k8s.io/cli-runtime/pkg/printers"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type GetClusterOptions struct {
-	configFlags   *genericclioptions.ConfigFlags
+	cmdFactory    cmdutil.Factory
 	ioStreams     *genericclioptions.IOStreams
-	kubeContexter util.KubeContexter
+	namespace     string
 	cluster       string
 	allNamespaces bool
 }
 
-func NewGetClusterOptions(streams genericclioptions.IOStreams) *GetClusterOptions {
+func NewGetClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *GetClusterOptions {
 	return &GetClusterOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewGetClusterOptions(streams)
-	// Initialize the factory for later use with the current config flag
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewGetClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewGetClusterOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:               "cluster [NAME]",
@@ -49,10 +46,7 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
 		Args:              cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args); err != nil {
-				return err
-			}
-			if err := options.Validate(); err != nil {
+			if err := options.Complete(args, cmd); err != nil {
 				return err
 			}
 			// running cmd.Execute or cmd.ExecuteE sets the context, which will be done by root
@@ -64,12 +58,16 @@ func NewGetClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", options.allNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *GetClusterOptions) Complete(args []string) error {
-	if *options.configFlags.Namespace == "" {
+func (options *GetClusterOptions) Complete(args []string, cmd *cobra.Command) error {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
 		options.allNamespaces = true
 	}
 
@@ -77,18 +75,6 @@ func (options *GetClusterOptions) Complete(args []string) error {
 		options.cluster = args[0]
 	}
 
-	return nil
-}
-
-func (options *GetClusterOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
 	return nil
 }
 
@@ -118,9 +104,9 @@ func getRayClusters(ctx context.Context, options *GetClusterOptions, k8sClient c
 			return nil, fmt.Errorf("unable to retrieve Ray clusters for all namespaces: %w", err)
 		}
 	} else {
-		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).List(ctx, listopts)
+		rayclusterList, err = k8sClient.RayClient().RayV1().RayClusters(options.namespace).List(ctx, listopts)
 		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve Ray clusters for namespace %s: %w", *options.configFlags.Namespace, err)
+			return nil, fmt.Errorf("unable to retrieve Ray clusters for namespace %s: %w", options.namespace, err)
 		}
 	}
 
@@ -129,7 +115,7 @@ func getRayClusters(ctx context.Context, options *GetClusterOptions, k8sClient c
 		if options.allNamespaces {
 			errMsg += " in any namespace"
 		} else {
-			errMsg += fmt.Sprintf(" in namespace %s", *options.configFlags.Namespace)
+			errMsg += fmt.Sprintf(" in namespace %s", options.namespace)
 		}
 		return nil, errors.New(errMsg)
 	}
@@ -177,7 +163,7 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 				raycluster.Status.DesiredTPU.String(),
 				raycluster.Status.DesiredMemory.String(),
 				relevantConditionType,
-				raycluster.Status.State, //nolint:staticcheck // Display State for now until it's removed from the CRD
+				raycluster.Status.State,
 				age,
 			},
 		})

@@ -3,9 +3,9 @@ package util
 import (
 	"errors"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -44,7 +44,7 @@ func buildRayServiceLabels(apiService *api.RayService) map[string]string {
 	return labels
 }
 
-func buildRayServiceAnnotations(apiService *api.RayService) map[string]string {
+func buildRayServiceAnnotations(_ *api.RayService) map[string]string {
 	annotations := map[string]string{}
 	// TODO: Add optional annotations
 	return annotations

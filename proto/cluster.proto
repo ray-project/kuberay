@@ -39,14 +39,14 @@ service ClusterService {
     };
   }
 
-  // Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in a given namespace.
   rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1/namespaces/{namespace}/clusters"
     };
   }
 
-  // Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in all namespaces.
   rpc ListAllClusters(ListAllClustersRequest) returns (ListAllClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1/clusters"
@@ -80,40 +80,37 @@ message GetClusterRequest {
 message ListClustersRequest {
   // Required. The namespace of the clusters to be retrieved.
   string namespace = 1 [(google.api.field_behavior) = REQUIRED];
-
-  // A page token to request the next page of results. The token is acquried
-  // from the nextPageToken field of the response from the previous
-  // ListCluster call or can be omitted when fetching the first page.
-  // TODO: support this later
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListCluster call or can be omitted when fetching the first page.
+  string continue = 2;
+  // The maximum number of clusters to return for the requested page.
+  // For backward compatibility, the default value is 0 which returns all clusters without pagination.
+  int64 limit = 3;
 }
 
 message ListClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
-
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
+  // The continue token for the next page of clusters.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllClustersRequest {
-  // A page token to request the next page of results. The token is acquried
-  // from the nextPageToken field of the response from the previous
-  // ListCluster call or can be omitted when fetching the first page.
-  // TODO: support this later
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListAllClusters call or can be omitted when fetching the first page.
+  string continue = 1;
+  // The maximum number of clusters to return per page across all namespaces.
+  // For backward compatibility, the default value is 0 which returns all clusters without pagination.
+  int64 limit = 2;
 }
 
 message ListAllClustersResponse {
   // A list of clusters returned.
   repeated Cluster clusters = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // The total number of clusters for the given query.
-  // int32 total_size = 2;
-
-  // The token to list the next page of clusters.
-  // string next_page_token = 3;
+  // The continue token for the next page of clusters.
+  // If there are no more clusters, this field will be empty.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteClusterRequest {
@@ -225,7 +222,8 @@ message ClusterSpec {
   bool enableInTreeAutoscaling = 3;
   // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
   AutoscalerOptions autoscalerOptions = 4;
-
+  // Optional. The annotations for the head service
+  map<string, string> headServiceAnnotations = 5;
 }
 
 message Volume {

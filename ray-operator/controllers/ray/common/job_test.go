@@ -37,7 +37,7 @@ func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
 	expected := `{"test":"test"}`
 	jsonOutput, err := getRuntimeEnvJson(testRayJob)
 	require.NoError(t, err)
-	assert.Equal(t, expected, jsonOutput)
+	assert.JSONEq(t, expected, jsonOutput)
 }
 
 func TestGetRuntimeEnvJsonFromYAML(t *testing.T) {
@@ -68,17 +68,15 @@ func TestGetMetadataJson(t *testing.T) {
 	expected := `{"testKey":"testValue"}`
 	metadataJson, err := GetMetadataJson(testRayJob.Spec.Metadata, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
-	assert.Equal(t, expected, metadataJson)
+	assert.JSONEq(t, expected, metadataJson)
 }
 
 func TestGetK8sJobCommand(t *testing.T) {
 	expected := []string{
 		"if",
-		"ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
+		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",
-		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
-		";", "else",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
+		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
 		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
@@ -87,7 +85,8 @@ func TestGetK8sJobCommand(t *testing.T) {
 		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
 		"--",
 		"echo no quote 'single quote' \"double quote\"",
-		";", "fi",
+		";", "fi", ";",
+		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
 	command, err := GetK8sJobCommand(testRayJob)
 	require.NoError(t, err)
@@ -116,17 +115,16 @@ pip: ["python-multipart==0.0.6"]
 	}
 	expected := []string{
 		"if",
-		"ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
+		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",
-		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
-		";", "else",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
+		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
 		"--runtime-env-json", strconv.Quote(`{"working_dir":"https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip","pip":["python-multipart==0.0.6"]}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
 		"--",
 		"echo no quote 'single quote' \"double quote\"",
-		";", "fi",
+		";", "fi", ";",
+		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
 	command, err := GetK8sJobCommand(rayJobWithYAML)
 	require.NoError(t, err)

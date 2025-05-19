@@ -3,9 +3,10 @@ package util
 import (
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 var apiServiceNoServe = &api.RayService{
@@ -26,12 +27,12 @@ var apiServiceV2 = &api.RayService{
 
 func TestBuildService(t *testing.T) {
 	_, err := NewRayService(apiServiceNoServe, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	if err.Error() != "serve configuration is not defined" {
 		t.Errorf("wrong error returned")
 	}
 	got, err := NewRayService(apiServiceV2, map[string]*api.ComputeTemplate{"foo": &template})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	if got.RayService.Spec.ServeConfigV2 == "" {
 		t.Errorf("Got empty V2")
 	}

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -83,7 +83,8 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 			Template:       *headPodTemplate,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
-		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{},
+		WorkerGroupSpecs:       []rayv1api.WorkerGroupSpec{},
+		HeadServiceAnnotations: clusterSpec.HeadServiceAnnotations,
 	}
 
 	// If enable ingress is specified, add it to the head node spec.
@@ -329,7 +330,7 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []corev1.EnvVar
 	if envs == nil {
 		return converted
 	}
-	if envs.Values != nil && len(envs.Values) > 0 {
+	if len(envs.Values) > 0 {
 		// Add values
 		for key, value := range envs.Values {
 			converted = append(converted, corev1.EnvVar{
@@ -337,7 +338,7 @@ func convertEnvironmentVariables(envs *api.EnvironmentVariables) []corev1.EnvVar
 			})
 		}
 	}
-	if envs.ValuesFrom != nil && len(envs.ValuesFrom) > 0 {
+	if len(envs.ValuesFrom) > 0 {
 		// Add values ref
 		for key, value := range envs.ValuesFrom {
 			switch value.Source {
@@ -836,7 +837,7 @@ func (c *RayCluster) Get() *rayv1api.RayCluster {
 }
 
 // SetAnnotations sets annotations on all templates in a RayCluster
-func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
+func (c *RayCluster) SetAnnotationsToAllTemplates(_ string, _ string) {
 	// TODO: reserved for common parameters.
 }
 
@@ -844,7 +845,7 @@ func (c *RayCluster) SetAnnotationsToAllTemplates(key string, value string) {
 func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error) {
 	extendedResourcesJSON, err := json.Marshal(runtime.ExtendedResources)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal extended resources: %v", err)
+		return nil, fmt.Errorf("failed to marshal extended resources: %w", err)
 	}
 
 	// Create data map
@@ -858,7 +859,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		"extended_resources": string(extendedResourcesJSON),
 	}
 	// Add tolerations in defined
-	if runtime.Tolerations != nil && len(runtime.Tolerations) > 0 {
+	if len(runtime.Tolerations) > 0 {
 		t, err := json.Marshal(runtime.Tolerations)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal tolerations for compute template %s: %w", runtime.Name, err)
@@ -930,10 +931,10 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 	if autoscalerOptions.Envs != nil {
 		if len(autoscalerOptions.Envs.Values) > 0 {
 			options.Env = make([]corev1.EnvVar, len(autoscalerOptions.Envs.Values))
-			ev_count := 0
+			evCount := 0
 			for key, value := range autoscalerOptions.Envs.Values {
-				options.Env[ev_count] = corev1.EnvVar{Name: key, Value: value}
-				ev_count += 1
+				options.Env[evCount] = corev1.EnvVar{Name: key, Value: value}
+				evCount++
 			}
 		}
 		if len(autoscalerOptions.Envs.ValuesFrom) > 0 {
@@ -945,7 +946,7 @@ func buildAutoscalerOptions(autoscalerOptions *api.AutoscalerOptions) (*rayv1api
 			}
 		}
 	}
-	if autoscalerOptions.Volumes != nil && len(autoscalerOptions.Volumes) > 0 {
+	if len(autoscalerOptions.Volumes) > 0 {
 		options.VolumeMounts = buildVolumeMounts(autoscalerOptions.Volumes)
 	}
 	if len(autoscalerOptions.Cpu) > 0 || len(autoscalerOptions.Memory) > 0 {

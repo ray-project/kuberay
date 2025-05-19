@@ -8,7 +8,7 @@ This section walks through how to build and test the operator in a running Kuber
 | software | version  |                                                                link |
 |:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| go       |  v1.23   |                                  [download](https://golang.org/dl/) |
+| go       |  v1.24   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
@@ -19,14 +19,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.23
+### Use go v1.24
 
-Currently, KubeRay uses go v1.23 for development.
+Currently, KubeRay uses go v1.24 for development.
 
 ```bash
-go install golang.org/dl/go1.23.2@latest
-go1.23.2 download
-export GOROOT=$(go1.23.2 env GOROOT)
+go install golang.org/dl/go1.24.2@latest
+go1.24.2 download
+export GOROOT=$(go1.24.2 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -73,7 +73,7 @@ kind create cluster --image=kindest/node:v1.24.0
 # Command: IMG={IMG_REPO}:{IMG_TAG} make docker-build
 IMG=kuberay/operator:nightly make docker-build
 
-# To skip running unit tests, run the following command instead:
+# To skip Go project compilation, run the following command instead:
 # IMG=kuberay/operator:nightly make docker-image
 
 # Step 4: Load the custom KubeRay image into the Kind cluster.
@@ -89,23 +89,28 @@ kind load docker-image kuberay/operator:nightly
 # Command: helm install kuberay-operator --set image.repository={IMG_REPO} --set image.tag={IMG_TAG} ../helm-chart/kuberay-operator
 helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 
-# Step 7: Check the log of KubeRay operator
-kubectl logs {YOUR_OPERATOR_POD} | grep "Hello KubeRay"
-# {"level":"info","ts":"2024-12-25T11:08:07.046Z","logger":"setup","msg":"Hello KubeRay"}
-# ...
+# Step 7: Check the logs
+kubectl logs deployments/kuberay-operator
 ```
 
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
-* The command `make docker-build` (Step 3) will also run `make test` (unit tests).
+* The command `make docker-build` (Step 3) will also run `make build` (Go project compilation).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 ### Run the operator outside the cluster
+
+This step requires you to switch your working directory to the kuberay project root. If
+you are in `ray-operator`, do:
+
+```bash
+cd ..
+```
 
 > Note: Running the operator outside the cluster allows you to debug the operator using your IDE. For example, you can set breakpoints in the code and inspect the state of the operator.
 
 ```bash
 # Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.24.0
+kind create cluster --image=kindest/node:v1.25.0
 
 # Step 2: Install CRDs
 make -C ray-operator install
@@ -117,9 +122,17 @@ make -C ray-operator build
 ./ray-operator/bin/manager -leader-election-namespace default -use-kubernetes-proxy
 ```
 
-## Running the tests
+## Tests
 
-The unit tests can be run by executing the following command:
+### Kind of tests
+
+* Unit tests: These are run locally and do not require a Kubernetes cluster. The filenames follow the pattern `*_controller_unit_test.go` and use the standard Go testing framework.
+* Env tests: These use the `envtest` package to start a local Kubernetes API server and etcd, without kubelet, controller-manager, or other components. You don't need to start a Kubernetes cluster beforehand. They are written using the Ginkgo framework. Since only the KubeRay operator is present, resource states like pod status must be manually updated. Filenames follow the pattern `*_controller_test.go`. See [Kubebuilder Envtest](https://book.kubebuilder.io/reference/envtest.html) for more details.
+* E2E tests: These run on a real Kubernetes cluster to test the KubeRay operator with actual resources. A running Kubernetes cluster and an installed KubeRay operator are required. These tests are located in the `test/` directory and use the standard Go testing framework.
+
+### Running the tests
+
+The unit tests and env tests can be run by executing the following command:
 
 ```bash
 make test
@@ -144,8 +157,9 @@ ok   github.com/ray-project/kuberay/ray-operator/controllers/utils 0.015s covera
 The e2e tests can be run by executing the following command:
 
 ```bash
-# Reinstall the kuberay-operator to make sure it use the latest nightly image you just built.
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+# Reinstall the kuberay-operator to make sure it uses the latest nightly image you just built.
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 make test-e2e
 ```
 
@@ -186,6 +200,10 @@ If not set, it defaults to a temporary directory that's removed once the tests e
 
 Alternatively, You can run the e2e test(s) from your preferred IDE / debugger.
 
+### Tips
+
+* For Ginkgo tests, you can use [focused specs](https://onsi.github.io/ginkgo/#focused-specs) to run a specific test for debugging purpose.
+
 ## Manually test new image in running cluster
 
 Build and apply the CRD:
@@ -197,7 +215,8 @@ make install
 Deploy the manifests and controller
 
 ```bash
-helm uninstall kuberay-operator; helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
+helm uninstall kuberay-operator
+helm install kuberay-operator --set image.repository=kuberay/operator --set image.tag=nightly ../helm-chart/kuberay-operator
 ```
 
 > Note: remember to replace with your own image
@@ -225,7 +244,7 @@ Run tests on your local environment
 
 ### Generating API Reference
 
-We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documenation for more details.
+We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documentation for more details.
 
 Generate API refernece:
 
@@ -270,7 +289,7 @@ python3 ../scripts/rbac-check.py
 
 ### Building Multi architecture images locally
 
-Most of image repositories supports multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct the image with a matching architectures. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
+Most image repositories support multiple architectures container images. When running an image from a device, the docker client automatically pulls the correct image with a matching architecture. The easiest way to build multi-arch images is to utilize Docker `Buildx` plug-in which allows easily building multi-arch images using Qemu emulation from a single machine. Buildx plugin is readily available when you install the [Docker Desktop](https://docs.docker.com/desktop/) on your machine.
 Verify Buildx installation and make sure it does not return error
 
 ```console

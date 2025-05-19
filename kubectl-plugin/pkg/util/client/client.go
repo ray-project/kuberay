@@ -7,7 +7,6 @@ import (
 	"time"
 
 	dockerparser "github.com/novln/docker-parser"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
@@ -145,7 +145,7 @@ func (c *k8sClient) WaitRayClusterProvisioned(ctx context.Context, namespace, na
 				return fmt.Errorf("unexpected type %T", event.Object)
 			}
 
-			if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) || cluster.Status.State == rayv1.Ready { //nolint:staticcheck // Check .Status.State in case RayClusterStatusConditions feature gate isn't enabled
+			if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) || cluster.Status.State == rayv1.Ready {
 				return nil
 			}
 		}

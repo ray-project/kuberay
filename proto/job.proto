@@ -80,19 +80,34 @@ message GetRayJobRequest {
 message ListRayJobsRequest {
   // Required. The namespace of the job to be retrieved.
   string namespace = 1 [(google.api.field_behavior) = REQUIRED];
-  // TODO: support paganation later
+
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListRayJobs call or can be omitted when fetching the first page.
+  string continue = 2;
+  // The maximum number of jobs to return for the requested page.
+  // For backward compatibility, the default value is 0 which returns all jobs without pagination.
+  int64 limit = 3;
 }
 
 message ListRayJobsResponse {
   repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The continue token for the next page of jobs. If it is empty, it means this is the last page.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllRayJobsRequest {
-  // TODO: support pagination later
+  // A continue token to request the next page of results. The token is acquired
+  // from the previous ListAllRayJobs call or can be omitted when fetching the first page.
+  string continue = 1;
+  // The maximum number of jobs to return for the requested page.
+  // For backward compatibility, the default value is 0 which returns all jobs without pagination.
+  int64 limit = 2;
 }
 
 message ListAllRayJobsResponse {
   repeated RayJob jobs = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The continue token for the next page of jobs. If it is empty, it means this is the last page.
+  string continue = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message DeleteRayJobRequest {
@@ -147,6 +162,10 @@ message RayJob {
   // Optional entrypointResources specifies the custom resources and quantities to reserve
   // for the entrypoint command.
   string entrypointResources = 20;
+  // Optional activeDeadlineSeconds is the duration in seconds that the RayJob may be active before
+  // KubeRay actively tries to terminate the RayJob; value must be positive integer.
+  // If not set, the job may run indefinitely until it completes, fails, or is manually stopped.
+  int32 activeDeadlineSeconds = 25;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the job deleted.

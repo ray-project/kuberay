@@ -37,6 +37,23 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "continue",
+            "description": "A continue token to request the next page of results. The token is acquired\nfrom the previous ListAllRayJobs call or can be omitted when fetching the first page.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "description": "The maximum number of jobs to return for the requested page.\nFor backward compatibility, the default value is 0 which returns all jobs without pagination.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
         "tags": [
           "RayJobService"
         ]
@@ -67,6 +84,21 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "continue",
+            "description": "A continue token to request the next page of results. The token is acquired\nfrom the previous ListRayJobs call or can be omitted when fetching the first page.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "description": "The maximum number of jobs to return for the requested page.\nFor backward compatibility, the default value is 0 which returns all jobs without pagination.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
           }
         ],
         "tags": [
@@ -341,6 +373,13 @@
         "autoscalerOptions": {
           "$ref": "#/definitions/protoAutoscalerOptions",
           "description": "AutoscalerOptions specifies optional configuration for the Ray autoscaler."
+        },
+        "headServiceAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. The annotations for the head service"
         }
       },
       "description": "Cluster specification."
@@ -468,6 +507,11 @@
             "$ref": "#/definitions/protoRayJob"
           },
           "readOnly": true
+        },
+        "continue": {
+          "type": "string",
+          "description": "The continue token for the next page of jobs. If it is empty, it means this is the last page.",
+          "readOnly": true
         }
       }
     },
@@ -479,6 +523,11 @@
           "items": {
             "$ref": "#/definitions/protoRayJob"
           },
+          "readOnly": true
+        },
+        "continue": {
+          "type": "string",
+          "description": "The continue token for the next page of jobs. If it is empty, it means this is the last page.",
           "readOnly": true
         }
       }
@@ -573,6 +622,11 @@
         "entrypointResources": {
           "type": "string",
           "description": "Optional entrypointResources specifies the custom resources and quantities to reserve\nfor the entrypoint command."
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional activeDeadlineSeconds is the duration in seconds that the RayJob may be active before\nKubeRay actively tries to terminate the RayJob; value must be positive integer.\nIf not set, the job may run indefinitely until it completes, fails, or is manually stopped."
         },
         "createdAt": {
           "type": "string",

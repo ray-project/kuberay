@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,13 +15,15 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type GetWorkerGroupsOptions struct {
-	configFlags   *genericclioptions.ConfigFlags
+	cmdFactory    cmdutil.Factory
 	ioStreams     *genericclioptions.IOStreams
-	kubeContexter util.KubeContexter
 	namespace     string
 	cluster       string
 	workerGroup   string
@@ -69,17 +68,15 @@ var getWorkerGroupsExample = templates.Examples(`
 		kubectl ray get workergroup my-group --namespace my-namespace --ray-cluster my-raycluster
 	`)
 
-func NewGetWorkerGroupOptions(streams genericclioptions.IOStreams) *GetWorkerGroupsOptions {
+func NewGetWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *GetWorkerGroupsOptions {
 	return &GetWorkerGroupsOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewGetWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewGetWorkerGroupOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewGetWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewGetWorkerGroupOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:          "workergroup [GROUP] [(-c/--ray-cluster) RAYCLUSTER]",
@@ -89,10 +86,7 @@ func NewGetWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Comman
 		SilenceUsage: true,
 		Args:         cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args); err != nil {
-				return err
-			}
-			if err := options.Validate(); err != nil {
+			if err := options.Complete(args, cmd); err != nil {
 				return err
 			}
 			k8sClient, err := client.NewClient(cmdFactory)
@@ -111,18 +105,21 @@ func NewGetWorkerGroupCommand(streams genericclioptions.IOStreams) *cobra.Comman
 		fmt.Fprintf(streams.ErrOut, "Error registering completion function for --ray-cluster: %v\n", err)
 	}
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *GetWorkerGroupsOptions) Complete(args []string) error {
+func (options *GetWorkerGroupsOptions) Complete(args []string, cmd *cobra.Command) error {
 	if options.allNamespaces {
 		options.namespace = ""
 	} else {
-		if options.configFlags.Namespace == nil || *options.configFlags.Namespace == "" {
+		namespace, err := cmd.Flags().GetString("namespace")
+		if err != nil {
+			return fmt.Errorf("failed to get namespace: %w", err)
+		}
+		options.namespace = namespace
+
+		if options.namespace == "" {
 			options.namespace = "default"
-		} else {
-			options.namespace = *options.configFlags.Namespace
 		}
 	}
 
@@ -130,18 +127,6 @@ func (options *GetWorkerGroupsOptions) Complete(args []string) error {
 		options.workerGroup = args[0]
 	}
 
-	return nil
-}
-
-func (options *GetWorkerGroupsOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
 	return nil
 }
 

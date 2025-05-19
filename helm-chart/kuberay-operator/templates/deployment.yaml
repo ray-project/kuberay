@@ -1,12 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kuberay-operator.fullname" . }}
+  name: {{ include "kuberay-operator.deployment.name" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
-{{ include "kuberay-operator.labels" . | indent 4 }}
-{{- if .Values.labels }}
-{{- toYaml .Values.labels | nindent 4 }}
-{{- end }}
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: 1
   strategy:
@@ -20,20 +21,20 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: kuberay-operator
-        {{- if .Values.labels }}
-        {{- toYaml .Values.labels | nindent 8 }}
+        app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
+        {{- with .Values.labels }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if .Values.annotations }}
+      {{- with .Values.annotations }}
       annotations:
-        {{- toYaml .Values.annotations | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
     {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ .Values.serviceAccount.name  }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
@@ -44,21 +45,27 @@ spec:
           emptyDir: {}
           {{- end }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
+          {{- with .Values.securityContext }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.image.pullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
           {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
           volumeMounts:
             - name: kuberay-logs
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
           command:
-            - {{ .Values.operatorComand }}
+            - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
@@ -98,14 +105,19 @@ spec:
             {{- if hasKey .Values "leaderElectionEnabled" -}}
             {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
             {{- end -}}
+            {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
+            {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
+            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
+          {{- with .Values.env }}
           env:
-          {{- toYaml .Values.env | nindent 12}}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /metrics
@@ -120,17 +132,19 @@ spec:
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- with .Values.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-    {{- with .Values.affinity }}
+      {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
-    {{- with .Values.tolerations }}
+      {{- end }}
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}

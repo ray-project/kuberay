@@ -52,6 +52,7 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
+  initContainers: []
   labels: {}
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
@@ -126,7 +127,7 @@ head:
   #     - name: ndots
   #       value: "2"
   #     - name: edns0
-  topologySpreadConstraints: {}
+  topologySpreadConstraints: []
 
 
 worker:
@@ -141,6 +142,7 @@ worker:
   serviceAccountName: ""
   restartPolicy: ""
   rayStartParams: {}
+  initContainers: []
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -190,7 +192,7 @@ worker:
   # container command for worker Pod.
   command: []
   args: []
-  topologySpreadConstraints: {}
+  topologySpreadConstraints: []
 
 
   # Custom pod DNS configuration
@@ -269,7 +271,7 @@ additionalWorkerGroups:
 
     # Topology Spread Constraints for worker pods
     # See: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
-    topologySpreadConstraints: {}
+    topologySpreadConstraints: []
 
     # Custom pod DNS configuration
     # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config

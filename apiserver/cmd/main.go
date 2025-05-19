@@ -11,22 +11,24 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
 	"k8s.io/klog/v2"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ray-project/kuberay/apiserver/pkg/interceptor"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/server"
 	"github.com/ray-project/kuberay/apiserver/pkg/swagger"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
@@ -36,6 +38,7 @@ var (
 	collectMetricsFlag = flag.Bool("collectMetricsFlag", true, "Whether to collect Prometheus metrics in API server.")
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
+	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	healthy            int32
 )
 
@@ -54,7 +57,8 @@ func main() {
 	resourceManager := manager.NewResourceManager(&clientManager)
 
 	atomic.StoreInt32(&healthy, 1)
-	go startRpcServer(resourceManager)
+	klog.Infof("Setting gRPC server timeout to %v", *grpcTimeout)
+	go startRPCServer(resourceManager, *grpcTimeout)
 	startHttpProxy()
 	// See also https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
 	quit := make(chan os.Signal, 1)
@@ -70,8 +74,8 @@ func main() {
 
 type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 
-func startRpcServer(resourceManager *manager.ResourceManager) {
-	klog.Info("Starting gRPC server")
+func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.Duration) {
+	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
 	listener, err := net.Listen("tcp", *rpcPortFlag)
 	if err != nil {
@@ -86,8 +90,13 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(grpc_prometheus.UnaryServerInterceptor, interceptor.ApiServerInterceptor)),
-		grpc.MaxRecvMsgSize(math.MaxInt32))
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			interceptor.TimeoutInterceptor(grpcTimeout),
+			grpc_prometheus.UnaryServerInterceptor,
+			interceptor.APIServerInterceptor,
+		)),
+		grpc.MaxRecvMsgSize(math.MaxInt32),
+	)
 	api.RegisterClusterServiceServer(s, clusterServer)
 	api.RegisterComputeTemplateServiceServer(s, templateServer)
 	api.RegisterRayJobServiceServer(s, jobServer)
@@ -109,7 +118,7 @@ func startRpcServer(resourceManager *manager.ResourceManager) {
 }
 
 func startHttpProxy() {
-	klog.Info("Starting Http Proxy")
+	klog.Infof("Starting Http Proxy at port %s", *httpPortFlag)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -129,11 +138,11 @@ func startHttpProxy() {
 		runtime.WithErrorHandler(runtime.DefaultHTTPErrorHandler),
 	)
 	// Register endpoints
-	registerHttpHandlerFromEndpoint(api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", ctx, runtimeMux)
-	registerHttpHandlerFromEndpoint(api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", ctx, runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterClusterServiceHandlerFromEndpoint, "ClusterService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterComputeTemplateServiceHandlerFromEndpoint, "ComputeTemplateService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobServiceHandlerFromEndpoint, "JobService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayServeServiceHandlerFromEndpoint, "ServeService", runtimeMux)
+	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	topMux := http.NewServeMux()
@@ -144,14 +153,24 @@ func startHttpProxy() {
 	topMux.HandleFunc("/healthz", serveHealth)
 	serveSwaggerUI(topMux)
 
-	if err := http.ListenAndServe(*httpPortFlag, topMux); err != nil {
+	// Create a custom HTTP server with timeouts.
+	srv := &http.Server{
+		Addr:         *httpPortFlag,
+		Handler:      topMux,
+		ReadTimeout:  0, // No timeout
+		WriteTimeout: 0, // No timeout
+		IdleTimeout:  0, // No timeout
+	}
+
+	// Start the server.
+	if err := srv.ListenAndServe(); err != nil {
 		klog.Fatal(err)
 	}
 
 	klog.Info("Http Proxy started")
 }
 
-func serveHealth(w http.ResponseWriter, r *http.Request) {
+func serveHealth(w http.ResponseWriter, _ *http.Request) {
 	if atomic.LoadInt32(&healthy) == 1 {
 		w.WriteHeader(http.StatusOK)
 	} else {
@@ -194,7 +213,7 @@ func serveSwaggerUI(mux *http.ServeMux) {
 	mux.Handle(prefix, http.StripPrefix(prefix, fileServer))
 }
 
-func registerHttpHandlerFromEndpoint(handler RegisterHttpHandlerFromEndpoint, serviceName string, ctx context.Context, mux *runtime.ServeMux) {
+func registerHttpHandlerFromEndpoint(ctx context.Context, handler RegisterHttpHandlerFromEndpoint, serviceName string, mux *runtime.ServeMux) {
 	endpoint := "localhost" + *rpcPortFlag
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32))}
 

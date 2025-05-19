@@ -8,11 +8,10 @@ import (
 	"strconv"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/meta"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -100,7 +99,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.Running //nolint:staticcheck // `ServiceStatus` is deprecated
+	newStatus.ServiceStatus = rayv1.Running
 	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus

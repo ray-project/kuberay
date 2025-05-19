@@ -5,75 +5,91 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestRayJobSubmitComplete(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeSubmitJobOptions := NewJobSubmitOptions(testStreams)
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
 	fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
 	fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
 
-	err := fakeSubmitJobOptions.Complete()
-	assert.Equal(t, "default", *fakeSubmitJobOptions.configFlags.Namespace)
+	cmd := &cobra.Command{}
+	cmd.Flags().StringVarP(&fakeSubmitJobOptions.namespace, "namespace", "n", "", "")
+
+	err := fakeSubmitJobOptions.Complete(cmd)
 	require.NoError(t, err)
+	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 }
 
 func TestRayJobSubmitValidate(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	fakeDir := t.TempDir()
 
-	rayYaml := `apiVersion: ray.io/v1
+	tests := []struct {
+		name        string
+		yamlContent string
+		expectError string
+	}{
+		{
+			name: "Successful submit job validation with RayJob",
+			yamlContent: `apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  submissionMode: 'InteractiveMode'`
-
-	rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
-
-	file, err := os.Create(rayJobYamlPath)
-	require.NoError(t, err)
-
-	_, err = file.Write([]byte(rayYaml))
-	require.NoError(t, err)
-
-	tests := []struct {
-		name        string
-		opts        *SubmitJobOptions
-		expectError string
-	}{
-		{
-			name: "should error when no K8s context is set",
-			opts: &SubmitJobOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
+  submissionMode: 'InteractiveMode'`,
 		},
 		{
-			name: "Successful submit job validation with RayJob",
-			opts: &SubmitJobOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				ioStreams:     &testStreams,
-				kubeContexter: util.NewMockKubeContexter(true),
-				fileName:      rayJobYamlPath,
-				workingDir:    "Fake/File/Path",
-			},
+			name: "BackoffLimit co-exist with InteractiveMode",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'
+  backoffLimit: 1`,
+			expectError: "BackoffLimit is incompatible with InteractiveMode",
+		},
+		{
+			name: "BackoffLimit is set to 0 with InteractiveMode",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'
+  backoffLimit: 0`,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.opts.Validate()
+			rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
+
+			file, err := os.Create(rayJobYamlPath)
+			require.NoError(t, err)
+			_, err = file.Write([]byte(tc.yamlContent))
+			require.NoError(t, err)
+
+			opts := &SubmitJobOptions{
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				fileName:   rayJobYamlPath,
+				workingDir: "Fake/File/Path",
+			}
+
+			err = opts.Validate()
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {
@@ -132,7 +148,8 @@ working_dir: /fake/dir/ray_working_dir/
 
 func TestRaySubmitCmd(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	fakeSubmitJobOptions := NewJobSubmitOptions(testStreams)
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
 
 	fakeSubmitJobOptions.runtimeEnv = "/fake-runtime/path"
 	fakeSubmitJobOptions.runtimeEnvJson = "{\"env_vars\":{\"counter_name\":\"test_counter\"}"

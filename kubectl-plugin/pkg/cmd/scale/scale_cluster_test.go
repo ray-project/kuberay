@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	kubefake "k8s.io/client-go/kubernetes/fake"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/utils/ptr"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
@@ -43,21 +44,25 @@ func TestRayScaleClusterComplete(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-			fakeScaleClusterOptions := NewScaleClusterOptions(testStreams)
-			if tc.namespace != "" {
-				fakeScaleClusterOptions.configFlags.Namespace = &tc.namespace
-			}
+			cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
-			err := fakeScaleClusterOptions.Complete(tc.args)
+			fakeScaleClusterOptions := NewScaleClusterOptions(cmdFactory, testStreams)
+
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVarP(&fakeScaleClusterOptions.namespace, "namespace", "n", tc.namespace, "")
+
+			err := fakeScaleClusterOptions.Complete(tc.args, cmd)
 
 			require.NoError(t, err)
-			assert.Equal(t, tc.expectedNamespace, *fakeScaleClusterOptions.configFlags.Namespace)
+			assert.Equal(t, tc.expectedNamespace, fakeScaleClusterOptions.namespace)
 			assert.Equal(t, tc.args[0], fakeScaleClusterOptions.cluster)
 		})
 	}
 }
 
 func TestRayScaleClusterValidate(t *testing.T) {
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
 	tests := []struct {
 		name        string
 		opts        *ScaleClusterOptions
@@ -65,47 +70,35 @@ func TestRayScaleClusterValidate(t *testing.T) {
 		expectError string
 	}{
 		{
-			name: "should error when no context is set",
-			opts: &ScaleClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(false),
-			},
-			expectError: "no context is currently set, use \"--context\" or \"kubectl config use-context <context>\" to select a new one",
-		},
-		{
 			name: "should error when no worker group is set",
 			opts: &ScaleClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
+				cmdFactory: cmdFactory,
 			},
 			expectError: "must specify -w/--worker-group",
 		},
 		{
 			name: "should error when no replicas are set",
 			opts: &ScaleClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				workerGroup:   "test-worker-group",
+				cmdFactory:  cmdFactory,
+				workerGroup: "test-worker-group",
 			},
 			expectError: "must specify -r/--replicas with a non-negative integer",
 		},
 		{
 			name: "should error when replicas is negative",
 			opts: &ScaleClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				workerGroup:   "test-worker-group",
-				replicas:      ptr.To(int32(-1)),
+				cmdFactory:  cmdFactory,
+				workerGroup: "test-worker-group",
+				replicas:    ptr.To(int32(-1)),
 			},
 			expectError: "must specify -r/--replicas with a non-negative integer",
 		},
 		{
 			name: "successful validation call",
 			opts: &ScaleClusterOptions{
-				configFlags:   genericclioptions.NewConfigFlags(true),
-				kubeContexter: util.NewMockKubeContexter(true),
-				workerGroup:   "test-worker-group",
-				replicas:      ptr.To(int32(4)),
+				cmdFactory:  cmdFactory,
+				workerGroup: "test-worker-group",
+				replicas:    ptr.To(int32(4)),
 			},
 		},
 	}
@@ -124,6 +117,7 @@ func TestRayScaleClusterValidate(t *testing.T) {
 
 func TestRayScaleClusterRun(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	testNamespace, workerGroup, cluster := "test-context", "worker-group-1", "my-cluster"
 	desiredReplicas := int32(3)
@@ -199,13 +193,12 @@ func TestRayScaleClusterRun(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeScaleClusterOptions := ScaleClusterOptions{
-				configFlags: &genericclioptions.ConfigFlags{
-					Namespace: &testNamespace,
-				},
+				cmdFactory:  cmdFactory,
 				ioStreams:   &testStreams,
+				namespace:   testNamespace,
+				cluster:     cluster,
 				replicas:    &desiredReplicas,
 				workerGroup: workerGroup,
-				cluster:     cluster,
 			}
 
 			kubeClientSet := kubefake.NewClientset()

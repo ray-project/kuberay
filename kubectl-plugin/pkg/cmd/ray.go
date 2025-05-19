@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/create"
 	kubectlraydelete "github.com/ray-project/kuberay/kubectl-plugin/pkg/cmd/delete"
@@ -29,14 +30,19 @@ func NewRayCommand(streams genericiooptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(get.NewGetCommand(streams))
-	cmd.AddCommand(session.NewSessionCommand(streams))
-	cmd.AddCommand(log.NewClusterLogCommand(streams))
-	cmd.AddCommand(job.NewJobCommand(streams))
-	cmd.AddCommand(version.NewVersionCommand(streams))
-	cmd.AddCommand(create.NewCreateCommand(streams))
-	cmd.AddCommand(kubectlraydelete.NewDeleteCommand(streams))
-	cmd.AddCommand(scale.NewScaleCommand(streams))
+	configFlags := genericclioptions.NewConfigFlags(true)
+	configFlags.AddFlags(cmd.PersistentFlags())
+
+	cmdFactory := cmdutil.NewFactory(configFlags)
+
+	cmd.AddCommand(get.NewGetCommand(cmdFactory, streams))
+	cmd.AddCommand(session.NewSessionCommand(cmdFactory, streams))
+	cmd.AddCommand(log.NewClusterLogCommand(cmdFactory, streams))
+	cmd.AddCommand(job.NewJobCommand(cmdFactory, streams))
+	cmd.AddCommand(version.NewVersionCommand(cmdFactory, streams))
+	cmd.AddCommand(create.NewCreateCommand(cmdFactory, streams))
+	cmd.AddCommand(kubectlraydelete.NewDeleteCommand(cmdFactory, streams))
+	cmd.AddCommand(scale.NewScaleCommand(cmdFactory, streams))
 
 	return cmd
 }

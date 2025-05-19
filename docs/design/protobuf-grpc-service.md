@@ -21,7 +21,7 @@ For the above reasons, it's worth it to build a generic abstraction on top of th
 
 ### Deployment topology and interactive flow
 
-The new gRPC service would be a individual deployment of the KubeRay control plane and user can choose to install it optionally. It will create a service and exposes endpoint to users.
+The new gRPC service would be an individual deployment of the KubeRay control plane and user can choose to install it optionally. It will create a service and exposes endpoint to users.
 
 ```text
 NAME                                                      READY   STATUS    RESTARTS      AGE
@@ -46,7 +46,7 @@ In order to better define resources at the API level, a few proto files will be 
 - Some of the Kubernetes API like `tolerance` and `node affinity` are too complicated to be converted to an API.
 - We want to leave some flexibility to use database to store history data in the near future (for example, pagination, list options etc).
 
-To resolve these issues, we provide a simple API which can cover most common use-cases.
+To resolve these issues, we provide a simple API which can cover most common use cases.
 
 For example, the protobuf definition of the `RayCluster`:
 
@@ -67,22 +67,22 @@ service ClusterService {
     };
   }
 
-  // Finds all Clusters in a given namespace. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in a given namespace.
   rpc ListCluster(ListClustersRequest) returns (ListClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/namespaces/{namespace}/clusters"
     };
   }
 
-  // Finds all Clusters in all namespaces. Supports pagination, and sorting on certain fields.
+  // Finds all Clusters in all namespaces.
   rpc ListAllClusters(ListAllClustersRequest) returns (ListAllClustersResponse) {
     option (google.api.http) = {
       get: "/apis/v1alpha2/clusters"
     };
   }
 
-  // Deletes an cluster without deleting the cluster's runs and jobs. To
-  // avoid unexpected behaviors, delete an cluster's runs and jobs before
+  // Deletes a cluster without deleting the cluster's runs and jobs. To
+  // avoid unexpected behaviors, delete a cluster's runs and jobs before
   // deleting the cluster.
   rpc DeleteCluster(DeleteClusterRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
@@ -234,7 +234,7 @@ message WorkerGroupSpec {
   int32 min_replicas = 5;
   // Optional. Max replicas of the worker group
   int32 max_replicas = 6;
-  // Optional. The ray start parames of worker node group
+  // Optional. The ray start params of worker node group
   map<string, string> ray_start_params = 7;
   // Optional. The volumes mount to worker pods
   repeated Volume volumes = 8;
@@ -273,7 +273,7 @@ message ClusterEvent {
 
 ### Support multiple clients
 
-Since we may have different clients to interactive with our services, we will generate gateway RESTful APIs and OpenAPI Spec at the same time.
+Since we may have different clients to interact with our services, we will generate gateway RESTful APIs and OpenAPI Spec at the same time.
 
 ![proto](https://user-images.githubusercontent.com/4739316/136441815-6bbf7b91-4bf9-4e89-a770-71e02f451987.png)
 
@@ -293,7 +293,7 @@ The service will implement gPRC server as following graph shows.
 
 ## Implementation History
 
-- 2021-11-25: inital proposal accepted.
+- 2021-11-25: initial proposal accepted.
 - 2022-12-01: new protobuf definition released.
 
 > Note: we should update doc when there's a large update.

@@ -8,11 +8,9 @@ import (
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,21 +20,21 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
-	// +kubebuilder:scaffold:imports
 )
 
 var (
@@ -70,6 +68,7 @@ func main() {
 	var featureGates string
 	var enableBatchScheduler bool
 	var batchScheduler string
+	var enableMetrics bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -100,6 +99,7 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
+	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -129,6 +129,7 @@ func main() {
 		config.BatchScheduler = batchScheduler
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
+		config.EnableMetrics = enableMetrics
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -229,16 +230,38 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:   config.HeadSidecarContainers,
-		WorkerSidecarContainers: config.WorkerSidecarContainers,
-	}
 	ctx := ctrl.SetupSignalHandler()
+
+	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
+	var rayJobMetricsManager *metrics.RayJobMetricsManager
+	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
+	if config.EnableMetrics {
+		mgrClient := mgr.GetClient()
+		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
+		rayJobMetricsManager = metrics.NewRayJobMetricsManager(ctx, mgrClient)
+		rayServiceMetricsManager = metrics.NewRayServiceMetricsManager(ctx, mgrClient)
+		ctrlmetrics.Registry.MustRegister(
+			rayClusterMetricsManager,
+			rayJobMetricsManager,
+			rayServiceMetricsManager,
+		)
+	}
+	rayClusterOptions := ray.RayClusterReconcilerOptions{
+		HeadSidecarContainers:    config.HeadSidecarContainers,
+		WorkerSidecarContainers:  config.WorkerSidecarContainers,
+		IsOpenShift:              utils.GetClusterType(),
+		RayClusterMetricsManager: rayClusterMetricsManager,
+	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
+
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+
+	rayJobOptions := ray.RayJobReconcilerOptions{
+		RayJobMetricsManager: rayJobMetricsManager,
+	}
+	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {

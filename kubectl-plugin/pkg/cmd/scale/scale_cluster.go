@@ -7,23 +7,22 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 )
 
 type ScaleClusterOptions struct {
-	configFlags   *genericclioptions.ConfigFlags
-	ioStreams     *genericclioptions.IOStreams
-	kubeContexter util.KubeContexter
-	replicas      *int32
-	workerGroup   string
-	cluster       string
+	cmdFactory  cmdutil.Factory
+	ioStreams   *genericclioptions.IOStreams
+	replicas    *int32
+	namespace   string
+	workerGroup string
+	cluster     string
 }
 
 var (
@@ -37,18 +36,16 @@ var (
 	`)
 )
 
-func NewScaleClusterOptions(streams genericclioptions.IOStreams) *ScaleClusterOptions {
+func NewScaleClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *ScaleClusterOptions {
 	return &ScaleClusterOptions{
-		configFlags:   genericclioptions.NewConfigFlags(true),
-		ioStreams:     &streams,
-		kubeContexter: &util.DefaultKubeContexter{},
-		replicas:      new(int32),
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
+		replicas:   new(int32),
 	}
 }
 
-func NewScaleClusterCommand(streams genericclioptions.IOStreams) *cobra.Command {
-	options := NewScaleClusterOptions(streams)
-	cmdFactory := cmdutil.NewFactory(options.configFlags)
+func NewScaleClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
+	options := NewScaleClusterOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:          "cluster (RAYCLUSTER) (-w/--worker-group WORKERGROUP) (-r/--replicas N)",
@@ -58,7 +55,7 @@ func NewScaleClusterCommand(streams genericclioptions.IOStreams) *cobra.Command 
 		SilenceUsage: true,
 		Args:         cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args); err != nil {
+			if err := options.Complete(args, cmd); err != nil {
 				return err
 			}
 			if err := options.Validate(); err != nil {
@@ -75,13 +72,17 @@ func NewScaleClusterCommand(streams genericclioptions.IOStreams) *cobra.Command 
 	cmd.Flags().StringVarP(&options.workerGroup, "worker-group", "w", "", "worker group")
 	cobra.CheckErr(cmd.MarkFlagRequired("worker-group"))
 	cmd.Flags().Int32VarP(options.replicas, "replicas", "r", -1, "Desired number of replicas in worker group")
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
-func (options *ScaleClusterOptions) Complete(args []string) error {
-	if *options.configFlags.Namespace == "" {
-		*options.configFlags.Namespace = "default"
+func (options *ScaleClusterOptions) Complete(args []string, cmd *cobra.Command) error {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
+		options.namespace = "default"
 	}
 
 	options.cluster = args[0]
@@ -90,15 +91,6 @@ func (options *ScaleClusterOptions) Complete(args []string) error {
 }
 
 func (options *ScaleClusterOptions) Validate() error {
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("error retrieving raw config: %w", err)
-	}
-
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-
 	if options.workerGroup == "" {
 		return fmt.Errorf("must specify -w/--worker-group")
 	}
@@ -111,9 +103,9 @@ func (options *ScaleClusterOptions) Validate() error {
 }
 
 func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Client, writer io.Writer) error {
-	cluster, err := k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Get(ctx, options.cluster, metav1.GetOptions{})
+	cluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, *options.configFlags.Namespace, err)
+		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, options.namespace, err)
 	}
 
 	// find the index of the worker group
@@ -126,21 +118,21 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		}
 	}
 	if workerGroupIndex == -1 {
-		return fmt.Errorf("worker group %s not found in Ray cluster %s in namespace %s. Available worker groups: %s", options.workerGroup, options.cluster, *options.configFlags.Namespace, strings.Join(workerGroups, ", "))
+		return fmt.Errorf("worker group %s not found in Ray cluster %s in namespace %s. Available worker groups: %s", options.workerGroup, options.cluster, options.namespace, strings.Join(workerGroups, ", "))
 	}
 
 	previousReplicas := *cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas
 	if previousReplicas == *options.replicas {
-		fmt.Fprintf(writer, "worker group %s in Ray cluster %s in namespace %s already has %d replicas. Skipping\n", options.workerGroup, options.cluster, *options.configFlags.Namespace, previousReplicas)
+		fmt.Fprintf(writer, "worker group %s in Ray cluster %s in namespace %s already has %d replicas. Skipping\n", options.workerGroup, options.cluster, options.namespace, previousReplicas)
 		return nil
 	}
 
 	cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas = options.replicas
-	_, err = k8sClient.RayClient().RayV1().RayClusters(*options.configFlags.Namespace).Update(ctx, cluster, metav1.UpdateOptions{})
+	_, err = k8sClient.RayClient().RayV1().RayClusters(options.namespace).Update(ctx, cluster, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, *options.configFlags.Namespace, err)
+		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, options.namespace, err)
 	}
 
-	fmt.Fprintf(writer, "Scaled worker group %s in Ray cluster %s in namespace %s from %d to %d replicas\n", options.workerGroup, options.cluster, *options.configFlags.Namespace, previousReplicas, *options.replicas)
+	fmt.Fprintf(writer, "Scaled worker group %s in Ray cluster %s in namespace %s from %d to %d replicas\n", options.workerGroup, options.cluster, options.namespace, previousReplicas, *options.replicas)
 	return nil
 }

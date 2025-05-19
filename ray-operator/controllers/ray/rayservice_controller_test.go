@@ -23,22 +23,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/test/support"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	// +kubebuilder:scaffold:imports
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 func serveConfigV2Template(serveAppName string) string {
@@ -76,6 +72,9 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"foo": "bar",
+			},
 		},
 		Spec: rayv1.RayServiceSpec{
 			ServeConfigV2: serveConfigV2,
@@ -85,7 +84,6 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 			RayClusterSpec: rayv1.RayClusterSpec{
 				RayVersion: support.GetRayVersion(),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
-					RayStartParams: map[string]string{},
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
@@ -99,11 +97,10 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 				},
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						Replicas:       ptr.To[int32](3),
-						MinReplicas:    ptr.To[int32](0),
-						MaxReplicas:    ptr.To[int32](10000),
-						GroupName:      "small-group",
-						RayStartParams: map[string]string{},
+						Replicas:    ptr.To[int32](3),
+						MinReplicas: ptr.To[int32](0),
+						MaxReplicas: ptr.To[int32](10000),
+						GroupName:   "small-group",
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
@@ -158,7 +155,7 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 		})
 
 		It("Should create a pending RayCluster", func() {
@@ -181,17 +178,17 @@ var _ = Context("RayService env tests", func() {
 			// Initialize RayCluster for the following tests.
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Check RayService service names", func() {
 			var svc corev1.Service
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name + "-head-svc", Namespace: namespace}, &svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name + "-serve-svc", Namespace: namespace}, &svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil())
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 	})
 
@@ -208,7 +205,7 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 		})
 
 		It("Should create a pending RayCluster", func() {
@@ -224,7 +221,7 @@ var _ = Context("RayService env tests", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: clusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Pending RayCluster: %v", rayCluster.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Pending RayCluster: %v", rayCluster.Name)
 				*rayCluster.Spec.WorkerGroupSpecs[0].Replicas++
 				return k8sClient.Update(ctx, rayCluster)
 			})
@@ -250,7 +247,7 @@ var _ = Context("RayService env tests", func() {
 			// Initialize RayCluster for the following tests.
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster: %v", rayCluster.Name)
 		})
 
 		It("Autoscaler updates the active RayCluster and should not switch to a new RayCluster", func() {
@@ -260,7 +257,7 @@ var _ = Context("RayService env tests", func() {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: clusterName, Namespace: namespace}, rayCluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil(), "Active RayCluster: %v", rayCluster.Name)
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Active RayCluster: %v", rayCluster.Name)
 				*rayCluster.Spec.WorkerGroupSpecs[0].Replicas++
 				return k8sClient.Update(ctx, rayCluster)
 			})
@@ -296,7 +293,7 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create RayService resource")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 
 			By("Conditions should be initialized correctly")
 			Eventually(
@@ -329,7 +326,17 @@ var _ = Context("RayService env tests", func() {
 			// Initialize RayCluster for the following tests.
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayService.Status.ActiveServiceStatus.RayClusterName, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster: %v", rayCluster.Name)
+
+			// Make sure the annotations are populated to the RayCluster.
+			Expect(rayCluster.Annotations).Should(Satisfy(func(annotations map[string]string) bool {
+				for key, value := range rayService.Annotations {
+					if val, ok := annotations[key]; !ok || val != value {
+						return false
+					}
+				}
+				return true
+			}))
 
 			By("Check the serve application status in the RayService status")
 			// Check the serve application status in the RayService status.
@@ -344,14 +351,14 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: namespace}, svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Head service: %v", svc)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Head service: %v", svc)
 			// TODO: Verify the head service by checking labels and annotations.
 
 			By("Should create a new serve service resource")
 			svc = &corev1.Service{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(rayService.Name), Namespace: namespace}, svc),
-				time.Second*3, time.Millisecond*500).Should(BeNil(), "Serve service: %v", svc)
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Serve service: %v", svc)
 			// TODO: Verify the serve service by checking labels and annotations.
 
 			By("The RayServiceReady condition should be true when the number of endpoints is greater than 0")
@@ -389,7 +396,7 @@ var _ = Context("RayService env tests", func() {
 				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					Eventually(
 						getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-						time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 					rayService.Spec.ServeConfigV2 = newConfigV2
 					return k8sClient.Update(ctx, rayService)
 				})
@@ -445,7 +452,7 @@ var _ = Context("RayService env tests", func() {
 				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					Eventually(
 						getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-						time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 					rayService.Spec.RayClusterSpec.WorkerGroupSpecs = workerGroupSpecs
 					return k8sClient.Update(ctx, rayService)
 				})
@@ -478,7 +485,7 @@ var _ = Context("RayService env tests", func() {
 				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					Eventually(
 						getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-						time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 					Expect(rayService.Spec.RayClusterSpec.RayVersion).NotTo(Equal(mockRayVersion))
 					rayService.Spec.RayClusterSpec.RayVersion = mockRayVersion
 					return k8sClient.Update(ctx, rayService)
@@ -496,7 +503,7 @@ var _ = Context("RayService env tests", func() {
 				pendingCluster := &rayv1.RayCluster{}
 				Eventually(
 					getResourceFunc(ctx, client.ObjectKey{Name: pendingClusterName, Namespace: namespace}, pendingCluster),
-					time.Second*15, time.Millisecond*500).Should(BeNil(), "Pending RayCluster: %v", pendingCluster.Name)
+					time.Second*15, time.Millisecond*500).Should(Succeed(), "Pending RayCluster: %v", pendingCluster.Name)
 			})
 
 			When("Promote the pending RayCluster to the active RayCluster", Ordered, func() {
@@ -514,7 +521,7 @@ var _ = Context("RayService env tests", func() {
 					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 						Eventually(
 							getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-							time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+							time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 						Expect(rayService.Spec.RayClusterSpec.RayVersion).NotTo(Equal(mockRayVersion))
 						rayService.Spec.RayClusterSpec.RayVersion = mockRayVersion
 						return k8sClient.Update(ctx, rayService)
@@ -539,7 +546,7 @@ var _ = Context("RayService env tests", func() {
 					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 						Eventually(
 							getResourceFunc(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService),
-							time.Second*3, time.Millisecond*500).Should(BeNil(), "RayService: %v", rayService.Name)
+							time.Second*3, time.Millisecond*500).Should(Succeed(), "RayService: %v", rayService.Name)
 						rayService.Spec.RayClusterSpec.WorkerGroupSpecs = workerGroupSpecs
 						return k8sClient.Update(ctx, rayService)
 					})

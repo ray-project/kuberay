@@ -119,7 +119,8 @@ const (
 	// The value of RAY_CLOUD_INSTANCE_ID is the Pod name for Autoscaler V2 alpha. This may change in the future.
 	RAY_CLOUD_INSTANCE_ID = "RAY_CLOUD_INSTANCE_ID"
 	// The value of RAY_NODE_TYPE_NAME is the name of the node group (i.e., the value of the "ray.io/group" label).
-	RAY_NODE_TYPE_NAME = "RAY_NODE_TYPE_NAME"
+	RAY_NODE_TYPE_NAME       = "RAY_NODE_TYPE_NAME"
+	RAY_ENABLE_AUTOSCALER_V2 = "RAY_enable_autoscaler_v2"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
@@ -136,6 +137,10 @@ const (
 	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature
 	// flag for v1.1.0 and will be removed if the behavior proves to be stable enough.
 	ENABLE_PROBES_INJECTION = "ENABLE_PROBES_INJECTION"
+
+	// This KubeRay operator environment variable is used to determine
+	// if operator should treat OpenShift cluster as Vanilla Kubernetes.
+	USE_INGRESS_ON_OPENSHIFT = "USE_INGRESS_ON_OPENSHIFT"
 
 	// If set to true, kuberay creates a normal ClusterIP service for a Ray Head instead of a Headless service.
 	ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE = "ENABLE_RAY_HEAD_CLUSTER_IP_SERVICE"
@@ -174,7 +179,7 @@ const (
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
-	BaseWgetHealthCommand     = "wget -T %d -q -O- http://localhost:%d/%s | grep success"
+	BaseWgetHealthCommand     = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"

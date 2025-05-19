@@ -95,8 +95,6 @@ func (r *rayClusterScaleExpectationImpl) IsSatisfied(ctx context.Context, namesp
 		case Delete:
 			if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: namespace}, pod); err != nil {
 				isPodSatisfied = errors.IsNotFound(err)
-			} else {
-				isPodSatisfied = pod.DeletionTimestamp != nil
 			}
 		}
 		// delete satisfied item in cache

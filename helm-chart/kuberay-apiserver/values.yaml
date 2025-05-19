@@ -4,11 +4,20 @@
 
 replicaCount: 1
 
-name: "kuberay-apiserver"
+name: kuberay-apiserver
+
 image:
   repository: quay.io/kuberay/apiserver
   tag: nightly
   pullPolicy: IfNotPresent
+
+labels:
+  # key1: value1
+  # key2: value2
+
+annotations:
+  # key1: value1
+  # key2: value2
 
 ## Install Default RBAC roles and bindings
 rbac:
@@ -20,15 +29,15 @@ serviceAccount:
   create: true
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: "kuberay-apiserver"
+  name: kuberay-apiserver
 
 containerPort:
-  - name: http
-    containerPort: 8888
-    protocol: TCP
-  - name: grpc
-    containerPort: 8887
-    protocol: TCP
+- name: http
+  containerPort: 8888
+  protocol: TCP
+- name: grpc
+  containerPort: 8887
+  protocol: TCP
 
 resources:
   limits:
@@ -37,19 +46,32 @@ resources:
   requests:
     cpu: 300m
     memory: 300Mi
+
+# -- Sidecar containers to run along with the main container.
+sidecarContainers: []
+
+# -- Node selector for pods.
+nodeSelector: {}
+
+# -- Affinity for pods.
+affinity: {}
+
+# -- Tolerations for pods.
+tolerations: []
+
 # Only one service type needs to be picked
 service:
-# Nodeport service
+  # Nodeport service
   type: NodePort
   ports:
-    - name: http
-      port: 8888
-      targetPort: 8888
-      nodePort: 31888
-    - name: rpc
-      port: 8887
-      targetPort: 8887
-      nodePort: 31887
+  - name: http
+    port: 8888
+    targetPort: 8888
+    nodePort: 31888
+  - name: rpc
+    port: 8887
+    targetPort: 8887
+    nodePort: 31887
 # ClusterIP service
 #  type: ClusterIP
 #  ports:
@@ -67,8 +89,13 @@ service:
 
 ingress:
   enabled: false
+  annotations: {}
+  className: ""
+  tls: []
+
 route:
   enabled: false
+  annotations: {}
 
 rbacEnable: true
 

@@ -49,7 +49,6 @@ by some organizations to back user interfaces for KubeRay resource management.
 * [Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
 * [Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html)
 * [MCAD](guidance/kuberay-with-MCAD.md)
-* [Kubeflow](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html)
 
 ## Security
 

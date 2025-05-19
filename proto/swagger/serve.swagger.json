@@ -47,7 +47,7 @@
           },
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -248,7 +248,7 @@
         "parameters": [
           {
             "name": "pageToken",
-            "description": "A page token to request the next page of results. The token is acquried\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
+            "description": "A page token to request the next page of results. The token is acquired\nfrom the nextPageToken field of the response from the previous\nListRayServices call or can be omitted when fetching the first page.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -419,6 +419,13 @@
         "autoscalerOptions": {
           "$ref": "#/definitions/protoAutoscalerOptions",
           "description": "AutoscalerOptions specifies optional configuration for the Ray autoscaler."
+        },
+        "headServiceAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. The annotations for the head service"
         }
       },
       "description": "Cluster specification."
@@ -556,7 +563,7 @@
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices.",
+          "description": "The token to list the next page of RayServices.\nIf there is no more service, this field will be empty.",
           "readOnly": true
         }
       }
@@ -580,7 +587,7 @@
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices.",
+          "description": "The token to list the next page of RayServices.\n\nIf there are no more clusters, this field will be empty.",
           "readOnly": true
         }
       }

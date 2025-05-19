@@ -6,9 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func NewGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewGetCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "get",
 		Short:        "Display one or many Ray resources.",
@@ -23,9 +24,9 @@ func NewGetCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewGetClusterCommand(streams))
-	cmd.AddCommand(NewGetWorkerGroupCommand(streams))
-	cmd.AddCommand(NewGetNodesCommand(streams))
+	cmd.AddCommand(NewGetClusterCommand(cmdFactory, streams))
+	cmd.AddCommand(NewGetWorkerGroupCommand(cmdFactory, streams))
+	cmd.AddCommand(NewGetNodesCommand(cmdFactory, streams))
 	return cmd
 }
 

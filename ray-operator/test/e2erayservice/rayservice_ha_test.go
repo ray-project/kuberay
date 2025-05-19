@@ -6,7 +6,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -37,7 +36,7 @@ func TestStaticRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -87,7 +86,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -157,7 +156,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -243,7 +242,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to running", rayService.Namespace, rayService.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
@@ -290,7 +289,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	})
 	// Because this test shares the Locust RayCluster YAML file with other tests,
 	// we need to ensure the YAML file is not accidentally updated.
-	g.Expect(time.Since(startTime) > 2*time.Minute).To(BeTrue())
+	g.Expect(time.Since(startTime)).To(BeNumerically(">", 2*time.Minute))
 
 	newHeadPod, err := GetHeadPod(test, rayServiceUnderlyingRayCluster)
 	g.Expect(err).NotTo(HaveOccurred())

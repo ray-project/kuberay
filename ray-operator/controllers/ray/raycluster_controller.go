@@ -11,34 +11,19 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
-
-	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-
-	batchv1 "k8s.io/api/batch/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-
-	"k8s.io/client-go/tools/record"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
-
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,6 +32,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 type reconcileFunc func(context.Context, *rayv1.RayCluster) error
@@ -58,45 +52,6 @@ var (
 	podUIDIndexField = "metadata.uid"
 )
 
-// getDiscoveryClient returns a discovery client for the current reconciler
-func getDiscoveryClient(config *rest.Config) (*discovery.DiscoveryClient, error) {
-	return discovery.NewDiscoveryClientForConfig(config)
-}
-
-// Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or Openshift
-func getClusterType(ctx context.Context) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if os.Getenv("USE_INGRESS_ON_OPENSHIFT") == "true" {
-		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
-		return false
-	}
-
-	// The discovery package is used to discover APIs supported by a Kubernetes API server.
-	config, err := ctrl.GetConfig()
-	if err == nil && config != nil {
-		dclient, err := getDiscoveryClient(config)
-		if err == nil && dclient != nil {
-			apiGroupList, err := dclient.ServerGroups()
-			if err != nil {
-				logger.Info("Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
-				return false
-			}
-			for i := 0; i < len(apiGroupList.Groups); i++ {
-				if strings.HasSuffix(apiGroupList.Groups[i].Name, ".openshift.io") {
-					logger.Info("We detected being on OpenShift!")
-					return true
-				}
-			}
-			return false
-		}
-		logger.Info("Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
-		return false
-	}
-	logger.Info("Cannot retrieve config, assuming we're on Vanilla Kubernetes")
-	return false
-}
-
 // NewReconciler returns a new reconcile.Reconciler
 func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions, rayConfigs configapi.Configuration) *RayClusterReconciler {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
@@ -105,7 +60,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	}); err != nil {
 		panic(err)
 	}
-	isOpenShift := getClusterType(ctx)
+
 	// init the batch scheduler manager
 	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig())
 	if err != nil {
@@ -117,15 +72,12 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	// add schema to runtime
 	schedulerMgr.AddToScheme(mgr.GetScheme())
 	return &RayClusterReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Recorder:          mgr.GetEventRecorderFor("raycluster-controller"),
-		BatchSchedulerMgr: schedulerMgr,
-		IsOpenShift:       isOpenShift,
-
+		Client:                     mgr.GetClient(),
+		Scheme:                     mgr.GetScheme(),
+		Recorder:                   mgr.GetEventRecorderFor("raycluster-controller"),
+		BatchSchedulerMgr:          schedulerMgr,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
-		headSidecarContainers:      options.HeadSidecarContainers,
-		workerSidecarContainers:    options.WorkerSidecarContainers,
+		options:                    options,
 	}
 }
 
@@ -136,16 +88,14 @@ type RayClusterReconciler struct {
 	Recorder                   record.EventRecorder
 	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
-
-	headSidecarContainers   []corev1.Container
-	workerSidecarContainers []corev1.Container
-
-	IsOpenShift bool
+	options                    RayClusterReconcilerOptions
 }
 
 type RayClusterReconcilerOptions struct {
-	HeadSidecarContainers   []corev1.Container
-	WorkerSidecarContainers []corev1.Container
+	RayClusterMetricsManager *metrics.RayClusterMetricsManager
+	HeadSidecarContainers    []corev1.Container
+	WorkerSidecarContainers  []corev1.Container
+	IsOpenShift              bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -185,7 +135,6 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
-		logger.Info("Read request instance not found error!")
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -219,6 +168,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
 		return ctrl.Result{}, nil
 	}
+
+	setDefaults(instance)
 
 	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
 		logger.Error(err, "The RayCluster metadata is invalid")
@@ -420,11 +371,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context, oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
-	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
 		logger.Info(
 			"inconsistentRayClusterStatus",
-			"oldState", oldStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
-			"newState", newStatus.State, //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			"oldState", oldStatus.State,
+			"newState", newStatus.State,
 			"oldReason", oldStatus.Reason,
 			"newReason", newStatus.Reason,
 		)
@@ -474,7 +425,7 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 		return nil
 	}
 
-	if r.IsOpenShift {
+	if r.options.IsOpenShift {
 		// This is open shift - create route
 		return r.reconcileRouteOpenShift(ctx, instance)
 	}
@@ -734,12 +685,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	} else if len(headPods.Items) == 0 {
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
-		common.CreatedClustersCounterInc(instance.Namespace)
 		if err := r.createHeadPod(ctx, *instance); err != nil {
-			common.FailedClustersCounterInc(instance.Namespace)
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
-		common.SuccessfulClustersCounterInc(instance.Namespace)
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
 		correctHeadPodName := instance.Name + "-head"
 		headPodNames := make([]string, len(headPods.Items))
@@ -761,8 +709,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
-		var workerReplicas int32 = utils.GetWorkerGroupDesiredReplicas(ctx, worker)
-		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", workerReplicas, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
+		numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, worker))
+		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", numExpectedWorkerPods, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
 		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName).ToListOptions()...); err != nil {
@@ -844,10 +792,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if worker.NumOfHosts <= 0 {
 			worker.NumOfHosts = 1
 		}
-		numExpectedPods := int(workerReplicas * worker.NumOfHosts)
-		diff := numExpectedPods - len(runningPods.Items)
+		diff := numExpectedWorkerPods - len(runningPods.Items)
 
-		logger.Info("reconcilePods", "workerReplicas", workerReplicas, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
+		logger.Info("reconcilePods", "workerReplicas", numExpectedWorkerPods, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
 		if diff > 0 {
 			// pods need to be added
@@ -1093,12 +1040,13 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
+
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
-	if len(r.headSidecarContainers) > 0 {
-		podConf.Spec.Containers = append(podConf.Spec.Containers, r.headSidecarContainers...)
+	if len(r.options.HeadSidecarContainers) > 0 {
+		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
@@ -1125,8 +1073,8 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
-	if len(r.workerSidecarContainers) > 0 {
-		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.workerSidecarContainers...)
+	if len(r.options.WorkerSidecarContainers) > 0 {
+		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
@@ -1233,7 +1181,6 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
-
 	if r.BatchSchedulerMgr != nil {
 		r.BatchSchedulerMgr.ConfigureReconciler(b)
 	}
@@ -1301,7 +1248,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
 		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+			newInstance.Status.State = rayv1.Ready
 			newInstance.Status.Reason = ""
 		}
 	}
@@ -1396,7 +1343,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
-		newInstance.Status.State = rayv1.Suspended //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		newInstance.Status.State = rayv1.Suspended
 	}
 
 	if err := r.updateEndpoints(ctx, newInstance); err != nil {
@@ -1410,11 +1357,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
-	if instance.Status.State != newInstance.Status.State { //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+	if instance.Status.State != newInstance.Status.State {
 		if newInstance.Status.StateTransitionTimes == nil {
 			newInstance.Status.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time)
 		}
-		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow //nolint:staticcheck // https://github.com/ray-project/kuberay/pull/2288
+		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow
 	}
 
 	return newInstance, nil
@@ -1660,8 +1607,26 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	err := r.Status().Update(ctx, newInstance)
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
+	} else {
+		emitRayClusterMetrics(r.options.RayClusterMetricsManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 	}
+
 	return inconsistent, err
+}
+
+func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	if rayClusterMetricsManager == nil {
+		return
+	}
+	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, oldStatus, newStatus, creationTimestamp)
+}
+
+func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
+	if !meta.IsStatusConditionTrue(oldStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
+		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
+		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
+	}
 }
 
 // sumGPUs sums the GPUs in the given resource list.
@@ -1675,4 +1640,17 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	}
 
 	return totalGPUs
+}
+
+// setDefaults sets some default values for the RayCluster
+func setDefaults(instance *rayv1.RayCluster) {
+	if instance.Spec.HeadGroupSpec.RayStartParams == nil {
+		instance.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	}
+
+	for i := range instance.Spec.WorkerGroupSpecs {
+		if instance.Spec.WorkerGroupSpecs[i].RayStartParams == nil {
+			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
+		}
+	}
 }

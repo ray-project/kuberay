@@ -97,7 +97,7 @@ message GetRayServiceRequest {
 message ListRayServicesRequest {
   // Required. The namespace of the ray services to be retrieved.
   string namespace = 1 [(google.api.field_behavior) = REQUIRED];
-  // A page token to request the next page of results. The token is acquried
+  // A page token to request the next page of results. The token is acquired
   // from the nextPageToken field of the response from the previous
   // ListRayServices call or can be omitted when fetching the first page.
   string page_token = 2;
@@ -113,11 +113,13 @@ message ListRayServicesResponse {
   // The total number of RayServices for the given query.
   int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
+  //
+  // If there are no more clusters, this field will be empty.
   string next_page_token = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message ListAllRayServicesRequest {
-  // A page token to request the next page of results. The token is acquried
+  // A page token to request the next page of results. The token is acquired
   // from the nextPageToken field of the response from the previous
   // ListRayServices call or can be omitted when fetching the first page.
   string page_token = 1;
@@ -133,6 +135,7 @@ message ListAllRayServicesResponse {
   // The total number of RayServices for the given query.
   int32 total_size = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
   // The token to list the next page of RayServices.
+  // If there is no more service, this field will be empty.
   string next_page_token = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 

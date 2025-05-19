@@ -11,11 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	//+kubebuilder:scaffold:imports
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -135,7 +133,6 @@ var _ = Describe("RayCluster validating webhook", func() {
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{},
@@ -170,7 +167,6 @@ var _ = Describe("RayCluster validating webhook", func() {
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
-						RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
 						Template: corev1.PodTemplateSpec{
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{},
@@ -179,8 +175,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 					},
 					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 						{
-							GroupName:      "group1",
-							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
+							GroupName: "group1",
 							Template: corev1.PodTemplateSpec{
 								Spec: corev1.PodSpec{
 									Containers: []corev1.Container{},
@@ -188,8 +183,7 @@ var _ = Describe("RayCluster validating webhook", func() {
 							},
 						},
 						{
-							GroupName:      "group1",
-							RayStartParams: map[string]string{"DEADBEEF": "DEADBEEF"},
+							GroupName: "group1",
 							Template: corev1.PodTemplateSpec{
 								Spec: corev1.PodSpec{
 									Containers: []corev1.Container{},

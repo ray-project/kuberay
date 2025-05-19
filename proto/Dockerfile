@@ -1,5 +1,5 @@
 # Generate client code (go & json) from API protocol buffers
-FROM golang:1.23.6-bullseye AS generator
+FROM golang:1.24.2-bullseye AS generator
 
 ENV PROTOC_VERSION 3.17.3
 ENV GOLANG_PROTOBUF_VERSION v1.5.2
@@ -14,6 +14,7 @@ ENV GOBIN=/go/bin
 USER root
 RUN wget https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64 -O /usr/bin/jq && chmod +x /usr/bin/jq
 RUN curl -L -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip
+RUN apt-get update && apt-get install -y unzip
 RUN unzip -o protoc.zip -d /usr/ bin/protoc
 RUN unzip -o protoc.zip -d /usr/ 'include/*'
 RUN rm -f protoc.zip

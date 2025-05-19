@@ -4,9 +4,8 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
@@ -32,7 +31,7 @@ func TestRayJobRetry(t *testing.T) {
 			WithSpec(rayv1ac.RayJobSpec().
 				WithBackoffLimit(2).
 				WithSubmitterConfig(rayv1ac.SubmitterConfig().
-					WithBackoffLimit(0)).
+					WithBackoffLimit(1)).
 				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
@@ -59,6 +58,12 @@ func TestRayJobRetry(t *testing.T) {
 			Should(WithTransform(RayJobFailed, Equal(int32(3))))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+
+		job, err := test.Client().Core().BatchV1().Jobs(namespace.Name).Get(test.Ctx(), rayJob.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(job.Spec.BackoffLimit).To(HaveValue(Equal(int32(1))))
+		g.Expect(job.Status.Failed).To(Equal(int32(0))) // Ray job failures (at the application level) are not counted as K8s job submitter failures; K8s job submitter failures only count for issues like network errors.
+		g.Expect(job.Status.Succeeded).To(Equal(int32(1)))
 
 		// Refresh the RayJob status
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)

@@ -12,18 +12,15 @@ import (
 	"strings"
 	"unicode"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
 	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/util/json"
-
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -215,11 +212,11 @@ func TrimJobName(jobName string) string {
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
-	maxLenght := 63
+	maxLength := 63
 
-	if len(s) > maxLenght {
+	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}
@@ -346,7 +343,7 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
-	return workerReplicas
+	return workerReplicas * workerGroupSpec.NumOfHosts
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
@@ -366,7 +363,7 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MinReplicas
+		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -379,7 +376,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += *nodeGroup.MaxReplicas
+		count += (*nodeGroup.MaxReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -426,6 +423,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)
 		}
@@ -439,11 +437,24 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
 	return sumResourceList(minResourcesList)
+}
+
+// calculateReplicaResource adjusts the resource quantities in a given ResourceList
+// to account for the specified number of hosts. It multiplies each resource quantity
+// in the ResourceList by the number of hosts.
+//
+// Note: This function modifies the provided ResourceList in place.
+func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32) {
+	for name, quantity := range *podResource {
+		quantity.Mul(int64(numOfHosts))
+		(*podResource)[name] = quantity
+	}
 }
 
 // CalculatePodResource returns the total resources of a pod.
@@ -634,6 +645,10 @@ func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
 		*spec.EnableInTreeAutoscaling
 }
 
+func IsAutoscalingV2Enabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV2
+}
+
 // Check if the RayCluster has GCS fault tolerance enabled.
 func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
 	v, ok := annotations[RayFTEnabledAnnotationKey]
@@ -646,4 +661,36 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 		return ""
 	}
 	return svc.Spec.Selector[RayClusterLabelKey]
+}
+
+// Check where we are running. We are trying to distinguish here whether
+// this is vanilla kubernetes cluster or Openshift
+func GetClusterType() bool {
+	if os.Getenv(USE_INGRESS_ON_OPENSHIFT) == "true" {
+		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
+		return false
+	}
+
+	// The discovery package is used to discover APIs supported by a Kubernetes API server.
+	config, err := ctrl.GetConfig()
+	if err != nil || config == nil {
+		return false
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil || discoveryClient == nil {
+		return false
+	}
+
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		return false
+	}
+
+	for _, group := range apiGroupList.Groups {
+		if strings.HasSuffix(group.Name, ".openshift.io") {
+			return true
+		}
+	}
+	return false
 }

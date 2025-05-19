@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 )
 
 type appPort struct {
@@ -24,15 +24,16 @@ type appPort struct {
 }
 
 type SessionOptions struct {
-	configFlags    *genericclioptions.ConfigFlags
+	cmdFactory     cmdutil.Factory
 	ioStreams      *genericiooptions.IOStreams
-	kubeContexter  util.KubeContexter
 	currentContext string
 	ResourceType   util.ResourceType
 	ResourceName   string
-	Namespace      string
+	namespace      string
 	Verbose        bool
 }
+
+const reconnectDelay = 3 * time.Second
 
 var (
 	dashboardPort = appPort{
@@ -71,18 +72,15 @@ var (
 	`)
 )
 
-func NewSessionOptions(streams genericiooptions.IOStreams) *SessionOptions {
-	configFlags := genericclioptions.NewConfigFlags(true)
+func NewSessionOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SessionOptions {
 	return &SessionOptions{
-		ioStreams:     &streams,
-		configFlags:   configFlags,
-		kubeContexter: &util.DefaultKubeContexter{},
+		cmdFactory: cmdFactory,
+		ioStreams:  &streams,
 	}
 }
 
-func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
-	options := NewSessionOptions(streams)
-	factory := cmdutil.NewFactory(options.configFlags)
+func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
+	options := NewSessionOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
 		Use:     "session (RAYCLUSTER | TYPE/NAME)",
@@ -95,25 +93,40 @@ func NewSessionCommand(streams genericiooptions.IOStreams) *cobra.Command {
 			}
 			return nil
 		},
-		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(factory),
+		ValidArgsFunction: completion.RayClusterResourceNameCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(cmd, args); err != nil {
 				return err
 			}
-			if err := options.Validate(); err != nil {
-				return err
-			}
-			return options.Run(cmd.Context(), factory)
+			return options.Run(cmd.Context(), cmdFactory)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&options.Verbose, "verbose", "v", false, "verbose output")
 
-	options.configFlags.AddFlags(cmd.Flags())
 	return cmd
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
+	namespace, err := cmd.Flags().GetString("namespace")
+	if err != nil {
+		return fmt.Errorf("failed to get namespace: %w", err)
+	}
+	options.namespace = namespace
+	if options.namespace == "" {
+		options.namespace = "default"
+	}
+
+	context, err := cmd.Flags().GetString("context")
+	if err != nil || context == "" {
+		config, err := options.cmdFactory.ToRawKubeConfigLoader().RawConfig()
+		if err != nil {
+			return fmt.Errorf("error retrieving raw config: %w", err)
+		}
+		context = config.CurrentContext
+	}
+	options.currentContext = context
+
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
 		options.ResourceType = util.RayCluster
@@ -137,25 +150,6 @@ func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error
 		options.ResourceName = typeAndName[1]
 	}
 
-	if *options.configFlags.Namespace == "" {
-		options.Namespace = "default"
-	} else {
-		options.Namespace = *options.configFlags.Namespace
-	}
-
-	return nil
-}
-
-func (options *SessionOptions) Validate() error {
-	// Overrides and binds the kube config then retrieves the merged result
-	config, err := options.configFlags.ToRawKubeConfigLoader().RawConfig()
-	if err != nil {
-		return fmt.Errorf("Error retrieving raw config: %w", err)
-	}
-	if !options.kubeContexter.HasContext(config, options.configFlags) {
-		return fmt.Errorf("no context is currently set, use %q or %q to select a new one", "--context", "kubectl config use-context <context>")
-	}
-	options.currentContext = config.CurrentContext
 	return nil
 }
 
@@ -165,7 +159,7 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.Namespace, options.ResourceType, options.ResourceName)
+	svcName, err := k8sClient.GetRayHeadSvcName(ctx, options.namespace, options.ResourceType, options.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -184,11 +178,12 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	}
 
 	var kubectlArgs []string
-	if options.currentContext == "" {
-		kubectlArgs = append(kubectlArgs, "--context", *options.configFlags.Context)
+	if options.currentContext != "" {
+		kubectlArgs = append(kubectlArgs, "--context", options.currentContext)
 	}
+	// TODO (dxia): forward more global kubectl flags like --server, --insecure-skip-tls-verify, --token, --tls-server-name, --user, --password, etc?
 
-	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.Namespace, "service/"+svcName)
+	kubectlArgs = append(kubectlArgs, "port-forward", "-n", options.namespace, "service/"+svcName)
 	for _, appPort := range appPorts {
 		kubectlArgs = append(kubectlArgs, fmt.Sprintf("%d:%d", appPort.port, appPort.port))
 	}
@@ -203,9 +198,9 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	go func() {
 		defer wg.Done()
 		for {
-			const reconnectDelay = 100
-			var err error
 			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+			portforwardCmd.Stdout = options.ioStreams.Out
+			portforwardCmd.Stderr = options.ioStreams.ErrOut
 
 			if options.Verbose {
 				fmt.Printf("Running: %s\n", strings.Join(portforwardCmd.Args, " "))
@@ -214,8 +209,8 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}
-			fmt.Printf("failed to port-forward: %v, try to reconnect after %d miliseconds...\n", err, reconnectDelay)
-			time.Sleep(reconnectDelay * time.Millisecond)
+			fmt.Printf("failed to port-forward: %v. Retrying in %v ...\n\n", err, reconnectDelay)
+			time.Sleep(reconnectDelay)
 		}
 	}()
 
