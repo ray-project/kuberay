@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -21,6 +22,7 @@ type RayClusterMetricsObserver interface {
 type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 	rayClusterInfo                       *prometheus.Desc
+	rayClusterProvisionedReady           *prometheus.Desc
 	client                               client.Client
 	log                                  logr.Logger
 }
@@ -45,6 +47,12 @@ func NewRayClusterMetricsManager(ctx context.Context, client client.Client) *Ray
 			"kuberay_cluster_info",
 			"Metadata information about RayCluster custom resources",
 			[]string{"name", "namespace", "owner_kind"},
+			nil,
+		),
+		rayClusterProvisionedReady: prometheus.NewDesc(
+			"kuberay_cluster_provisioned_ready",
+			"Indicates whether the RayCluster is provisioned and ready",
+			[]string{"name", "namespace", "condition"},
 			nil,
 		),
 		client: client,
@@ -72,6 +80,7 @@ func (r *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
 
 	for _, rayCluster := range rayClusterList.Items {
 		r.collectRayClusterInfo(&rayCluster, ch)
+		r.collectRayClusterProvisionedReady(&rayCluster, ch)
 	}
 }
 
@@ -92,5 +101,20 @@ func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayClust
 		cluster.Name,
 		cluster.Namespace,
 		ownerKind,
+	)
+}
+
+func (r *RayClusterMetricsManager) collectRayClusterProvisionedReady(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
+	condition := "false"
+	if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
+		condition = "true"
+	}
+	ch <- prometheus.MustNewConstMetric(
+		r.rayClusterProvisionedReady,
+		prometheus.GaugeValue,
+		1,
+		cluster.Name,
+		cluster.Namespace,
+		condition,
 	)
 }
