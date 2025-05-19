@@ -230,26 +230,31 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
+	ctx := ctrl.SetupSignalHandler()
+
+	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
+	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
 	if config.EnableMetrics {
-		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
-		rayJobMetricsManager = metrics.NewRayJobMetricsManager()
+		mgrClient := mgr.GetClient()
+		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
+		rayJobMetricsManager = metrics.NewRayJobMetricsManager(ctx, mgrClient)
+		rayServiceMetricsManager = metrics.NewRayServiceMetricsManager(ctx, mgrClient)
 		ctrlmetrics.Registry.MustRegister(
-			rayClusterMetricCollector,
+			rayClusterMetricsManager,
 			rayJobMetricsManager,
+			rayServiceMetricsManager,
 		)
 	}
-
-	ctx := ctrl.SetupSignalHandler()
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:     config.HeadSidecarContainers,
-		WorkerSidecarContainers:   config.WorkerSidecarContainers,
-		IsOpenShift:               utils.GetClusterType(),
-		RayClusterMetricCollector: rayClusterMetricCollector,
+		HeadSidecarContainers:    config.HeadSidecarContainers,
+		WorkerSidecarContainers:  config.WorkerSidecarContainers,
+		IsOpenShift:              utils.GetClusterType(),
+		RayClusterMetricsManager: rayClusterMetricsManager,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
+
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 

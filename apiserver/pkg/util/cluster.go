@@ -83,7 +83,8 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 			Template:       *headPodTemplate,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
-		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{},
+		WorkerGroupSpecs:       []rayv1api.WorkerGroupSpec{},
+		HeadServiceAnnotations: clusterSpec.HeadServiceAnnotations,
 	}
 
 	// If enable ingress is specified, add it to the head node spec.

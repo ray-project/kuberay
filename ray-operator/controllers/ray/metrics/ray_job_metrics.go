@@ -1,9 +1,13 @@
 package metrics
 
 import (
+	"context"
 	"strconv"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -16,10 +20,13 @@ type RayJobMetricsObserver interface {
 // RayJobMetricsManager implements the prometheus.Collector and RayJobMetricsObserver interface to collect ray job metrics.
 type RayJobMetricsManager struct {
 	rayJobExecutionDurationSeconds *prometheus.GaugeVec
+	rayJobInfo                     *prometheus.Desc
+	client                         client.Client
+	log                            logr.Logger
 }
 
 // NewRayJobMetricsManager creates a new RayJobMetricsManager instance.
-func NewRayJobMetricsManager() *RayJobMetricsManager {
+func NewRayJobMetricsManager(ctx context.Context, client client.Client) *RayJobMetricsManager {
 	collector := &RayJobMetricsManager{
 		rayJobExecutionDurationSeconds: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -28,20 +35,51 @@ func NewRayJobMetricsManager() *RayJobMetricsManager {
 			},
 			[]string{"name", "namespace", "job_deployment_status", "retry_count"},
 		),
+		// rayJobInfo is a gauge metric that indicates the metadata information about RayJob custom resources.
+		rayJobInfo: prometheus.NewDesc(
+			"kuberay_job_info",
+			"Metadata information about RayJob custom resources",
+			[]string{"name", "namespace"},
+			nil,
+		),
+		client: client,
+		log:    ctrl.LoggerFrom(ctx),
 	}
 	return collector
 }
 
 // Describe implements prometheus.Collector interface Describe method.
-func (c *RayJobMetricsManager) Describe(ch chan<- *prometheus.Desc) {
-	c.rayJobExecutionDurationSeconds.Describe(ch)
+func (r *RayJobMetricsManager) Describe(ch chan<- *prometheus.Desc) {
+	r.rayJobExecutionDurationSeconds.Describe(ch)
+	ch <- r.rayJobInfo
 }
 
 // Collect implements prometheus.Collector interface Collect method.
-func (c *RayJobMetricsManager) Collect(ch chan<- prometheus.Metric) {
-	c.rayJobExecutionDurationSeconds.Collect(ch)
+func (r *RayJobMetricsManager) Collect(ch chan<- prometheus.Metric) {
+	r.rayJobExecutionDurationSeconds.Collect(ch)
+
+	var rayJobList rayv1.RayJobList
+	err := r.client.List(context.Background(), &rayJobList)
+	if err != nil {
+		r.log.Error(err, "Failed to list RayJob resources")
+		return
+	}
+
+	for _, rayJob := range rayJobList.Items {
+		r.collectRayJobInfo(&rayJob, ch)
+	}
 }
 
-func (c *RayJobMetricsManager) ObserveRayJobExecutionDuration(name, namespace string, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64) {
-	c.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, string(jobDeploymentStatus), strconv.Itoa(retryCount)).Set(duration)
+func (r *RayJobMetricsManager) ObserveRayJobExecutionDuration(name, namespace string, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64) {
+	r.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, string(jobDeploymentStatus), strconv.Itoa(retryCount)).Set(duration)
+}
+
+func (r *RayJobMetricsManager) collectRayJobInfo(rayJob *rayv1.RayJob, ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(
+		r.rayJobInfo,
+		prometheus.GaugeValue,
+		1,
+		rayJob.Name,
+		rayJob.Namespace,
+	)
 }

@@ -277,7 +277,7 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		},
 		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+			IdleTimeoutSeconds: ptr.To(int32(60)),
 			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
@@ -406,7 +406,7 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+	IdleTimeoutSeconds: ptr.To(int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 	Image:              ptr.To("Some Image"),
 	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
@@ -727,4 +727,84 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
 	assert.Equal(t, "Job is currently running", job.Message)
 	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
+}
+
+func TestFromCrdToAPIServices(t *testing.T) {
+	services := []*rayv1api.RayService{&ServiceV2Test}
+	serviceEventsMap := map[string][]corev1.Event{}
+	apiServices := FromCrdToAPIServices(services, serviceEventsMap)
+	assert.Len(t, apiServices, 1)
+
+	apiService := apiServices[0]
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, apiService.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, apiService.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], apiService.User)
+}
+
+func TestPopulateService(t *testing.T) {
+	service := FromCrdToAPIService(&ServiceV2Test, []corev1.Event{})
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, service.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, service.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], service.User)
+	assert.Equal(t, ServiceV2Test.Spec.ServeConfigV2, service.ServeConfig_V2)
+	assert.Equal(t, int64(-1), service.DeleteAt.Seconds)
+}
+
+func TestPopulateServeApplicationStatus(t *testing.T) {
+	expectedAppName := "app0"
+	expectedAppStatus := rayv1api.AppStatus{
+		Deployments: map[string]rayv1api.ServeDeploymentStatus{},
+		Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
+		Message:     "Deploying...",
+	}
+	serveApplicationStatuses := map[string]rayv1api.AppStatus{
+		expectedAppName: expectedAppStatus,
+	}
+	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
+	assert.Len(t, appStatuses, 1)
+
+	appStatus := appStatuses[0]
+	assert.Equal(t, expectedAppName, appStatus.Name)
+	assert.Equal(t, expectedAppStatus.Status, appStatus.Status)
+	assert.Equal(t, expectedAppStatus.Message, appStatus.Message)
+}
+
+func TestPopulateServeDeploymentStatus(t *testing.T) {
+	expectedDeploymentStatus := rayv1api.ServeDeploymentStatus{
+		Status:  rayv1api.DeploymentStatusEnum.UPDATING,
+		Message: "Updating...",
+	}
+	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
+		"deployment0": expectedDeploymentStatus,
+	}
+	deploymentStatuses := PopulateServeDeploymentStatus(serveDeploymentStatuses)
+	assert.Len(t, deploymentStatuses, 1)
+
+	deploymentStatus := deploymentStatuses[0]
+	assert.Equal(t, expectedDeploymentStatus.Status, deploymentStatus.Status)
+	assert.Equal(t, expectedDeploymentStatus.Message, deploymentStatus.Message)
+}
+
+func TestPopulateRayServiceEvent(t *testing.T) {
+	expectedServiceName := "svc0"
+	expectedEvent := corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Reason:  "test",
+		Message: "test",
+		Type:    "Normal",
+		Count:   2,
+	}
+	events := []corev1.Event{expectedEvent}
+	serviceEvents := PopulateRayServiceEvent(expectedServiceName, events)
+	assert.Len(t, serviceEvents, 1)
+
+	serviceEvent := serviceEvents[0]
+	assert.Equal(t, expectedEvent.Name, serviceEvent.Id)
+	assert.Equal(t, expectedServiceName+"-"+expectedEvent.ObjectMeta.Name, serviceEvent.Name)
+	assert.Equal(t, expectedEvent.Reason, serviceEvent.Reason)
+	assert.Equal(t, expectedEvent.Message, serviceEvent.Message)
+	assert.Equal(t, expectedEvent.Type, serviceEvent.Type)
+	assert.Equal(t, expectedEvent.Count, serviceEvent.Count)
 }

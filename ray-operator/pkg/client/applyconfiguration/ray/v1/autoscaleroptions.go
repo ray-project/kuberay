@@ -16,6 +16,7 @@ type AutoscalerOptionsApplyConfiguration struct {
 	SecurityContext    *corev1.SecurityContext      `json:"securityContext,omitempty"`
 	IdleTimeoutSeconds *int32                       `json:"idleTimeoutSeconds,omitempty"`
 	UpscalingMode      *rayv1.UpscalingMode         `json:"upscalingMode,omitempty"`
+	Version            *rayv1.AutoscalerVersion     `json:"version,omitempty"`
 	Env                []corev1.EnvVar              `json:"env,omitempty"`
 	EnvFrom            []corev1.EnvFromSource       `json:"envFrom,omitempty"`
 	VolumeMounts       []corev1.VolumeMount         `json:"volumeMounts,omitempty"`
@@ -72,6 +73,14 @@ func (b *AutoscalerOptionsApplyConfiguration) WithIdleTimeoutSeconds(value int32
 // If called multiple times, the UpscalingMode field is set to the value of the last call.
 func (b *AutoscalerOptionsApplyConfiguration) WithUpscalingMode(value rayv1.UpscalingMode) *AutoscalerOptionsApplyConfiguration {
 	b.UpscalingMode = &value
+	return b
+}
+
+// WithVersion sets the Version field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Version field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithVersion(value rayv1.AutoscalerVersion) *AutoscalerOptionsApplyConfiguration {
+	b.Version = &value
 	return b
 }
 

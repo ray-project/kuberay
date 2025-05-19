@@ -220,6 +220,7 @@ func (s *RayJobSubmissionServiceServer) getRayClusterURL(ctx context.Context, re
 	return &url, nil
 }
 
+// Internal method to convert RayJobInfo to JobSubmissionInfo
 func convertNodeInfo(info *utils.RayJobInfo) *api.JobSubmissionInfo {
 	jsi := api.JobSubmissionInfo{
 		Entrypoint:   info.Entrypoint,

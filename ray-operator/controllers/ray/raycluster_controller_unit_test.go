@@ -18,6 +18,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -25,9 +26,10 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -52,7 +54,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -337,7 +339,7 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    ptr.To[int32](expectReplicaNum),
+					Replicas:    ptr.To(expectReplicaNum),
 					MinReplicas: ptr.To[int32](0),
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
@@ -1936,7 +1938,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	setupTest(t)
 
-	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To[bool](true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To(true)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
@@ -3571,78 +3573,116 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
-func TestCollectRayClusterMetrics(t *testing.T) {
-	tests := []struct {
-		creationTime     time.Time
+func TestEmitRayClusterProvisionedDuration(t *testing.T) {
+	clusterName := "test-ray-cluster"
+	clusterNamespace := "default"
+
+	// Creation time 5 minutes ago to simulate cluster runtime
+	creationTime := time.Now().Add(-5 * time.Minute)
+
+	testCases := []struct {
 		name             string
-		clusterName      string
-		clusterNamespace string
-		newClusterStatus rayv1.RayClusterStatus
-		oldClusterStatus rayv1.RayClusterStatus
+		oldStatus        rayv1.RayClusterStatus
+		newStatus        rayv1.RayClusterStatus
 		expectMetric     bool
+		expectedDuration float64
 	}{
 		{
-			name:             "Transition from not provisioned to provisioned (should emit metric)",
-			clusterName:      "test",
-			clusterNamespace: "default",
-			creationTime:     time.Now(),
+			name: "transition from unprovisioned to provisioned (should emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
 			expectMetric:     true,
-			newClusterStatus: rayv1.RayClusterStatus{
-				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
-				},
-			},
-			oldClusterStatus: rayv1.RayClusterStatus{
-				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionFalse},
-				},
-			},
+			expectedDuration: time.Since(creationTime).Seconds(),
 		},
 		{
-			name:             "No transition, both provisioned (should not emit metric)",
-			clusterName:      "test",
-			clusterNamespace: "default",
-			creationTime:     time.Now(),
+			name: "already provisioned (should not emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
 			expectMetric:     false,
-			newClusterStatus: rayv1.RayClusterStatus{
+			expectedDuration: time.Since(creationTime).Seconds(),
+		},
+		{
+			name:      "transition from unset to provisioned (should emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{},
+			newStatus: rayv1.RayClusterStatus{
 				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
 				},
 			},
-			oldClusterStatus: rayv1.RayClusterStatus{
-				Conditions: []metav1.Condition{
-					{Type: string(rayv1.RayClusterProvisioned), Status: metav1.ConditionTrue},
-				},
-			},
+			expectMetric:     true,
+			expectedDuration: time.Since(creationTime).Seconds(),
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			registry := prometheus.NewRegistry()
-			collector := metrics.NewRayClusterMetricCollector()
-			require.NoError(t, registry.Register(collector))
-
-			collectRayClusterMetrics(collector, tc.clusterName, tc.clusterNamespace, tc.newClusterStatus, tc.oldClusterStatus, tc.creationTime)
-
-			metricFamilies, err := registry.Gather()
-			require.NoError(t, err)
-			found := false
-			for _, mf := range metricFamilies {
-				if mf.GetName() == "kuberay_cluster_provisioned_duration_seconds" {
-					found = true
-					if tc.expectMetric {
-						require.Len(t, mf.Metric, 1)
-						assert.Equal(t, tc.clusterName, mf.Metric[0].GetLabel()[0].GetValue())
-						assert.Equal(t, tc.clusterNamespace, mf.Metric[0].GetLabel()[1].GetValue())
-					} else {
-						assert.Empty(t, mf.Metric, "should not emit metric")
-					}
-				}
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayClusterMetricsObserver(ctrl)
+			if tc.expectMetric {
+				mockCollector.EXPECT().
+					ObserveRayClusterProvisionedDuration(
+						clusterName,
+						clusterNamespace,
+						mock.MatchedBy(func(d float64) bool {
+							// Allow some wiggle room in timing
+							return math.Abs(d-tc.expectedDuration) < 1.0
+						}),
+					).Times(1)
 			}
-			if tc.expectMetric && !found {
-				t.Errorf("expected metric 'kuberay_cluster_provisioned_duration_seconds' not found")
-			}
+
+			emitRayClusterProvisionedDuration(
+				mockCollector,
+				clusterName,
+				clusterNamespace,
+				tc.oldStatus,
+				tc.newStatus,
+				creationTime,
+			)
 		})
+	}
+}
+
+func TestSetDefaults(t *testing.T) {
+	setupTest(t)
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.RayStartParams = nil
+	cluster.Spec.WorkerGroupSpecs[0].RayStartParams = nil
+
+	setDefaults(cluster)
+
+	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
 	}
 }

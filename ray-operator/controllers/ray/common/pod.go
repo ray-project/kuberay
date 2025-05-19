@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -191,6 +192,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
+
+		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
+			setAutoscalerV2EnvVars(&podTemplate)
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
@@ -206,6 +212,18 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	return podTemplate
+}
+
+// setAutoscalerV2EnvVars sets env vars for autoscaler v2 in the head node
+func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
+	if podTemplate.Spec.Containers[utils.RayContainerIndex].Env == nil {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
+	}
+
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+		Value: "true",
+	})
 }
 
 func getEnableInitContainerInjection() bool {
@@ -307,6 +325,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			ContainerPort: int32(utils.DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
+	}
+
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
 	return podTemplate
@@ -830,9 +852,9 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 	for _, resourceKeyString := range sortedResourceKeys {
 		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		// Scan for resource keys of gpus
 		if _, ok := rayStartParams["num-gpus"]; !ok {
-			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+			if isGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
@@ -1004,4 +1026,15 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+func isGPUResourceKey(key string) bool {
+	// ending with "gpu" like "nvidia.com/gpu"
+	if strings.HasSuffix(key, "gpu") {
+		return true
+	}
+	// Nvidia Multi-Instance GPU in the form of "nvidia.com/mig-<slice_count>g.<memory_size>gb" like "nvidia.com/mig-2g.32gb"
+	// reference: https://github.com/NVIDIA/k8s-device-plugin#configuration-option-details
+	match, _ := regexp.MatchString(`nvidia\.com/mig-\d+g\.\d+gb$`, key)
+	return match
 }
