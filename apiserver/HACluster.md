@@ -7,7 +7,7 @@ introducing [Fault Tolerance Ray Cluster](https://docs.ray.io/en/master/cluster/
 The RayCluster with high availability can also be created in API server, which aims to
 ensure a high availability Global Control Service (GCS) data. The GCS manages
 cluster-level metadata by storing all data in memory, which is lack of fault tolerance. A
-single failure can cause the entire RayCluster to fail. To enable GCS's fault tolerance,
+single head node failure can cause the entire RayCluster to fail. To enable GCS's fault tolerance,
 we should have a highly available Redis so that when GCS restart, it can resume its
 status by retrieve previous data from the Redis instance.
 

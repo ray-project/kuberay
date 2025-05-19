@@ -19,14 +19,8 @@ run through of the example below.
 kubectl delete raycluster --all
 ```
 
-### IMPORTANT: Change your working directory to `apiserver/`
-
-All the following guidance require you to switch your working directory to the KubeRay
-`apiserver`:
-
-```sh
-cd apiserver/
-```
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the KubeRay `apiserver`
 
 ### Install ConfigMap
 

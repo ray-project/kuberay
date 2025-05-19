@@ -30,14 +30,8 @@ run through of the example below.
 kubectl delete raycluster --all
 ```
 
-### IMPORTANT: Change your working directory to `apiserver/`
-
-All the following guidance require you to switch your working directory to the KubeRay
-`apiserver`:
-
-```sh
-cd apiserver/
-```
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the KubeRay `apiserver`
 
 ### Install ConfigMap
 
@@ -62,7 +56,6 @@ kubectl get configmaps
 Use following command to create a compute template and a RayCluster with RayService support:
 
 ```sh
-cur
 # Create compute tempalte
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json' \

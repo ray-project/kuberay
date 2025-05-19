@@ -17,10 +17,8 @@ If this flag is enabled, a `http` port at `/metrics` endpoint provides API serve
 Refer to [README](README.md) for setting up KubeRay operator and API server. This will
 set the flag `collectMetricsFlag` to `true` which enable the metrics collection.
 
-### IMPORTANT: Change your working directory to project root
-
-All the following guidance require you to switch your working directory to the KubeRay
-project root.
+> [!IMPORTANT]
+> All the following guidance require you to switch your working directory to the KubeRay project root
 
 ### Install Kubernetes Prometheus Stack via Helm Chart
 

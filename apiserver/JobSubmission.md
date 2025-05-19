@@ -88,7 +88,7 @@ Note that the `submissionId` value that you will get is different
 ### Get job details
 
 Once the job is submitted, the following command can be used to get job's details. Please
-change the `<submissionID>` to the one returned during job creation.
+change the `submissionId` to the one returned during job creation.
 
 ```shell
 curl -X GET 'localhost:31888/apis/v1/namespaces/default/jobsubmissions/test-cluster/<submissionID>' \
@@ -101,7 +101,7 @@ This should return JSON similar to the one below
 {
    "entrypoint":"python /home/ray/samples/sample_code.py",
    "jobId":"02000000",
-   "submissionId":"<submissionID>",
+   "submissionId":"raysubmit_KWZLwme56esG3Wcr",
    "status":"SUCCEEDED",
    "message":"Job finished successfully.",
    "startTime":"1699442662879",
