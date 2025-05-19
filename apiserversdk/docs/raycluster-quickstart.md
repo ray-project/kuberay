@@ -5,12 +5,12 @@ KubeRay APIServer. For detailed introduction and more advanced usage with Kubern
 please refer to [this
 guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html).
 
-## Preperation
+## Preparation
 
-- Install [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) (>= 1.23),
-[Helm](https://helm.sh/docs/intro/install/) (>= v3.4) if needed,
+- Install [Helm](https://helm.sh/docs/intro/install/) (>= v3.4),
 [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), and
 [Docker](https://docs.docker.com/engine/install/).
+- KubeRay v1.4.0 or higher and Ray 2.41.0.
 - Make sure your Kubernetes cluster has at least 4 CPU and 4 GB RAM.
 
 ## Step 1: Create a Kubernetes cluster

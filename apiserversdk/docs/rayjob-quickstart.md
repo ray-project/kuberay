@@ -8,9 +8,10 @@ guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/rayjob-q
 
 ## Preparation
 
-- KubeRay v0.6.0 or higher
-  - KubeRay v0.6.0 or v1.0.0: Ray 1.10 or higher.
-  - KubeRay v1.1.1 or newer is highly recommended: Ray 2.8.0 or higher.
+- Install [Helm](https://helm.sh/docs/intro/install/) (>= v3.4),
+[Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), and
+[Docker](https://docs.docker.com/engine/install/).
+- KubeRay v1.4.0 or higher and Ray 2.41.0.
 
 ## Step 1: Create a Kubernetes cluster
 
