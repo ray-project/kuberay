@@ -178,14 +178,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// remove the non-existed-finalizer
-	finalizers := activeRayClusterBeforeUpdate.Finalizers
-	activeRayClusterBeforeUpdate.Finalizers = activeRayClusterBeforeUpdate.Finalizers[:0]
-	for _, finalizer := range finalizers {
-		if finalizer == "no-existed-finalizer" {
-			continue
-		}
-		activeRayClusterBeforeUpdate.Finalizers = append(activeRayClusterBeforeUpdate.Finalizers, finalizer)
-	}
+	activeRayClusterBeforeUpdate.Finalizers = nil
 	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(
 		test.Ctx(),
 		activeRayClusterBeforeUpdate,
