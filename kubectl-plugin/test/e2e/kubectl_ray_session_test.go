@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,9 +25,13 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	})
 
 	It("succeed in forwarding RayCluster and should be able to cancel", func() {
-		cmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
+		// Set the command to run in a new process group
+		// This is necessary to ensure that the signal is sent to all child processes
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 		err := cmd.Start()
 		Expect(err).NotTo(HaveOccurred())
@@ -39,58 +43,73 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 
 		// Send a request to localhost:8265, it should succeed
 		Eventually(func() error {
-			_, err := exec.Command("curl", "http://localhost:8265").CombinedOutput()
+			_, err := exec.CommandContext(ctx, "curl", "http://localhost:8265").CombinedOutput()
 			return err
 		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 		// Send a signal to cancel the command
-		err = cmd.Process.Signal(os.Interrupt)
+		pgid, err := syscall.Getpgid(cmd.Process.Pid)
+		Expect(err).NotTo(HaveOccurred())
+		// Make sure we kill the whole process group, even if the test is failure
+		defer func() {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			// prevent zombie process
+			_ = cmd.Wait()
+		}()
+
+		// Send Interrupt signal to the process group
+		// This will also send the signal to all child processes
+		err = syscall.Kill(-pgid, syscall.SIGINT)
 		Expect(err).NotTo(HaveOccurred())
 
 		select {
-		case <-ctx.Done():
-			// Timeout, kill the process
-			Expect(ctx.Err()).To(Equal(context.DeadlineExceeded))
-			err = cmd.Process.Kill()
-			Expect(err).NotTo(HaveOccurred())
-			Fail("kubectl ray session command did not finish in time")
 		case err = <-done:
-			// It should not have error, or ExitError due to interrupt
 			if err != nil {
 				exitErr := &exec.ExitError{}
 				Expect(errors.As(err, &exitErr)).To(BeTrue())
-				Expect(exitErr.String()).To(Equal("signal: interrupt"))
+				ws := exitErr.Sys().(syscall.WaitStatus)
+				Expect(ws.Signal()).To(Equal(syscall.SIGINT))
 			}
+		case <-time.After(3 * time.Second):
+			// force kill the process if it doesn't exit within the timeout
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			Fail("kubectl ray session did not terminate after SIGINT")
 		}
+		// Check if the port-forwarding process is still running
+		_, err = exec.CommandContext(ctx, "lsof", "-i", ":8265").CombinedOutput()
+		Expect(err).To(HaveOccurred())
 	})
 
 	It("should reconnect after pod connection is lost", func() {
-		sessionCmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+
+		sessionCmd := exec.CommandContext(ctx, "kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 
 		err := sessionCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Send a request to localhost:8265, it should succeed
 		Eventually(func() error {
-			_, err := exec.Command("curl", "http://localhost:8265").CombinedOutput()
+			_, err := exec.CommandContext(ctx, "curl", "http://localhost:8265").CombinedOutput()
 			return err
 		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 		// Get the current head pod name
-		cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
+		cmd := exec.CommandContext(ctx, "kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
 		output, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		oldPodUID := string(output)
 		var newPodUID string
 
 		// Delete the pod
-		cmd = exec.Command("kubectl", "delete", "--namespace", namespace, "pod/raycluster-kuberay-head")
+		cmd = exec.CommandContext(ctx, "kubectl", "delete", "--namespace", namespace, "pod/raycluster-kuberay-head")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the new pod to be created
 		Eventually(func() error {
-			cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
+			cmd := exec.CommandContext(ctx, "kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
 			output, err := cmd.CombinedOutput()
 			newPodUID = string(output)
 			if err != nil {
@@ -103,13 +122,13 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the new pod to be ready
-		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod/raycluster-kuberay-head", "--for=condition=Ready", "--timeout=120s")
+		cmd = exec.CommandContext(ctx, "kubectl", "wait", "--namespace", namespace, "pod/raycluster-kuberay-head", "--for=condition=Ready", "--timeout=120s")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Send a request to localhost:8265, it should succeed
 		Eventually(func() error {
-			_, err := exec.Command("curl", "http://localhost:8265").CombinedOutput()
+			_, err := exec.CommandContext(ctx, "curl", "http://localhost:8265").CombinedOutput()
 			return err
 		}, 60*time.Second, 1*time.Millisecond).ShouldNot(HaveOccurred())
 
@@ -119,7 +138,10 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	})
 
 	It("should not succeed", func() {
-		cmd := exec.Command("kubectl", "ray", "session", "--namespace", namespace, "fakeclustername")
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "kubectl", "ray", "session", "--namespace", namespace, "fakeclustername")
 		output, err := cmd.CombinedOutput()
 
 		Expect(err).To(HaveOccurred())

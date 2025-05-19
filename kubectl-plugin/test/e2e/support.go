@@ -1,11 +1,15 @@
 package e2e
 
 import (
+	"context"
+	"encoding/json"
 	"math/rand"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -51,8 +55,27 @@ func deployTestRayCluster(ns string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func KillPortForwardOn8265() {
-	cmd := exec.Command("pkill", "-f", "kubectl port-forward.*8265")
-	// Ignore the error if no process is found
-	_ = cmd.Run()
+func getAndCheckRayJob(
+	ctx context.Context,
+	namespace,
+	name,
+	expectedJobID,
+	expectedJobStatus,
+	expectedJobDeploymentStatus string,
+) (rayjob rayv1.RayJob) {
+	cmd := exec.CommandContext(ctx, "kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
+	output, err := cmd.CombinedOutput()
+	Expect(err).ToNot(HaveOccurred())
+
+	var rayJob rayv1.RayJob
+	err = json.Unmarshal(output, &rayJob)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Retrieve Job ID
+	Expect(rayJob.Status.JobId).To(Equal(expectedJobID))
+	// Retrieve Job Status
+	Expect(string(rayJob.Status.JobStatus)).To(Equal(expectedJobStatus))
+	// Retrieve Job Deployment Status
+	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal(expectedJobDeploymentStatus))
+	return rayJob
 }

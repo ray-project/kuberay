@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"os/exec"
 	"path"
 	"regexp"
@@ -10,8 +9,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // Directory when running test is kuberay/kubectl-plugin/test/e2e/
@@ -37,8 +34,6 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	})
 
 	It("succeed in submitting RayJob", func() {
-		// To avoid port conflict, kill any existing port-forward process on 8265
-		KillPortForwardOn8265()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(
@@ -56,12 +51,10 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		assertRayJobSucceeded(ctx, namespace, rayJobName, cmdOutputJobID)
+		getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 	})
 
 	It("succeed in submitting RayJob with runtime environment set with working dir", func() {
-		// To avoid port conflict, kill any existing port-forward process on 8265
-		KillPortForwardOn8265()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
@@ -82,12 +75,10 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		assertRayJobSucceeded(ctx, namespace, rayJobName, cmdOutputJobID)
+		getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 	})
 
 	It("succeed in submitting RayJob with headNodeSelectors and workerNodeSelectors", func() {
-		// To avoid port conflict, kill any existing port-forward process on 8265
-		KillPortForwardOn8265()
 		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -114,7 +105,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := assertRayJobSucceeded(ctx, namespace, rayJobName, cmdOutputJobID)
+		rayJob := getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 		// Retrieve Job Head Node Selectors
 		Expect(rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector["kubernetes.io/os"]).To(Equal("linux"))
 		// Retrieve Job Worker Node Selectors
@@ -122,7 +113,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	})
 })
 
-// extractRayJobID extracts the Ray Job ID from the kubectl ray job submit output.
+// `extractRayJobID` extracts the Ray Job ID from the output of `kubectl ray job submit`.
 //
 // Use regex to extract the job ID from the output.
 // The output is expected to be like:
@@ -144,22 +135,4 @@ func extractRayJobID(output string) string {
 		return matches[0]
 	}
 	return ""
-}
-
-func assertRayJobSucceeded(ctx context.Context, namespace, jobName, cmdOutputJobID string) (rayjob rayv1.RayJob) {
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "--namespace", namespace, "rayjob", jobName, "-o", "json")
-	output, err := cmd.CombinedOutput()
-	Expect(err).ToNot(HaveOccurred())
-
-	var rayJob rayv1.RayJob
-	err = json.Unmarshal(output, &rayJob)
-	Expect(err).ToNot(HaveOccurred())
-
-	// Retrieve Job ID
-	Expect(cmdOutputJobID).To(Equal(rayJob.Status.JobId))
-	// Retrieve Job Status
-	Expect(string(rayJob.Status.JobStatus)).To(Equal("SUCCEEDED"))
-	// Retrieve Job Deployment Status
-	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal("Complete"))
-	return rayJob
 }
