@@ -1,0 +1,10 @@
+go 1.24.2
+
+use (
+	./apiserver
+	./apiserversdk
+	./experimental
+	./kubectl-plugin
+	./proto
+	./ray-operator
+)
