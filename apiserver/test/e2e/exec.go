@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,8 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
@@ -37,8 +35,7 @@ type RemoteExecuteClient struct {
 }
 
 func newRemoteExecuteClient() (*RemoteExecuteClient, error) {
-	kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	config, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load in-cluster config: %w", err)
 	}
