@@ -1,8 +1,9 @@
 # RayCluster QuickStart
 
-The guidance on managing the Ray clusters with Kubernetes can be found
-[here](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html). This guide goes
-through how to manage and interact via Ray clusters with KubeRay APIServer.
+This document focus on explaining how to manage and interact with RayCluster using the
+KubeRay APIServer. For detailed introduction and more advanced usage with Kubernetes,
+please refer to [this
+guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html).
 
 ## Preperation
 
@@ -29,7 +30,7 @@ from the Helm repository.
 ## Step 3: Deploy a RayCluster custom resource
 
 Once the KubeRay operator is running, you are ready to deploy a RayCluster. While we are using APIServer, we can do this
-with curl. The following command will create a RayCluster CR in your current cluster:
+with curl. The following command will create a RayCluster CR named `raycluster-kuberay` in your current cluster:
 
 ```sh
 curl -s https://raw.githubusercontent.com/ray-project/kuberay/master/ray-operator/config/samples/ray-cluster.sample.yaml | \
@@ -38,24 +39,10 @@ curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/raycluster
   --data-binary @-
 ```
 
-Once the RayCluster CR has been created, you can view it by running:
+Once the RayCluster CR has been created, you can view its detail by executing following command:
 
 ```sh
-kubectl get rayclusters
-# NAME                 DESIRED WORKERS   AVAILABLE WORKERS   CPUS   MEMORY   GPUS   STATUS   AGE
-# raycluster-kuberay   1                                     2      3G       0               89s
-```
-
-The KubeRay operator detects the RayCluster object and starts your Ray cluster by creating head and worker pods. To view
-Ray cluster’s pods, run the following command:
-
-```sh
-# View the pods in the RayCluster named "raycluster-kuberay"
-kubectl get pods --selector=ray.io/cluster=raycluster-kuberay
-
-# NAME                                          READY   STATUS    RESTARTS   AGE
-# raycluster-kuberay-head-k7rlq                 1/1     Running   0          56s
-# raycluster-kuberay-workergroup-worker-65zl8   1/1     Running   0          56s
+curl http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay
 ```
 
 ## Step 4: Modify Created RayCluster
@@ -79,8 +66,8 @@ You can verify if the `annotation` is added with following command. You should s
 annotations you added in the output:
 
 ```sh
-kubectl get raycluster raycluster-kuberay -o jsonpath='{.metadata.annotations}'
-# {"example.com/purpose":"model-training"}
+curl -s http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay \
+  | jq '.metadata.annotations'
 ```
 
 ## Step 5: Delete the RayCluster
@@ -92,13 +79,13 @@ the RayCluster we created earlier:
 curl -X DELETE 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay'
 ```
 
-You can then verify if the RayCluster is removed. The following command should print nothing:
+You can then verify if the RayCluster is removed. The following command should return 404:
 
 ```sh
-kubectl get rayclusters
+curl -s http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay
 ```
 
-## Step 6: Clean up
+## Clean up
 
 ```sh
 kind delete cluster
