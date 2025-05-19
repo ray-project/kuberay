@@ -19,6 +19,7 @@ import (
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
@@ -40,6 +41,8 @@ type End2EndTestingContext struct {
 	ctx                    context.Context
 	apiServerHttpClient    *http.Client
 	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
+	rayHttpClient          rayv1.RayV1Interface
+	k8sHttpClient          *kubernetes.Clientset
 	rayClient              rayv1.RayV1Interface
 	k8client               *kubernetes.Clientset
 	apiServerBaseURL       string
@@ -65,6 +68,8 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 		withRayVersion(),
 		withBaseURL(),
 		withHttpClient(),
+		withRayHttpClient(),
+		withK8sHttpClient(),
 		withContext(),
 		withK8sClient(),
 		withRayClient(),
@@ -93,6 +98,28 @@ func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
+		return nil
+	}
+}
+
+func withRayHttpClient() contextOption {
+	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+		var err error
+		testingContext.rayHttpClient, err = rayv1.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func withK8sHttpClient() contextOption {
+	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+		var err error
+		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 }
@@ -185,6 +212,18 @@ func withRayClient() contextOption {
 		require.NoError(t, err, "No error expected when getting a ray")
 		return nil
 	}
+}
+
+func (e2etc *End2EndTestingContext) GetCtx() context.Context {
+	return e2etc.ctx
+}
+
+func (e2etc *End2EndTestingContext) GetK8sHttpClient() *kubernetes.Clientset {
+	return e2etc.k8sHttpClient
+}
+
+func (e2etc *End2EndTestingContext) GetRayHttpClient() rayv1.RayV1Interface {
+	return e2etc.rayHttpClient
 }
 
 func (e2etc *End2EndTestingContext) GetRayServiceByName(serviceName string) (*rayv1api.RayService, error) {
@@ -332,7 +371,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	})
 	require.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName)
 
-	waitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
+	WaitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
 	return actualCluster, configMapName
 }
 
