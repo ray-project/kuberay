@@ -646,10 +646,11 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 	for attempt := 0; attempt < krc.maxRetry; attempt++ {
 		response, err := krc.httpClient.Do(httpRequest)
+		// do not retry for Go Error
 		if err != nil {
 			lastStatus = nil
 			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
-			continue
+			break
 		}
 
 		defer func() {
@@ -659,10 +660,11 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		}()
 
 		bodyBytes, err := io.ReadAll(response.Body)
+		// do not retry for Go Error
 		if err != nil {
 			lastStatus = nil
 			lastErr = fmt.Errorf("failed to read response body bytes: %w", err)
-			continue
+			break
 		}
 
 		if response.StatusCode != http.StatusOK {
@@ -677,12 +679,30 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			lastErr = &KuberayAPIServerClientError{
 				HTTPStatusCode: response.StatusCode,
 			}
+
+			// Retry only for HTTP status in the list
+			if !isRetryableHTTPStatus(response.StatusCode) {
+				break
+			}
 			continue
 		}
 
 		return bodyBytes, nil, nil
 	}
 	return nil, lastStatus, lastErr
+}
+
+func isRetryableHTTPStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout, // 408
+		http.StatusTooManyRequests,    // 429
+		http.StatusBadGateway,         // 502
+		http.StatusServiceUnavailable, // 503
+		http.StatusGatewayTimeout:     // 504
+		return true
+	default:
+		return false
+	}
 }
 
 func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
