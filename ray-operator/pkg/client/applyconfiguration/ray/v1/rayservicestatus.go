@@ -2,12 +2,19 @@
 
 package v1
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // RayServiceStatusApplyConfiguration represents a declarative configuration of the RayServiceStatus type for use
 // with apply.
 type RayServiceStatusApplyConfiguration struct {
-	Applications     map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
-	RayClusterName   *string                                `json:"rayClusterName,omitempty"`
-	RayClusterStatus *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
+	Applications            map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
+	TargetCapacity          *int32                                 `json:"targetCapacity,omitempty"`
+	TrafficRoutedPercent    *int32                                 `json:"trafficRoutedPercent,omitempty"`
+	LastTrafficMigratedTime *metav1.Time                           `json:"lastTrafficMigratedTime,omitempty"`
+	RayClusterName          *string                                `json:"rayClusterName,omitempty"`
+	RayClusterStatus        *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
 }
 
 // RayServiceStatusApplyConfiguration constructs a declarative configuration of the RayServiceStatus type for use with
@@ -27,6 +34,30 @@ func (b *RayServiceStatusApplyConfiguration) WithApplications(entries map[string
 	for k, v := range entries {
 		b.Applications[k] = v
 	}
+	return b
+}
+
+// WithTargetCapacity sets the TargetCapacity field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TargetCapacity field is set to the value of the last call.
+func (b *RayServiceStatusApplyConfiguration) WithTargetCapacity(value int32) *RayServiceStatusApplyConfiguration {
+	b.TargetCapacity = &value
+	return b
+}
+
+// WithTrafficRoutedPercent sets the TrafficRoutedPercent field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TrafficRoutedPercent field is set to the value of the last call.
+func (b *RayServiceStatusApplyConfiguration) WithTrafficRoutedPercent(value int32) *RayServiceStatusApplyConfiguration {
+	b.TrafficRoutedPercent = &value
+	return b
+}
+
+// WithLastTrafficMigratedTime sets the LastTrafficMigratedTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LastTrafficMigratedTime field is set to the value of the last call.
+func (b *RayServiceStatusApplyConfiguration) WithLastTrafficMigratedTime(value metav1.Time) *RayServiceStatusApplyConfiguration {
+	b.LastTrafficMigratedTime = &value
 	return b
 }
 
