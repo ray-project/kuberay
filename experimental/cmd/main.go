@@ -15,8 +15,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/ray-project/kuberay/security/pkg/grpcproxy"
-	"github.com/ray-project/kuberay/security/pkg/httpproxy"
+	"github.com/ray-project/kuberay/experimental/pkg/grpcproxy"
+	"github.com/ray-project/kuberay/experimental/pkg/httpproxy"
 )
 
 func main() {
