@@ -6,11 +6,10 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -128,8 +127,10 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	// In-place update
-	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
+	// Update both `serveConfigV2` and the Ray head's environment variables.
+	// Then, verify the following two conditions:
+	// (1) The new `serveConfigV2` is not applied to the old RayCluster.
+	// (2) A zero-downtime upgrade is triggered.
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -139,15 +140,15 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 
 	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "FOO", Value: "BAR"}}
 
-	var activeRayClusterBeforeUpdate *rayv1.RayCluster
-	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
+	var oldRayCluster *rayv1.RayCluster
+	oldRayCluster, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// apply a non-existed-finalizer to the active ray cluster to avoiding be removed before checking the serveConfigV2
-	activeRayClusterBeforeUpdate.Finalizers = append(activeRayClusterBeforeUpdate.Finalizers, "no-existed-finalizer")
+	// Apply a finalizer to the active RayCluster to prevent it from being deleted after the zero-downtime upgrade process is complete.
+	oldRayCluster.Finalizers = append(oldRayCluster.Finalizers, "no-existed-finalizer")
 	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(
 		test.Ctx(),
-		activeRayClusterBeforeUpdate,
+		oldRayCluster,
 		metav1.UpdateOptions{},
 	)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -159,7 +160,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	waitingForRayClusterSwitch(g, test, rayService, activeRayClusterBeforeUpdate.Name)
+	waitingForRayClusterSwitch(g, test, rayService, oldRayCluster.Name)
 
 	// Make sure the serveConfig is updated to new ray cluster.
 	g.Eventually(func(g Gomega) {
@@ -169,27 +170,26 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 
 	// Make sure the old ray cluster is not updated.
-	stdout, _, err = CurlRayClusterDashboard(test, activeRayClusterBeforeUpdate, curlPod, curlContainerName, utils.DeployPathV2)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(stdout.String()).NotTo(ContainSubstring("\"price\": 456"), "new price should not be updated on the old ray cluster")
+	stdout, _ = curlHeadPodWithRayServicePath(test, oldRayCluster, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("6"))
 
 	// get fresh old RayCluster
-	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
+	oldRayCluster, err = GetRayCluster(test, oldRayCluster.Namespace, oldRayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// remove the non-existed-finalizer
-	activeRayClusterBeforeUpdate.Finalizers = nil
+	oldRayCluster.Finalizers = nil
 	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(
 		test.Ctx(),
-		activeRayClusterBeforeUpdate,
+		oldRayCluster,
 		metav1.UpdateOptions{},
 	)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// make sure the old ray cluster is removed
 	g.Eventually(func() bool {
-		_, err = GetRayCluster(test, activeRayClusterBeforeUpdate.Namespace, activeRayClusterBeforeUpdate.Name)
-		return k8sApiErrors.IsNotFound(err)
+		_, err = GetRayCluster(test, oldRayCluster.Namespace, oldRayCluster.Name)
+		return k8serrors.IsNotFound(err)
 	}, TestTimeoutMedium).Should(BeTrue())
 }
 
@@ -236,8 +236,9 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing
 	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	// In-place update
-	// Parse ServeConfigV2 and replace the string in the simplest way to update it.
+	// Update both `serveConfigV2` and the Ray head's environment variables.
+	// Since `upgradeStrategy` is set to `None`, a zero-downtime upgrade will not be triggered,
+	// and the new `serveConfigV2` will be applied to the existing RayCluster.
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -247,8 +248,8 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing
 
 	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "FOO", Value: "BAR"}}
 
-	var activeRayClusterBeforeUpdate *rayv1.RayCluster
-	activeRayClusterBeforeUpdate, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
+	var oldRayCluster *rayv1.RayCluster
+	oldRayCluster, err = GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
@@ -269,7 +270,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing
 	}, TestTimeoutShort).Should(Succeed())
 
 	// RayCluster is not changed
-	activeRayClusterAfterUpdate, err2 := GetRayCluster(test, namespace.Name, activeRayClusterBeforeUpdate.Name)
+	activeRayClusterAfterUpdate, err2 := GetRayCluster(test, namespace.Name, oldRayCluster.Name)
 	g.Expect(err2).NotTo(HaveOccurred())
-	g.Expect(activeRayClusterAfterUpdate).To(Equal(activeRayClusterBeforeUpdate))
+	g.Expect(activeRayClusterAfterUpdate).To(Equal(oldRayCluster))
 }
