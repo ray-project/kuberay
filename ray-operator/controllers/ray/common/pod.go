@@ -189,6 +189,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+		if utils.EnvVarExists(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, podTemplate.Spec.Containers[utils.RayContainerIndex].Env) {
+			defaultContainerCommand, _ := utils.EnvVarByName(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND,
+				podTemplate.Spec.Containers[utils.RayContainerIndex].Env)
+			autoscalerContainer.Command = strings.Split(defaultContainerCommand.Value, " ")
+		}
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -302,6 +307,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
+		}
+		if utils.EnvVarExists(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, podTemplate.Spec.Containers[utils.RayContainerIndex].Env) {
+			defaultContainerCommand, _ := utils.EnvVarByName(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND,
+				podTemplate.Spec.Containers[utils.RayContainerIndex].Env)
+			initContainer.Command = strings.Split(defaultContainerCommand.Value, " ")
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
@@ -466,6 +476,11 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
 		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		if utils.EnvVarExists(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, pod.Spec.Containers[utils.RayContainerIndex].Env) {
+			defaultContainerCommand, _ := utils.EnvVarByName(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND,
+				pod.Spec.Containers[utils.RayContainerIndex].Env)
+			pod.Spec.Containers[utils.RayContainerIndex].Command = strings.Split(defaultContainerCommand.Value, " ")
+		}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
