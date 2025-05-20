@@ -165,6 +165,8 @@ env:
 serviceMonitor:
   # If enabled, serviceMonitor will be created, expose /metrics http endpoint to prometheus
   enabled: false
+  interval: 30s
+  honorLabels: true
 # -- Resource requests and limits for containers.
 resources:
   limits:

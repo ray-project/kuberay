@@ -7,6 +7,8 @@ spec:
   endpoints:
     - path: /metrics
       targetPort: http
+      interval: {{ .Values.serviceMonitor.interval | default "30s" }}
+      honorLabels: {{ .Values.serviceMonitor.honorLabels | default true }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}
