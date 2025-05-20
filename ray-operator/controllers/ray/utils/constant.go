@@ -148,6 +148,12 @@ const (
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
+	// If this environment variable is set,
+	// when JobStatus reaches the final state but JobDeploymentStatus is still Running,
+	// wait for the graceful exit time and then transfer JobDeploymentStatus to the final state, thereby releasing pod resources.
+	// unit second
+	SUBMITTER_GRACE_PERIOD_TIME = "SUBMITTER_GRACE_PERIOD_TIME"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
