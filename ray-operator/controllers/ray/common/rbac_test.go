@@ -1,9 +1,9 @@
 package common
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,9 +81,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			rb, err := BuildRoleBinding(tc.input)
 			require.NoError(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("got %v, want %v", got, tc.want)
-			}
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }
