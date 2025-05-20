@@ -1377,16 +1377,17 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeApplications), "Updated serve applications to the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 	}
-
-	incrementalUpgradeUpdate, reason := checkIfNeedIncrementalUpgradeUpdate(rayServiceInstance)
-	logger.Info("checkIfNeedIncrementalUpgradeUpdate", "incrementalUpgradeUpdate", incrementalUpgradeUpdate, "reason", reason)
-	if incrementalUpgradeUpdate {
-		if err := r.reconcileServeTargetCapacity(ctx, rayServiceInstance, rayDashboardClient); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateTargetCapacity), "Failed to update target_capacity of serve applications to the RayService %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
-			return false, serveApplications, err
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		incrementalUpgradeUpdate, reason := checkIfNeedIncrementalUpgradeUpdate(rayServiceInstance)
+		logger.Info("checkIfNeedIncrementalUpgradeUpdate", "incrementalUpgradeUpdate", incrementalUpgradeUpdate, "reason", reason)
+		if incrementalUpgradeUpdate {
+			if err := r.reconcileServeTargetCapacity(ctx, rayServiceInstance, rayDashboardClient); err != nil {
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateTargetCapacity), "Failed to update target_capacity of serve applications to the RayService %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+				return false, serveApplications, err
+			}
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeTargetCapacity),
+				"Updated target_capacity of serve applications to the RayService %s/%s", rayServiceInstance.Namespace, rayServiceInstance.Name)
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeTargetCapacity),
-			"Updated target_capacity of serve applications to the RayService %s/%s", rayServiceInstance.Namespace, rayServiceInstance.Name)
 	}
 
 	return isReady, serveApplications, nil
