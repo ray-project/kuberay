@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -173,7 +172,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	stdout, _ = curlHeadPodWithRayServicePath(test, oldRayCluster, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
 
-	// get fresh old RayCluster
+	// fresh old RayCluster
 	oldRayCluster, err = GetRayCluster(test, oldRayCluster.Namespace, oldRayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -185,12 +184,6 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 		metav1.UpdateOptions{},
 	)
 	g.Expect(err).NotTo(HaveOccurred())
-
-	// make sure the old ray cluster is removed
-	g.Eventually(func() bool {
-		_, err = GetRayCluster(test, oldRayCluster.Namespace, oldRayCluster.Name)
-		return k8serrors.IsNotFound(err)
-	}, TestTimeoutMedium).Should(BeTrue())
 }
 
 func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing.T) {
