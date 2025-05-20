@@ -442,6 +442,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	})
 }
 
+// This test verifies that the autoscaler can still trigger GPU nodes for CPU tasks when no CPU-only worker group is defined.
 func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 	for _, tc := range tests {
 
