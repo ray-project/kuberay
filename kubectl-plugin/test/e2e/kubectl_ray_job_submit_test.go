@@ -1,11 +1,9 @@
 package e2e
 
 import (
-	"context"
 	"os/exec"
 	"path"
 	"regexp"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,10 +32,8 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	})
 
 	It("succeed in submitting RayJob", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(
-			ctx, "kubectl", "ray", "job", "submit",
+		cmd := exec.Command(
+			"kubectl", "ray", "job", "submit",
 			"--namespace", namespace,
 			"-f", rayJobFilePath,
 			"--working-dir", kubectlRayJobWorkingDir,
@@ -51,15 +47,12 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 	})
 
 	It("succeed in submitting RayJob with runtime environment set with working dir", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
 		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
-		cmd := exec.CommandContext(
-			ctx,
+		cmd := exec.Command(
 			"kubectl", "ray", "job", "submit",
 			"--namespace", namespace, "-f",
 			rayJobNoEnvFilePath, "--runtime-env",
@@ -75,17 +68,13 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 	})
 
 	It("succeed in submitting RayJob with headNodeSelectors and workerNodeSelectors", func() {
 		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-
-		cmd := exec.CommandContext(
-			ctx,
+		cmd := exec.Command(
 			"kubectl", "ray", "job", "submit",
 			"--namespace", namespace,
 			"--name", rayJobName,
@@ -105,7 +94,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := getAndCheckRayJob(ctx, namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 		// Retrieve Job Head Node Selectors
 		Expect(rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector["kubernetes.io/os"]).To(Equal("linux"))
 		// Retrieve Job Worker Node Selectors

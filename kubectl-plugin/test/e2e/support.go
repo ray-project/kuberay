@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"context"
 	"encoding/json"
 	"math/rand"
 	"os/exec"
@@ -56,14 +55,14 @@ func deployTestRayCluster(ns string) {
 }
 
 func getAndCheckRayJob(
-	ctx context.Context,
 	namespace,
 	name,
 	expectedJobID,
 	expectedJobStatus,
 	expectedJobDeploymentStatus string,
 ) (rayjob rayv1.RayJob) {
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
+	GinkgoHelper()
+	cmd := exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
 	output, err := cmd.CombinedOutput()
 	Expect(err).ToNot(HaveOccurred())
 
@@ -71,11 +70,8 @@ func getAndCheckRayJob(
 	err = json.Unmarshal(output, &rayJob)
 	Expect(err).ToNot(HaveOccurred())
 
-	// Retrieve Job ID
 	Expect(rayJob.Status.JobId).To(Equal(expectedJobID))
-	// Retrieve Job Status
 	Expect(string(rayJob.Status.JobStatus)).To(Equal(expectedJobStatus))
-	// Retrieve Job Deployment Status
 	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal(expectedJobDeploymentStatus))
 	return rayJob
 }
