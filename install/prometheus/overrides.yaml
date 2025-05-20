@@ -932,7 +932,7 @@ grafana:
       labelValue: "1"
       # Allow discovery in all namespaces for dashboards
       searchNamespace: ALL
-
+      folder: /var/lib/grafana/dashboards
       ## Annotations for Grafana dashboard configmaps
       ##
       annotations: {}
@@ -942,7 +942,8 @@ grafana:
         etcd:
           enabled: false
       provider:
-        allowUiUpdates: false
+        allowUiUpdates: true
+        foldersFromFilesStructure: true
     datasources:
       enabled: true
       defaultDatasourceEnabled: true
