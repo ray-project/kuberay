@@ -3,7 +3,7 @@ module github.com/ray-project/kuberay/apiserversdk
 require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
-	github.com/ray-project/kuberay/ray-operator v0.0.0-00010101000000-000000000000
+	github.com/ray-project/kuberay/ray-operator v1.3.1
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.33.0

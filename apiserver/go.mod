@@ -25,8 +25,8 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/onsi/gomega v1.37.0
-	github.com/ray-project/kuberay/apiserversdk v0.0.0-00010101000000-000000000000
-	github.com/ray-project/kuberay/ray-operator v0.0.0-00010101000000-000000000000
+	github.com/ray-project/kuberay/apiserversdk v0.0.0-20250519054718-f3ebea713a2f
+	github.com/ray-project/kuberay/ray-operator v1.3.1
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
