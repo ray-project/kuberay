@@ -255,16 +255,13 @@ func main() {
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	rayServiceOptions := ray.RayServiceReconcilerOptions{
-		RayServiceMetricsManager: rayServiceMetricsManager,
-	}
-
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, rayServiceOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
 		RayJobMetricsManager: rayJobMetricsManager,
 	}
+
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 

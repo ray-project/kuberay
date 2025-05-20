@@ -122,8 +122,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	testClientProvider := TestClientProvider{}
-	rayServiceOptions := RayServiceReconcilerOptions{}
-	err = NewRayServiceReconciler(ctx, mgr, rayServiceOptions, testClientProvider).SetupWithManager(mgr, 1)
+	err = NewRayServiceReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
 	rayJobOptions := RayJobReconcilerOptions{}

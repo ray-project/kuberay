@@ -32,7 +32,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -56,15 +55,10 @@ type RayServiceReconciler struct {
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 	dashboardClientFunc          func() utils.RayDashboardClientInterface
 	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
-	options                      RayServiceReconcilerOptions
-}
-
-type RayServiceReconcilerOptions struct {
-	RayServiceMetricsManager *metrics.RayServiceMetricsManager
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
-func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, options RayServiceReconcilerOptions, provider utils.ClientProvider) *RayServiceReconciler {
+func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayServiceReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	httpProxyClientFunc := provider.GetHttpProxyClient(mgr)
 	return &RayServiceReconciler{
@@ -76,7 +70,6 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, options Ray
 
 		dashboardClientFunc: dashboardClientFunc,
 		httpProxyClientFunc: httpProxyClientFunc,
-		options:             options,
 	}
 }
 
