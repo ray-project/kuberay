@@ -25,7 +25,7 @@ spec:
               target_ongoing_requests: 64
             max_ongoing_requests: 128
   rayClusterConfig:
-    rayVersion: "2.44.1"
+    rayVersion: "2.46.0"
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
@@ -33,7 +33,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-llm:2.44.1-py311-cu124
+            image: rayproject/ray-llm:2.46.0-py311-cu124
             ports:
             - containerPort: 8000
               name: serve
@@ -75,7 +75,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-llm:2.44.1-py311-cu124
+            image: rayproject/ray-llm:2.46.0-py311-cu124
             env:
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
