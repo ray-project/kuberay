@@ -942,7 +942,7 @@ grafana:
         etcd:
           enabled: false
       provider:
-        allowUiUpdates: true
+        allowUiUpdates: false
         foldersFromFilesStructure: true
     datasources:
       enabled: true
