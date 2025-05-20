@@ -41,7 +41,7 @@ var (
 	logFile            = flag.String("logFilePath", "", "Synchronize logs to local file")
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
-	enableApiServerV2  = flag.Bool("enable-api-server-v2", true, "Enable API server V2")
+	enableAPIServerV2  = flag.Bool("enable-api-server-v2", true, "Enable API server V2")
 	healthy            int32
 )
 
@@ -149,7 +149,7 @@ func startHttpProxy() {
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
 	var topMux *http.ServeMux
-	if *enableApiServerV2 {
+	if *enableAPIServerV2 {
 		kubernetesConfig, err := config.GetConfig()
 		if err != nil {
 			klog.Fatalf("Failed to load kubeconfig: %v", err)
