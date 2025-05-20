@@ -105,16 +105,32 @@ func TestRayServiceReady(t *testing.T) {
 						Name:      "ray-service-1",
 						Namespace: "default",
 					},
+					Status: rayv1.RayServiceStatuses{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(rayv1.RayServiceReady),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-2",
 						Namespace: "default",
 					},
+					Status: rayv1.RayServiceStatuses{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(rayv1.RayServiceReady),
+								Status: metav1.ConditionFalse,
+							},
+						},
+					},
 				},
 			},
 			expectedInfo: []string{
-				`kuberay_service_ready{condition="false",name="ray-service-1",namespace="default"} 1`,
+				`kuberay_service_ready{condition="true",name="ray-service-1",namespace="default"} 1`,
 				`kuberay_service_ready{condition="false",name="ray-service-2",namespace="default"} 1`,
 			},
 		},
