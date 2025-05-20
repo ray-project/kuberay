@@ -23,7 +23,7 @@ type RayClusterMetricsObserver interface {
 type RayClusterMetricsManager struct {
 	rayClusterProvisionedDurationSeconds *prometheus.GaugeVec
 	rayClusterInfo                       *prometheus.Desc
-	rayClusterProvisionedReady           *prometheus.Desc
+	rayClusterConditionProvisioned       *prometheus.Desc
 	client                               client.Client
 	log                                  logr.Logger
 }
@@ -50,9 +50,9 @@ func NewRayClusterMetricsManager(ctx context.Context, client client.Client) *Ray
 			[]string{"name", "namespace", "owner_kind"},
 			nil,
 		),
-		rayClusterProvisionedReady: prometheus.NewDesc(
+		rayClusterConditionProvisioned: prometheus.NewDesc(
 			"kuberay_cluster_condition_provisioned",
-			"Indicates whether the RayCluster is provisioned and ready",
+			"Indicates whether the RayCluster is provisioned",
 			[]string{"name", "namespace", "condition"},
 			nil,
 		),
@@ -107,7 +107,7 @@ func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayClust
 
 func (r *RayClusterMetricsManager) collectRayClusterProvisionedReady(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
-		r.rayClusterProvisionedReady,
+		r.rayClusterConditionProvisioned,
 		prometheus.GaugeValue,
 		1,
 		cluster.Name,
