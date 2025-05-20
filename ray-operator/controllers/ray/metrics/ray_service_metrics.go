@@ -31,7 +31,7 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 			nil,
 		),
 		RayServiceReady: prometheus.NewDesc(
-			"kuberay_service_ready",
+			"kuberay_service_condition_ready",
 			"RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
 			[]string{"name", "namespace", "condition"},
 			nil,

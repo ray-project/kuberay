@@ -130,8 +130,8 @@ func TestRayServiceReady(t *testing.T) {
 				},
 			},
 			expectedInfo: []string{
-				`kuberay_service_ready{condition="true",name="ray-service-1",namespace="default"} 1`,
-				`kuberay_service_ready{condition="false",name="ray-service-2",namespace="default"} 1`,
+				`kuberay_service_condition_ready{condition="true",name="ray-service-1",namespace="default"} 1`,
+				`kuberay_service_condition_ready{condition="false",name="ray-service-2",namespace="default"} 1`,
 			},
 		},
 	}
