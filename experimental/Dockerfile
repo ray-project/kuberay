@@ -15,11 +15,11 @@ COPY experimental/ experimental/
 WORKDIR /workspace/experimental
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o security cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o security_proxy cmd/main.go
 
 FROM scratch
 WORKDIR /workspace
 
-COPY --from=builder /workspace/experimental/security /usr/local/bin/security
+COPY --from=builder /workspace/experimental/security_proxy /usr/local/bin/security_proxy
 
-ENTRYPOINT ["/usr/local/bin/security"]
+ENTRYPOINT ["/usr/local/bin/security_proxy"]
