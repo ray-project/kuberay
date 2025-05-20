@@ -10,14 +10,16 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the go source
-COPY experimental/ experimental/
+COPY security/ security/
+
+WORKDIR /workspace/security
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o experimental cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o security cmd/main.go
 
 FROM scratch
 WORKDIR /workspace
 
-COPY --from=builder /workspace/experimental /usr/local/bin/experimental
+COPY --from=builder /workspace/security /usr/local/bin/security
 
-ENTRYPOINT ["/usr/local/bin/experimental"]
+ENTRYPOINT ["/usr/local/bin/security"]
