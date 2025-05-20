@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
@@ -50,7 +51,7 @@ func NewRayClusterMetricsManager(ctx context.Context, client client.Client) *Ray
 			nil,
 		),
 		rayClusterProvisionedReady: prometheus.NewDesc(
-			"kuberay_cluster_provisioned_ready",
+			"kuberay_cluster_condition_provisioned",
 			"Indicates whether the RayCluster is provisioned and ready",
 			[]string{"name", "namespace", "condition"},
 			nil,
@@ -105,16 +106,12 @@ func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayClust
 }
 
 func (r *RayClusterMetricsManager) collectRayClusterProvisionedReady(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
-	condition := "false"
-	if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
-		condition = "true"
-	}
 	ch <- prometheus.MustNewConstMetric(
 		r.rayClusterProvisionedReady,
 		prometheus.GaugeValue,
 		1,
 		cluster.Name,
 		cluster.Namespace,
-		condition,
+		strconv.FormatBool(meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned))),
 	)
 }

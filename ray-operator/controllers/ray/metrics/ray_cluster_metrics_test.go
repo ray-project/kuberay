@@ -135,8 +135,8 @@ func TestRayClusterProvisionedReady(t *testing.T) {
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_cluster_provisioned_ready{condition="true",name="provisioned-cluster",namespace="default"} 1`,
-				`kuberay_cluster_provisioned_ready{condition="false",name="unprovisioned-cluster",namespace="default"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="true",name="provisioned-cluster",namespace="default"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="false",name="unprovisioned-cluster",namespace="default"} 1`,
 			},
 		},
 	}
