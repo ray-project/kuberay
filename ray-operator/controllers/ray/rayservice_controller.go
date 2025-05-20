@@ -213,20 +213,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
 		}
 	}
-	emitRayServiceMetrics(r.options.RayServiceMetricsManager, rayServiceInstance.Name, rayServiceInstance.Namespace, rayServiceInstance.Status)
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
-}
-
-func emitRayServiceMetrics(rayServiceMetricsManager *metrics.RayServiceMetricsManager, rayServiceName, rayServiceNamespace string, rayServiceStatus rayv1.RayServiceStatuses) {
-	if rayServiceMetricsManager == nil {
-		return
-	}
-	emitRayServiceReady(rayServiceMetricsManager, rayServiceName, rayServiceNamespace, rayServiceStatus)
-}
-
-func emitRayServiceReady(RayServiceMetricsObserver metrics.RayServiceMetricsObserver, rayServiceName, rayServiceNamespace string, rayServiceStatus rayv1.RayServiceStatuses) {
-	ready := meta.IsStatusConditionTrue(rayServiceStatus.Conditions, string(rayv1.RayServiceReady))
-	RayServiceMetricsObserver.ObserveRayServiceReady(rayServiceName, rayServiceNamespace, ready)
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {

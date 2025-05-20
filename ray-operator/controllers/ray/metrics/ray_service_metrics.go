@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -20,7 +21,7 @@ type RayServiceMetricsObserver interface {
 // RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
 	rayServiceInfo  *prometheus.Desc
-	RayServiceReady *prometheus.GaugeVec
+	RayServiceReady *prometheus.Desc
 	client          client.Client
 	log             logr.Logger
 }
@@ -34,12 +35,11 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 			[]string{"name", "namespace"},
 			nil,
 		),
-		RayServiceReady: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "kuberay_service_ready",
-				Help: "RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
-			},
+		RayServiceReady: prometheus.NewDesc(
+			"kuberay_service_ready",
+			"RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
 			[]string{"name", "namespace", "condition"},
+			nil,
 		),
 		client: client,
 		log:    ctrl.LoggerFrom(ctx),
@@ -50,7 +50,7 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 // Describe implements prometheus.Collector interface Describe method.
 func (c *RayServiceMetricsManager) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.rayServiceInfo
-	c.RayServiceReady.Describe(ch)
+	ch <- c.RayServiceReady
 }
 
 // Collect implements prometheus.Collector interface Collect method.
@@ -62,8 +62,8 @@ func (c *RayServiceMetricsManager) Collect(ch chan<- prometheus.Metric) {
 	}
 	for _, rayService := range rayServiceList.Items {
 		c.collectRayServiceInfo(&rayService, ch)
+		c.collectRayServiceMetrics(&rayService, ch)
 	}
-	c.RayServiceReady.Collect(ch)
 }
 
 func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayService, ch chan<- prometheus.Metric) {
@@ -76,7 +76,14 @@ func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayServi
 	)
 }
 
-func (c *RayServiceMetricsManager) ObserveRayServiceReady(name, namespace string, ready bool) {
-	c.RayServiceReady.WithLabelValues(name, namespace, strconv.FormatBool(!ready)).Set(0)
-	c.RayServiceReady.WithLabelValues(name, namespace, strconv.FormatBool(ready)).Set(1)
+func (c *RayServiceMetricsManager) collectRayServiceMetrics(service *rayv1.RayService, ch chan<- prometheus.Metric) {
+	ready := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
+	ch <- prometheus.MustNewConstMetric(
+		c.RayServiceReady,
+		prometheus.GaugeValue,
+		1,
+		service.Name,
+		service.Namespace,
+		strconv.FormatBool(ready),
+	)
 }
