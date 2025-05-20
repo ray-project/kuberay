@@ -387,7 +387,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 				namespace := test.NewTestNamespace()
 
-				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor_submit_task.py"))
+				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))
 				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -420,8 +420,11 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				headPod, err := GetHeadPod(test, rayCluster)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
-				// Create a detached actor that will keep submitting tasks, which is used to trigger scale up
-				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor_submit_task.py"})
+				// Create detached actors
+				for i := 0; i < int(max(rtc.updatedMax, rtc.initialMax)); i++ {
+					ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
+				}
+
 				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.initialMax)))
 				// Verify that the Autoscaler scales up/down to initialMax Pod count
@@ -440,7 +443,6 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.updatedMax)))
 
 				// Verify that the Autoscaler scales up/down to updatedMax Pod count
-				// Should wait for a while for tasks in the cluster to finish before scaling down
 				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutShort).
 					Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.updatedMax)))
 			})
