@@ -1374,22 +1374,72 @@ func TestGetRayServiceIncrementalUpgradeOptions(t *testing.T) {
 }
 
 func TestGetGatewayListenersForServeService(t *testing.T) {
-	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "serve-service",
+	tests := []struct {
+		name              string
+		serveService      *corev1.Service
+		expectedListeners []gwv1.Listener
+	}{
+		{
+			name:              "Return listeners for nil Serve Service",
+			serveService:      nil,
+			expectedListeners: nil,
 		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: 8000}, // default port
-				{Port: 8500}, // some other port
+		{
+			name: "Return listener for valid Serve Service with single ports",
+			serveService: &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "serve-service",
+				},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{{Port: 8000}},
+				},
+			},
+			expectedListeners: []gwv1.Listener{
+				{
+					Name:     "serve-service-listener",
+					Protocol: gwv1.HTTPProtocolType,
+					Port:     8000,
+				},
+			},
+		},
+		{
+			name: "Return listeners for valid Serve Service with multiple ports",
+			serveService: &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "serve-service",
+				},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						{
+							Name: "default-port",
+							Port: 8000,
+						},
+						{
+							Name: "some-other-port",
+							Port: 8500,
+						},
+					},
+				},
+			},
+			expectedListeners: []gwv1.Listener{
+				{
+					Name:     "serve-service-default-port-listener",
+					Protocol: gwv1.HTTPProtocolType,
+					Port:     8000,
+				},
+				{
+					Name:     "serve-service-some-other-port-listener",
+					Protocol: gwv1.HTTPProtocolType,
+					Port:     8500,
+				},
 			},
 		},
 	}
 
-	listeners := GetGatewayListenersForServeService(svc)
-	assert.Len(t, listeners, 2)
-	assert.Equal(t, gwv1.PortNumber(8000), listeners[0].Port)
-	assert.Equal(t, gwv1.PortNumber(8500), listeners[1].Port)
-	assert.Equal(t, gwv1.SectionName("serve-service-listener"), listeners[0].Name)
-	assert.Equal(t, gwv1.HTTPProtocolType, listeners[0].Protocol)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listeners := GetGatewayListenersForServeService(tt.serveService)
+			assert.Equal(t, tt.expectedListeners, listeners)
+		})
+	}
 }

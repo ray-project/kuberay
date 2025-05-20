@@ -549,7 +549,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 
 	// Create a new Gateway object if needed
 	if existingGateway == nil {
-		logger.Info("Creating a new Gateway instance")
+		logger.Info("Creating a new Gateway instance", "Gateway Listeners", desiredGateway.Spec.Listeners)
 		if err := r.Create(ctx, desiredGateway); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
 			return nil, err
