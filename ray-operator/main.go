@@ -27,6 +27,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -49,6 +50,7 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
