@@ -96,14 +96,14 @@ func TestRayClusterInfo(t *testing.T) {
 	}
 }
 
-func TestRayClusterProvisionedReady(t *testing.T) {
+func TestRayClusterConditionProvisioned(t *testing.T) {
 	tests := []struct {
 		name            string
 		clusters        []rayv1.RayCluster
 		expectedMetrics []string
 	}{
 		{
-			name: "clusters with different provisioned states",
+			name: "clusters with different provisioned status",
 			clusters: []rayv1.RayCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{

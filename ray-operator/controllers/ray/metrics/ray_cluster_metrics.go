@@ -81,7 +81,7 @@ func (r *RayClusterMetricsManager) Collect(ch chan<- prometheus.Metric) {
 
 	for _, rayCluster := range rayClusterList.Items {
 		r.collectRayClusterInfo(&rayCluster, ch)
-		r.collectRayClusterProvisionedReady(&rayCluster, ch)
+		r.collectRayClusterConditionProvisioned(&rayCluster, ch)
 	}
 }
 
@@ -105,7 +105,7 @@ func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayClust
 	)
 }
 
-func (r *RayClusterMetricsManager) collectRayClusterProvisionedReady(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
+func (r *RayClusterMetricsManager) collectRayClusterConditionProvisioned(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		r.rayClusterConditionProvisioned,
 		prometheus.GaugeValue,
