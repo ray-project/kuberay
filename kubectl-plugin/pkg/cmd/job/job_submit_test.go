@@ -1,8 +1,10 @@
 package job
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -81,7 +83,7 @@ spec:
   shutdownAfterJobFinishes: false
   ttlSecondsAfterFinished: 10
   submissionMode: 'InteractiveMode'`,
-			expectError: "ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true",
+			expectError: "ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true",
 		},
 		{
 			name: "shutdownAfterJobFinishes is false and ttlSecondsAfterFinished is not zero",
@@ -93,6 +95,18 @@ spec:
   shutdownAfterJobFinishes: true
   ttlSecondsAfterFinished: 10
   submissionMode: 'InteractiveMode'`,
+		},
+		{
+			name: "ttlSecondsAfterFinished is less than zero",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: -10
+  submissionMode: 'InteractiveMode'`,
+			expectError: "ttlSecondsAfterFinished must be greater than or equal to 0",
 		},
 	}
 
@@ -112,7 +126,7 @@ spec:
 				workingDir: "Fake/File/Path",
 			}
 
-			err = opts.Validate()
+			err = opts.Validate(&cobra.Command{})
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {
@@ -138,13 +152,20 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 			rayjobName:               "rayjob-sample",
 			shutdownAfterJobFinishes: false,
 			ttlSecondsAfterFinished:  10,
-			expectError:              "ttl-seconds-after-finished is only supported when shutdown-after-job-finishes is set to true",
+			expectError:              "--ttl-seconds-after-finished is only supported when --shutdown-after-job-finishes is set to true",
 		},
 		{
 			name:                     "shutdownAfterJobFinishes is true and ttlSecondsAfterFinished is not zero",
 			rayjobName:               "rayjob-sample",
 			shutdownAfterJobFinishes: true,
 			ttlSecondsAfterFinished:  10,
+		},
+		{
+			name:                     "shutdownAfterJobFinishes is true and ttlSecondsAfterFinished is less than zero",
+			rayjobName:               "rayjob-sample",
+			shutdownAfterJobFinishes: true,
+			ttlSecondsAfterFinished:  -10,
+			expectError:              "--ttl-seconds-after-finished must be greater than or equal to 0",
 		},
 	}
 
@@ -158,11 +179,212 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 				shutdownAfterJobFinishes: tc.shutdownAfterJobFinishes,
 				ttlSecondsAfterFinished:  tc.ttlSecondsAfterFinished,
 			}
-			err := opts.Validate()
+			err := opts.Validate(&cobra.Command{})
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRayJobSubmitCmdFlagsOverrideYaml(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	fakeDir := t.TempDir()
+
+	tests := []struct {
+		name        string
+		yamlContent string
+		flagMap     map[string]any
+		expectSpec  map[string]any
+		expectError string
+	}{
+		{
+			name: "Both shutdownAfterJobFinishes and ttlSecondsAfterFinished are not set in yaml",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": true,
+				"ttl-seconds-after-finished":  20,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(20),
+			},
+		},
+		{
+			name: "Both shutdownAfterJobFinishes and ttlSecondsAfterFinished are set in yaml with wrong values",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: false
+  ttlSecondsAfterFinished: -10
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": true,
+				"ttl-seconds-after-finished":  20,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(20),
+			},
+		},
+		{
+			name: "Only shutdownAfterJobFinishes is set in yaml",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: false
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": true,
+				"ttl-seconds-after-finished":  20,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(20),
+			},
+		},
+		{
+			name: "Only ttlSecondsAfterFinished is set in yaml",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": true,
+				"ttl-seconds-after-finished":  20,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(20),
+			},
+		},
+		{
+			name: "Override only shutdownAfterJobFinishes",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: false
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": true,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(10),
+			},
+		},
+		{
+			name: "Override only ttlSecondsAfterFinished",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 100
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"ttl-seconds-after-finished": 200,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(200),
+			},
+		},
+		{
+			name: "Override only shutdownAfterJobFinishes to false and cause error",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"shutdown-after-job-finishes": false,
+			},
+			expectError: "ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true",
+		},
+		{
+			name: "Override only ttlSecondsAfterFinished to -10 and cause error",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 10
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"ttl-seconds-after-finished": -10,
+			},
+			expectError: "--ttl-seconds-after-finished must be greater than or equal to 0",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rayJobYamlPath := filepath.Join(fakeDir, "rayjob-temp-*.yaml")
+
+			file, err := os.Create(rayJobYamlPath)
+			require.NoError(t, err)
+			_, err = file.Write([]byte(tc.yamlContent))
+			require.NoError(t, err)
+
+			opts := &SubmitJobOptions{
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				fileName:   rayJobYamlPath,
+				workingDir: "Fake/File/Path",
+			}
+			cmd := &cobra.Command{}
+			cmd.Flags().BoolVar(&opts.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "")
+			cmd.Flags().Int32Var(&opts.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "")
+
+			args := []string{}
+			for flag, value := range tc.flagMap {
+				if v, ok := value.(bool); ok && v {
+					args = append(args, fmt.Sprintf("--%s", flag))
+				} else {
+					args = append(args, fmt.Sprintf("--%s=%v", flag, value))
+				}
+			}
+
+			cmd.SetArgs(args)
+			err = cmd.ParseFlags(args)
+			require.NoError(t, err)
+
+			err = opts.Validate(cmd)
+			if tc.expectError != "" {
+				require.EqualError(t, err, tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tc.expectSpec != nil {
+				for field, expected := range tc.expectSpec {
+					actual := reflect.ValueOf(opts.RayJob.Spec).FieldByName(field).Interface()
+					require.Equal(t, expected, actual)
+				}
 			}
 		})
 	}
