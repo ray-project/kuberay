@@ -371,7 +371,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	})
 	require.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName)
 
-	WaitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
+	waitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
 	return actualCluster, configMapName
 }
 

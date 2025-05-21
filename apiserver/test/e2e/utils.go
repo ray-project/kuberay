@@ -74,9 +74,9 @@ func ReadFileAsString(t *testing.T, fileName string) string {
 	return string(file)
 }
 
-// WaitForClusterConditions waits for the cluster to be in one of the expected conditions
+// waitForClusterConditions waits for the cluster to be in one of the expected conditions
 // if no expected conditions are provided, it skips the wait
-func WaitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, clusterName string, expectedConditions []rayv1api.RayClusterConditionType) {
+func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, clusterName string, expectedConditions []rayv1api.RayClusterConditionType) {
 	if len(expectedConditions) == 0 {
 		// no expected conditions provided, skip the wait
 		return
@@ -102,7 +102,7 @@ func WaitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 }
 
 func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
-	WaitForClusterConditions(t, tCtx, clusterName, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
+	waitForClusterConditions(t, tCtx, clusterName, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 }
 
 func waitForClusterToDisappear(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {

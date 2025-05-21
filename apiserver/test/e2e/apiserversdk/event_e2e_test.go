@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetRayClusterEvent(t *testing.T) {
-	tCtx, err := e2e.NewEnd2EndTestingContext(t)
+	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
 	rayClient := tCtx.GetRayHttpClient()
 	rayCluster := &rayv1.RayCluster{

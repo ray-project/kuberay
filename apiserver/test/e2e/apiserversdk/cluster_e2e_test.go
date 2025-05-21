@@ -7,12 +7,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/ray-project/kuberay/apiserver/test/e2e"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestCreateCluster(t *testing.T) {
-	tCtx, err := e2e.NewEnd2EndTestingContext(t)
+	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
 	rayClient := tCtx.GetRayHttpClient()
 	rayCluster := &rayv1.RayCluster{

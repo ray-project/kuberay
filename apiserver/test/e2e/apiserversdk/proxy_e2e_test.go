@@ -7,12 +7,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/ray-project/kuberay/apiserver/test/e2e"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestGetRayClusterProxy(t *testing.T) {
-	tCtx, err := e2e.NewEnd2EndTestingContext(t)
+	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
 	rayClient := tCtx.GetRayHttpClient()
 	rayCluster := &rayv1.RayCluster{
@@ -40,7 +39,7 @@ func TestGetRayClusterProxy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for the Ray cluster's head pod to be ready so that we can access the dashboard
-	e2e.WaitForClusterConditions(t, tCtx, tCtx.GetRayClusterName(), []rayv1.RayClusterConditionType{rayv1.HeadPodReady})
+	waitForClusterConditions(t, tCtx, tCtx.GetRayClusterName(), []rayv1.RayClusterConditionType{rayv1.HeadPodReady})
 
 	k8sClient := tCtx.GetK8sHttpClient()
 	serviceName := tCtx.GetRayClusterName() + "-head-svc"
