@@ -1,19 +1,19 @@
 # KubeRay APIServer
 
-The KubeRay APIServer provides an HTTP proxy to the Kubernetes APIserver with the same
-interface. Users can directly use Kubernetes OpenAPI Spec and KubeRay CRD to create, query,
-update, and delete Ray resources. It contains following highlight features:
+The KubeRay APIServer provides an HTTP proxy to the Kubernetes APIServer with the same
+interface. Users can directly use the Kubernetes OpenAPI Spec and KubeRay CRD to create, query,
+update, and delete Ray resources. It contains the following highlighted features:
 
-1. Compatible with existing Kubernetes clients and API interface, where users can use
-   existing Kubernetes clients to interact with the proxy provided by APIServer.
-2. Provide APIServer as a Go library for users to build their proxies with custom HTTP middleware functions.
+1. Compatibility with existing Kubernetes clients and API interfaces, allowing users to use
+   existing Kubernetes clients to interact with the proxy provided by the APIServer.
+2. Provides the APIServer as a Go library for users to build their proxies with custom HTTP middleware functions.
 
 ## When to use APIServer
 
-You can consider using APIServer if:
+Consider using the APIServer if:
 
 - You want to manage Ray clusters in Kubernetes via HTTP/REST (e.g., from a UI, SDK, or CLI).
-- You want to create templates or default values to simplify the configuration setup.
+- You want to create templates or default values to simplify configuration setup.
 
 ## Installation
 
@@ -28,8 +28,8 @@ Please follow the [Installation](./Installation.md) guide to install the APIServ
 ## Usage
 
 The KubeRay APIServer exposes a RESTful API that mirrors the Kubernetes APIServer. You
-can interact with it using Kubernetes-style endpoints and request patterns for creating,
-retrieving, updating, and deleting custom resources such as `RayCluster` and `RayJob`.
+can interact with it using Kubernetes-style endpoints and request patterns to create,
+retrieve, update, and delete custom resources such as `RayCluster` and `RayJob`.
 
 ### API Structure
 
@@ -45,9 +45,9 @@ For custom resources defined by CRDs (e.g., `RayCluster`, `RayJob`, etc.), the e
 <baseURL>/apis/ray.io/v1/namespaces/<namespace>/<resourceType>/<resourceName>
 ```
 
-- `namespace` = your target Kubernetes namespace (e.g., `default`)
-- `resourceType` = Custom resource type (e.g., `rayclusters`, `rayjobs`, `rayservices`)
-- `resourceName` = name of the resource.
+- `namespace`: Your target Kubernetes namespace (e.g., `default`)
+- `resourceType`: Custom resource type (e.g., `rayclusters`, `rayjobs`, `rayservices`)
+- `resourceName`: Name of the resource.
 
 ### Label and Field Selectors
 
@@ -60,7 +60,7 @@ When listing resources (using `GET` on a collection endpoint), you can filter re
 GET /apis/ray.io/v1/namespaces/default/rayclusters?labelSelector=key%3Dvalue
 ```
 
-- Field selector: filters resources based on the value their resource
+- Field selector: Filters resources based on the value of their resource
 fields (e.g., `metadata.name`, `status.phase`).
 
 ```sh

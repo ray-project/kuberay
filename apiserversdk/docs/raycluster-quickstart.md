@@ -1,7 +1,7 @@
 # RayCluster QuickStart
 
-This document focus on explaining how to manage and interact with RayCluster using the
-KubeRay APIServer. For detailed introduction and more advanced usage with Kubernetes,
+This document focuses on explaining how to manage and interact with RayCluster using the
+KubeRay APIServer. For a detailed introduction and more advanced usage with Kubernetes,
 please refer to [this
 guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html).
 
@@ -39,7 +39,7 @@ curl -X POST http://localhost:31888/apis/ray.io/v1/namespaces/default/raycluster
   --data-binary @-
 ```
 
-Once the RayCluster CR has been created, you can view its detail by executing following command:
+Once the RayCluster CR has been created, you can view its details by executing the following command:
 
 ```sh
 curl http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay
@@ -62,7 +62,7 @@ curl -X PATCH 'http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclust
 }'
 ```
 
-You can verify if the `annotation` is added with following command. You should see the
+You can verify if the `annotation` is added with the following command. You should see the
 annotations you added in the output:
 
 ```sh
@@ -73,7 +73,7 @@ curl -s http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/ray
 ## Step 5: Delete the RayCluster
 
 To delete the RayCluster with KubeRay APIServer, execute the following command. The `raycluster-kuberay` is the name of
-the RayCluster we created earlier:
+the RayCluster that we created earlier:
 
 ```sh
 curl -X DELETE 'localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay'
