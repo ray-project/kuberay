@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -28,6 +30,9 @@ type KuberayAPIServerClient struct {
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
 	maxRetry           int
+	backoffBase        float64
+	initBackoff        time.Duration
+	maxBackoff         time.Duration
 }
 
 type KuberayAPIServerClientError struct {
@@ -48,7 +53,7 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry int) *KuberayAPIServerClient {
+func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry int, backoffBase float64, initBackoff time.Duration, maxBackoff time.Duration) *KuberayAPIServerClient {
 	client := &KuberayAPIServerClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
@@ -66,7 +71,10 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry
 			DiscardUnknown: false,
 			Resolver:       nil,
 		},
-		maxRetry: maxRetry,
+		maxRetry:    maxRetry,
+		backoffBase: backoffBase,
+		initBackoff: initBackoff,
+		maxBackoff:  maxBackoff,
 	}
 	client.executeHttpRequest = client.executeRequest
 	return client
@@ -669,10 +677,11 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 		if response.StatusCode != http.StatusOK {
 			status, err := krc.extractStatus(bodyBytes)
+			// do not retry for Go Error
 			if err != nil {
 				lastStatus = nil
 				lastErr = err
-				continue
+				break
 			}
 
 			lastStatus = status
@@ -684,6 +693,14 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			if !isRetryableHTTPStatus(response.StatusCode) {
 				break
 			}
+
+			// Backoff before retry
+			sleep := krc.initBackoff * time.Duration(math.Pow(krc.backoffBase, float64(attempt)))
+			if sleep > krc.maxBackoff {
+				sleep = krc.maxBackoff
+			}
+			time.Sleep(sleep)
+
 			continue
 		}
 

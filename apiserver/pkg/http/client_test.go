@@ -1,12 +1,14 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -49,7 +51,7 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry)
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		resp := &api.ListClustersResponse{
 			Clusters: []*api.Cluster{
@@ -77,7 +79,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry)
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		// Intentionall returning a bad response.
 		return []byte("helloworld"), nil, nil
@@ -98,12 +100,13 @@ func TestAPIServerClientError(t *testing.T) {
 	require.Equal(t, "kuberay api server request failed with HTTP status (500: Internal Server Error)", httpErr.Error())
 }
 
-func TestAPISErverClientRetry(t *testing.T) {
+func TestAPIServerClientRetry(t *testing.T) {
 	statusErr := &rpcStatus.Status{Code: 13, Message: "Internal server error"}
-	succeedBody := "success"
+	succeedBody := `{"code": 0, "message": "OK"}`
 
 	// create mock http request
-	req, err := http.NewRequest("GET", "http://mock/test", nil)
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -166,7 +169,7 @@ func TestAPISErverClientRetry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &http.Client{Transport: tt.transport}
-			client := NewKuberayAPIServerClient("baseurl", mockClient, tt.maxRetry)
+			client := NewKuberayAPIServerClient("baseurl", mockClient, tt.maxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
 
 			body, status, err := client.executeRequest(req, "http://mock/test")
 
@@ -194,4 +197,43 @@ func TestAPISErverClientRetry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAPIServerClientBackoffTiming_RealSleep(t *testing.T) {
+	statusErr := &rpcStatus.Status{Code: 13, Message: "Internal server error"}
+
+	mockTransport := &mockTransport{
+		statusSequence: []int{
+			http.StatusServiceUnavailable,
+			http.StatusServiceUnavailable,
+			http.StatusOK,
+		},
+		statusErr: statusErr,
+	}
+
+	mockClient := &http.Client{Transport: mockTransport}
+
+	// Set short backoff time
+	initBackoff := 1 * time.Millisecond
+	backoffBase := 2.0
+	maxBackoff := 50 * time.Millisecond
+	maxRetry := 3
+
+	client := NewKuberayAPIServerClient("baseurl", mockClient, maxRetry, backoffBase, initBackoff, maxBackoff)
+
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
+	require.NoError(t, err)
+
+	start := time.Now()
+	_, _, err = client.executeRequest(req, "http://mock/test")
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	require.Equal(t, 3, mockTransport.callCount)
+
+	// backoff: 1ms + 2ms
+	expectedMin := 3 * time.Millisecond
+
+	require.GreaterOrEqual(t, elapsed, expectedMin)
 }

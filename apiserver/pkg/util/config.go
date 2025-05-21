@@ -27,6 +27,10 @@ const (
 
 	// Max retry times for HTTP Client
 	HTTPClientDefaultMaxRetry = 3
+
+	HTTPClientDefaultBackoffBase = float64(2)
+	HTTPClientDefaultInitBackoff = 500 * time.Millisecond
+	HTTPClientDefaultMaxBackoff  = 10 * time.Second
 )
 
 const (

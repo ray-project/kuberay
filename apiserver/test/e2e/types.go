@@ -93,7 +93,7 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, util.HTTPClientDefaultMaxRetry)
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, util.HTTPClientDefaultMaxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
 		return nil
 	}
 }
