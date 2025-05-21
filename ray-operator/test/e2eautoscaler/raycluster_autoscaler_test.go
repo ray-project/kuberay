@@ -520,6 +520,14 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 		// Create a namespace
 		namespace := test.NewTestNamespace()
 
+		workerTemplate := tc.WorkerPodTemplateGetter()
+		workerTemplate.Spec.WithInitContainers(corev1ac.Container().
+			WithName("init-sleep").
+			WithImage(GetRayImage()).
+			// delay the worker startup to make sure it takes longer than the IdleTimeoutSeconds
+			// and longer than the default autoscaler update interval of 5 seconds.
+			WithCommand("bash", "-c", "sleep 10"))
+
 		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -528,7 +536,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 					// A short idle timeout (6 seconds) is configured specifically for this test to ensure
 					// that worker nodes are marked as idle quickly, allowing the test to trigger
 					// the autoscaler's scale-down logic efficiently. This is important because
-					// launching a new node in Kind requires about 10 seconds to boot.
+					// launching a new node in Kind requires at least 10 seconds to boot (we have added the delay above).
 					// By setting the idle timeout to 6 seconds (just above the default autoscaler update interval of 5 seconds),
 					// the worker node from the previous placement group becomes idle and eligible for removal right as
 					// the cluster is in the process of creating a new node.
@@ -545,7 +553,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 					WithMaxReplicas(2).
 					WithGroupName("short-idle-group").
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
-					WithTemplate(tc.WorkerPodTemplateGetter()))
+					WithTemplate(workerTemplate))
 
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 				WithSpec(rayClusterSpecAC)
