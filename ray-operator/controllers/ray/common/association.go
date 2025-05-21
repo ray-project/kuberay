@@ -203,3 +203,17 @@ func RayClusterNetworkResourcesOptions(instance *rayv1.RayCluster) AssociationOp
 		},
 	}
 }
+
+func RayServiceGatewayNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      fmt.Sprintf("%s-%s", rayService.Name, "gateway"),
+		Namespace: rayService.Namespace,
+	}
+}
+
+func RayServiceHTTPRouteNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      fmt.Sprintf("httproute-%s", rayService.Name),
+		Namespace: rayService.Namespace,
+	}
+}

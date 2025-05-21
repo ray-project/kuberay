@@ -1380,9 +1380,9 @@ func TestGetGatewayListenersForServeService(t *testing.T) {
 		expectedListeners []gwv1.Listener
 	}{
 		{
-			name:              "Return listeners for nil Serve Service",
-			serveService:      nil,
-			expectedListeners: nil,
+			name:              "Return listeners for empty Serve Service",
+			serveService:      &corev1.Service{},
+			expectedListeners: []gwv1.Listener{},
 		},
 		{
 			name: "Return listener for valid Serve Service with single ports",
