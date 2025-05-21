@@ -144,6 +144,10 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 	}
 
+	if !rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.TTLSecondsAfterFinished != 0 {
+		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false cannot have TTLSecondsAfterFinished")
+	}
+
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
 	if rayJob.Spec.Suspend && isClusterSelectorMode {
 		return fmt.Errorf("the ClusterSelector mode doesn't support the suspend operation")
