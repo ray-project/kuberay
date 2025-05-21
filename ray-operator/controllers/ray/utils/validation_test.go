@@ -817,6 +817,15 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name: "ShutdownAfterJobFinishes is true and TTLSecondsAfterFinished is negative",
+			spec: rayv1.RayJobSpec{
+				ShutdownAfterJobFinishes: true,
+				TTLSecondsAfterFinished:  -5,
+				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -144,7 +144,11 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 	}
 
-	if !rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.TTLSecondsAfterFinished != 0 {
+	if rayJob.Spec.TTLSecondsAfterFinished < 0 {
+		return fmt.Errorf("TTLSecondsAfterFinished must be a non-negative integer")
+	}
+
+	if !rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.TTLSecondsAfterFinished > 0 {
 		return fmt.Errorf("a RayJob with shutdownAfterJobFinishes set to false cannot have TTLSecondsAfterFinished")
 	}
 
