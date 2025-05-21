@@ -509,3 +509,63 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 		})
 	}
 }
+
+// This test verifies that the autoscaler can launch nodes to fulfill ray.autoscaler.sdk.request_resources from the user program.
+func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
+	tc := tests[0] // Use the default autoscaler config
+
+	test := With(t)
+	g := gomega.NewWithT(t)
+
+	// Create a namespace
+	namespace := test.NewTestNamespace()
+
+	// Mount the call_request_resources.py script as a ConfigMap
+	scriptsAC := newConfigMap(namespace.Name, files(test, "call_request_resources.py"))
+	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+	test.T().Run("Test ray.autoscaler.sdk.request_resources", func(_ *testing.T) {
+		groupName := "request-group"
+
+		rayClusterSpecAC := rayv1ac.RayClusterSpec().
+			WithEnableInTreeAutoscaling(true).
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"num-cpus": "0"}).
+				WithTemplate(tc.HeadPodTemplateGetter())).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(0).
+				WithMinReplicas(0).
+				WithMaxReplicas(3).
+				WithGroupName(groupName).
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(tc.WorkerPodTemplateGetter()))
+		rayClusterAC := rayv1ac.RayCluster("ray-cluster-sdk", namespace.Name).
+			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+		// Wait for RayCluster to become ready
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+		g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+		// Trigger resource request via ray.autoscaler.sdk.request_resources
+		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+			"python", "/home/ray/test_scripts/call_request_resources.py",
+		})
+
+		// Autoscaler should create 3 workers
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically(">=", 3)))
+		g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(3))
+	})
+}
