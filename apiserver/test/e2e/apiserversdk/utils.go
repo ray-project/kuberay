@@ -10,7 +10,7 @@ import (
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-var TestPollingInterval = 500 * time.Millisecond
+var testPollingInterval = 500 * time.Millisecond
 
 func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, clusterName string, expectedConditions []rayv1api.RayClusterConditionType) {
 	if len(expectedConditions) == 0 {
@@ -34,5 +34,5 @@ func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 			}
 		}
 		return false
-	}, 1*time.Minute, TestPollingInterval).Should(gomega.BeTrue())
+	}, 1*time.Minute, testPollingInterval).Should(gomega.BeTrue())
 }

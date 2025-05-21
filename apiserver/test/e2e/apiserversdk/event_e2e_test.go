@@ -2,13 +2,13 @@ package apiserversdk
 
 import (
 	"testing"
+	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/ray-project/kuberay/apiserver/test/e2e"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -51,7 +51,7 @@ func TestGetRayClusterEvent(t *testing.T) {
 			}
 		}
 		return false
-	}, e2e.TestTimeoutShort, e2e.TestPollingInterval).Should(gomega.BeTrue(), "Expected to see RayCluster event in the list of events")
+	}, 10*time.Second, testPollingInterval).Should(gomega.BeTrue(), "Expected to see RayCluster event in the list of events")
 
 	err = rayClient.RayClusters(tCtx.GetNamespaceName()).Delete(tCtx.GetCtx(), tCtx.GetRayClusterName(), metav1.DeleteOptions{})
 	require.NoError(t, err)
