@@ -1,19 +1,19 @@
-# Creating Autoscaling clusters using API server
+# Creating Autoscaling clusters using APIServer
 
-One of Ray's key features is autoscaling. This [document] explains setting up autoscaling
-with the Ray operator. Here, we demonstrate how to configure it using the API server and
+One of Ray's key features is autoscaling. This [document] explains how to set up autoscaling
+with the Ray operator. Here, we demonstrate how to configure it using the APIServer and
 run an example.
 
 ## Setup
 
-Refer to [README](README.md) for setting up KubRay operator and API server.
+Refer to the [README](README.md) for setting up the KubeRay operator and APIServer.
 
 ## Example
 
 This example walks through how to trigger scale-up and scale-down for RayCluster.
 
-Before going through the example, remove any running RayClusters to ensure a successful
-run through of the example below.
+Before proceeding with the example, remove any running RayClusters to ensure a successful
+execution of the steps below.
 
 ```sh
 kubectl delete raycluster --all
@@ -24,14 +24,14 @@ kubectl delete raycluster --all
 
 ### Install ConfigMap
 
-Please install this [ConfigMap] which contains code for our example. Simply download
-this file and run:
+Install this [ConfigMap], which contains the code for our example. Simply download
+the file and run:
 
 ```sh
 kubectl apply -f test/cluster/cluster/detachedactor.yaml
 ```
 
-Check if the config map is successfully created, you should see `ray-example` in the list:
+Check if the ConfigMap is successfully created. You should see `ray-example` in the list:
 
 ```sh
 kubectl get configmaps
@@ -41,7 +41,7 @@ kubectl get configmaps
 
 ### Deploy RayCluster
 
-Before running the example, you need to first deploy a RayCluster with the following command.
+Before running the example, deploy a RayCluster with the following command:
 
 ```sh
 # Create compute template
@@ -57,7 +57,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 
 This command performs two main operations:
 
-1. Creates a compute template `default-template` that specifies resources to use when
+1. Creates a compute template `default-template` that specifies resources to use during
    scale-up (2 CPUs and 4 GiB memory).
 
 2. Deploys a RayCluster (test-cluster) with:
@@ -68,7 +68,7 @@ The worker group uses the following autoscalerOptions to control scaling behavio
 
 - **`upscalingMode: "Default"`**: Default scaling behavior. Ray will scale up only as
 needed.
-- **`idleTimeoutSeconds: 30`** If a worker pod remains idle (i.e., not running any tasks)
+- **`idleTimeoutSeconds: 30`**: If a worker pod remains idle (i.e., not running any tasks)
 for 30 seconds, it will be automatically removed.
 - **`cpu: "500m"`, `memory: "512Mi"`**: Defines the **minimum resource unit** Ray uses to
 assess scaling needs.  If no worker pod has at least this much free capacity, Ray will
@@ -113,7 +113,7 @@ The `detached_actor.py` file is defined in the [ConfigMap] we installed earlier 
 mounted to the head node, which requires `num_cpus=1`. Recall that initially there is no
 worker pod exists, RayCluster needs to scale up a worker for running this actor.
 
-Check if a worker is created. You can see a worker `test-cluster-small-wg-worker` spins
+Check if a worker is created. You should see a worker `test-cluster-small-wg-worker` spin
 up.
 
 ```sh
@@ -128,7 +128,7 @@ kubectl get pods
 
 ### Trigger RayCluster scale-down
 
-Run following to delete the actor we created earlier.
+Run the following command to delete the actor we created earlier:
 
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
@@ -144,10 +144,10 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 }'
 ```
 
-While the actor is deleted, we do not need the worker anymore. The worker pod will be deleted
-after `idleTimeoutSeconds` (default 60, we specified 30) seconds.
+Once the actor is deleted, the worker is no longer needed. The worker pod will be deleted
+after `idleTimeoutSeconds` (default 60; we specified 30) seconds.
 
-List all pods to verify if the worker pod is deleted:
+List all pods to verify that the worker pod is deleted:
 
 ```sh
 kubectl get pods
