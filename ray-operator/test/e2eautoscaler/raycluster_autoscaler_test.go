@@ -525,9 +525,16 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
 				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
-					// We want the autoscaler not to remove idle workers for upcoming placement groups.
-					// So, we set a short idle timeout for this test to make workers as idle after 6 seconds.
-					// Note that this should be slightly larger than AUTOSCALER_UPDATE_INTERVAL_S, which is 5 by default.
+					// A short idle timeout (6 seconds) is configured specifically for this test to ensure
+					// that worker nodes are marked as idle quickly, allowing the test to trigger
+					// the autoscaler's scale-down logic efficiently. This is important because
+					// launching a new node in Kind requires about 10 seconds to boot.
+					// By setting the idle timeout to 6 seconds (just above the default autoscaler update interval of 5 seconds),
+					// the worker node from the previous placement group becomes idle and eligible for removal right as
+					// the cluster is in the process of creating a new node.
+					// This timing ensures that the autoscaler is tested under realistic race conditions,
+					// verifying that it does not mistakenly remove the idle node that will shortly be needed
+					// for the upcoming placement group, even while a new node is still booting.
 					WithIdleTimeoutSeconds(6)).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
