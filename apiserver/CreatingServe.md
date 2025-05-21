@@ -4,7 +4,7 @@ Currently, there are two ways for creating a RayCluster with RayService support:
 
 1. Create a RayCluster first, then use [Create RayService](./HttpRequestSpec.md#Create-ray-service-in-a-given-namespace)
    APIs to create a service.
-2. Directly create cluster with RayServe support (described in this document)
+2. Directly create a cluster with RayServe support (described in this document)
 
 For creating a cluster with RayService support, simply add the following annotation when
 creating the cluster:
@@ -31,7 +31,7 @@ kubectl delete raycluster --all
 ```
 
 > [!IMPORTANT]
-> All the following guidance require you to switch your working directory to the KubeRay `apiserver`
+> All the following guidance requires you to switch your working directory to the KubeRay `apiserver`
 
 ### Install ConfigMap
 
@@ -53,7 +53,7 @@ kubectl get configmaps
 
 ### Create RayCluster
 
-Use following command to create a compute template and a RayCluster with RayService support:
+Use the following command to create a compute template and a RayCluster with RayService support:
 
 ```sh
 # Create compute tempalte
@@ -75,10 +75,10 @@ kubectl get service
 # test-cluster-serve-svc   ClusterIP   10.96.161.26    <none>        8000/TCP                                                  7s
 ```
 
-You should see two services created, one for head node to access dashboard and manage the
+You should see two services created, one for the head node to access the dashboard and manage the
 cluster, the other for submit the serve request.
 
-Note that we set the 52365 port for dashboard agent in the above curl command, which is
+Note that we set the 52365 port for the dashboard agent in the above curl command, which is
 used internally by Ray Serve.
 
 ### Clean up

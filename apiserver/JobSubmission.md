@@ -31,7 +31,7 @@ Note that this cluster is mounting a volume from a configmap. This config map sh
 prior to cluster creation using [this YAML].
 
 We will use this [ConfigMap] which contains code for our example. Please download the
-config map and deploy it with following command:
+config map and deploy it with the following command:
 
 ```sh
 kubectl apply -f code_configmap.yaml
@@ -51,7 +51,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
   --data @docs/api-example/jobsubmission_clusters.json
 ```
 
-To check if the RayCluster setup correctly, list all pods with following command. You can
+To check if the RayCluster setup correctly, list all pods with the following command. You can
 see a head and worker node for `test-cluster` running:
 
 ```sh

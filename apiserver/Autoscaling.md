@@ -20,7 +20,7 @@ kubectl delete raycluster --all
 ```
 
 > [!IMPORTANT]
-> All the following guidance require you to switch your working directory to the KubeRay `apiserver`
+> All the following guidance requires you to switch your working directory to the KubeRay `apiserver`
 
 ### Install ConfigMap
 
@@ -41,10 +41,10 @@ kubectl get configmaps
 
 ### Deploy RayCluster
 
-Before running the example, you need to first deploy a RayCluster with following command.
+Before running the example, you need to first deploy a RayCluster with the following command.
 
 ```sh
-# Create compute tempalte
+# Create compute template
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 --header 'Content-Type: application/json' \
 --data  @docs/api-example/compute_template.json
@@ -79,7 +79,7 @@ trigger a scale-up and launch a new worker pod.
 
 ### Validate that RayCluster is deployed correctly
 
-Run following command to get list of pods running. You should see something like below:
+Run the following command to get a list of pods running. You should see something like below:
 
 ```sh
 kubectl get pods
@@ -93,7 +93,7 @@ will only see head pod with 2 containers for `test-cluster`.
 
 ### Trigger RayCluster scale-up
 
-Create a detached actor to trigger scale-up with following command:
+Create a detached actor to trigger scale-up with the following command:
 
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
@@ -144,7 +144,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 }'
 ```
 
-While actor is deleted, we do not need the worker anymore. The worker pod will be deleted
+While the actor is deleted, we do not need the worker anymore. The worker pod will be deleted
 after `idleTimeoutSeconds` (default 60, we specified 30) seconds.
 
 List all pods to verify if the worker pod is deleted:

@@ -18,7 +18,7 @@ Refer to [README](README.md) for setting up KubeRay operator and API server. Thi
 set the flag `collectMetricsFlag` to `true` which enable the metrics collection.
 
 > [!IMPORTANT]
-> All the following guidance require you to switch your working directory to the KubeRay project root
+> All the following guidance requires you to switch your working directory to the KubeRay project root
 
 ### Install Kubernetes Prometheus Stack via Helm Chart
 

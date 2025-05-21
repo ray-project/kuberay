@@ -1,15 +1,15 @@
 # Creating HA cluster with API Server
 
-One of the issue for long-running Ray application (e.g. RayServe) is that if Ray head node
+One of the issues for long-running Ray application (e.g. RayServe) is that if the Ray head node
 dies, the whole cluster has to be restarted. Fortunately, KubeRay cluster solved it by
 introducing [Fault Tolerance Ray Cluster](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html).
 
-The RayCluster with high availability can also be created in API server, which aims to
+The RayCluster with high availability can also be created with the API server, which aims to
 ensure a high availability Global Control Service (GCS) data. The GCS manages
-cluster-level metadata by storing all data in memory, which is lack of fault tolerance. A
+cluster-level metadata by storing all data in memory, which lacks fault tolerance. A
 single head node failure can cause the entire RayCluster to fail. To enable GCS's fault tolerance,
-we should have a highly available Redis so that when GCS restart, it can resume its
-status by retrieve previous data from the Redis instance.
+we should have a highly available Redis so that when GCS restarts, it can resume its
+status by retrieving previous data from the Redis instance.
 
 We will provide a detailed example on how to create this highly available API Server.
 
@@ -44,7 +44,7 @@ Note that we created a new `redis` namespace and deploy redis in it.
 Alternatively, if you run on the cloud you can use managed version of HA Redis, which will not require
 you to stand up, run, manage and monitor your own version of redis.
 
-Check if the redis is successfully set up with following command. You should see
+Check if the redis is successfully set up with the following command. You should see
 `redis-config` in the list:
 
 ```sh
@@ -56,10 +56,10 @@ kubectl get configmaps -n redis
 
 ### Create Redis password secret
 
-Before creating your cluster, you need to create secret in the
+Before creating your cluster, you need to create a secret in the
 namespace where you are planning to create your Ray cluster (remember, that secret is visible only within a given
 namespace). To create a secret for using external redis, please download the [Secret] and
-run following command:
+run the following command:
 
 ```sh
 kubectl apply -f redis_passwrd.yaml
@@ -70,7 +70,7 @@ kubectl apply -f redis_passwrd.yaml
 We will use this [ConfigMap] which contains code for our example. For the real world
 cases, it is recommended to pack user code in an image.
 
-Please download the config map and deploy it with following command:
+Please download the config map and deploy it with the following command:
 
 ```sh
 kubectl apply -f code_configmap.yaml
@@ -78,7 +78,7 @@ kubectl apply -f code_configmap.yaml
 
 ### Create RayCluster
 
-Use following command to create a compute template and a RayCluster:
+Use the following command to create a compute template and a RayCluster:
 
 ```sh
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
@@ -98,14 +98,15 @@ To enable the RayCluster's GCS fault tolerance feature, we added the annotation:
 }
 ```
 
-For connecting to Redis, we set the following content in `rayStartParams` of
-`headGroupSpec`: We also added following content in `rayStartParams` of `headGroupSpec`,
+For connecting to Redis, we also added the following content in `rayStartParams` of `headGroupSpec`,
 which set the Redis password and the number of cpu. Setting `num-cpu` to 0 ensures that no
 application code runs on a head node.
 
 ```json
-"redis-password:: "$REDIS_PASSWORD"
-"num-cpu": "0"
+{
+    "redis-password:: "$REDIS_PASSWORD"
+    "num-cpu": "0"
+}
 ```
 
 Here, the `$REDIS_PASSWORD` is defined in `headGroupSpec`'s environment variable below:
@@ -128,7 +129,7 @@ Here, the `$REDIS_PASSWORD` is defined in `headGroupSpec`'s environment variable
 For the `workerGroupSpecs`, we set the `gcs_rpc_server_reconnect_timeout` environment
 variable, which controls the GCS heartbeat timeout (default 60 seconds). This controls how
 long after the head node dies do we kill the worker node. While it takes time to restart
-the head node, we want this values to be large enough to prevent the worker node being
+the head node, we want these values to be large enough to prevent the worker node being
 killed during the restarting period.
 
 ```json
@@ -141,7 +142,7 @@ killed during the restarting period.
 
 ### Validate that RayCluster is deployed correctly
 
-Run following command to get list of pods running. You should see one head and worker node
+Run the following command to get a list of pods running. You should see one head and worker node
 like below:
 
 ```sh
@@ -158,7 +159,7 @@ is working correctly. We will validate this by creating a detached actor. If it 
 exists and functions after the head node deletion and restoration, we can confirm that the
 GCS data is restored correctly.
 
-Run following command for creating a detached actor. Please change `ha-cluster-head` to
+Run the following command for creating a detached actor. Please change `ha-cluster-head` to
 your head node's name. Note that the `detached_actor.py` file is defined in the
 [ConfigMap] we installed earlier and mounted to the head node:
 
@@ -198,7 +199,7 @@ kubectl get pods
 # ha-cluster-small-wg-worker-tpgqs    1/1     Running   0          9m19s
 ```
 
-Note that only head node will be recreated, while the worker node stays as is.
+Note that only the head node will be recreated, while the worker node stays as is.
 
 Port-forward again and access the dashboard through `http://localhost:8265`:
 
