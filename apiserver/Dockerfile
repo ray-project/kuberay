@@ -2,19 +2,13 @@
 FROM golang:1.24.2-bullseye AS builder
 
 WORKDIR /workspace
+
 # Copy the Go Modules manifests
-COPY apiserver/go.mod apiserver/go.mod
-COPY apiserver/go.sum apiserver/go.sum
-COPY proto/go.mod proto/go.mod
-COPY proto/go.sum proto/go.sum
-COPY ray-operator/go.mod ray-operator/go.mod
-COPY ray-operator/go.sum ray-operator/go.sum
-COPY apiserversdk/go.mod apiserversdk/go.mod
-COPY apiserversdk/go.sum apiserversdk/go.sum
+COPY go.mod go.sum ./
 
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
-RUN cd apiserver && go mod download && cd ..
+RUN go mod download
 
 # Copy the go source
 COPY proto/ proto/

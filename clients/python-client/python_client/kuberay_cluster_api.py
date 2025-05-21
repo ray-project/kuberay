@@ -105,45 +105,6 @@ class RayClusterApi:
                 log.error("error fetching custom resource: {}".format(e))
                 return None
 
-    def get_ray_cluster_status(self, name: str, k8s_namespace: str = "default", timeout: int=60) -> Any:
-        """Get a specific Ray cluster in a given namespace.
-
-        Parameters:
-        - name (str): The name of the Ray cluster custom resource. Defaults to "".
-        - k8s_namespace (str, optional): The namespace in which to retrieve the Ray cluster. Defaults to "default".
-        - timeout (int, optional): The duration in seconds after which we stop trying to get status. Defaults to 60 seconds.
-
-
-        Returns:
-            Any: The custom resource for the specified Ray cluster, or None if not found.
-
-        Raises:
-            ApiException: If there was an error fetching the custom resource.
-        """
-        for attempt in range(10):
-            try:
-                resource: Any = self.api.get_namespaced_custom_object_status(
-                    group=constants.GROUP,
-                    version=constants.VERSION,
-                    plural=constants.PLURAL,
-                    name=name,
-                    namespace=k8s_namespace,
-                )
-            except ApiException as e:
-                if e.status == 404:
-                    log.error("raycluster resource is not found. error = {}".format(e))
-                    return None
-                else:
-                    log.error("error fetching custom resource: {}".format(e))
-                    return None
-
-            if resource["status"]:
-                    return resource["status"]
-            else:
-                time.sleep(5)
-
-        return None
-
     def get_ray_cluster_status(self, name: str, k8s_namespace: str = "default", timeout: int = 60, delay_between_attempts: int = 5) -> Any:
         """Get a specific Ray cluster in a given namespace.
 

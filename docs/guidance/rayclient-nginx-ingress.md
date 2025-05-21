@@ -3,7 +3,7 @@
 >
 > Warning: Ray client has some known [limitations](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/ray-client.html#things-to-know) and is not actively maintained.
 
-This document provides an example for connecting Ray client to a Raycluster via [NGINX Ingress](https://kubernetes.github.io/ingress-nginx/) on Kind. Although this is a Kind example, the steps applies to any Kubernetes Cluster that runs the NGINX Ingress Controller.
+This document provides an example for connecting Ray client to a Raycluster via [NGINX Ingress](https://kubernetes.github.io/ingress-nginx/) on Kind. Although this is a Kind example, the steps apply to any Kubernetes Cluster that runs the NGINX Ingress Controller.
 
 ## Requirements
 
