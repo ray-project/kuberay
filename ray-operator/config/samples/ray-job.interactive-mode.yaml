@@ -14,11 +14,10 @@ spec:
   jobId: ""
   rayClusterSpec:
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
-            - image: rayproject/ray:2.41.0
+            - image: rayproject/ray:2.45.0
               name: ray-head
               ports:
                 - containerPort: 6379
@@ -34,15 +33,14 @@ spec:
                 requests:
                   cpu: "2"
                   memory: 4Gi
-    rayVersion: 2.41.0
+    rayVersion: 2.45.0
     workerGroupSpecs:
       - groupName: default-group
-        rayStartParams: {}
         replicas: 1
         template:
           spec:
             containers:
-              - image: rayproject/ray:2.41.0
+              - image: rayproject/ray:2.45.0
                 name: ray-worker
                 resources:
                   limits:

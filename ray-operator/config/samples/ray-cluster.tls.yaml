@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-tls
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.45.0'
   # Note: Uncomment the `enableInTreeAutoscaling` and `autoscalerOptions`
   # if you wish to configure TLS for the autoscaler.
 
@@ -42,7 +42,6 @@ spec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-    rayStartParams: {}
     # pod template
     template:
       metadata:
@@ -51,7 +50,7 @@ spec:
         initContainers:
           # Generate head's private key and certificate before `ray start`.
           - name: ray-head-tls
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -68,7 +67,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -128,14 +127,13 @@ spec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-    rayStartParams: {}
     #pod template
     template:
       spec:
         initContainers:
           # Generate worker's private key and certificate before `ray start`.
           - name: ray-worker-tls
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.45.0
             command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
             volumeMounts:
               - mountPath: /etc/ca/tls
@@ -152,7 +150,7 @@ spec:
                     fieldPath: status.podIP
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.45.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
