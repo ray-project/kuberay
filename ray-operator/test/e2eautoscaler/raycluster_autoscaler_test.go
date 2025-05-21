@@ -520,6 +520,11 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 		// Create a namespace
 		namespace := test.NewTestNamespace()
 
+		scriptsAC := newConfigMap(namespace.Name, files(test, "do_not_remove_idles_for_pg.py"))
+		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
 		workerTemplate := tc.WorkerPodTemplateGetter()
 		workerTemplate.Spec.WithInitContainers(corev1ac.Container().
 			WithName("init-sleep").
@@ -556,7 +561,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 					WithTemplate(workerTemplate))
 
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(rayClusterSpecAC)
+				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -572,26 +577,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
 			// Run the test script. It should exit without error.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "-c", doNotRemoveIdlesForPlacementGroupScript})
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/do_not_remove_idles_for_pg.py"})
 		})
 	}
 }
-
-const doNotRemoveIdlesForPlacementGroupScript = `
-import ray
-from ray.util.placement_group import placement_group, remove_placement_group
-
-pg1 = placement_group([{"CPU": 1}] * 1, strategy="STRICT_SPREAD")
-ray.get(pg1.ready())
-nodes = {n["NodeID"] for n in ray.nodes() if n["alive"]}
-assert len(nodes) == 2 # 1 head + 1 worker
-remove_placement_group(pg1)
-
-# This pg2 should rely on the worker previously used by pg1, plus a new worker to be created.
-# So, the autoscaler should not remove the old worker while creating the new one.
-# We assert that the previous nodes should be a subset (< operator) of the new nodes. This assertion only works for Ray >= 2.45.0.
-pg2 = placement_group([{"CPU": 1}] * 2, strategy="STRICT_SPREAD")
-ray.get(pg2.ready())
-assert nodes < {n["NodeID"] for n in ray.nodes() if n["alive"]}, "some of nodes are unexpectedly removed from the cluster."
-remove_placement_group(pg2)
-`
