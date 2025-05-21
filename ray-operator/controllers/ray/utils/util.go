@@ -24,6 +24,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -699,6 +700,9 @@ func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTT
 }
 
 func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
+	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
+		return false
+	}
 	return spec != nil && spec.UpgradeStrategy != nil &&
 		*spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade
 }

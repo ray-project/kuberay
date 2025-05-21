@@ -50,7 +50,6 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
-	utilruntime.Must(gwv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -185,6 +184,10 @@ func main() {
 		exitOnError(err, "Unable to set flag gates for known features")
 	}
 	features.LogFeatureGates(setupLog)
+
+	if features.Enabled(features.RayClusterStatusConditions) {
+		utilruntime.Must(gwv1.AddToScheme(scheme))
+	}
 
 	// Manager options
 	options := ctrl.Options{
