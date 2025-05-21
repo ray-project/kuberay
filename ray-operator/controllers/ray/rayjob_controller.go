@@ -541,6 +541,11 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
+		if utils.EnvVarExists(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env) {
+			defaultContainerCommand, _ := utils.EnvVarByName(utils.KUBERAY_DEFAULT_CONTAINER_COMMAND,
+				submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
+			submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = strings.Split(defaultContainerCommand.Value, " ")
+		}
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-ce", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
