@@ -383,6 +383,7 @@ func TestRayClusterAutoscalerRequestResources(t *testing.T) {
 					WithReplicas(0).
 					WithMinReplicas(0).
 					WithMaxReplicas(3).
+					WithIdleTimeoutSeconds(3600).
 					WithGroupName("request-resource-group").
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
