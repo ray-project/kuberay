@@ -509,3 +509,74 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 		})
 	}
 }
+
+// This test verifies that the autoscaler does not remove idle nodes required by an upcoming placement group.
+func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
+	for _, tc := range tests {
+
+		test := With(t)
+		g := gomega.NewWithT(t)
+
+		// Create a namespace
+		namespace := test.NewTestNamespace()
+
+		test.T().Run(tc.name, func(_ *testing.T) {
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					// We want the autoscaler not to remove idle workers for upcoming placement groups.
+					// So, we set a short idle timeout for this test to make workers as idle after 6 seconds.
+					// Note that this should be slightly larger than AUTOSCALER_UPDATE_INTERVAL_S, which is 5 by default.
+					WithIdleTimeoutSeconds(6)).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(2).
+					WithGroupName("short-idle-group").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(tc.WorkerPodTemplateGetter()))
+
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+				WithSpec(rayClusterSpecAC)
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for RayCluster to become ready and verify there is no worker replica.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Run the test script. It should exit without error.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "-c", doNotRemoveIdlesForPlacementGroupScript})
+		})
+	}
+}
+
+const doNotRemoveIdlesForPlacementGroupScript = `
+import ray
+from ray.util.placement_group import placement_group, remove_placement_group
+
+pg1 = placement_group([{"CPU": 1}] * 1, strategy="STRICT_SPREAD")
+ray.get(pg1.ready())
+nodes = {n["NodeID"] for n in ray.nodes() if n["alive"]}
+assert len(nodes) == 2 # 1 head + 1 worker
+remove_placement_group(pg1)
+
+# This pg2 should rely on the worker previously used by pg1, plus a new worker to be created.
+# So, the autoscaler should not remove the old worker while creating the new one.
+# We assert that the previous nodes should be a subset (< operator) of the new nodes. This assertion only works for Ray >= 2.45.0.
+pg2 = placement_group([{"CPU": 1}] * 2, strategy="STRICT_SPREAD")
+ray.get(pg2.ready())
+assert nodes < {n["NodeID"] for n in ray.nodes() if n["alive"]}, "some of nodes are unexpectedly removed from the cluster."
+remove_placement_group(pg2)
+`
