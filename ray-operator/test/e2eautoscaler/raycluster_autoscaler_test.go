@@ -560,7 +560,7 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 
 			// Trigger resource request via ray.autoscaler.sdk.request_resources
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
-				"python", "/home/ray/test_scripts/call_request_resources.py",
+				"python", "/home/ray/test_scripts/call_request_resources.py", "--num-cpus=3",
 			})
 
 			// Autoscaler should create 3 workers

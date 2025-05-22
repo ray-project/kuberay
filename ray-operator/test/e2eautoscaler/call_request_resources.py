@@ -1,8 +1,13 @@
 import ray
 import time
+import argparse
 from ray.autoscaler.sdk import request_resources
 
-ray.init(namespace="default_namespace")
-request_resources(num_cpus=3)
-while len(ray.nodes()) != 4: # 1 head + 3 workers
+parser = argparse.ArgumentParser()
+parser.add_argument("--num-cpus", type=int, default=1)
+args = parser.parse_args()
+
+ray.init()
+request_resources(num_cpus=args.num_cpus)
+while len(ray.nodes()) != 1 + int(args.num_cpus):  # 1 head + N workers (assuming 1 CPU per worker)
     time.sleep(1)
