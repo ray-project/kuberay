@@ -1433,7 +1433,6 @@ func TestCreateHTTPRoute(t *testing.T) {
 			},
 		},
 	}
-
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-ray-cluster",
@@ -1443,6 +1442,12 @@ func TestCreateHTTPRoute(t *testing.T) {
 			Head: rayv1.HeadInfo{
 				ServiceName: "pending-service",
 			},
+		},
+	}
+	gateway := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "incremental-ray-service-gateway",
+			Namespace: "test-ns",
 		},
 	}
 
@@ -1457,28 +1462,14 @@ func TestCreateHTTPRoute(t *testing.T) {
 			name:           "valid HTTPRoute creation",
 			routedPercent:  int32(80),
 			rayService:     makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(1000)), ptr.To(int32(80)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster},
+			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster, gateway},
 			expectError:    false,
 		},
 		{
 			name:           "missing IncrementalUpgradeOptions",
 			routedPercent:  int32(50),
 			rayService:     makeIncrementalUpgradeRayService(false, "gateway-class", ptr.To(int32(50)), ptr.To(int32(120)), ptr.To(int32(50)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster},
-			expectError:    true,
-		},
-		{
-			name:           "missing active service",
-			routedPercent:  int32(0),
-			rayService:     makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(120)), ptr.To(int32(0)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{pendingService, pendingCluster, activeCluster},
-			expectError:    true,
-		},
-		{
-			name:           "missing pending service",
-			routedPercent:  int32(100),
-			rayService:     makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(120)), ptr.To(int32(100)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{activeService, pendingCluster, activeCluster},
+			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster, gateway},
 			expectError:    true,
 		},
 	}
@@ -1488,6 +1479,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(newScheme)
 			_ = rayv1.AddToScheme(newScheme)
+			_ = gwv1.AddToScheme(newScheme)
 
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
 			reconciler := RayServiceReconciler{
@@ -1531,7 +1523,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
 
-	// Create Services for RayService
+	// Create runtime objects for RayService
 	activeService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-service",
@@ -1566,10 +1558,16 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			},
 		},
 	}
+	gateway := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "incremental-ray-service-gateway",
+			Namespace: namespace,
+		},
+	}
 
 	// Prepare RayService instance
-	rayService := makeIncrementalUpgradeRayService(true, "gateway-name", ptr.To(int32(20)), ptr.To(int32(30)), ptr.To(int32(80)), ptr.To(metav1.Time{Time: time.Now()}))
-	runtimeObjects := []runtime.Object{rayService, activeService, pendingService, activeCluster, pendingCluster}
+	rayService := makeIncrementalUpgradeRayService(true, "test-gateway", ptr.To(int32(20)), ptr.To(int32(30)), ptr.To(int32(80)), ptr.To(metav1.Time{Time: time.Now()}))
+	runtimeObjects := []runtime.Object{rayService, activeService, pendingService, activeCluster, pendingCluster, gateway}
 
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	reconciler := RayServiceReconciler{
@@ -1617,14 +1615,17 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			route, err := reconciler.reconcileHTTPRoute(ctx, rayService)
 			require.NoError(t, err)
 			require.NotNil(t, route)
-
 			assert.Equal(t, tt.expectedRouteName, route.Name)
 			assert.Equal(t, namespace, route.Namespace)
-			require.Len(t, route.Spec.Rules, 1)
-			require.Len(t, route.Spec.Rules[0].BackendRefs, 2)
 
 			// Check updated weights match expected
 			assert.Equal(t, tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[0].Weight)
+			assert.Equal(t, 100-tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[1].Weight)
+
+			// Check ParentRef refers to the expected Gateway
+			parent := route.Spec.ParentRefs[0]
+			assert.Equal(t, gwv1.ObjectName("incremental-ray-service-gateway"), parent.Name)
+			assert.Equal(t, ptr.To(gwv1.Namespace("test-ns")), parent.Namespace)
 		})
 	}
 }

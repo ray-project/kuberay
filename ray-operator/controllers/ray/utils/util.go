@@ -684,18 +684,32 @@ func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTT
 	if httpRouteInstance == nil {
 		return false
 	}
-	for _, parent := range httpRouteInstance.Status.RouteStatus.Parents {
-		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) || *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+	for _, parent := range httpRouteInstance.Status.Parents {
+		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) {
 			continue
 		}
+		if parent.ParentRef.Namespace != nil && *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+			continue
+		}
+		hasAccepted := false
+		hasResolved := false
+
 		for _, condition := range parent.Conditions {
-			if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
-				return true
+			switch gwv1.RouteConditionType(condition.Type) {
+			case gwv1.RouteConditionAccepted:
+				if condition.Status == metav1.ConditionTrue {
+					hasAccepted = true
+				}
+			case gwv1.RouteConditionResolvedRefs:
+				if condition.Status == metav1.ConditionTrue {
+					hasResolved = true
+				}
 			}
 		}
+		if hasAccepted && hasResolved {
+			return true
+		}
 	}
-
-	// HTTPRoute should have at least one ready Parent ref
 	return false
 }
 
@@ -714,34 +728,39 @@ func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.I
 	return nil
 }
 
-// addGatewayListenersForServeService is a helper function to returns Gateway Listeners for Serve ports
-func GetGatewayListenersForServeService(serveService *corev1.Service) []gwv1.Listener {
-	if serveService == nil {
-		return nil
+// addGatewayListenersForRayService is a helper function to returns Gateway Listeners
+func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
+	// servePorts := serveService.Spec.Ports
+	listeners := make([]gwv1.Listener, 0, 1)
+	listenerName := fmt.Sprintf("%s-listener", rayServiceInstance.Name)
+	listener := gwv1.Listener{
+		Name:     gwv1.SectionName(listenerName),
+		Protocol: gwv1.HTTPProtocolType,      // only support HTTP
+		Port:     gwv1.PortNumber(int32(80)), // hardcoded to 80 for now
 	}
+	listeners = append(listeners, listener)
 
-	servePorts := serveService.Spec.Ports
-	listeners := make([]gwv1.Listener, 0, len(servePorts))
+	return listeners
 
 	// Add listener for Serve Ports
-	for _, servicePort := range servePorts {
-		// Conditionally format unique Listener name. servicePort.Name is required
-		// for services with multiple Service Ports.
-		var listenerName string
-		if servicePort.Name != "" {
-			listenerName = fmt.Sprintf("%s-%s-listener", serveService.Name, servicePort.Name)
-		} else {
-			listenerName = fmt.Sprintf("%s-listener", serveService.Name)
-		}
+	// for _, servicePort := range servePorts {
+	// 	// Conditionally format unique Listener name. servicePort.Name is required
+	// 	// for services with multiple Service Ports.
+	// 	var listenerName string
+	// 	if servicePort.Name != "" {
+	// 		listenerName = fmt.Sprintf("%s-%s-listener", serveService.Name, servicePort.Name)
+	// 	} else {
+	// 		listenerName = fmt.Sprintf("%s-listener", serveService.Name)
+	// 	}
 
-		listener := gwv1.Listener{
-			Name:     gwv1.SectionName(listenerName),
-			Protocol: gwv1.HTTPProtocolType, // only support HTTP
-			Port:     gwv1.PortNumber(servicePort.Port),
-		}
-		listeners = append(listeners, listener)
-	}
-	return listeners
+	// 	listener := gwv1.Listener{
+	// 		Name:     gwv1.SectionName(listenerName),
+	// 		Protocol: gwv1.HTTPProtocolType, // only support HTTP
+	// 		Port:     gwv1.PortNumber(servicePort.Port),
+	// 	}
+	// 	listeners = append(listeners, listener)
+	// }
+	// return listeners
 }
 
 // Check where we are running. We are trying to distinguish here whether

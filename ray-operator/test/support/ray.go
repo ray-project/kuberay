@@ -13,6 +13,8 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
@@ -222,3 +224,31 @@ func GetRayClusterWorkerGroupReplicaSum(cluster *rayv1.RayCluster) int32 {
 	}
 	return replicas
 }
+
+func GetHTTPRoute(t Test, namespace, name string) (*gwv1.HTTPRoute, error) {
+	return t.Client().Gateway().GatewayV1().HTTPRoutes(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func HTTPRoute(t Test, namespace, name string) func() (*gwv1.HTTPRoute, error) {
+	return func() (*gwv1.HTTPRoute, error) {
+		return GetHTTPRoute(t, namespace, name)
+	}
+}
+
+func GetGateway(t Test, namespace, name string) (*gwv1.Gateway, error) {
+	return t.Client().Gateway().GatewayV1().Gateways(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
+	return func() (*gwv1.Gateway, error) {
+		return GetGateway(t, namespace, name)
+	}
+}
+
+// func IsGatewayReady(gateway *gwv1.Gateway) bool {
+// 	return meta.IsStatusConditionTrue(gateway.Status.Conditions, string(gwv1.GatewayConditionAccepted))
+// }
+
+// func IsHTTPRouteReady(httpRoute *gwv1.HTTPRoute) bool {
+// 	return meta.IsStatusConditionTrue(httpRoute.Status.Conditions, string(gwv1.RouteConditionAccepted))
+// }

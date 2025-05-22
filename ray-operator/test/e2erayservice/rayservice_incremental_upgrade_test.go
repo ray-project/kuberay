@@ -55,13 +55,15 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Validate Gateway and HTTPRoute objects have been created for incremental upgrade.
-	gateway := rayService.Spec.Gateway
+	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
 
-	httpRoute := rayService.Spec.HTTPRoute
+	httpRoute, err := GetHTTPRoute(test, namespace.Name, fmt.Sprintf("%s-%s", "httproute", rayServiceName))
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(httpRoute).NotTo(BeNil())
 
-	// Create curl pod to test traffic routing between old and new RayClusters
+	// Create curl pod to test traffic routing through Gateway to RayService
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
@@ -98,6 +100,13 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Eventually(func(g Gomega) {
 		rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Expect(rayService.Status.PendingServiceStatus).NotTo(BeNil())
+		g.Expect(rayService.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(rayService.Status.PendingServiceStatus.TargetCapacity).NotTo(BeNil())
+		g.Expect(rayService.Status.ActiveServiceStatus).NotTo(BeNil())
+		g.Expect(rayService.Status.ActiveServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(rayService.Status.ActiveServiceStatus.TargetCapacity).NotTo(BeNil())
 
 		for _, val := range []int32{
 			*rayService.Status.PendingServiceStatus.TrafficRoutedPercent,
