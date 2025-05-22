@@ -664,8 +664,31 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
+			done := make(chan struct{})
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						time.Sleep(time.Second)
+					}
+					list, err := test.Client().Core().CoreV1().Pods(headPod.Namespace).List(test.Ctx(), metav1.ListOptions{})
+					if err != nil {
+						t.Logf("Failed to list pods: %v", err)
+						continue
+					}
+					t.Logf("Found %d pods", len(list.Items))
+					for _, pod := range list.Items {
+						t.Logf("Pod %s/%s %s", pod.Namespace, pod.Name, pod.Status.Phase)
+					}
+					t.Logf("=======")
+				}
+			}()
+
 			// Run the test script. It should exit without error.
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/do_not_remove_idles_for_pg.py"})
+			close(done)
 		})
 	}
 }
