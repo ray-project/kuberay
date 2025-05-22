@@ -359,6 +359,97 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 	}
 }
 
+func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
+	replicaTests := []struct {
+		name             string
+		initialMax       int32
+		updatedMax       int32
+		expectedReplicas int32
+		actorCount       int
+	}{
+		{
+			name:       "Scale up maxReplicas from 3 to 5",
+			initialMax: 3,
+			updatedMax: 5,
+		},
+		{
+			name:       "Scale down maxReplicas from 3 to 1",
+			initialMax: 3,
+			updatedMax: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		for _, rtc := range replicaTests {
+			t.Run(fmt.Sprintf("%s(%s)", tc.name, rtc.name), func(t *testing.T) {
+				test := With(t)
+				g := gomega.NewWithT(t)
+
+				namespace := test.NewTestNamespace()
+
+				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))
+				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+
+				groupName := "test-group"
+
+				rayClusterSpecAC := rayv1ac.RayClusterSpec().
+					WithEnableInTreeAutoscaling(true).
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{"num-cpus": "0"}).
+						WithTemplate(tc.HeadPodTemplateGetter())).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithReplicas(1).
+						WithMinReplicas(1).
+						WithMaxReplicas(rtc.initialMax).
+						WithGroupName(groupName).
+						WithRayStartParams(map[string]string{"num-cpus": "1"}).
+						WithTemplate(tc.WorkerPodTemplateGetter()))
+				rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+					WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+				rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+
+				// Wait for RayCluster to become ready and verify the number of available initial worker replicas (1)
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+					Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+
+				headPod, err := GetHeadPod(test, rayCluster)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+
+				// Create detached actors
+				for i := 0; i < int(max(rtc.updatedMax, rtc.initialMax)); i++ {
+					ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
+				}
+
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.initialMax)))
+				// Verify that the Autoscaler scales up/down to initialMax Pod count
+				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).
+					To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.initialMax)))
+
+				// Update maxReplicas
+				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+				rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(rtc.updatedMax)
+				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+
+				// Check that replicas is set to the updatedMax
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+					Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(rtc.updatedMax)))
+
+				// Verify that the Autoscaler scales up/down to updatedMax Pod count
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutShort).
+					Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(rtc.updatedMax)))
+			})
+		}
+	}
+}
+
 func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	// Only test with the V2 Autoscaler
 	tc := tests[1]
