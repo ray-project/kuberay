@@ -91,7 +91,7 @@ func TestRayServiceInfo(t *testing.T) {
 	}
 }
 
-func TestRayServiceReady(t *testing.T) {
+func TestRayServiceConditionReady(t *testing.T) {
 	testCases := []struct {
 		name         string
 		rayServices  []rayv1.RayService

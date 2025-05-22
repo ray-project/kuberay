@@ -15,10 +15,10 @@ import (
 
 // RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
-	rayServiceInfo  *prometheus.Desc
-	RayServiceReady *prometheus.Desc
-	client          client.Client
-	log             logr.Logger
+	rayServiceInfo           *prometheus.Desc
+	RayServiceConditionReady *prometheus.Desc
+	client                   client.Client
+	log                      logr.Logger
 }
 
 // NewRayServiceMetricsManager creates a new RayServiceMetricsManager instance.
@@ -30,9 +30,9 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 			[]string{"name", "namespace"},
 			nil,
 		),
-		RayServiceReady: prometheus.NewDesc(
+		RayServiceConditionReady: prometheus.NewDesc(
 			"kuberay_service_condition_ready",
-			"RayServiceReady means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
+			"Describes whether the RayService is ready. Ready means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
 			[]string{"name", "namespace", "condition"},
 			nil,
 		),
@@ -45,7 +45,7 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 // Describe implements prometheus.Collector interface Describe method.
 func (c *RayServiceMetricsManager) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.rayServiceInfo
-	ch <- c.RayServiceReady
+	ch <- c.RayServiceConditionReady
 }
 
 // Collect implements prometheus.Collector interface Collect method.
@@ -74,7 +74,7 @@ func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayServi
 func (c *RayServiceMetricsManager) collectRayServiceMetrics(service *rayv1.RayService, ch chan<- prometheus.Metric) {
 	ready := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
 	ch <- prometheus.MustNewConstMetric(
-		c.RayServiceReady,
+		c.RayServiceConditionReady,
 		prometheus.GaugeValue,
 		1,
 		service.Name,
