@@ -600,3 +600,72 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 		})
 	}
 }
+
+// This test verifies that the autoscaler does not remove idle nodes required by an upcoming placement group.
+// The following is how the test works with the do_not_remove_idles_for_pg.py script:
+// 1. We create a placement group `pg1` with a bundle [{"CPU": 1}].
+// 2. Autoscaler should scale up 1 worker Pod (`worker1`).
+// 3. We remove `pg1`.
+// 4. We create a placement group `pg2` with bundles [{"CPU": 1}, {"CPU": 1}].
+// 5. Autoscaler should scale up the second worker Pod (`worker2`), but it needs at least 15 seconds to be up and running due to the injected init container.
+// 6. We verify that `worker1` should not be terminated, although it is idle for more than the `IdleTimeoutSeconds`, which is 6 seconds.
+func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
+	for _, tc := range tests {
+
+		test := With(t)
+		g := gomega.NewWithT(t)
+
+		// Create a namespace
+		namespace := test.NewTestNamespace()
+
+		scriptsAC := newConfigMap(namespace.Name, files(test, "do_not_remove_idles_for_pg.py"))
+		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+		workerTemplate := tc.WorkerPodTemplateGetter()
+		workerTemplate.Spec.WithInitContainers(corev1ac.Container().
+			WithName("init-sleep").
+			WithImage(GetRayImage()).
+			// delay the worker startup to make sure it takes longer than the IdleTimeoutSeconds, which is 6 seconds,
+			// and longer than the default autoscaler update interval of 5 seconds.
+			WithCommand("bash", "-c", "sleep 15"))
+
+		test.T().Run(tc.name, func(_ *testing.T) {
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(6)).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(2).
+					WithGroupName("short-idle-group").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(workerTemplate))
+
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for RayCluster to become ready and verify there is no worker replica.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Run the test script. It should exit without error.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/do_not_remove_idles_for_pg.py"})
+		})
+	}
+}
