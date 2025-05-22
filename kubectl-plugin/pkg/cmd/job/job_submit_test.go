@@ -86,7 +86,7 @@ spec:
 			expectError: "ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true",
 		},
 		{
-			name: "shutdownAfterJobFinishes is false and ttlSecondsAfterFinished is not zero",
+			name: "shutdownAfterJobFinishes is true and ttlSecondsAfterFinished is not zero",
 			yamlContent: `apiVersion: ray.io/v1
 kind: RayJob
 metadata:
