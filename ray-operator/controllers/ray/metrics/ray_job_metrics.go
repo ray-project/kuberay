@@ -21,6 +21,7 @@ type RayJobMetricsObserver interface {
 type RayJobMetricsManager struct {
 	rayJobExecutionDurationSeconds *prometheus.GaugeVec
 	rayJobInfo                     *prometheus.Desc
+	rayJobDeploymentStatus         *prometheus.Desc
 	client                         client.Client
 	log                            logr.Logger
 }
@@ -40,6 +41,13 @@ func NewRayJobMetricsManager(ctx context.Context, client client.Client) *RayJobM
 			"kuberay_job_info",
 			"Metadata information about RayJob custom resources",
 			[]string{"name", "namespace"},
+			nil,
+		),
+		// rayJobDeploymentStatus is a gauge metric that indicates the current deployment status of the RayJob custom resources.
+		rayJobDeploymentStatus: prometheus.NewDesc(
+			"kuberay_job_deployment_status",
+			"The RayJobs current deployment status",
+			[]string{"name", "namespace", "deployment_status"},
 			nil,
 		),
 		client: client,
@@ -67,6 +75,7 @@ func (r *RayJobMetricsManager) Collect(ch chan<- prometheus.Metric) {
 
 	for _, rayJob := range rayJobList.Items {
 		r.collectRayJobInfo(&rayJob, ch)
+		r.collectRayJobDeploymentStatus(&rayJob, ch)
 	}
 }
 
@@ -81,5 +90,16 @@ func (r *RayJobMetricsManager) collectRayJobInfo(rayJob *rayv1.RayJob, ch chan<-
 		1,
 		rayJob.Name,
 		rayJob.Namespace,
+	)
+}
+
+func (r *RayJobMetricsManager) collectRayJobDeploymentStatus(rayJob *rayv1.RayJob, ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(
+		r.rayJobDeploymentStatus,
+		prometheus.GaugeValue,
+		1,
+		rayJob.Name,
+		rayJob.Namespace,
+		string(rayJob.Status.JobDeploymentStatus),
 	)
 }
