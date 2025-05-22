@@ -19,3 +19,5 @@ spec:
   endpoints:
     - port: http
       path: /metrics
+      # honorLabels ensures that Prometheus uses the labels provided by the exporter
+      honorLabels: true
