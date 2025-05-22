@@ -511,6 +511,13 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 }
 
 // This test verifies that the autoscaler does not remove idle nodes required by an upcoming placement group.
+// The following is how the test works with the do_not_remove_idles_for_pg.py script:
+// 1. We create a placement group `pg1` with a bundle [{"CPU": 1}].
+// 2. Autoscaler should scale up 1 worker Pod (`worker1`).
+// 3. We remove `pg1`.
+// 4. We create a placement group `pg2` with bundles [{"CPU": 1}, {"CPU": 1}].
+// 5. Autoscaler should scale up the second worker Pod (`worker2`), but it needs at least 15 seconds to be up and running due to the injected init container.
+// 6. We verify that `worker1` should not be terminated, although it is idle for more than the `IdleTimeoutSeconds`, which is 6 seconds.
 func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 	for _, tc := range tests {
 
@@ -529,25 +536,15 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 		workerTemplate.Spec.WithInitContainers(corev1ac.Container().
 			WithName("init-sleep").
 			WithImage(GetRayImage()).
-			// delay the worker startup to make sure it takes longer than the IdleTimeoutSeconds
+			// delay the worker startup to make sure it takes longer than the IdleTimeoutSeconds, which is 6 seconds,
 			// and longer than the default autoscaler update interval of 5 seconds.
-			WithCommand("bash", "-c", "sleep 10"))
+			WithCommand("bash", "-c", "sleep 15"))
 
 		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
 				WithRayVersion(GetRayVersion()).
 				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
-					// A short idle timeout (6 seconds) is configured specifically for this test to ensure
-					// that worker nodes are marked as idle quickly, allowing the test to trigger
-					// the autoscaler's scale-down logic efficiently. This is important because
-					// launching a new node in Kind requires at least 10 seconds to boot (we have added the delay above).
-					// By setting the idle timeout to 6 seconds (just above the default autoscaler update interval of 5 seconds),
-					// the worker node from the previous placement group becomes idle and eligible for removal right as
-					// the cluster is in the process of creating a new node.
-					// This timing ensures that the autoscaler is tested under realistic race conditions,
-					// verifying that it does not mistakenly remove the idle node that will shortly be needed
-					// for the upcoming placement group, even while a new node is still booting.
 					WithIdleTimeoutSeconds(6)).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
