@@ -786,6 +786,10 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 
 		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
+			// RayJob is Failed or Succeed, but Raycluster is still Running, maybe is a Ray's bug, we need to notice this until Ray fix this bug
+			if newRayJob.Status.Reason == rayv1.SubmitterGracePeriodExceeded {
+				r.Recorder.Event(newRayJob, corev1.EventTypeWarning, "SubmitterGracePeriodExceeded", newRayJobStatus.Message)
+			}
 		}
 
 		logger.Info("updateRayJobStatus", "old JobStatus", oldRayJobStatus.JobStatus, "new JobStatus", newRayJobStatus.JobStatus,
@@ -913,8 +917,7 @@ func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJo
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 		}
 		rayJob.Status.Reason = rayv1.SubmitterGracePeriodExceeded
-		rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the submitter gracePeriodTime. StartTime: %v. submitterGracePeriodTime: %d", rayJob.Status.StartTime, submitterGracePeriodTime)
-		// todo(dushulin): Add event to notice this maybe a ray bug
+		rayJob.Status.Message = fmt.Sprintf("Maybe Ray's bug. The RayJob has passed the submitter gracePeriodTime. StartTime: %v. submitterGracePeriodTime: %d", rayJob.Status.StartTime, submitterGracePeriodTime)
 		return true
 	}
 	return false
