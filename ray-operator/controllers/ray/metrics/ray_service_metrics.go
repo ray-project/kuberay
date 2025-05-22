@@ -15,10 +15,11 @@ import (
 
 // RayServiceMetricsManager implements the prometheus.Collector and RayServiceMetricsObserver interface to collect ray service metrics.
 type RayServiceMetricsManager struct {
-	rayServiceInfo           *prometheus.Desc
-	RayServiceConditionReady *prometheus.Desc
-	client                   client.Client
-	log                      logr.Logger
+	rayServiceInfo                       *prometheus.Desc
+	RayServiceConditionReady             *prometheus.Desc
+	RayServiceConditionUpgradeInProgress *prometheus.Desc
+	client                               client.Client
+	log                                  logr.Logger
 }
 
 // NewRayServiceMetricsManager creates a new RayServiceMetricsManager instance.
@@ -36,6 +37,12 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 			[]string{"name", "namespace", "condition"},
 			nil,
 		),
+		RayServiceConditionUpgradeInProgress: prometheus.NewDesc(
+			"kuberay_service_condition_upgrade_in_progress",
+			"Describes whether the RayService is upgrading. UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.",
+			[]string{"name", "namespace", "condition"},
+			nil,
+		),
 		client: client,
 		log:    ctrl.LoggerFrom(ctx),
 	}
@@ -46,6 +53,7 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 func (c *RayServiceMetricsManager) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.rayServiceInfo
 	ch <- c.RayServiceConditionReady
+	ch <- c.RayServiceConditionUpgradeInProgress
 }
 
 // Collect implements prometheus.Collector interface Collect method.
@@ -73,6 +81,7 @@ func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayServi
 
 func (c *RayServiceMetricsManager) collectRayServiceMetrics(service *rayv1.RayService, ch chan<- prometheus.Metric) {
 	ready := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
+	upgradeInProgress := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
 	ch <- prometheus.MustNewConstMetric(
 		c.RayServiceConditionReady,
 		prometheus.GaugeValue,
@@ -80,5 +89,13 @@ func (c *RayServiceMetricsManager) collectRayServiceMetrics(service *rayv1.RaySe
 		service.Name,
 		service.Namespace,
 		strconv.FormatBool(ready),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		c.RayServiceConditionUpgradeInProgress,
+		prometheus.GaugeValue,
+		1,
+		service.Name,
+		service.Namespace,
+		strconv.FormatBool(upgradeInProgress),
 	)
 }
