@@ -60,6 +60,7 @@ func NewRayJobMetricsManager(ctx context.Context, client client.Client) *RayJobM
 func (r *RayJobMetricsManager) Describe(ch chan<- *prometheus.Desc) {
 	r.rayJobExecutionDurationSeconds.Describe(ch)
 	ch <- r.rayJobInfo
+	ch <- r.rayJobDeploymentStatus
 }
 
 // Collect implements prometheus.Collector interface Collect method.
