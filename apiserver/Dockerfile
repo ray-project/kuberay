@@ -14,6 +14,7 @@ RUN go mod download
 COPY proto/ proto/
 COPY ray-operator/ ray-operator/
 COPY apiserver/ apiserver/
+COPY apiserversdk/ apiserversdk/
 
 WORKDIR /workspace/apiserver
 
