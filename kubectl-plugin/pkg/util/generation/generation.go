@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -25,20 +26,17 @@ const (
 )
 
 type RayClusterConfig struct {
-	Namespace   *string           `yaml:"namespace,omitempty"`
-	Name        *string           `yaml:"name,omitempty"`
-	Labels      map[string]string `yaml:"labels,omitempty"`
-	Annotations map[string]string `yaml:"annotations,omitempty"`
-
-	RayVersion     *string `yaml:"ray-version,omitempty"`
-	Image          *string `yaml:"image,omitempty"`
-	ServiceAccount *string `yaml:"service-account,omitempty"`
-
-	Head *Head `yaml:"head,omitempty"`
-
-	GKE *GKE `yaml:"gke,omitempty"`
-
-	WorkerGroups []WorkerGroup `yaml:"worker-groups,omitempty"`
+	Namespace      *string           `yaml:"namespace,omitempty"`
+	Name           *string           `yaml:"name,omitempty"`
+	Labels         map[string]string `yaml:"labels,omitempty"`
+	Annotations    map[string]string `yaml:"annotations,omitempty"`
+	RayVersion     *string           `yaml:"ray-version,omitempty"`
+	Image          *string           `yaml:"image,omitempty"`
+	ServiceAccount *string           `yaml:"service-account,omitempty"`
+	Head           *Head             `yaml:"head,omitempty"`
+	GKE            *GKE              `yaml:"gke,omitempty"`
+	Autoscaler     *Autoscaler       `yaml:"autoscaler,omitempty"`
+	WorkerGroups   []WorkerGroup     `yaml:"worker-groups,omitempty"`
 }
 
 type Head struct {
@@ -61,6 +59,40 @@ type WorkerGroup struct {
 	RayStartParams   map[string]string `yaml:"ray-start-params,omitempty"`
 	NodeSelectors    map[string]string `yaml:"node-selectors,omitempty"`
 	Replicas         int32             `yaml:"replicas"`
+}
+
+type AutoscalerVersion string
+
+const (
+	AutoscalerV1 AutoscalerVersion = "v1"
+	AutoscalerV2 AutoscalerVersion = "v2"
+)
+
+// String is used both by fmt.Print and by Cobra in help text
+func (e *AutoscalerVersion) String() string {
+	return string(*e)
+}
+
+// Set must have pointer receiver so it doesn't change the value of a copy
+func (e *AutoscalerVersion) Set(v string) error {
+	val := strings.ToLower(v)
+
+	switch val {
+	case string(AutoscalerV1), string(AutoscalerV2):
+		*e = AutoscalerVersion(val)
+		return nil
+	default:
+		return fmt.Errorf("must be one of %q or %q", AutoscalerV1, AutoscalerV2)
+	}
+}
+
+// Type is only used in help text
+func (e *AutoscalerVersion) Type() string {
+	return "enum"
+}
+
+type Autoscaler struct {
+	Version AutoscalerVersion `yaml:"version,omitempty"`
 }
 
 // GKE is a struct that contains the GKE specific configuration
@@ -189,14 +221,6 @@ func generateLimitResources(memory, ephemeralStorage, gpu, tpu *string) corev1.R
 }
 
 func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
-	// TODO: Look for better workaround/fixes for RayStartParams. Currently using `WithRayStartParams()` requires
-	// a non-empty map with valid key value pairs and will not populate the field with empty/nil values. This
-	// isn't ideal as it forces the generated RayCluster yamls to use those parameters.
-	headRayStartParams := map[string]string{
-		"dashboard-host": "0.0.0.0",
-	}
-	maps.Copy(headRayStartParams, rayClusterConfig.Head.RayStartParams)
-
 	headRequestResources := generateRequestResources(rayClusterConfig.Head.CPU, rayClusterConfig.Head.Memory, rayClusterConfig.Head.EphemeralStorage, rayClusterConfig.Head.GPU,
 		// TPU is not used for head request resources
 		nil)
@@ -215,16 +239,11 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 			workerGroup.Name = ptr.To(name)
 		}
 
-		workerRayStartParams := map[string]string{
-			"metrics-export-port": "8080",
-		}
-		maps.Copy(workerRayStartParams, workerGroup.RayStartParams)
-
 		workerRequestResources := generateRequestResources(workerGroup.CPU, workerGroup.Memory, workerGroup.EphemeralStorage, workerGroup.GPU, workerGroup.TPU)
 		workerLimitResources := generateLimitResources(workerGroup.Memory, workerGroup.EphemeralStorage, workerGroup.GPU, workerGroup.TPU)
 
 		workerGroupSpecs[i] = rayv1ac.WorkerGroupSpec().
-			WithRayStartParams(workerRayStartParams).
+			WithRayStartParams(workerGroup.RayStartParams).
 			WithGroupName(*workerGroup.Name).
 			WithReplicas(workerGroup.Replicas).
 			WithTemplate(corev1ac.PodTemplateSpec().
@@ -249,7 +268,7 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 	rayClusterSpec := rayv1ac.RayClusterSpec().
 		WithRayVersion(*rayClusterConfig.RayVersion).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(headRayStartParams).
+			WithRayStartParams(rayClusterConfig.Head.RayStartParams).
 			WithTemplate(corev1ac.PodTemplateSpec().
 				WithSpec(corev1ac.PodSpec().
 					WithNodeSelector(rayClusterConfig.Head.NodeSelectors).
@@ -263,6 +282,11 @@ func (rayClusterConfig *RayClusterConfig) generateRayClusterSpec() *rayv1ac.RayC
 							corev1ac.ContainerPort().WithContainerPort(8265).WithName("dashboard"),
 							corev1ac.ContainerPort().WithContainerPort(10001).WithName("client")))))).
 		WithWorkerGroupSpecs(workerGroupSpecs...)
+
+	if rayClusterConfig.Autoscaler != nil && rayClusterConfig.Autoscaler.Version != "" {
+		rayClusterSpec.WithEnableInTreeAutoscaling(true).
+			WithAutoscalerOptions(rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersion(rayClusterConfig.Autoscaler.Version)))
+	}
 
 	if rayClusterConfig.ServiceAccount != nil && *rayClusterConfig.ServiceAccount != "" {
 		rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName = ptr.To(*rayClusterConfig.ServiceAccount)

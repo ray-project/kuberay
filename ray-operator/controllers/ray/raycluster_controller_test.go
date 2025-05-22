@@ -42,6 +42,11 @@ import (
 )
 
 func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
+	const (
+		minReplicas int32 = 0
+		maxReplicas int32 = 4
+		replicas    int32 = 3
+	)
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -49,7 +54,6 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
@@ -63,11 +67,10 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:       ptr.To[int32](3),
-					MinReplicas:    ptr.To[int32](0),
-					MaxReplicas:    ptr.To[int32](4),
-					GroupName:      "small-group",
-					RayStartParams: map[string]string{},
+					Replicas:    ptr.To(replicas),
+					MinReplicas: ptr.To(minReplicas),
+					MaxReplicas: ptr.To(maxReplicas),
+					GroupName:   "small-group",
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
@@ -898,13 +901,23 @@ var _ = Context("Inside the default namespace", func() {
 	})
 
 	Describe("RayCluster with a multi-host worker group", Ordered, func() {
+		const (
+			minReplicas int32 = 0
+			maxReplicas int32 = 4
+			replicas    int32 = 3
+		)
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
 		numOfHosts := int32(4)
 		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
 		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		headPods := corev1.PodList{}
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+		numHeadPods := 1
+
 		workerPods := corev1.PodList{}
+		numWorkerPods := 3 * int(numOfHosts)
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
 		It("Verify RayCluster spec", func() {
@@ -927,11 +940,49 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
 		})
 
-		It("Check the number of worker Pods", func() {
-			numWorkerPods := 3 * int(numOfHosts)
+		It("Update all Pods to Running", func() {
+			// Note that this test assumes that headPods and workerPods are up-to-date.
+			Eventually(listResourceFunc(ctx, &headPods, headFilters...), time.Second*3, time.Millisecond*500).Should(Equal(numHeadPods), "headPods: %v", headPods.Items)
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			}
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("RayCluster's .status.state transitions to 'ready' when all worker Pods are Running and check pod counts are correct", func() {
+			desiredWorkerPods := replicas * numOfHosts
+			minWorkerPods := minReplicas * numOfHosts
+			maxWorkerPods := maxReplicas * numOfHosts
+
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+
+			Eventually(func() bool {
+				// "Replica" in status fields (e.g., DesiredWorkerReplicas) refers to the number of pods.
+				// The name is preserved for compatibility, but it semantically means pod count.
+				status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+				if status.DesiredWorkerReplicas != desiredWorkerPods ||
+					status.MinWorkerReplicas != minWorkerPods ||
+					status.MaxWorkerReplicas != maxWorkerPods {
+					return false
+				}
+				return true
+			}, time.Second*5, time.Millisecond*500).Should(BeTrue())
 		})
 
 		It("Simulate Ray Autoscaler scales down", func() {

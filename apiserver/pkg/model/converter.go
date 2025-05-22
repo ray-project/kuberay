@@ -146,6 +146,7 @@ func PopulateRayClusterSpec(spec rayv1api.RayClusterSpec) *api.ClusterSpec {
 		clusterSpec.EnableInTreeAutoscaling = true
 		clusterSpec.AutoscalerOptions = convertAutoscalingOptions(spec.AutoscalerOptions)
 	}
+	clusterSpec.HeadServiceAnnotations = spec.HeadServiceAnnotations
 	return clusterSpec
 }
 
@@ -526,7 +527,7 @@ func FromCrdToAPIServices(
 	services []*rayv1api.RayService,
 	serviceEventsMap map[string][]corev1.Event,
 ) []*api.RayService {
-	apiServices := make([]*api.RayService, 0)
+	apiServices := make([]*api.RayService, 0, len(services))
 	for _, service := range services {
 		apiServices = append(apiServices, FromCrdToAPIService(service, serviceEventsMap[service.Name]))
 	}
@@ -592,7 +593,7 @@ func PoplulateRayServiceStatus(
 func PopulateServeApplicationStatus(
 	serveApplicationStatuses map[string]rayv1api.AppStatus,
 ) []*api.ServeApplicationStatus {
-	appStatuses := make([]*api.ServeApplicationStatus, 0)
+	appStatuses := make([]*api.ServeApplicationStatus, 0, len(serveApplicationStatuses))
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
 			Name:                  appName,
@@ -608,7 +609,7 @@ func PopulateServeApplicationStatus(
 func PopulateServeDeploymentStatus(
 	serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus,
 ) []*api.ServeDeploymentStatus {
-	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
+	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0, len(serveDeploymentStatuses))
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{
 			DeploymentName: deploymentName,
@@ -621,7 +622,7 @@ func PopulateServeDeploymentStatus(
 }
 
 func PopulateRayServiceEvent(serviceName string, events []corev1.Event) []*api.RayServiceEvent {
-	serviceEvents := make([]*api.RayServiceEvent, 0)
+	serviceEvents := make([]*api.RayServiceEvent, 0, len(events))
 	for _, event := range events {
 		serviceEvent := &api.RayServiceEvent{
 			Id:             event.Name,

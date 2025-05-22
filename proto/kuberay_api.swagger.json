@@ -1289,6 +1289,13 @@
         "autoscalerOptions": {
           "$ref": "#/definitions/protoAutoscalerOptions",
           "description": "AutoscalerOptions specifies optional configuration for the Ray autoscaler."
+        },
+        "headServiceAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Optional. The annotations for the head service"
         }
       },
       "description": "Cluster specification."
@@ -2034,7 +2041,7 @@
         },
         "nextPageToken": {
           "type": "string",
-          "description": "The token to list the next page of RayServices.",
+          "description": "The token to list the next page of RayServices.\nIf there is no more service, this field will be empty.",
           "readOnly": true
         }
       }

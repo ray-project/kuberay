@@ -8,6 +8,7 @@ spec:
   rayVersion: '2.41.0'
   enableInTreeAutoscaling: true
   autoscalerOptions:
+    version: v2
     upscalingMode: Default
     idleTimeoutSeconds: 60
     imagePullPolicy: IfNotPresent
@@ -52,9 +53,6 @@ spec:
             requests:
               cpu: "1"
               memory: "2G"
-          env:
-            - name: RAY_enable_autoscaler_v2 # Pass env var for the autoscaler v2.
-              value: "1"
           volumeMounts:
             - mountPath: /home/ray/samples
               name: ray-example-configmap
@@ -68,7 +66,6 @@ spec:
                   path: detached_actor.py
                 - key: terminate_detached_actor.py
                   path: terminate_detached_actor.py
-        restartPolicy: Never # No restart to avoid reuse of pod for different ray nodes.
   workerGroupSpecs:
   # the Pod replicas in this group typed worker
   - replicas: 0
@@ -89,7 +86,6 @@ spec:
             requests:
               cpu: "1"
               memory: "1G"
-        restartPolicy: Never # Never restart a pod to avoid pod reuse
 ---
 apiVersion: v1
 kind: ConfigMap

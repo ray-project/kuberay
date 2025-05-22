@@ -30,20 +30,21 @@ type CreateClusterOptions struct {
 	headNodeSelectors      map[string]string
 	workerNodeSelectors    map[string]string
 	rayClusterConfig       *generation.RayClusterConfig
-	namespace              string
-	clusterName            string
+	headMemory             string
+	workerMemory           string
 	rayVersion             string
 	image                  string
 	headCPU                string
-	headMemory             string
+	namespace              string
 	headEphemeralStorage   string
 	headGPU                string
 	workerCPU              string
-	workerMemory           string
+	clusterName            string
 	workerEphemeralStorage string
 	workerGPU              string
 	workerTPU              string
 	configFile             string
+	autoscaler             generation.AutoscalerVersion
 	timeout                time.Duration
 	numOfHosts             int32
 	workerReplicas         int32
@@ -139,6 +140,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", util.DefaultNumOfHosts, "number of hosts in default worker group per replica")
+	cmd.Flags().Var(&options.autoscaler, "autoscaler", fmt.Sprintf("autoscaler to use, supports: %q, %q", generation.AutoscalerV1, generation.AutoscalerV2))
 	cmd.Flags().StringVar(&options.configFile, "file", "", "path to a YAML file containing Ray cluster configuration")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
@@ -305,6 +307,9 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 					RayStartParams:   options.workerRayStartParams,
 					NodeSelectors:    options.workerNodeSelectors,
 				},
+			},
+			Autoscaler: &generation.Autoscaler{
+				Version: options.autoscaler,
 			},
 		}
 	}
