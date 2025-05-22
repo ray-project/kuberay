@@ -500,56 +500,6 @@ func TestRayClusterAutoscalerRequestResources(t *testing.T) {
 	}
 }
 
-func TestRayClusterAutoscalerRequestResources(t *testing.T) {
-	for _, tc := range tests {
-
-		test := With(t)
-		g := gomega.NewWithT(t)
-
-		namespace := test.NewTestNamespace()
-
-		scriptsAC := newConfigMap(namespace.Name, files(test, "request_resources.py"))
-		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
-
-		test.T().Run(tc.name, func(_ *testing.T) {
-			rayClusterSpecAC := rayv1ac.RayClusterSpec().
-				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
-				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-					WithRayStartParams(map[string]string{"num-cpus": "0"}).
-					WithTemplate(tc.HeadPodTemplateGetter())).
-				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-					WithReplicas(0).
-					WithMinReplicas(0).
-					WithMaxReplicas(3).
-					WithIdleTimeoutSeconds(3600).
-					WithGroupName("request-resource-group").
-					WithRayStartParams(map[string]string{"num-cpus": "1"}).
-					WithTemplate(tc.WorkerPodTemplateGetter()))
-			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
-
-			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-			g.Expect(err).NotTo(gomega.HaveOccurred())
-			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
-
-			headPod, err := GetHeadPod(test, rayCluster)
-			g.Expect(err).NotTo(gomega.HaveOccurred())
-			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
-
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/request_resources.py"})
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
-		})
-	}
-}
-
 func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 	// Only test with the V2 Autoscaler
 	tc := tests[1]
