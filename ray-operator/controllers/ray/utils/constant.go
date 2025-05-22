@@ -151,8 +151,8 @@ const (
 	// If this environment variable is set,
 	// when JobStatus reaches the final state but JobDeploymentStatus is still Running,
 	// wait for the graceful exit time and then transfer JobDeploymentStatus to the final state, thereby releasing pod resources.
-	// unit second
-	SUBMITTER_GRACE_PERIOD_TIME = "SUBMITTER_GRACE_PERIOD_TIME"
+	SUBMITTER_GRACE_PERIOD_TIME         = "SUBMITTER_GRACE_PERIOD_TIME"
+	SUBMITTER_DEFAULT_GRACE_PERIOD_TIME = 300
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"

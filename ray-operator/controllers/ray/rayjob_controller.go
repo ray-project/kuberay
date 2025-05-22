@@ -903,21 +903,27 @@ func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJo
 		}
 	}
 	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
-		submitterGracePeriodTime := 300
-		if v, _ := strconv.Atoi(os.Getenv(utils.SUBMITTER_GRACE_PERIOD_TIME)); v > 0 {
-			submitterGracePeriodTime = v
+		submitterGracePeriodTime, err := strconv.Atoi(os.Getenv(utils.SUBMITTER_GRACE_PERIOD_TIME))
+		if err != nil {
+			logger.Info(
+				"Environment variable is not set, using default value of seconds",
+				"environmentVariable", utils.SUBMITTER_GRACE_PERIOD_TIME,
+				"defaultValue", utils.SUBMITTER_DEFAULT_GRACE_PERIOD_TIME,
+			)
+			submitterGracePeriodTime = utils.SUBMITTER_DEFAULT_GRACE_PERIOD_TIME
 		}
+
 		if time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(submitterGracePeriodTime) * time.Second)) {
 			return false
 		}
-		logger.Info("The RayJob has passed the submitter gracePeriodTime. Transition the status to `Failed` or `Complete`.", "StartTime", rayJob.Status.StartTime, "submitterGracePeriodTime", submitterGracePeriodTime)
+		logger.Info("The RayJob has passed the submitter complete grace period. Transition the status to `Failed` or `Complete`.", "StartTime", rayJob.Status.StartTime, "submitterGracePeriodTime", submitterGracePeriodTime)
 		if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 		} else if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded {
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 		}
 		rayJob.Status.Reason = rayv1.SubmitterGracePeriodExceeded
-		rayJob.Status.Message = fmt.Sprintf("Maybe Ray's bug. The RayJob has passed the submitter gracePeriodTime. StartTime: %v. submitterGracePeriodTime: %d", rayJob.Status.StartTime, submitterGracePeriodTime)
+		rayJob.Status.Message = fmt.Sprintf("Maybe Ray's bug. The RayJob has passed the submitter complete grace period. StartTime: %v. submitterGracePeriodTime: %d", rayJob.Status.StartTime, submitterGracePeriodTime)
 		return true
 	}
 	return false
