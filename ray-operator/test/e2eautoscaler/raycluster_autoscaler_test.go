@@ -565,7 +565,7 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 
 			// Autoscaler should create 3 workers
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically(">=", 3)))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically("==", 3)))
 			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(3))
 		})
 	}
