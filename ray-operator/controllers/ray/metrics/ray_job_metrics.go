@@ -46,7 +46,7 @@ func NewRayJobMetricsManager(ctx context.Context, client client.Client) *RayJobM
 		// rayJobDeploymentStatus is a gauge metric that indicates the current deployment status of the RayJob custom resources.
 		rayJobDeploymentStatus: prometheus.NewDesc(
 			"kuberay_job_deployment_status",
-			"The RayJobs current deployment status",
+			"The RayJob's current deployment status",
 			[]string{"name", "namespace", "deployment_status"},
 			nil,
 		),
