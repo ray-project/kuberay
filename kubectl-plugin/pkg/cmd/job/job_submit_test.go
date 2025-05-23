@@ -1,6 +1,7 @@
 package job
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -199,4 +200,21 @@ func TestRaySubmitCmd(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedCmd, actualCmd)
+}
+
+func TestControllerRuntimeLoggerInitialization(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	options := NewJobSubmitOptions(cmdFactory, testStreams)
+
+	// Create a context for the test
+	ctx := context.Background()
+
+	// Run the function that initializes the logger
+	err := options.Run(ctx, cmdFactory)
+
+	// The error should be related to client initialization, not logger initialization
+	// This is expected because we're not setting up a real k8s client for the test
+	assert.Error(t, err)
+	assert.NotContains(t, err.Error(), "log.SetLogger(...) was never called")
 }

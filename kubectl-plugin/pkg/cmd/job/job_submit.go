@@ -21,6 +21,8 @@ import (
 	"k8s.io/kubectl/pkg/cmd/portforward"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
@@ -288,6 +290,10 @@ func (options *SubmitJobOptions) Validate() error {
 }
 
 func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
+	// Initialize controller-runtime logger
+	logger := zap.New()
+	ctrl.SetLogger(logger)
+
 	k8sClients, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to initialize clientset: %w", err)
