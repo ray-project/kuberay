@@ -30,7 +30,7 @@ podman machine start
 podman machine list
 ```
 
-Expect the Podman Machine running with the follow CPU and MEMORY resources
+Expect the Podman Machine running with the following CPU and MEMORY resources
 
 ```text
 NAME                     VM TYPE     CREATED        LAST UP            CPUS        MEMORY      DISK SIZE

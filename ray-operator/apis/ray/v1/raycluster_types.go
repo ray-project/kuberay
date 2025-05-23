@@ -67,7 +67,7 @@ type RedisCredential struct {
 
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
-	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
+	// Template is the exact pod template used in K8s deployments, statefulsets, etc.
 	Template corev1.PodTemplateSpec `json:"template"`
 	// HeadService is the Kubernetes service of the head pod.
 	// +optional
@@ -132,10 +132,10 @@ type AutoscalerOptions struct {
 	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
+	// Image optionally overrides the autoscaler's container image. This override is provided for autoscaler testing and development.
 	// +optional
 	Image *string `json:"image,omitempty"`
-	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
+	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is provided for autoscaler testing and development.
 	// +optional
 	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// SecurityContext defines the security options the container should be run with.

@@ -1,9 +1,9 @@
 package common
 
 import (
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,28 +45,14 @@ func TestBuildRouteForHeadService(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test name
-	var builder strings.Builder
-	builder.WriteString(instanceWithIngressEnabled.ObjectMeta.Name)
-	builder.WriteString("-head-route")
-	if builder.String() != route.Name {
-		t.Fatalf("Error generating Route name. Expected `%v` but got `%v`", builder.String(), route.Name)
-	}
+	assert.Equal(t, instanceWithIngressEnabled.ObjectMeta.Name+"-head-route", route.Name)
+
 	// Test To subject
-	expectedKind := "Service"
-	if expectedKind != route.Spec.To.Kind {
-		t.Fatalf("Error generating Route kind. Expected `%v` but got `%v`", expectedKind, route.Spec.To.Kind)
-	}
+	assert.Equal(t, "Service", route.Spec.To.Kind)
+
 	// Test Service name
-	builder.Reset()
-	builder.WriteString(instanceWithIngressEnabled.ObjectMeta.Name)
-	builder.WriteString("-head-svc")
-	if builder.String() != route.Spec.To.Name {
-		t.Fatalf("Error generating service name. Expected `%v` but got `%v`", builder.String(), route.Spec.To.Name)
-	}
+	assert.Equal(t, instanceWithIngressEnabled.ObjectMeta.Name+"-head-svc", route.Spec.To.Name)
 
 	// Test Service port
-	expectedPort := intstr.FromInt(8265)
-	if route.Spec.Port.TargetPort != expectedPort {
-		t.Fatalf("Error generating service port. Expected `%v` but got `%v`", expectedPort, route.Spec.Port.TargetPort)
-	}
+	assert.Equal(t, intstr.FromInt(8265), route.Spec.Port.TargetPort)
 }
