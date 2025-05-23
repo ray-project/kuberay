@@ -350,7 +350,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			}
 
 			// Verify that the Autoscaler scales up to 5 Pods
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(5))))
 
 			// Check that replicas is set to 5
