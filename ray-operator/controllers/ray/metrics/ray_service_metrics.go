@@ -65,7 +65,7 @@ func (c *RayServiceMetricsManager) Collect(ch chan<- prometheus.Metric) {
 	}
 	for _, rayService := range rayServiceList.Items {
 		c.collectRayServiceInfo(&rayService, ch)
-		c.collectRayServiceMetrics(&rayService, ch)
+		c.collectRayServiceConditionMetrics(&rayService, ch)
 	}
 }
 
@@ -79,7 +79,7 @@ func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayServi
 	)
 }
 
-func (c *RayServiceMetricsManager) collectRayServiceMetrics(service *rayv1.RayService, ch chan<- prometheus.Metric) {
+func (c *RayServiceMetricsManager) collectRayServiceConditionMetrics(service *rayv1.RayService, ch chan<- prometheus.Metric) {
 	ready := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceReady))
 	ch <- prometheus.MustNewConstMetric(
 		c.rayServiceConditionReady,
