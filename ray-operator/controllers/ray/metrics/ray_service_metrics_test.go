@@ -91,7 +91,7 @@ func TestRayServiceInfo(t *testing.T) {
 	}
 }
 
-func TestRayServiceConditionReady(t *testing.T) {
+func TestRayServiceCondition(t *testing.T) {
 	testCases := []struct {
 		name         string
 		rayServices  []rayv1.RayService
@@ -132,6 +132,43 @@ func TestRayServiceConditionReady(t *testing.T) {
 			expectedInfo: []string{
 				`kuberay_service_condition_ready{condition="true",name="ray-service-1",namespace="default"} 1`,
 				`kuberay_service_condition_ready{condition="false",name="ray-service-2",namespace="default"} 1`,
+			},
+		},
+		{
+			name: "Test RayService upgrade in progress showing correctly",
+			rayServices: []rayv1.RayService{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ray-service-1",
+						Namespace: "default",
+					},
+					Status: rayv1.RayServiceStatuses{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(rayv1.UpgradeInProgress),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ray-service-2",
+						Namespace: "default",
+					},
+					Status: rayv1.RayServiceStatuses{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(rayv1.UpgradeInProgress),
+								Status: metav1.ConditionFalse,
+							},
+						},
+					},
+				},
+			},
+			expectedInfo: []string{
+				`kuberay_service_condition_upgrade_in_progress{condition="true",name="ray-service-1",namespace="default"} 1`,
+				`kuberay_service_condition_upgrade_in_progress{condition="false",name="ray-service-2",namespace="default"} 1`,
 			},
 		},
 	}
