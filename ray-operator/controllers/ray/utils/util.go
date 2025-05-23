@@ -237,6 +237,14 @@ func FormatInt32(n int32) string {
 	return strconv.FormatInt(int64(n), 10)
 }
 
+// SafeUint64ToInt64 safely converts a uint64 to int64. If the uint64 value exceeds the maximum int64 value, the function will panic.
+func SafeUint64ToInt64(n uint64) int64 {
+	if n > uint64(1<<63-1) {
+		panic(fmt.Sprintf("uint64 to int64 overflow: %d", n))
+	}
+	return int64(n)
+}
+
 // GetNamespace return namespace
 func GetNamespace(metaData metav1.ObjectMeta) string {
 	if metaData.Namespace == "" {
