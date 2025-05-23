@@ -345,7 +345,6 @@ func parseDefaultContainerCommand(s string) map[string][]string {
 			continue
 		}
 		command = strings.Replace(command, "\\:", ":", -1)
-		command = strings.TrimSuffix(command, ":")
 		defaultContainerCommands[containerOrder[i]] = strings.Split(command, " ")
 	}
 	return defaultContainerCommands
