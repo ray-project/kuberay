@@ -653,9 +653,10 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 
+	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
 	for attempt := 0; attempt < krc.retryCfg.MaxRetry; attempt++ {
 		response, err := krc.httpClient.Do(httpRequest)
-		// do not retry for Go Error
+		// Error in sending the request, treated as non-retryable error
 		if err != nil {
 			lastStatus = nil
 			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
@@ -664,48 +665,47 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 		defer func() {
 			if closeErr := response.Body.Close(); closeErr != nil {
-				klog.Errorf("Failed to close http response body because %+v", closeErr)
+				klog.Errorf("failed to close http response body because %+v", closeErr)
 			}
 		}()
 
 		bodyBytes, err := io.ReadAll(response.Body)
-		// do not retry for Go Error
+		// Error in reading response body, treated as non-retryable error
 		if err != nil {
 			lastStatus = nil
 			lastErr = fmt.Errorf("failed to read response body bytes: %w", err)
 			break
 		}
 
-		if response.StatusCode != http.StatusOK {
-			status, err := krc.extractStatus(bodyBytes)
-			// do not retry for Go Error
-			if err != nil {
-				lastStatus = nil
-				lastErr = err
-				break
-			}
-
-			lastStatus = status
-			lastErr = &KuberayAPIServerClientError{
-				HTTPStatusCode: response.StatusCode,
-			}
-
-			// Retry only for HTTP status in the list
-			if !isRetryableHTTPStatus(response.StatusCode) {
-				break
-			}
-
-			// Backoff before retry
-			sleep := krc.retryCfg.InitBackoff * time.Duration(math.Pow(krc.retryCfg.BackoffFactor, float64(attempt)))
-			if sleep > krc.retryCfg.MaxBackoff {
-				sleep = krc.retryCfg.MaxBackoff
-			}
-			time.Sleep(sleep)
-
-			continue
+		if response.StatusCode == http.StatusOK {
+			return bodyBytes, nil, nil
 		}
 
-		return bodyBytes, nil, nil
+		status, err := krc.extractStatus(bodyBytes)
+		// Error in extracting status from response body, treated as non-retryable error
+		if err != nil {
+			lastStatus = nil
+			lastErr = err
+			break
+		}
+
+		lastStatus = status
+		lastErr = &KuberayAPIServerClientError{
+			HTTPStatusCode: response.StatusCode,
+		}
+
+		// Retry only for HTTP status in the list
+		if !isRetryableHTTPStatus(response.StatusCode) {
+			break
+		}
+
+		// Backoff before retry
+		sleep := krc.retryCfg.InitBackoff * time.Duration(math.Pow(krc.retryCfg.BackoffFactor, float64(attempt)))
+		if sleep > krc.retryCfg.MaxBackoff {
+			sleep = krc.retryCfg.MaxBackoff
+		}
+		time.Sleep(sleep)
+
 	}
 	return nil, lastStatus, lastErr
 }
