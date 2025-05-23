@@ -1,0 +1,60 @@
+stages:
+  - lint
+  - build
+
+lint:
+  stage: lint
+  image: python:3.8
+  before_script:
+    - apt-get update && apt-get install -y curl tar
+    # 安装 golangci-lint
+    - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.60.3
+    - mv ./bin/golangci-lint /usr/local/bin/golangci-lint
+    # 安装 kubeconform
+    - curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
+    - tar -xzf kubeconform.tar.gz
+    - mv kubeconform /usr/local/bin/
+    # 安装 pre-commit
+    - pip install pre-commit
+  script:
+    - pre-commit run --all-files
+
+test_operator:
+  stage: test
+  image: golang:1.22
+  variables:
+    WORKING_DIRECTORY: ray-operator
+  before_script:
+    - apt-get update && apt-get install -y wget
+    # 安装 kubebuilder
+    - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
+    - mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
+  script:
+    - cd $WORKING_DIRECTORY
+    - go version
+    - go mod download
+    - make test
+
+build_operator:
+  stage: build
+  image: golang:1.22
+  variables:
+    WORKING_DIRECTORY: ray-operator
+  before_script:
+    - apt-get update && apt-get install -y wget
+    # 安装 kubebuilder
+    - wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.0.0/kubebuilder_$(go env GOOS)_$(go env GOARCH)
+    - mv kubebuilder_$(go env GOOS)_$(go env GOARCH) /usr/local/bin/kubebuilder
+    # 假设 runner 已有 docker
+  script:
+    - cd $WORKING_DIRECTORY
+    - go version
+    - go mod download
+    - make build
+    # 构建镜像
+    - export SHA_SHORT=$(git rev-parse --short HEAD)
+    - IMG=kuberay/operator:${SHA_SHORT} make docker-image
+    - docker save -o /tmp/operator.tar kuberay/operator:${SHA_SHORT}
+  artifacts:
+    paths:
+      - /tmp/operator.tar
