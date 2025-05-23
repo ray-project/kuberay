@@ -847,6 +847,44 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 }
 
+func TestBuildPod_WithAutoscalerEnabledWithDefaultCommand(t *testing.T) {
+	ctx := context.Background()
+
+	defaultContainerCommand := map[string][]string{
+		"ray-head":         {"I", "am", "head"},
+		"wait-gcs-ready":   {"I", "am", "wait", "gcs", "ready"},
+		"ray-worker":       {"I", "am", "worker"},
+		"autoscaler":       {"I", "am", "autoscaler"},
+		"rayjob-submitter": {"I", "am", "rayjob", "submitter"},
+	}
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379", defaultContainerCommand)
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", defaultContainerCommand)
+	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"I", "am", "head"}, headContainer.Command)
+
+	// Make sure autoscaler container existed and with the default command.
+	assert.Len(t, headPod.Spec.Containers, 2)
+	index := getAutoscalerContainerIndex(headPod)
+	assert.Equal(t, []string{"I", "am", "autoscaler"}, headPod.Spec.Containers[index].Command)
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", defaultContainerCommand)
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, defaultContainerCommand)
+	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"I", "am", "worker"}, workerContainer.Command)
+
+	// Make sure init container existed and with the default command.
+	assert.Len(t, workerPod.Spec.InitContainers, 1)
+	assert.Equal(t, []string{"I", "am", "wait", "gcs", "ready"}, workerPod.Spec.InitContainers[0].Command)
+}
+
 // Check that autoscaler container overrides work as expected.
 func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	ctx := context.Background()

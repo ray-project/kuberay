@@ -201,6 +201,14 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+
+	// Test 7: Check rayjob submitter with default container command
+	defaultContainerCommand := map[string][]string{
+		"rayjob-submitter": {"/bin/bash", "-v"},
+	}
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil, defaultContainerCommand)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/bin/bash", "-v"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
