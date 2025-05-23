@@ -61,7 +61,7 @@ start-local-apiserver: operator-image cluster load-operator-image deploy-operato
 
 # Build and start apiserver and curl from scratch.
 .PHONY: start-local-apiserver-e2e
-start-local-apiserver-e2e: operator-image cluster load-operator-image deploy-operator install-e2e
+start-local-apiserver-e2e: operator-image cluster load-operator-image deploy-operator install-apiserver-e2e
 
 .PHONY: clear-local-apiserver
 clear-local-apiserver: clean-cluster ## Clear local apiserver.
@@ -191,7 +191,7 @@ install: kustomize docker-image load-image  ## Install the kuberay api server wi
 
 # Install apiserver and curl for e2e test
 .PHONY: install-apiserver-e2e
-install-e2e: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
+install-apiserver-e2e: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
 	cd deploy/local/e2e && $(KUSTOMIZE) edit set image kuberay/apiserver=$(IMG)
 	$(KUSTOMIZE) build deploy/local/e2e | kubectl create -f -
 
@@ -200,7 +200,7 @@ uninstall: ## Remove the kuberay api server without security server from the K8s
 	$(KUSTOMIZE) build deploy/local/insecure | kubectl delete -f -
 
 .PHONY: uninstall-apiserver-e2e
-uninstall-e2e: ## Remove the kuberay api server for e2e from the K8s cluster specified in ~/.kube/config.
+uninstall-apiserver-e2e: ## Remove the kuberay api server for e2e from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build deploy/local/e2e | kubectl delete -f -
 
 .PHONY: install-secure
