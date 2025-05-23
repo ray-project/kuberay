@@ -213,9 +213,9 @@ type RayJobSpec struct {
 
 // RayJobStatus defines the observed state of RayJob
 type RayJobStatus struct {
-	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
+	// RayJobInfo contains information about the Ray job retrieved from the Ray dashboard.
 	// +optional
-	RayJobStatusInfo RayJobStatusInfo `json:"rayJobStatusInfo,omitempty"`
+	RayJobStatusInfo RayJobStatusInfo `json:"rayJobInfo,omitempty"`
 	// +optional
 	JobId string `json:"jobId,omitempty"`
 	// +optional
