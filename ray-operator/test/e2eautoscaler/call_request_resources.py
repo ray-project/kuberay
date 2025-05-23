@@ -9,5 +9,3 @@ args = parser.parse_args()
 
 ray.init()
 request_resources(num_cpus=args.num_cpus)
-while len(ray.nodes()) != 1 + int(args.num_cpus):  # 1 head + N workers (assuming 1 CPU per worker)
-    time.sleep(1)

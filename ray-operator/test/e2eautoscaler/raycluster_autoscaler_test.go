@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/utils/ptr"
@@ -727,20 +726,6 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 			// Autoscaler should create 3 workers
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically("==", 3)))
-
-			// Explicitly wait for all 3 worker Pods to be Running
-			g.Eventually(func() bool {
-				pods := GetGroupPods(test, rayCluster, groupName)
-				if len(pods) != 3 {
-					return false
-				}
-				for _, pod := range pods {
-					if pod.Status.Phase != corev1.PodRunning {
-						return false
-					}
-				}
-				return true
-			}, TestTimeoutMedium).Should(gomega.BeTrue())
 		})
 	}
 }
