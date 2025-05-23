@@ -51,7 +51,14 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
+	retryCfg := RetryConfig{
+		MaxRetry:      util.HTTPClientDefaultMaxRetry,
+		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		InitBackoff:   util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+	}
+
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		resp := &api.ListClustersResponse{
 			Clusters: []*api.Cluster{
@@ -79,7 +86,14 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
-	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, util.HTTPClientDefaultMaxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
+	retryCfg := RetryConfig{
+		MaxRetry:      util.HTTPClientDefaultMaxRetry,
+		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		InitBackoff:   util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+	}
+
+	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
 	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		// Intentionall returning a bad response.
 		return []byte("helloworld"), nil, nil
@@ -169,7 +183,14 @@ func TestAPIServerClientRetry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &http.Client{Transport: tt.transport}
-			client := NewKuberayAPIServerClient("baseurl", mockClient, tt.maxRetry, util.HTTPClientDefaultBackoffBase, util.HTTPClientDefaultInitBackoff, util.HTTPClientDefaultMaxBackoff)
+
+			retryCfg := RetryConfig{
+				MaxRetry:      tt.maxRetry,
+				BackoffFactor: util.HTTPClientDefaultBackoffBase,
+				InitBackoff:   util.HTTPClientDefaultInitBackoff,
+				MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+			}
+			client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
 
 			body, status, err := client.executeRequest(req, "http://mock/test")
 
@@ -213,13 +234,15 @@ func TestAPIServerClientBackoffTiming_RealSleep(t *testing.T) {
 
 	mockClient := &http.Client{Transport: mockTransport}
 
-	// Set short backoff time
-	initBackoff := 1 * time.Millisecond
-	backoffBase := 2.0
-	maxBackoff := 50 * time.Millisecond
-	maxRetry := 3
+	retryCfg := RetryConfig{
+		MaxRetry:      util.HTTPClientDefaultMaxRetry,
+		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		// Set short backoff time
+		InitBackoff: 1 * time.Millisecond,
+		MaxBackoff:  50 * time.Millisecond,
+	}
 
-	client := NewKuberayAPIServerClient("baseurl", mockClient, maxRetry, backoffBase, initBackoff, maxBackoff)
+	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
 
 	ctx := context.Background()
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)

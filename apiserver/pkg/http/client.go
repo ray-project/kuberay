@@ -18,6 +18,13 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
+type RetryConfig struct {
+	MaxRetry      int
+	BackoffFactor float64
+	InitBackoff   time.Duration
+	MaxBackoff    time.Duration
+}
+
 type KuberayAPIServerClient struct {
 	httpClient  *http.Client
 	marshaler   *protojson.MarshalOptions
@@ -29,10 +36,7 @@ type KuberayAPIServerClient struct {
 	// Store http request handling function for unit test purpose.
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
-	maxRetry           int
-	backoffBase        float64
-	initBackoff        time.Duration
-	maxBackoff         time.Duration
+	retryCfg           RetryConfig
 }
 
 type KuberayAPIServerClientError struct {
@@ -53,7 +57,7 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry int, backoffBase float64, initBackoff time.Duration, maxBackoff time.Duration) *KuberayAPIServerClient {
+func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, retryCfg RetryConfig) *KuberayAPIServerClient {
 	client := &KuberayAPIServerClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
@@ -71,10 +75,7 @@ func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, maxRetry
 			DiscardUnknown: false,
 			Resolver:       nil,
 		},
-		maxRetry:    maxRetry,
-		backoffBase: backoffBase,
-		initBackoff: initBackoff,
-		maxBackoff:  maxBackoff,
+		retryCfg: retryCfg,
 	}
 	client.executeHttpRequest = client.executeRequest
 	return client
@@ -652,7 +653,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 
-	for attempt := 0; attempt < krc.maxRetry; attempt++ {
+	for attempt := 0; attempt < krc.retryCfg.MaxRetry; attempt++ {
 		response, err := krc.httpClient.Do(httpRequest)
 		// do not retry for Go Error
 		if err != nil {
@@ -695,9 +696,9 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			}
 
 			// Backoff before retry
-			sleep := krc.initBackoff * time.Duration(math.Pow(krc.backoffBase, float64(attempt)))
-			if sleep > krc.maxBackoff {
-				sleep = krc.maxBackoff
+			sleep := krc.retryCfg.InitBackoff * time.Duration(math.Pow(krc.retryCfg.BackoffFactor, float64(attempt)))
+			if sleep > krc.retryCfg.MaxBackoff {
+				sleep = krc.retryCfg.MaxBackoff
 			}
 			time.Sleep(sleep)
 
