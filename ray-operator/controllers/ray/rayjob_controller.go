@@ -46,7 +46,8 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsManager *metrics.RayJobMetricsManager
+	RayJobMetricsManager     *metrics.RayJobMetricsManager
+	DefaultContainerCommands map[string][]string
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -507,7 +508,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
-			submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
+			submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance, r.options.DefaultContainerCommands)
 			if err != nil {
 				return err
 			}
@@ -521,7 +522,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
+func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, defaultContainerCommand map[string][]string) (corev1.PodTemplateSpec, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var submitterTemplate corev1.PodTemplateSpec
 
@@ -541,6 +542,9 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
+		if defaultCommand, ok := defaultContainerCommand["rayjob-submitter"]; ok && len(defaultCommand) != 0 {
+			submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = defaultCommand
+		}
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-ce", strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)

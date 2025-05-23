@@ -33,10 +33,15 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
-	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
-	NeuronCoreRayResourceName          = "neuron_cores"
-	TPUContainerResourceName           = "google.com/tpu"
-	TPURayResourceName                 = "TPU"
+
+	// KuberayDefaultContainerCommandEnvKey colon separated. It would set the default command on
+	// ray-head's container, wait-gcs-ready, ray-worker, autoscaler and rayjob submitter accordingly.
+	// If there are colons in the command, please use '\' to escape it.
+	KuberayDefaultContainerCommandEnvKey = "KUBERAY_DEFAULT_CONTAINER_COMMAND"
+	NeuronCoreContainerResourceName      = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName            = "neuron_cores"
+	TPUContainerResourceName             = "google.com/tpu"
+	TPURayResourceName                   = "TPU"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -159,7 +164,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string, defaultContainerCommands map[string][]string) corev1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -189,6 +194,9 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+		if defaultCommand, ok := defaultContainerCommands["autoscaler"]; ok && len(defaultCommand) != 0 {
+			autoscalerContainer.Command = defaultCommand
+		}
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -241,7 +249,7 @@ func getEnableProbesInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, defaultContainerCommand map[string][]string) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
@@ -302,6 +310,9 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
+		}
+		if defaultCommand, ok := defaultContainerCommand["wait-gcs-ready"]; ok && len(defaultCommand) != 0 {
+			initContainer.Command = defaultCommand
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
@@ -406,7 +417,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerCommands map[string][]string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -466,6 +477,10 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
 		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		containerName := fmt.Sprintf("ray-%s", rayNodeType)
+		if defaultCommand, ok := defaultContainerCommands[containerName]; ok && len(defaultCommand) != 0 {
+			pod.Spec.Containers[utils.RayContainerIndex].Command = defaultCommand
+		}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.

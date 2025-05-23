@@ -31,6 +31,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -246,12 +247,19 @@ func main() {
 			rayServiceMetricsManager,
 		)
 	}
+	var defaultContainerCommands map[string][]string
+	if s := os.Getenv(common.KuberayDefaultContainerCommandEnvKey); len(s) != 0 {
+		defaultContainerCommands = parseDefaultContainerCommand(s)
+	}
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
+		DefaultContainerCommands: defaultContainerCommands,
 	}
+	rayClusterOptions.DefaultContainerCommands = defaultContainerCommands
+
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
@@ -259,7 +267,8 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		RayJobMetricsManager: rayJobMetricsManager,
+		RayJobMetricsManager:     rayJobMetricsManager,
+		DefaultContainerCommands: defaultContainerCommands,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
@@ -322,4 +331,49 @@ func newLogEncoder(encoderType string) (zapcore.Encoder, error) {
 	}
 
 	return nil, fmt.Errorf("invalid encoder %q (must be 'json' or 'console')", encoderType)
+}
+
+func parseDefaultContainerCommand(s string) map[string][]string {
+	commands := splitUnescapedColons(s)
+	containerOrder := []string{"ray-head", "wait-gcs-ready", "ray-worker", "autoscaler", "rayjob-submitter"}
+	defaultContainerCommands := make(map[string][]string, len(containerOrder))
+	for i, command := range commands {
+		if i >= len(containerOrder) {
+			break
+		}
+		if len(command) == 0 {
+			continue
+		}
+		command = strings.Replace(command, "\\:", ":", -1)
+		command = strings.TrimSuffix(command, ":")
+		defaultContainerCommands[containerOrder[i]] = strings.Split(command, " ")
+	}
+	return defaultContainerCommands
+}
+
+func splitUnescapedColons(input string) []string {
+	var parts []string
+	var buf strings.Builder
+	escaped := false
+
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+
+		if ch == '\\' {
+			// Might be escaping the next character
+			escaped = !escaped
+			buf.WriteByte(ch)
+		} else if ch == ':' && !escaped {
+			// Unescaped colon: split here
+			parts = append(parts, buf.String())
+			buf.Reset()
+		} else {
+			escaped = false
+			buf.WriteByte(ch)
+		}
+	}
+
+	// Append the final part
+	parts = append(parts, buf.String())
+	return parts
 }
