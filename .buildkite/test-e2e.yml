@@ -90,7 +90,7 @@
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Build and start apiserver
     - pushd ../apiserver
-    - KIND_CLUSTER_NAME=kind KIND=kind make install-e2e
+    - KIND_CLUSTER_NAME=kind KIND=kind make install-apiserver-e2e
     - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
     # Run e2e tests and print KubeRay api server logs if tests fail
     - echo "--- START:Running e2e apiserver (nightly operator) tests"
