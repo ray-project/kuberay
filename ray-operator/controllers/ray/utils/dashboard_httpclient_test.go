@@ -100,7 +100,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+expectJobId,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &rayv1.RayJobInfo{
 					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
@@ -159,7 +159,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &rayv1.RayJobInfo{
 					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,

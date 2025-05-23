@@ -23,6 +23,7 @@ type RayJobStatusApplyConfiguration struct {
 	Failed              *int32                              `json:"failed,omitempty"`
 	RayClusterStatus    *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
 	ObservedGeneration  *int64                              `json:"observedGeneration,omitempty"`
+	RayJobStatusInfo    *RayJobStatusInfoApplyConfiguration `json:"rayJobInfo,omitempty"`
 }
 
 // RayJobStatusApplyConfiguration constructs a declarative configuration of the RayJobStatus type for use with
@@ -132,5 +133,13 @@ func (b *RayJobStatusApplyConfiguration) WithRayClusterStatus(value *RayClusterS
 // If called multiple times, the ObservedGeneration field is set to the value of the last call.
 func (b *RayJobStatusApplyConfiguration) WithObservedGeneration(value int64) *RayJobStatusApplyConfiguration {
 	b.ObservedGeneration = &value
+	return b
+}
+
+// WithRayJobStatusInfo sets the RayJobStatusInfo field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayJobStatusInfo field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithRayJobStatusInfo(value *RayJobStatusInfoApplyConfiguration) *RayJobStatusApplyConfiguration {
+	b.RayJobStatusInfo = value
 	return b
 }

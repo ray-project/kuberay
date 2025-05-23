@@ -188,6 +188,8 @@ RayJob is the Schema for the rayjobs API
 | `spec` _[RayJobSpec](#rayjobspec)_ |  |  |  |
 
 
+
+
 #### RayJobSpec
 
 
@@ -220,6 +222,8 @@ _Appears in:_
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
+
+
 
 
 
@@ -314,6 +318,19 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `valueFrom` _[EnvVarSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvarsource-v1-core)_ |  |  |  |
 | `value` _string_ |  |  |  |
+
+
+#### RuntimeEnvType
+
+_Underlying type:_ _object_
+
+
+
+
+
+_Appears in:_
+- [RayJobInfo](#rayjobinfo)
+
 
 
 #### ScaleStrategy

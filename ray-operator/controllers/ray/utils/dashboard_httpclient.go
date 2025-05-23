@@ -33,8 +33,8 @@ type RayDashboardClientInterface interface {
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*ServeApplicationStatus, error)
-	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
-	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
+	GetJobInfo(ctx context.Context, jobId string) (*rayv1.RayJobInfo, error)
+	ListJobs(ctx context.Context) (*[]rayv1.RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
 	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
@@ -206,35 +206,17 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 	return applicationStatuses, nil
 }
 
-type RuntimeEnvType map[string]interface{}
-
-// RayJobInfo is the response of "ray job status" api.
-// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
-// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/pydantic_models.py#L38-L107
-type RayJobInfo struct {
-	ErrorType    *string           `json:"error_type,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
-	JobStatus    rayv1.JobStatus   `json:"status,omitempty"`
-	Entrypoint   string            `json:"entrypoint,omitempty"`
-	JobId        string            `json:"job_id,omitempty"`
-	SubmissionId string            `json:"submission_id,omitempty"`
-	Message      string            `json:"message,omitempty"`
-	StartTime    uint64            `json:"start_time,omitempty"`
-	EndTime      uint64            `json:"end_time,omitempty"`
-}
-
 // RayJobRequest is the request body to submit.
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 // Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/common.py#L325-L353
 type RayJobRequest struct {
-	RuntimeEnv   RuntimeEnvType     `json:"runtime_env,omitempty"`
-	Metadata     map[string]string  `json:"metadata,omitempty"`
-	Resources    map[string]float32 `json:"entrypoint_resources,omitempty"`
-	Entrypoint   string             `json:"entrypoint"`
-	SubmissionId string             `json:"submission_id,omitempty"`
-	NumCpus      float32            `json:"entrypoint_num_cpus,omitempty"`
-	NumGpus      float32            `json:"entrypoint_num_gpus,omitempty"`
+	RuntimeEnv   rayv1.RuntimeEnvType `json:"runtime_env,omitempty"`
+	Metadata     map[string]string    `json:"metadata,omitempty"`
+	Resources    map[string]float32   `json:"entrypoint_resources,omitempty"`
+	Entrypoint   string               `json:"entrypoint"`
+	SubmissionId string               `json:"submission_id,omitempty"`
+	NumCpus      float32              `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32              `json:"entrypoint_num_gpus,omitempty"`
 }
 
 type RayJobResponse struct {
@@ -251,7 +233,7 @@ type RayJobLogsResponse struct {
 
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
-func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
+func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*rayv1.RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
@@ -272,7 +254,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 		return nil, err
 	}
 
-	var jobInfo RayJobInfo
+	var jobInfo rayv1.RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
@@ -281,7 +263,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
+func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]rayv1.RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
@@ -302,7 +284,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 		return nil, err
 	}
 
-	var jobInfo []RayJobInfo
+	var jobInfo []rayv1.RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
@@ -469,8 +451,8 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 	return req, nil
 }
 
-func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
-	var runtimeEnv RuntimeEnvType
+func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (rayv1.RuntimeEnvType, error) {
+	var runtimeEnv rayv1.RuntimeEnvType
 	if err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}

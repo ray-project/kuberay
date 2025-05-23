@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -221,7 +222,7 @@ func (s *RayJobSubmissionServiceServer) getRayClusterURL(ctx context.Context, re
 }
 
 // Internal method to convert RayJobInfo to JobSubmissionInfo
-func convertNodeInfo(info *utils.RayJobInfo) *api.JobSubmissionInfo {
+func convertNodeInfo(info *rayv1.RayJobInfo) *api.JobSubmissionInfo {
 	jsi := api.JobSubmissionInfo{
 		Entrypoint:   info.Entrypoint,
 		JobId:        info.JobId,

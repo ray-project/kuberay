@@ -98,6 +98,33 @@ type SubmitterConfig struct {
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
+type RuntimeEnvType map[string]interface{}
+
+// RayJobInfo is the response of "ray job status" api.
+// Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
+// Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/pydantic_models.py#L38-L107
+type RayJobInfo struct {
+	ErrorType    *string           `json:"error_type,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	RuntimeEnv   RuntimeEnvType    `json:"runtime_env,omitempty"`
+	JobStatus    JobStatus         `json:"status,omitempty"`
+	Entrypoint   string            `json:"entrypoint,omitempty"`
+	JobId        string            `json:"job_id,omitempty"`
+	SubmissionId string            `json:"submission_id,omitempty"`
+	Message      string            `json:"message,omitempty"`
+	StartTime    uint64            `json:"start_time,omitempty"`
+	EndTime      uint64            `json:"end_time,omitempty"`
+}
+
+// RayJobStatusInfo is a subset of RayJobInfo that is used to store in CR status.
+//
+// TODO(kevin85421): We can consider exposing the whole RayJobInfo in the CR status
+// after careful consideration. In that case, we can remove RayJobStatusInfo.
+type RayJobStatusInfo struct {
+	StartTime *metav1.Time `json:"start_time,omitempty"`
+	EndTime   *metav1.Time `json:"end_time,omitempty"`
+}
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
@@ -186,46 +213,20 @@ type RayJobSpec struct {
 
 // RayJobStatus defines the observed state of RayJob
 type RayJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// +optional
-	JobId string `json:"jobId,omitempty"`
-	// +optional
-	RayClusterName string `json:"rayClusterName,omitempty"`
-	// +optional
-	DashboardURL string `json:"dashboardURL,omitempty"`
-	// +optional
-	JobStatus JobStatus `json:"jobStatus,omitempty"`
-	// +optional
+	RayJobStatusInfo    RayJobStatusInfo    `json:"rayJobInfo,omitempty"`
+	StartTime           *metav1.Time        `json:"startTime,omitempty"`
+	Failed              *int32              `json:"failed,omitempty"`
+	Succeeded           *int32              `json:"succeeded,omitempty"`
+	EndTime             *metav1.Time        `json:"endTime,omitempty"`
+	JobStatus           JobStatus           `json:"jobStatus,omitempty"`
+	Message             string              `json:"message,omitempty"`
+	Reason              JobFailedReason     `json:"reason,omitempty"`
 	JobDeploymentStatus JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
-	// +optional
-	Reason JobFailedReason `json:"reason,omitempty"`
-	// +optional
-	Message string `json:"message,omitempty"`
-	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
-	// +optional
-	StartTime *metav1.Time `json:"startTime,omitempty"`
-	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
-	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
-	// or the submitter Job has failed.
-	// +optional
-	EndTime *metav1.Time `json:"endTime,omitempty"`
-	// Succeeded is the number of times this job succeeded.
-	// +kubebuilder:default:=0
-	// +optional
-	Succeeded *int32 `json:"succeeded,omitempty"`
-	// Failed is the number of times this job failed.
-	// +kubebuilder:default:=0
-	// +optional
-	Failed *int32 `json:"failed,omitempty"`
-	// RayClusterStatus is the status of the RayCluster running the job.
-	// +optional
-	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
-
-	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
-	// RayJob's generation, which is updated on mutation by the API Server.
-	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	JobId               string              `json:"jobId,omitempty"`
+	DashboardURL        string              `json:"dashboardURL,omitempty"`
+	RayClusterName      string              `json:"rayClusterName,omitempty"`
+	RayClusterStatus    RayClusterStatus    `json:"rayClusterStatus,omitempty"`
+	ObservedGeneration  int64               `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -243,10 +244,8 @@ type RayJobStatus struct {
 type RayJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec RayJobSpec `json:"spec,omitempty"`
-	// +optional
-	Status RayJobStatus `json:"status,omitempty"`
+	Spec              RayJobSpec   `json:"spec,omitempty"`
+	Status            RayJobStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

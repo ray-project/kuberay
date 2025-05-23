@@ -81,6 +81,12 @@ env_vars:
 		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
 
+		LogWithTimestamp(test.T(), "Checking that the RayJob status info has been set correctly.")
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayJob.Status.RayJobStatusInfo.StartTime).NotTo(BeNil())
+		g.Expect(rayJob.Status.RayJobStatusInfo.EndTime).NotTo(BeNil())
+
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
