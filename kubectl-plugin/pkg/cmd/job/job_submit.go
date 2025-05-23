@@ -180,7 +180,6 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
-	cmd.Flags().BoolVar(&options.shutdownAfterJobFinishes, "shutdown-after-job-finishes", false, "Shutdown the cluster after the job finishes")
 	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
 
 	return cmd
@@ -226,6 +225,14 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		}
 	}
 
+	if cmd.Flags().Changed("ttl-seconds-after-finished") {
+		options.shutdownAfterJobFinishes = true
+	}
+
+	if options.ttlSecondsAfterFinished < 0 {
+		return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
+	}
+
 	// Take care of case where there is a filename input
 	if options.fileName != "" {
 		info, err := os.Stat(options.fileName)
@@ -267,36 +274,18 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		}
 
 		if cmd.Flags().Changed("ttl-seconds-after-finished") {
-			if options.ttlSecondsAfterFinished < 0 {
-				return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
-			}
 			options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
-		}
-		if cmd.Flags().Changed("shutdown-after-job-finishes") {
-			if !options.shutdownAfterJobFinishes && options.ttlSecondsAfterFinished > 0 {
-				return fmt.Errorf("--ttl-seconds-after-finished is only supported when --shutdown-after-job-finishes is set to true")
-			}
 			options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
 		}
 
 		if options.RayJob.Spec.TTLSecondsAfterFinished < 0 {
 			return fmt.Errorf("ttlSecondsAfterFinished must be greater than or equal to 0")
 		}
-
 		if !options.RayJob.Spec.ShutdownAfterJobFinishes && options.RayJob.Spec.TTLSecondsAfterFinished > 0 {
 			return fmt.Errorf("ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true")
 		}
-
 	} else if strings.TrimSpace(options.rayjobName) == "" {
 		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
-	} else if options.fileName == "" {
-		if options.ttlSecondsAfterFinished < 0 {
-			return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
-		}
-
-		if !options.shutdownAfterJobFinishes && options.ttlSecondsAfterFinished > 0 {
-			return fmt.Errorf("--ttl-seconds-after-finished is only supported when --shutdown-after-job-finishes is set to true")
-		}
 	}
 
 	if options.workingDir == "" {
