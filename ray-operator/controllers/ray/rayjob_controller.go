@@ -788,12 +788,8 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
 
-		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed || rayv1.IsJobTerminal(newRayJobStatus.JobStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
-			// RayJob is Failed or Succeed, but Raycluster is still Running, maybe is a Ray's bug, we need to notice this until Ray fix this bug
-			if newRayJob.Status.Reason == rayv1.SubmitterGracePeriodExceeded {
-				r.Recorder.Event(newRayJob, corev1.EventTypeWarning, "SubmitterGracePeriodExceeded", newRayJobStatus.Message)
-			}
 		}
 
 		logger.Info("updateRayJobStatus", "old JobStatus", oldRayJobStatus.JobStatus, "new JobStatus", newRayJobStatus.JobStatus,
@@ -927,11 +923,6 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
 		submitterGracePeriodTime, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS))
 		if err != nil {
-			logger.Info(
-				"Environment variable is not set, using default value of seconds",
-				"environmentVariable", utils.RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS,
-				"defaultValue", utils.DEFAULT_RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS,
-			)
 			submitterGracePeriodTime = utils.DEFAULT_RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
 		}
 
