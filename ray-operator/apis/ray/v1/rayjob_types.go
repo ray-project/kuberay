@@ -213,6 +213,8 @@ type RayJobSpec struct {
 
 // RayJobStatus defines the observed state of RayJob
 type RayJobStatus struct {
+	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
+	// +optional
 	RayJobStatusInfo    RayJobStatusInfo    `json:"rayJobInfo,omitempty"`
 	StartTime           *metav1.Time        `json:"startTime,omitempty"`
 	Failed              *int32              `json:"failed,omitempty"`
