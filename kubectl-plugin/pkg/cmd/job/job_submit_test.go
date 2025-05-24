@@ -108,6 +108,17 @@ spec:
   submissionMode: 'InteractiveMode'`,
 			expectError: "ttlSecondsAfterFinished must be greater than or equal to 0",
 		},
+		{
+			name: "ttlSecondsAfterFinished is less than zero",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  shutdownAfterJobFinishes: true
+  ttlSecondsAfterFinished: 0
+  submissionMode: 'InteractiveMode'`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -157,6 +168,11 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 			rayjobName:              "rayjob-sample",
 			ttlSecondsAfterFinished: -10,
 			expectError:             "--ttl-seconds-after-finished must be greater than or equal to 0",
+		},
+		{
+			name:                    "ttlSecondsAfterFinished is equal to zero",
+			rayjobName:              "rayjob-sample",
+			ttlSecondsAfterFinished: 0,
 		},
 	}
 
@@ -276,6 +292,22 @@ spec:
 			expectSpec: map[string]any{
 				"ShutdownAfterJobFinishes": true,
 				"TTLSecondsAfterFinished":  int32(200),
+			},
+		},
+		{
+			name: "Set ttl-seconds-after-finished to zero",
+			yamlContent: `apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sample
+spec:
+  submissionMode: 'InteractiveMode'`,
+			flagMap: map[string]any{
+				"ttl-seconds-after-finished": 0,
+			},
+			expectSpec: map[string]any{
+				"ShutdownAfterJobFinishes": true,
+				"TTLSecondsAfterFinished":  int32(0),
 			},
 		},
 		{
