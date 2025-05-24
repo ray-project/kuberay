@@ -11889,6 +11889,15 @@ spec:
                       type: string
                     type: object
                 type: object
+              rayJobInfo:
+                properties:
+                  endTime:
+                    format: date-time
+                    type: string
+                  startTime:
+                    format: date-time
+                    type: string
+                type: object
               reason:
                 type: string
               startTime:

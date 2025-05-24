@@ -98,6 +98,16 @@ type SubmitterConfig struct {
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
+// `RayJobStatusInfo` is a subset of `RayJobInfo` from `dashboard_httpclient.py`.
+// This subset is used to store information in the CR status.
+//
+// TODO(kevin85421): We can consider exposing the whole `RayJobInfo` in the CR status
+// after careful consideration. In that case, we can remove `RayJobStatusInfo`.
+type RayJobStatusInfo struct {
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	EndTime   *metav1.Time `json:"endTime,omitempty"`
+}
+
 // RayJobSpec defines the desired state of RayJob
 type RayJobSpec struct {
 	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
@@ -188,6 +198,9 @@ type RayJobSpec struct {
 type RayJobStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
+	// +optional
+	RayJobStatusInfo RayJobStatusInfo `json:"rayJobInfo,omitempty"`
 	// +optional
 	JobId string `json:"jobId,omitempty"`
 	// +optional
