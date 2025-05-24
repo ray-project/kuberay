@@ -173,8 +173,11 @@ func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
 	}
 	// Since default environment variables are added in buildRayClusterSpec but omitted during CRD-to-API conversion,
 	// an empty variable may appear in the spec even if the user didn't set it.
-	if expected.HeadGroupSpec.Environment == nil {
-		expected.HeadGroupSpec.Environment = &api.EnvironmentVariables{}
+	if expected.GetHeadGroupSpec() == nil {
+		expected.HeadGroupSpec = &api.HeadGroupSpec{}
+	}
+	if expected.GetHeadGroupSpec().GetEnvironment() == nil {
+		expected.GetHeadGroupSpec().Environment = &api.EnvironmentVariables{}
 	}
 	for _, wg := range expected.GetWorkerGroupSpec() {
 		if wg.Environment == nil {
