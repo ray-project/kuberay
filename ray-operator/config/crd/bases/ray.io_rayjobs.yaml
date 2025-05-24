@@ -11889,7 +11889,7 @@ spec:
                       type: string
                     type: object
                 type: object
-              rayJobStatusInfo:
+              rayJobInfo:
                 properties:
                   endTime:
                     format: date-time

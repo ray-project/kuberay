@@ -98,8 +98,8 @@ type SubmitterConfig struct {
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 
-// `RayJobStatusInfo` is a subset of `RayJobInfo` in `dashboard_httpclient.py` that is used
-// to store in CR status.
+// `RayJobStatusInfo` is a subset of `RayJobInfo` from `dashboard_httpclient.py`.
+// This subset is used to store information in the CR status.
 //
 // TODO(kevin85421): We can consider exposing the whole `RayJobInfo` in the CR status
 // after careful consideration. In that case, we can remove `RayJobStatusInfo`.
@@ -200,7 +200,7 @@ type RayJobStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
 	// +optional
-	RayJobStatusInfo RayJobStatusInfo `json:"rayJobStatusInfo,omitempty"`
+	RayJobStatusInfo RayJobStatusInfo `json:"rayJobInfo,omitempty"`
 	// +optional
 	JobId string `json:"jobId,omitempty"`
 	// +optional

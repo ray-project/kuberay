@@ -10,7 +10,7 @@ import (
 // RayJobStatusApplyConfiguration represents a declarative configuration of the RayJobStatus type for use
 // with apply.
 type RayJobStatusApplyConfiguration struct {
-	RayJobStatusInfo    *RayJobStatusInfoApplyConfiguration `json:"rayJobStatusInfo,omitempty"`
+	RayJobStatusInfo    *RayJobStatusInfoApplyConfiguration `json:"rayJobInfo,omitempty"`
 	JobId               *string                             `json:"jobId,omitempty"`
 	RayClusterName      *string                             `json:"rayClusterName,omitempty"`
 	DashboardURL        *string                             `json:"dashboardURL,omitempty"`
