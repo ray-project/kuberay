@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -184,6 +185,8 @@ func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
 			wg.Environment = &api.EnvironmentVariables{}
 		}
 	}
+	fmt.Println("expected:", expected)
+	fmt.Println("actual:", actual)
 	return proto.Equal(expected, actual)
 }
 
@@ -218,5 +221,7 @@ func jobSpecEqual(expected, actual *api.RayJob) bool {
 	expectedCopy.StartTime, actualCopy.StartTime = nil, nil
 	expectedCopy.EndTime, actualCopy.EndTime = nil, nil
 	expectedCopy.RayClusterName, actualCopy.RayClusterName = "", ""
+	// Version will be ignored if cluster spec not provided
+	expectedCopy.Version, actualCopy.Version = "", ""
 	return proto.Equal(expectedCopy, actualCopy)
 }
