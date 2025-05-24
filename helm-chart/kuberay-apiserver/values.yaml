@@ -102,6 +102,8 @@ rbacEnable: true
 # the chart can be installed by users with permissions to a single namespace only
 singleNamespaceInstall: false
 
+enableAPIServerV2: true
+
 # security definition. Comment it out if security is not required
 security:
   proxy:
