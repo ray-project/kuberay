@@ -11891,10 +11891,10 @@ spec:
                 type: object
               rayJobStatusInfo:
                 properties:
-                  end_time:
+                  endTime:
                     format: date-time
                     type: string
-                  start_time:
+                  startTime:
                     format: date-time
                     type: string
                 type: object

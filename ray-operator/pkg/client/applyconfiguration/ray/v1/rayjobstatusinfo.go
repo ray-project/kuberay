@@ -9,8 +9,8 @@ import (
 // RayJobStatusInfoApplyConfiguration represents a declarative configuration of the RayJobStatusInfo type for use
 // with apply.
 type RayJobStatusInfoApplyConfiguration struct {
-	StartTime *metav1.Time `json:"start_time,omitempty"`
-	EndTime   *metav1.Time `json:"end_time,omitempty"`
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	EndTime   *metav1.Time `json:"endTime,omitempty"`
 }
 
 // RayJobStatusInfoApplyConfiguration constructs a declarative configuration of the RayJobStatusInfo type for use with

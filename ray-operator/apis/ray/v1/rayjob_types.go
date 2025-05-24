@@ -104,8 +104,8 @@ type SubmitterConfig struct {
 // TODO(kevin85421): We can consider exposing the whole `RayJobInfo` in the CR status
 // after careful consideration. In that case, we can remove `RayJobStatusInfo`.
 type RayJobStatusInfo struct {
-	StartTime *metav1.Time `json:"start_time,omitempty"`
-	EndTime   *metav1.Time `json:"end_time,omitempty"`
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	EndTime   *metav1.Time `json:"endTime,omitempty"`
 }
 
 // RayJobSpec defines the desired state of RayJob
