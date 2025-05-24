@@ -661,7 +661,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastStatus *rpcStatus.Status
 
 	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
-	for attempt := 0; attempt < krc.retryCfg.MaxRetry; attempt++ {
+	for attempt := 0; attempt <= krc.retryCfg.MaxRetry; attempt++ {
 		response, err := krc.httpClient.Do(httpRequest)
 		// Error in sending the request, treated as non-retryable error
 		if err != nil {
