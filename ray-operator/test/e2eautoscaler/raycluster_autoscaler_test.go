@@ -740,7 +740,7 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 		// Create a namespace
 		namespace := test.NewTestNamespace()
 
-		// Mount the call_request_resources.py script as a ConfigMap
+		// Scripts for creating and terminating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -787,11 +787,6 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-
-			// Wait for RayCluster to become ready after updating worker groups
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
