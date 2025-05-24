@@ -740,18 +740,20 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 		// Create a namespace
 		namespace := test.NewTestNamespace()
 
-		// Mount the call_request_resources.py script as a ConfigMap
+		// Mount the create_detached_actor.py and terminate_detached_actor.py scripts as a ConfigMap
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 		test.T().Run(tc.name, func(_ *testing.T) {
-			groupName := "first-group"
-			newGroupName := "new-group"
+			cpuGroup := "cpu-group"
+			gpuGroup := "gpu-group"
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -760,8 +762,8 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 					WithReplicas(0).
 					WithMinReplicas(0).
 					WithMaxReplicas(3).
-					WithGroupName(groupName).
-					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
+					WithGroupName(cpuGroup).
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
@@ -775,41 +777,52 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
 			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
-			// Add a worker group
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Create a CPU-only detached actor, and a worker should be created.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "cpu_actor", "--num-cpus=1"})
+			g.Eventually(GroupPods(test, rayCluster, cpuGroup), TestTimeoutMedium).Should(gomega.HaveLen(1))
+
+			// Update the CPU worker group to have 1 replica to avoid overwriting the existing worker group
+			// when adding the new GPU worker group.
+			//
+			// TODO(kevin85421): Autoscaler V2 will get stuck forever if the CPU worker group's replicas are overwritten
+			// from 1 to 0. Ideally, Autoscaler V2 should still work no matter whether `Replicas` is overwritten or not.
+			//
+			// (1) Create a CPU detached actor
+			// (2) Autoscaler updates the CPU worker group's `Replicas` to 1
+			// (3) Add a GPU worker group and overwrite the CPU worker group's `Replicas` to 0
+			// (4) At this point, the CPU worker group's `Replicas` is 0 in CR, but the CPU worker Pod still exists
+			// (5) Create a GPU detached actor, and the GPU worker group's `Replicas` will be updated to 1
+			// (6) Create a CPU detached actor, and the CPU worker group's `Replicas` will be updated to 1 instead of 2
+			rayClusterAC.Spec.WorkerGroupSpecs[0].WithReplicas(1)
+
+			// Add a GPU worker group
 			rayClusterAC.Spec.WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithMaxReplicas(3).
-				WithGroupName(newGroupName).
-				WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 2}'`}).
+				WithGroupName(gpuGroup).
+				WithRayStartParams(map[string]string{"num-cpus": "0", "num-gpus": "1"}).
 				WithTemplate(tc.WorkerPodTemplateGetter()))
 
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
-			// Wait for RayCluster to become ready after updating worker groups
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+			// Create a GPU-only detached actor, and a worker should be created.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "gpu_actor", "--num-gpus=1", "--num-cpus=0"})
+			g.Eventually(GroupPods(test, rayCluster, gpuGroup), TestTimeoutMedium).Should(gomega.HaveLen(1))
 
-			headPod, err := GetHeadPod(test, rayCluster)
-			g.Expect(err).NotTo(gomega.HaveOccurred())
-			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+			// Create a CPU-only detached actor, and a worker should be created.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "cpu_actor_2", "--num-cpus=1"})
+			g.Eventually(GroupPods(test, rayCluster, cpuGroup), TestTimeoutMedium).Should(gomega.HaveLen(2))
 
-			// Create a detached actor, and a worker should be created.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "custom_actor", "--num-custom-resources=2"})
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
-
-			// Verify that the created node is in the new worker group
-			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.BeEmpty())
-			g.Expect(GetGroupPods(test, rayCluster, newGroupName)).To(gomega.HaveLen(1))
-
-			// Terminate a detached actor, and a worker should be deleted.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "custom_actor"})
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+			// Terminate the GPU-only detached actor, and a worker should be deleted.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "gpu_actor"})
+			g.Eventually(GroupPods(test, rayCluster, gpuGroup), TestTimeoutMedium).Should(gomega.BeEmpty())
 		})
 	}
 }
