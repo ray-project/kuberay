@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -179,4 +180,17 @@ func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
 		}
 	}
 	return proto.Equal(expected, actual)
+}
+
+func serviceSpecEqual(expected, actual *api.RayService) bool {
+	if !clusterSpecEqual(expected.ClusterSpec, actual.ClusterSpec) {
+		return false
+	}
+	expectedClusterSpec, actualClusterSpec, actualServiceStatus, actualCreatedAt, actualDeleteAt := expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt
+	expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt = nil, nil, nil, nil, nil
+	fmt.Println("expected:", expected)
+	fmt.Println("actual:", actual)
+	equal := proto.Equal(expected, actual)
+	expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt = expectedClusterSpec, actualClusterSpec, actualServiceStatus, actualCreatedAt, actualDeleteAt
+	return equal
 }

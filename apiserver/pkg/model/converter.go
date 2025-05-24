@@ -550,6 +550,7 @@ func FromCrdToAPIService(service *rayv1api.RayService, events []corev1.Event) *a
 		Name:           service.Name,
 		Namespace:      service.Namespace,
 		User:           service.Labels[util.RayClusterUserLabelKey],
+		Version:        service.Spec.RayClusterSpec.RayVersion,
 		ServeConfig_V2: service.Spec.ServeConfigV2,
 		ClusterSpec:    PopulateRayClusterSpec(service.Spec.RayClusterSpec),
 		ServiceUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(
