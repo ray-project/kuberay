@@ -52,11 +52,13 @@ tests:
       singleNamespaceInstall: false
       enableAPIServerV2: true
     asserts:
-      - containsDocument:
+      - documentIndex: 0
+        containsDocument:
           apiVersion: rbac.authorization.k8s.io/v1
           kind: ClusterRole
           name: kuberay-apiserver
-      - containsDocument:
+      - documentIndex: 1
+        containsDocument:
           apiVersion: rbac.authorization.k8s.io/v1
           kind: ClusterRole
           name: kuberay-apiserver-service-access
