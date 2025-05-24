@@ -7,7 +7,6 @@ metadata:
   name: kuberay-operator-monitor
   namespace: prometheus-system
 spec:
-  jobLabel: kuberay-operator
   # Only select Kubernetes Services in the "default" namespace.
   namespaceSelector:
     matchNames:
