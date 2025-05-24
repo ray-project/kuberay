@@ -84,7 +84,7 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 }
 
-func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
+func TestUpdateServeConfigAndRayClusterSpec(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -186,7 +186,7 @@ func TestRayServiceInPlaceUpdateWithRayClusterSpec(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
-func TestRayServiceInPlaceUpdateWithRayClusterSpecWithoutZeroDowntime(t *testing.T) {
+func TestUpdateServeConfigAndRayClusterSpecWithUpgradeDisabled(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
