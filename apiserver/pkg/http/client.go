@@ -19,10 +19,11 @@ import (
 )
 
 type RetryConfig struct {
-	MaxRetry      int
-	BackoffFactor float64
-	InitBackoff   time.Duration
-	MaxBackoff    time.Duration
+	MaxRetry       int
+	BackoffFactor  float64
+	InitBackoff    time.Duration
+	MaxBackoff     time.Duration
+	OverallTimeout time.Duration
 }
 
 type KuberayAPIServerClient struct {
@@ -649,6 +650,12 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 }
 
 func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
+	// Set the overall timeout
+	ctx, cancel := context.WithTimeout(context.Background(), krc.retryCfg.OverallTimeout)
+	defer cancel()
+
+	httpRequest = httpRequest.WithContext(ctx)
+
 	// Record the last error and status got
 	var lastErr error
 	var lastStatus *rpcStatus.Status
@@ -704,7 +711,13 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		if sleep > krc.retryCfg.MaxBackoff {
 			sleep = krc.retryCfg.MaxBackoff
 		}
-		time.Sleep(sleep)
+
+		select {
+		case <-time.After(sleep):
+			// continue to the next retry after backoff
+		case <-ctx.Done():
+			return nil, lastStatus, fmt.Errorf("overall timeout reached: %w", ctx.Err())
+		}
 
 	}
 	return nil, lastStatus, lastErr

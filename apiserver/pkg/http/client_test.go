@@ -52,10 +52,11 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
 	retryCfg := RetryConfig{
-		MaxRetry:      util.HTTPClientDefaultMaxRetry,
-		BackoffFactor: util.HTTPClientDefaultBackoffBase,
-		InitBackoff:   util.HTTPClientDefaultInitBackoff,
-		MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+		MaxRetry:       util.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+		InitBackoff:    util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: util.HTTPClientOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
@@ -87,10 +88,11 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
 	retryCfg := RetryConfig{
-		MaxRetry:      util.HTTPClientDefaultMaxRetry,
-		BackoffFactor: util.HTTPClientDefaultBackoffBase,
-		InitBackoff:   util.HTTPClientDefaultInitBackoff,
-		MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+		MaxRetry:       util.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+		InitBackoff:    util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: util.HTTPClientOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
@@ -185,10 +187,11 @@ func TestAPIServerClientRetry(t *testing.T) {
 			mockClient := &http.Client{Transport: tt.transport}
 
 			retryCfg := RetryConfig{
-				MaxRetry:      tt.maxRetry,
-				BackoffFactor: util.HTTPClientDefaultBackoffBase,
-				InitBackoff:   util.HTTPClientDefaultInitBackoff,
-				MaxBackoff:    util.HTTPClientDefaultMaxBackoff,
+				MaxRetry:       tt.maxRetry,
+				BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+				InitBackoff:    util.HTTPClientDefaultInitBackoff,
+				MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+				OverallTimeout: util.HTTPClientOverallTimeout,
 			}
 			client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
 
@@ -220,7 +223,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 	}
 }
 
-func TestAPIServerClientBackoffTiming_RealSleep(t *testing.T) {
+func TestAPIServerClientBackoff(t *testing.T) {
 	statusErr := &rpcStatus.Status{Code: 13, Message: "Internal server error"}
 
 	mockTransport := &mockTransport{
@@ -238,8 +241,9 @@ func TestAPIServerClientBackoffTiming_RealSleep(t *testing.T) {
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
 		BackoffFactor: util.HTTPClientDefaultBackoffBase,
 		// Set short backoff time
-		InitBackoff: 1 * time.Millisecond,
-		MaxBackoff:  50 * time.Millisecond,
+		InitBackoff:    1 * time.Millisecond,
+		MaxBackoff:     50 * time.Millisecond,
+		OverallTimeout: util.HTTPClientOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
@@ -259,4 +263,40 @@ func TestAPIServerClientBackoffTiming_RealSleep(t *testing.T) {
 	expectedMin := 3 * time.Millisecond
 
 	require.GreaterOrEqual(t, elapsed, expectedMin)
+}
+
+func TestAPIServerClientOverallTimeout(t *testing.T) {
+	statusErr := &rpcStatus.Status{Code: 13, Message: "Internal server error"}
+
+	mockTransport := &mockTransport{
+		statusSequence: []int{
+			http.StatusServiceUnavailable,
+			http.StatusServiceUnavailable,
+			http.StatusOK,
+		},
+		statusErr: statusErr,
+	}
+
+	mockClient := &http.Client{Transport: mockTransport}
+
+	retryCfg := RetryConfig{
+		MaxRetry:      util.HTTPClientDefaultMaxRetry,
+		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		InitBackoff:   1 * time.Millisecond,
+		MaxBackoff:    50 * time.Millisecond,
+		// Set short overall timeout so that the timeout error will be raised
+		OverallTimeout: 1 * time.Millisecond,
+	}
+
+	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
+
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
+	require.NoError(t, err)
+
+	_, _, err = client.executeRequest(req, "http://mock/test")
+
+	// Expect a timeout error
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "timeout")
 }
