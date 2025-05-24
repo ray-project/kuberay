@@ -1365,7 +1365,6 @@ func TestCreateGateway(t *testing.T) {
 	reconciler := &RayServiceReconciler{
 		Client: fakeClient,
 	}
-	ctx := context.TODO()
 
 	tests := []struct {
 		rayService          *rayv1.RayService
@@ -1392,7 +1391,7 @@ func TestCreateGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gw, err := reconciler.createGateway(ctx, tt.rayService)
+			gw, err := reconciler.createGateway(tt.rayService)
 			if tt.expectErr {
 				require.Error(t, err)
 				assert.Nil(t, gw)
@@ -1685,7 +1684,7 @@ func TestReconcileGateway(t *testing.T) {
 		{
 			name: "update existing Gateway if desired Gateway spec differs",
 			setupGateway: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
-				desired, err := r.createGateway(ctx, rs)
+				desired, err := r.createGateway(rs)
 				require.NoError(t, err)
 
 				existing := desired.DeepCopy()

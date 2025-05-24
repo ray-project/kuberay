@@ -8,9 +8,9 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
-	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
 type Client interface {

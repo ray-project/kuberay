@@ -10,11 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
