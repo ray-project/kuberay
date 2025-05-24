@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -90,6 +91,23 @@ func CurlRayServicePod(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
+func curlHeadPodWithRayServicePath(t Test,
+	rayCluster *rayv1.RayCluster,
+	curlPod *corev1.Pod,
+	curlPodContainerName,
+	rayServicePath string,
+	body string,
+) (bytes.Buffer, bytes.Buffer) {
+	cmd := []string{
+		"curl",
+		"-X", "GET",
+		"-H", "Content-Type: application/json",
+		fmt.Sprintf("%s-head-svc.%s.svc.cluster.local:8000%s", rayCluster.Name, rayCluster.Namespace, rayServicePath),
+		"-d", body,
+	}
+	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
+}
+
 func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
       - name: fruit_app
@@ -161,4 +179,20 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
 								})))))),
 		)
+}
+
+func waitingForRayClusterSwitch(g *WithT, test Test, rayService *rayv1.RayService, oldRayClusterName string) {
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+	// Assert that the active RayCluster is eventually different
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to switch to a new cluster", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) string {
+		return rayService.Status.ActiveServiceStatus.RayClusterName
+	}, Not(Equal(oldRayClusterName))))
+
+	LogWithTimestamp(test.T(), "Verifying RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
+	rayService, err := GetRayService(test, rayService.Namespace, rayService.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(IsRayServiceUpgrading(rayService)).To(BeFalse())
 }
