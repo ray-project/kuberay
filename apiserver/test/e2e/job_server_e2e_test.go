@@ -215,6 +215,7 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec")
 				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
@@ -643,6 +644,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec")
 				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
@@ -721,6 +723,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
+	require.True(t, jobSpecEqual(testJobRequest.Job, actualJob), "Job spec should match the input spec")
 	waitForRayJobInExpectedStatuses(t, tCtx, testJobRequest.Job.Name, expectedJobStatues)
 	return testJobRequest
 }

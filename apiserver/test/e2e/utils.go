@@ -168,12 +168,15 @@ func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, servic
 }
 
 func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
+	if expected == nil || actual == nil {
+		return expected == nil && actual == nil
+	}
 	// Since default environment variables are added in buildRayClusterSpec but omitted during CRD-to-API conversion,
 	// an empty variable may appear in the spec even if the user didn't set it.
 	if expected.HeadGroupSpec.Environment == nil {
 		expected.HeadGroupSpec.Environment = &api.EnvironmentVariables{}
 	}
-	for _, wg := range expected.WorkerGroupSpec {
+	for _, wg := range expected.GetWorkerGroupSpec() {
 		if wg.Environment == nil {
 			wg.Environment = &api.EnvironmentVariables{}
 		}
@@ -182,12 +185,35 @@ func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
 }
 
 func serviceSpecEqual(expected, actual *api.RayService) bool {
-	if !clusterSpecEqual(expected.ClusterSpec, actual.ClusterSpec) {
+	if !clusterSpecEqual(expected.GetClusterSpec(), actual.GetClusterSpec()) {
 		return false
 	}
-	expectedClusterSpec, actualClusterSpec, actualServiceStatus, actualCreatedAt, actualDeleteAt := expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt
-	expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt = nil, nil, nil, nil, nil
-	equal := proto.Equal(expected, actual)
-	expected.ClusterSpec, actual.ClusterSpec, actual.RayServiceStatus, actual.CreatedAt, actual.DeleteAt = expectedClusterSpec, actualClusterSpec, actualServiceStatus, actualCreatedAt, actualDeleteAt
-	return equal
+	expectedCopy := proto.Clone(expected).(*api.RayService)
+	actualCopy := proto.Clone(actual).(*api.RayService)
+	// Clear fields that are not relevant for equality check
+	expectedCopy.ClusterSpec, actualCopy.ClusterSpec = nil, nil
+	expectedCopy.RayServiceStatus, actualCopy.RayServiceStatus = nil, nil
+	expectedCopy.CreatedAt, actualCopy.CreatedAt = nil, nil
+	expectedCopy.DeleteAt, actualCopy.DeleteAt = nil, nil
+	// Compare the rest of the fields
+	return proto.Equal(expectedCopy, actualCopy)
+}
+
+func jobSpecEqual(expected, actual *api.RayJob) bool {
+	if !clusterSpecEqual(expected.GetClusterSpec(), actual.GetClusterSpec()) {
+		return false
+	}
+	expectedCopy := proto.Clone(expected).(*api.RayJob)
+	actualCopy := proto.Clone(actual).(*api.RayJob)
+	// Clear fields that are not relevant for equality check
+	expectedCopy.ClusterSpec, actualCopy.ClusterSpec = nil, nil
+	expectedCopy.CreatedAt, actualCopy.CreatedAt = nil, nil
+	expectedCopy.DeleteAt, actualCopy.DeleteAt = nil, nil
+	expectedCopy.JobStatus, actualCopy.JobStatus = "", ""
+	expectedCopy.JobDeploymentStatus, actualCopy.JobDeploymentStatus = "", ""
+	expectedCopy.Message, actualCopy.Message = "", ""
+	expectedCopy.StartTime, actualCopy.StartTime = nil, nil
+	expectedCopy.EndTime, actualCopy.EndTime = nil, nil
+	expectedCopy.RayClusterName, actualCopy.RayClusterName = "", ""
+	return proto.Equal(expectedCopy, actualCopy)
 }
