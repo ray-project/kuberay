@@ -99,7 +99,7 @@ func withHttpClient() contextOption {
 			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 			InitBackoff:    util.HTTPClientDefaultInitBackoff,
 			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
-			OverallTimeout: util.HTTPClientOverallTimeout,
+			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 		}
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)

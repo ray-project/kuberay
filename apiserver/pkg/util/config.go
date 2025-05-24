@@ -34,7 +34,7 @@ const (
 	HTTPClientDefaultMaxBackoff  = 10 * time.Second
 
 	// Overall timeout for retries
-	HTTPClientOverallTimeout = 30 * time.Second
+	HTTPClientDefaultOverallTimeout = 30 * time.Second
 )
 
 const (

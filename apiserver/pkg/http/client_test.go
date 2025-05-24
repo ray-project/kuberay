@@ -25,12 +25,16 @@ type mockTransport struct {
 	returnDoError  bool
 }
 
+// RoundTrip returns the mock HTTP response. When all statuses in
+// m.statusSequence are consumed, it returns status 200 (OK).
 func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 	if m.returnDoError {
 		return nil, errors.New("mock go error")
 	}
 
 	index := m.callCount
+	m.callCount++
+
 	status := http.StatusOK
 	if index < len(m.statusSequence) {
 		status = m.statusSequence[index]
@@ -41,8 +45,6 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 		statusMsg := fmt.Sprintf(`{"code": %d, "message": "%s"}`, m.statusErr.Code, m.statusErr.Message)
 		respBody = statusMsg
 	}
-
-	m.callCount++
 
 	return &http.Response{
 		StatusCode: status,
@@ -56,7 +58,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
 		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
-		OverallTimeout: util.HTTPClientOverallTimeout,
+		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
@@ -92,7 +94,7 @@ func TestUnmarshalHttpResponseFails(t *testing.T) {
 		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
 		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
-		OverallTimeout: util.HTTPClientOverallTimeout,
+		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
@@ -137,7 +139,8 @@ func TestAPIServerClientRetry(t *testing.T) {
 			name:     "Retries and succeeds on third retry",
 			maxRetry: 3,
 			transport: &mockTransport{
-				statusSequence: []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusOK},
+				// For 4 attempts (maxRetry + 1)
+				statusSequence: []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusOK},
 				body:           succeedBody,
 			},
 			expectErr:    nil,
@@ -148,7 +151,8 @@ func TestAPIServerClientRetry(t *testing.T) {
 			name:     "Fails after max retries with internal server error (retryable)",
 			maxRetry: 2,
 			transport: &mockTransport{
-				statusSequence: []int{http.StatusServiceUnavailable, http.StatusInternalServerError},
+				// For 3 attempts (maxRetry + 1)
+				statusSequence: []int{http.StatusServiceUnavailable, http.StatusInternalServerError, http.StatusInternalServerError},
 				statusErr:      statusErr,
 			},
 			expectStatus: statusErr,
@@ -158,7 +162,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 			expectBody: nil,
 		},
 		{
-			name:     "Stops on first non-retryable error (403 Forbidden)",
+			name:     "Stops on non-retryable HTTP status code (403 Forbidden)",
 			maxRetry: 3,
 			transport: &mockTransport{
 				statusSequence: []int{http.StatusForbidden},
@@ -171,7 +175,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 			expectBody: nil,
 		},
 		{
-			name:     "Stops on Go error",
+			name:     "Stops on non-retryable error",
 			maxRetry: 3,
 			transport: &mockTransport{
 				returnDoError: true,
@@ -191,7 +195,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 				BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 				InitBackoff:    util.HTTPClientDefaultInitBackoff,
 				MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
-				OverallTimeout: util.HTTPClientOverallTimeout,
+				OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 			}
 			client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
 
@@ -243,7 +247,7 @@ func TestAPIServerClientBackoff(t *testing.T) {
 		// Set short backoff time
 		InitBackoff:    1 * time.Millisecond,
 		MaxBackoff:     50 * time.Millisecond,
-		OverallTimeout: util.HTTPClientOverallTimeout,
+		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
