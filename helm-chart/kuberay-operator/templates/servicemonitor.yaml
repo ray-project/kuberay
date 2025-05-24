@@ -1,0 +1,18 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "kuberay-operator.fullname" . }}
+spec:
+  endpoints:
+    - path: /metrics
+      targetPort: http
+      interval: {{ .Values.serviceMonitor.interval | default "30s" }}
+      honorLabels: {{ .Values.serviceMonitor.honorLabels | default true }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
+{{- end }}
