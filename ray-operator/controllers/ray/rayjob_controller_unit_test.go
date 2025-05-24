@@ -27,6 +27,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
@@ -201,6 +202,13 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+
+	// Test 7: Check with feature flag login bash enabled
+	features.SetFeatureGateDuringTest(t, features.RayClusterLoginBash, true)
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/bin/bash", "-l"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	features.SetFeatureGateDuringTest(t, features.RayClusterLoginBash, false)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
