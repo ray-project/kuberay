@@ -18,6 +18,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -259,7 +260,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         []string{"/bin/bash", "-c", "--"},
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -302,6 +303,9 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
+		}
+		if features.Enabled(features.RayClusterLoginBash) {
+			initContainer.Command = []string{"/bin/bash", "-lc", "--"}
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
@@ -465,7 +469,10 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
+		if features.Enabled(features.RayClusterLoginBash) {
+			pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		}
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -534,7 +541,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 		},
 		Command: []string{
 			"/bin/bash",
-			"-lc",
+			"-c",
 			"--",
 		},
 		Args: []string{
@@ -550,6 +557,9 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				corev1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
+	}
+	if features.Enabled(features.RayClusterLoginBash) {
+		container.Command = []string{"/bin/bash", "-lc", "--"}
 	}
 	return container
 }
