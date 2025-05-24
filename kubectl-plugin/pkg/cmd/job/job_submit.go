@@ -288,7 +288,6 @@ func (options *SubmitJobOptions) Validate() error {
 }
 
 func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factory) error {
-
 	k8sClients, err := client.NewClient(factory)
 	if err != nil {
 		return fmt.Errorf("failed to initialize clientset: %w", err)
