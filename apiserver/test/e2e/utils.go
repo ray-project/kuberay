@@ -5,7 +5,6 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -185,8 +184,6 @@ func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
 			wg.Environment = &api.EnvironmentVariables{}
 		}
 	}
-	fmt.Println("expected:", expected)
-	fmt.Println("actual:", actual)
 	return proto.Equal(expected, actual)
 }
 
@@ -201,7 +198,6 @@ func serviceSpecEqual(expected, actual *api.RayService) bool {
 	expectedCopy.RayServiceStatus, actualCopy.RayServiceStatus = nil, nil
 	expectedCopy.CreatedAt, actualCopy.CreatedAt = nil, nil
 	expectedCopy.DeleteAt, actualCopy.DeleteAt = nil, nil
-	// Compare the rest of the fields
 	return proto.Equal(expectedCopy, actualCopy)
 }
 
