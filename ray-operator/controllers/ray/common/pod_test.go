@@ -20,6 +20,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var testMemoryLimit = resource.MustParse("1Gi")
@@ -191,7 +192,7 @@ var autoscalerContainer = corev1.Container{
 	},
 	Command: []string{
 		"/bin/bash",
-		"-lc",
+		"-c",
 		"--",
 	},
 	Args: []string{
@@ -845,6 +846,44 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	assert.True(t, ok, "Expected serve label is not present")
 	assert.Equal(t, utils.EnableRayClusterServingServiceTrue, val, "Wrong serve label value")
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
+}
+
+func TestBuildPod_WithFeatureFlagLoginBash(t *testing.T) {
+	ctx := context.Background()
+	features.SetFeatureGateDuringTest(t, features.RayClusterLoginBash, true)
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.RayServiceCRD, "")
+
+	// make sure head container with login bash.
+	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, headContainer.Command)
+
+	// make sure autoscaler container with login bash.
+	index := getAutoscalerContainerIndex(headPod)
+	autoscalerContainer := headPod.Spec.Containers[index]
+	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, autoscalerContainer.Command)
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP)
+
+	// make sure worker container with login bash.
+	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
+	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, workerContainer.Command)
+
+	// make init container with login bash.
+	initContainers := workerPod.Spec.InitContainers
+	for _, initContainer := range initContainers {
+		if initContainer.Name == "wait-gcs-ready" {
+			assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, initContainer.Command)
+		}
+	}
 }
 
 // Check that autoscaler container overrides work as expected.
