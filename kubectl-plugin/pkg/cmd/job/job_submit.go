@@ -470,17 +470,45 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Error while setting up `ray job submit` stderr: %w", err)
 	}
 
+	// Create error channel to monitor ray job submit command
+	cmdErrChan := make(chan error, 1)
+
 	go func() {
 		fmt.Printf("Running Ray submit job command...\n")
 		err := cmd.Start()
 		if err != nil {
-			log.Fatalf("error occurred while running command %s: %v", fmt.Sprint(raySubmitCmd), err)
+			cmdErrChan <- fmt.Errorf("error occurred while starting command %s: %w", fmt.Sprint(raySubmitCmd), err)
+			return
+		}
+		cmdErrChan <- cmd.Wait()
+	}()
+
+	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
+	rayCmdStdErrScanner := bufio.NewScanner(rayCmdStdErr)
+	go func() {
+		for rayCmdStdOutScanner.Scan() {
+			currOutToken := rayCmdStdOutScanner.Text()
+			if currOutToken != "" {
+				fmt.Fprintf(options.ioStreams.Out, "%s\n", currOutToken)
+			}
+		}
+	}()
+	go func() {
+		for rayCmdStdErrScanner.Scan() {
+			currErrToken := rayCmdStdErrScanner.Text()
+			if currErrToken != "" {
+				fmt.Fprintf(options.ioStreams.ErrOut, "%s\n", currErrToken)
+			}
 		}
 	}()
 
 	var rayJobID string
 	if options.submissionID != "" {
 		rayJobID = options.submissionID
+		// Wait for command to finish when using predefined submission ID
+		if cmdErr := <-cmdErrChan; cmdErr != nil {
+			return fmt.Errorf("ray job submit command failed: %w", cmdErr)
+		}
 	} else {
 		// Create a channel to receive rayJobID from the API
 		rayJobIDChan := make(chan string)
@@ -501,42 +529,28 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
 				time.Sleep(sleepDur)
 			}
+			close(rayJobIDChan)
 		}()
 
-		// Wait till rayJobID is populated or the timeout occurs
-		jobID, ok := <-rayJobIDChan
-		if !ok {
-			return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v", jobIDTimeout)
+		// Wait for either rayJobID or command error
+		select {
+		case cmdErr := <-cmdErrChan:
+			if cmdErr != nil {
+				return fmt.Errorf("ray job submit command failed: %w", cmdErr)
+			}
+			// Command finished successfully, wait for job ID
+			if jobID, ok := <-rayJobIDChan; ok {
+				rayJobID = jobID
+			} else {
+				return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v seconds", jobIDTimeout)
+			}
+		case jobID, ok := <-rayJobIDChan:
+			if !ok {
+				return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v seconds", jobIDTimeout)
+			}
+			rayJobID = jobID
 		}
-		rayJobID = jobID
 	}
-
-	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
-	rayCmdStdErrScanner := bufio.NewScanner(rayCmdStdErr)
-	go func() {
-		for {
-			currStdToken := rayCmdStdOutScanner.Text()
-			if currStdToken != "" {
-				fmt.Println(currStdToken)
-			}
-			scanNotDone := rayCmdStdOutScanner.Scan()
-			if !scanNotDone {
-				break
-			}
-		}
-	}()
-	go func() {
-		for {
-			currErrToken := rayCmdStdErrScanner.Text()
-			if currErrToken != "" {
-				fmt.Fprintf(options.ioStreams.ErrOut, "%s\n", currErrToken)
-			}
-			scanNotDone := rayCmdStdErrScanner.Scan()
-			if !scanNotDone {
-				break
-			}
-		}
-	}()
 
 	// Add annotation to RayJob with the correct Ray job ID and update the CR
 	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
@@ -550,11 +564,6 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
 
-	// Wait for Ray job submit to finish.
-	err = cmd.Wait()
-	if err != nil {
-		return fmt.Errorf("Error occurred with Ray job submit: %w", err)
-	}
 	if options.noWait {
 		fmt.Printf("Ray job submitted with ID %s\n", rayJobID)
 		return nil
