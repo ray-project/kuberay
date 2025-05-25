@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -230,6 +231,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
+		if shouldUpdate := checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
 
@@ -792,7 +797,7 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
 
-		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed || rayv1.IsJobTerminal(newRayJobStatus.JobStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
 
@@ -920,4 +925,30 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
+}
+
+func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
+		submitterGracePeriodTime, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS))
+		if err != nil {
+			submitterGracePeriodTime = utils.DEFAULT_RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
+		}
+
+		if time.Now().Before(rayJob.Status.EndTime.Add(time.Duration(submitterGracePeriodTime) * time.Second)) {
+			return false
+		}
+		logger.Info("The RayJob has passed the submitter complete grace period. Transition the status to `Failed` or `Complete`.", "StartTime", rayJob.Status.StartTime, "submitterGracePeriodTime", submitterGracePeriodTime)
+		if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+		} else if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded {
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+		} else if rayJob.Status.JobStatus == rayv1.JobStatusStopped {
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+		}
+		rayJob.Status.Reason = rayv1.SubmitterGracePeriodExceeded
+		rayJob.Status.Message = fmt.Sprintf("Maybe Ray's bug. The RayJob has passed the submitter complete grace period. EndTime: %v. submitterGracePeriodTime: %d", rayJob.Status.EndTime, submitterGracePeriodTime)
+		return true
+	}
+	return false
 }

@@ -148,6 +148,16 @@ const (
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
+	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within
+	// `RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds of `JobStatus`
+	// reaching a terminal state, KubeRay will still update `JobDeploymentStatus` to either
+	// `Complete` or `Failed`.
+
+	// If this occurs, it is likely due to a system-level issue (e.g., a Ray bug) that prevents the
+	// `ray job submit` process in the Kubernetes Job submitter from exiting.
+	RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
+	DEFAULT_RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
