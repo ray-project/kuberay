@@ -23,6 +23,7 @@ func newProxyRoundTripper(cfg *rest.Config) (*ProxyRoundTripper, error) {
 	}, nil
 }
 
+// RoundTrp send the request through the Kubernetes service proxy subresource
 func (rt *ProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	newReq := req.Clone(req.Context())
 
