@@ -5,7 +5,7 @@ metadata:
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
   # Use the Ray nightly or Ray version >= 2.10.0 and KubeRay 1.1.0 or later for autoscaler v2.
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   enableInTreeAutoscaling: true
   autoscalerOptions:
     version: v2
@@ -38,7 +38,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -78,7 +78,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: "1"
