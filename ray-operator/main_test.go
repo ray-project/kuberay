@@ -189,3 +189,78 @@ reconcileConcurrency: true
 		})
 	}
 }
+
+func Test_parseDefaultContainerCommand(t *testing.T) {
+	testCases := []struct {
+		expectedResult             map[string][]string
+		name                       string
+		defaultContainerCommandEnv string
+	}{
+		{
+			name:                       "empty command",
+			defaultContainerCommandEnv: "",
+			expectedResult:             map[string][]string{},
+		},
+		{
+			name:                       "all sets",
+			defaultContainerCommandEnv: "/bin/aa -c --:/bin/bb -c --:/bin/cc -c --:/bin/dd -c --:/bin/ee -v",
+			expectedResult: map[string][]string{
+				"ray-head":         {"/bin/aa", "-c", "--"},
+				"wait-gcs-ready":   {"/bin/bb", "-c", "--"},
+				"ray-worker":       {"/bin/cc", "-c", "--"},
+				"autoscaler":       {"/bin/dd", "-c", "--"},
+				"rayjob-submitter": {"/bin/ee", "-v"},
+			},
+		},
+		{
+			name:                       "skip ray-head",
+			defaultContainerCommandEnv: ":/bin/bb -c --:/bin/cc -c --:/bin/dd -c --:/bin/ee -v",
+			expectedResult: map[string][]string{
+				"wait-gcs-ready":   {"/bin/bb", "-c", "--"},
+				"ray-worker":       {"/bin/cc", "-c", "--"},
+				"autoscaler":       {"/bin/dd", "-c", "--"},
+				"rayjob-submitter": {"/bin/ee", "-v"},
+			},
+		},
+		{
+			name:                       "skip ray-worker",
+			defaultContainerCommandEnv: "/bin/aa -c --:/bin/bb -c --::/bin/dd -c --:/bin/ee -v",
+			expectedResult: map[string][]string{
+				"ray-head":         {"/bin/aa", "-c", "--"},
+				"wait-gcs-ready":   {"/bin/bb", "-c", "--"},
+				"autoscaler":       {"/bin/dd", "-c", "--"},
+				"rayjob-submitter": {"/bin/ee", "-v"},
+			},
+		},
+		{
+			name:                       "skip rayjob-submitter",
+			defaultContainerCommandEnv: "/bin/aa -c --:/bin/bb -c --:/bin/cc -c --:/bin/dd -c --:",
+			expectedResult: map[string][]string{
+				"ray-head":       {"/bin/aa", "-c", "--"},
+				"wait-gcs-ready": {"/bin/bb", "-c", "--"},
+				"ray-worker":     {"/bin/cc", "-c", "--"},
+				"autoscaler":     {"/bin/dd", "-c", "--"},
+			},
+		},
+		{
+			name:                       "with escape colon",
+			defaultContainerCommandEnv: "/bin/aa -c --:/bin/bb -c \\:c --:/bin/cc -c --:/bin/dd -c --:/bin/ee -v",
+			expectedResult: map[string][]string{
+				"ray-head":         {"/bin/aa", "-c", "--"},
+				"wait-gcs-ready":   {"/bin/bb", "-c", ":c", "--"},
+				"ray-worker":       {"/bin/cc", "-c", "--"},
+				"autoscaler":       {"/bin/dd", "-c", "--"},
+				"rayjob-submitter": {"/bin/ee", "-v"},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := parseDefaultContainerCommand(testCase.defaultContainerCommandEnv)
+			if !reflect.DeepEqual(result, testCase.expectedResult) {
+				t.Errorf("expected %+v, got %+v", testCase.expectedResult, result)
+			}
+		})
+	}
+}
