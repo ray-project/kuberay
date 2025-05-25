@@ -107,11 +107,16 @@ test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
-e2e-test: ## Run end to end tests using a pre-exiting cluster.
+e2e-test: ## Run end to end tests using a pre-existing cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
+# 1. Clean up the cluster if it exists.
+# 2. Create a fresh kind cluster with api server and operator installed.
+# 3. Load the ray test image into the cluster.
+# 4. Run the end to end tests.
+# 5. Clean up the cluster.
 .PHONY: local-e2e-test
-local-e2e-test: start-local-apiserver load-ray-test-image e2e-test clean-cluster ## Run end to end tests on a newly created kind cluster with all components deployed.
+local-e2e-test: clean-cluster start-local-apiserver load-ray-test-image e2e-test clean-cluster
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
