@@ -1,217 +1,223 @@
-# Creating HA cluster with API Server
+# Creating HA cluster with APIServer
 
-One of the issue for long-running Ray applications, for example, Ray Serve is that Ray Head node is a single
-point of failure, which means that if the Head node dies, complete cluster has to be restarted. Fortunately,
-KubeRay cluster provides an option to create
-[fault tolerance Ray cluster](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html).
-The similar type of highly available Ray cluster can also be created using API server. The foundation of this
-approach is ensuring high availability Global Control Service (GCS) data. GCS manages cluster-level
-metadata. By default, the GCS lacks fault tolerance as it stores all data in-memory, and a failure can cause the
-entire Ray cluster to fail. To make the GCS fault tolerant, you must have a high-availability Redis. This way,
-in the event of a GCS restart, it retrieves all the data from the Redis instance and resumes its regular
-functioning.
+One of the issues with long-running Ray applications (e.g., RayServe) is that if the Ray head node
+dies, the whole cluster has to be restarted. Fortunately, the KubeRay cluster solves this by
+introducing the [Fault Tolerance Ray Cluster](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html).
 
-## Creating external Redis cluster
+The RayCluster with high availability can also be created with the APIServer, which aims to
+ensure high availability of Global Control Service (GCS) data. The GCS manages
+cluster-level metadata by storing all data in memory, which lacks fault tolerance. A
+single head node failure can cause the entire RayCluster to fail. To enable GCS fault tolerance,
+we should have a highly available Redis so that when GCS restarts, it can resume its
+state by retrieving previous data from the Redis instance.
 
-A comprehensive documentation on creating Redis cluster on Kubernetes can be found
-[here]( https://www.dragonflydb.io/guides/redis-kubernetes). For this example we will use a rather simple
-[yaml file](test/cluster/redis/redis.yaml). To create Redis run:
+We will provide a detailed example on how to create this highly available APIServer.
+
+## Setup
+
+### Setup Ray Operator and APIServer
+
+Refer to the [README](README.md) for setting up the KubeRay operator and APIServer.
+
+## Example
+
+Before going through the example, remove any running RayClusters to ensure a successful
+run through of the example below.
+
+```sh
+kubectl delete raycluster --all
+```
+
+### Create external Redis cluster
+
+Comprehensive documentation on creating a Redis cluster on Kubernetes can be found
+[here](https://www.dragonflydb.io/guides/redis-kubernetes). For this example, we will use a simple
+[RedisYAML]. Simply download this YAML file and run:
 
 ```sh
 kubectl create ns redis
-kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis.yaml -n redis
+kubectl apply -f redis.yaml -n redis
 ```
 
-Note that here we are deploying redis to the `redis` namespace, that we are creating here.
+Note that we created a new `redis` namespace and deploy redis in it.
 
-Alternatively, if you run on the cloud you can use managed version of HA Redis, which will not require
-you to stand up, run, manage and monitor your own version of redis.
+Alternatively, if you run on the cloud, you can use a managed version of HA Redis, which will not require
+you to set up, run, manage, and monitor your own version of Redis.
 
-## Creating Redis password secret
+Check if Redis is successfully set up with the following command. You should see
+`redis-config` in the list:
 
-Before creating your cluster, you need to create [secret](test/cluster/redis/redis_passwrd.yaml) in the
+```sh
+kubectl get configmaps -n redis
+
+# NAME               DATA   AGE
+# redis-config       1      19s
+```
+
+### Create Redis password secret
+
+Before creating your cluster, you need to create a secret in the
 namespace where you are planning to create your Ray cluster (remember, that secret is visible only within a given
-namespace). To create a secret for using external redis, run:
+namespace). To create a secret for using external Redis, please download the [Secret] and
+run the following command:
 
 ```sh
-kubectl apply -f <your location>/kuberay/apiserver/test/cluster/redis/redis_passwrd.yaml
+kubectl apply -f redis_passwrd.yaml
 ```
 
-## Ray Code for testing
+### Install ConfigMap
 
-For both Ray Jobs and Ray Serve we recommend packaging user code in the image. For a simple testing here
-we will create a [config map](test/cluster/code_configmap.yaml), containing simple code, that we will use for
-testing. To deploy it run the following:
+We will use this [ConfigMap], which contains code for our example. For real-world
+cases, it is recommended to pack user code in an image.
+
+Please download the config map and deploy it with the following command:
 
 ```sh
-kubectl apply -f <your location>/kuberay/apiserver/test/cluster/code_configmap.yaml
+kubectl apply -f code_configmap.yaml
 ```
 
-## API server request
+### Create RayCluster
 
-To create a Ray cluster we can use the following curl command:
+Use the following command to create a compute template and a RayCluster:
 
 ```sh
+curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
+    --header 'Content-Type: application/json' \
+    --data @docs/api-example/compute_template.json
+
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
---header 'Content-Type: application/json' \
---data '{
-  "name": "ha-cluster",
-  "namespace": "default",
-  "user": "boris",
-  "version": "2.9.0",
-  "environment": "DEV",
-  "annotations" : {
+    --header 'Content-Type: application/json' \
+    --data @docs/api-example/ha_clusters.json
+```
+
+To enable the RayCluster's GCS fault tolerance feature, add the annotation:
+
+```json
+"annotations" : {
     "ray.io/ft-enabled": "true"
-  },
-  "clusterSpec": {
-    "headGroupSpec": {
-      "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.9.0-py310",
-      "serviceType": "NodePort",
-      "rayStartParams": {
-         "dashboard-host": "0.0.0.0",
-         "metrics-export-port": "8080",
-         "num-cpus": "0",
-         "redis-password": "$REDIS_PASSWORD"
-       },
-       "environment": {
-         "values": {
-            "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
-         },
-         "valuesFrom": {
-            "REDIS_PASSWORD": {
-                "source": 1,
-                "name": "redis-password-secret",
-                "key": "password"
-            }
-         }
-       },
-       "volumes": [
-         {
-           "name": "code-sample",
-           "mountPath": "/home/ray/samples",
-           "volumeType": "CONFIGMAP",
-           "source": "ray-example",
-           "items": {
-              "detached_actor.py" : "detached_actor.py",
-              "increment_counter.py" : "increment_counter.py"
-            }
-         }
-       ]
+}
+```
+
+For connecting to Redis, we also added the following content in `rayStartParams` of `headGroupSpec`,
+which sets the Redis password and the number of CPUs. Setting `num-cpu` to 0 ensures that no
+application code runs on a head node.
+
+```json
+{
+    "redis-password:: "$REDIS_PASSWORD"
+    "num-cpu": "0"
+}
+```
+
+Here, the `$REDIS_PASSWORD` is defined in the `headGroupSpec`'s environment variable below:
+
+```json
+"environment": {
+    "values": {
+        "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
     },
-    "workerGroupSpec": [
-      {
-        "groupName": "small-wg",
-        "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
-        "replicas": 1,
-        "minReplicas": 0,
-        "maxReplicas": 5,
-        "rayStartParams": {
-           "node-ip-address": "$MY_POD_IP",
-           "metrics-export-port": "8080"
-        },
-        "environment": {
-           "values": {
-             "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-           }
-        },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-example",
-            "items": {
-              "detached_actor.py" : "detached_actor.py",
-              "increment_counter.py" : "increment_counter.py"
-            }
-          }
-        ]
-      }
-    ]
-  }
-}'
+    "valuesFrom": {
+        "REDIS_PASSWORD": {
+            "source": 1,
+            "name": "redis-password-secret",
+            "key": "password"
+        }
+    }
+},
 ```
 
-Note that computeTemplate here has to be created using this [command](test/cluster//template/simple)
+For the `workerGroupSpecs`, we set the `gcs_rpc_server_reconnect_timeout` environment
+variable, which controls the GCS heartbeat timeout (default 60 seconds). This controls how
+long after the head node dies we kill the worker node. While it takes time to restart
+the head node, we want these values to be large enough to prevent the worker node from being
+killed during the restarting period.
 
-Lets discuss the important pieces here:
-You need to specify annotation, that tells Ray that this is cluster with GCS fault tolerance
+```json
+"environment": {
+    "values": {
+        "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
+    }
+},
+```
+
+### Validate that RayCluster is deployed correctly
+
+Run the following command to get a list of pods running. You should see one head and one worker node
+as shown below:
 
 ```sh
-ray.io/ft-enabled: "true"
+kubectl get pods
+# NAME                                READY   STATUS    RESTARTS   AGE
+# ha-cluster-head                     1/1     Running   0          2m36s
+# ha-cluster-small-wg-worker-22lbx    1/1     Running   0          2m36s
 ```
 
-For the `headGroupSpec` you need the following. In the `rayStartParams` you need to add information about Redis
-password.
+### Create an Actor
+
+Before we try to trigger the restoration, we need to find a way to validate that our GCS restore
+is working correctly. We will validate this by creating a detached actor. If it still
+exists and functions after the head node deletion and restoration, we can confirm that the
+GCS data is restored correctly.
+
+Run the following command to create a detached actor. Please change `ha-cluster-head` to
+your head node's name. Note that the `detached_actor.py` file is defined in the
+[ConfigMap] we installed earlier and mounted to the head node:
 
 ```sh
-"redis-password:: "$REDIS_PASSWORD"
-"num-cpu": "0"
+kubectl exec -it ha-cluster-head -- python3 /home/ray/samples/detached_actor.py
 ```
 
-Where the value of `REDIS_PASSWORD` comes from environment variable (below). Additionally `num-cpus:
-0` ensures that no application code runs on a head node.
-
-The following environment variable have to be added here:
+Then, open a new terminal and use port-forward to enable access to the Ray dashboard.
+The dashboard can be accessed through `http://localhost:8265`:
 
 ```sh
-       "environment": {
-         "values": {
-            "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
-         },
-         "valuesFrom": {
-            "REDIS_PASSWORD": {
-                "source": 1,
-                "name": "redis-password-secret",
-                "key": "password"
-            }
-         }
-       },
+kubectl port-forward pod/ha-cluster-head 8265:8265
 ```
 
-For the `workerGroupSpecs` you might want to increase `gcs_rpc_server_reconnect_timeout` by specifying the following
-environment variable:
+In the dashboard, you can see two nodes in the Cluster pane, which are the head and worker:
+
+![hacluster-dashboard-cluster](img/hacluster-dashboard-cluster.png)
+
+If you go to the Actor pane, you can see the actor that we created earlier:
+
+![hacluster-dashboard-actor](img/hacluster-dashboard-actor.png)
+
+### Trigger the GCS restore
+
+To trigger the restoration, simply delete the head node with:
 
 ```sh
-        "environment": {
-           "values": {
-             "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-           }
-        },
+kubectl delete pods ha-cluster-head
 ```
 
-This environment variable allows to increase GCS heartbeat timeout, which is 60 sec by default. The reason for
-increasing it is because restart of the head node can take some time, and we want to make sure that the worker node
-will not be killed during this time.
-
-## Testing resulting cluster
-
-Once the cluster is created, we can validate that it is working correctly. To do this first create a detached actor.
-To do this, note the name of the head node and create a detached actor using the following command:
+If you list the pods now, you can see a new head node is recreated
 
 ```sh
-kubectl exec -it <head node pod name> -- python3 /home/ray/samples/detached_actor.py
+kubectl get pods
+# NAME                                READY   STATUS    RESTARTS   AGE
+# ha-cluster-head                     0/1     Running   0          5s
+# ha-cluster-small-wg-worker-tpgqs    1/1     Running   0          9m19s
 ```
 
-Once this is done, open Ray dashboard (using port-forward). In the cluster tab you should see 2 nodes and in the
-Actor's pane you should see created actor.
+Note that only the head node will be recreated, while the worker node remains unchanged.
 
-Now you can delete head node pod:
+Port-forward again and access the dashboard through `http://localhost:8265`:
 
 ```sh
-kubectl delete pods <head node pod name>
+kubectl port-forward pod/ha-cluster-head 8265:8265
 ```
 
-The operator will recreate it. Make sure that only head node is recreated (note that it now has a different name),
-while worker node stays as is. Now you can go to the dashboard and make sure that in the Cluster tab you still see
-2 nodes and in the Actor's pane you still see created actor.
+You can see one pod marked as "DEAD" in the Cluster pane, and the actor in the Actors pane
+is still running.
 
-For additional test run the following command:
+### Clean up
 
 ```sh
-kubectl exec -it <head node pod name> -- python3 /home/ray/samples/increment_counter.py
+make clean-cluster
+# Remove apiserver from helm
+helm uninstall kuberay-apiserver
 ```
 
-and make sure that it executes correctly. Note that the name of the head node here is different
+[RedisYAML]: test/cluster/redis/redis.yaml
+[Secret]: test/cluster/redis/redis_passwrd.yaml
+[ConfigMap]: test/cluster/code_configmap.yaml
