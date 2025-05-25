@@ -67,7 +67,7 @@ type RedisCredential struct {
 
 // HeadGroupSpec are the spec for the head pod
 type HeadGroupSpec struct {
-	// Template is the exact pod template used in K8s depoyments, statefulsets, etc.
+	// Template is the exact pod template used in K8s deployments, statefulsets, etc.
 	Template corev1.PodTemplateSpec `json:"template"`
 	// HeadService is the Kubernetes service of the head pod.
 	// +optional
@@ -76,6 +76,7 @@ type HeadGroupSpec struct {
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
+	// +optional
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
 	// +optional
@@ -106,6 +107,7 @@ type WorkerGroupSpec struct {
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
+	// +optional
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is a pod template for the worker
 	Template corev1.PodTemplateSpec `json:"template"`
@@ -130,10 +132,10 @@ type AutoscalerOptions struct {
 	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
+	// Image optionally overrides the autoscaler's container image. This override is provided for autoscaler testing and development.
 	// +optional
 	Image *string `json:"image,omitempty"`
-	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
+	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is provided for autoscaler testing and development.
 	// +optional
 	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 	// SecurityContext defines the security options the container should be run with.
@@ -152,6 +154,13 @@ type AutoscalerOptions struct {
 	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	UpscalingMode *UpscalingMode `json:"upscalingMode,omitempty"`
+	// Version is the version of the Ray autoscaler.
+	// Setting this to v1 will explicitly use autoscaler v1.
+	// Setting this to v2 will explicitly use autoscaler v2.
+	// If this isn't set, the Ray version determines the autoscaler version.
+	// In Ray 2.47.0 and later, the default autoscaler version is v2. It's v1 before that.
+	// +optional
+	Version *AutoscalerVersion `json:"version,omitempty"`
 	// Optional list of environment variables to set in the autoscaler container.
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
@@ -165,6 +174,14 @@ type AutoscalerOptions struct {
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative
 type UpscalingMode string
+
+// +kubebuilder:validation:Enum=v1;v2
+type AutoscalerVersion string
+
+const (
+	AutoscalerVersionV1 AutoscalerVersion = "v1"
+	AutoscalerVersionV2 AutoscalerVersion = "v2"
+)
 
 // The overall state of the Ray cluster.
 type ClusterState string

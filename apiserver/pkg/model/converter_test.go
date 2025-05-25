@@ -277,7 +277,7 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		},
 		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+			IdleTimeoutSeconds: ptr.To(int32(60)),
 			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
@@ -303,9 +303,10 @@ var JobNewClusterTest = rayv1api.RayJob{
 		Metadata: map[string]string{
 			"job_submission_id": "123",
 		},
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
-		RayClusterSpec:          &ClusterSpecTest.Spec,
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
+		RayClusterSpec:           &ClusterSpecTest.Spec,
 	},
 }
 
@@ -318,9 +319,10 @@ var JobExistingClusterTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
@@ -336,9 +338,10 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
@@ -375,10 +378,11 @@ var JobWithOutputTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
-		RayClusterSpec:          &ClusterSpecTest.Spec,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
+		RayClusterSpec:           &ClusterSpecTest.Spec,
 	},
 	Status: rayv1api.RayJobStatus{
 		JobStatus:           "RUNNING",
@@ -406,7 +410,7 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+	IdleTimeoutSeconds: ptr.To(int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 	Image:              ptr.To("Some Image"),
 	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),

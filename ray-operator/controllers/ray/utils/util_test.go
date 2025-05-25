@@ -215,9 +215,7 @@ func TestCheckRouteName(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			name := CheckRouteName(context.Background(), tc.routeName, tc.namespace)
-			if name != tc.want {
-				t.Fatalf("got %s, want %s", name, tc.want)
-			}
+			assert.Equal(t, tc.want, name)
 		})
 	}
 }
@@ -343,10 +341,7 @@ func TestGetHeadGroupServiceAccountName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := GetHeadGroupServiceAccountName(tc.input)
-			if got != tc.want {
-				t.Fatalf("got %s, want %s", got, tc.want)
-			}
+			assert.Equal(t, tc.want, GetHeadGroupServiceAccountName(tc.input))
 		})
 	}
 }
@@ -545,13 +540,16 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas*numOfHosts)
 }
 
-func TestCalculateMinReplicas(t *testing.T) {
+func TestCalculateMinAndMaxReplicas(t *testing.T) {
 	suspend := true
 
 	tests := []struct {
 		name     string
 		specs    []rayv1.WorkerGroupSpec
-		expected int32
+		expected struct {
+			minReplicas int32
+			maxReplicas int32
+		}
 	}{
 		{
 			name: "Single group with one host",
@@ -559,9 +557,16 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 2,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 2,
+				maxReplicas: 3,
+			},
 		},
 		{
 			name: "Single group with four hosts",
@@ -569,9 +574,16 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  4,
 					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 8,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 8,
+				maxReplicas: 12,
+			},
 		},
 		{
 			name: "Two worker groups: one with a single host, one with two hosts",
@@ -579,13 +591,21 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](4),
+					MaxReplicas: ptr.To[int32](4),
 				},
 				{
 					NumOfHosts:  2,
 					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](3),
 				},
 			},
-			expected: 10,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 10,
+				maxReplicas: 10,
+			},
 		},
 		{
 			name: "Two groups with suspended",
@@ -593,87 +613,23 @@ func TestCalculateMinReplicas(t *testing.T) {
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](3),
 					Suspend:     &suspend,
 				},
 				{
 					NumOfHosts:  1,
 					MinReplicas: ptr.To[int32](1),
-					Suspend:     &suspend,
-				},
-			},
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cluster := &rayv1.RayCluster{
-				Spec: rayv1.RayClusterSpec{
-					WorkerGroupSpecs: tt.specs,
-				},
-			}
-			assert.Equal(t, tt.expected, CalculateMinReplicas(cluster))
-		})
-	}
-}
-
-func TestCalculateMaxReplicas(t *testing.T) {
-	suspend := true
-
-	tests := []struct {
-		name     string
-		specs    []rayv1.WorkerGroupSpec
-		expected int32
-	}{
-		{
-			name: "Single group with one host",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 3,
-		},
-		{
-			name: "Single group with four hosts",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  4,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 12,
-		},
-		{
-			name: "Two worker groups: one with a single host, one with two hosts",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](4),
-				},
-				{
-					NumOfHosts:  2,
-					MaxReplicas: ptr.To[int32](3),
-				},
-			},
-			expected: 10,
-		},
-		{
-			name: "Two groups with suspended",
-			specs: []rayv1.WorkerGroupSpec{
-				{
-					NumOfHosts:  1,
-					MaxReplicas: ptr.To[int32](3),
-					Suspend:     &suspend,
-				},
-				{
-					NumOfHosts:  1,
 					MaxReplicas: ptr.To[int32](1),
 					Suspend:     &suspend,
 				},
 			},
-			expected: 0,
+			expected: struct {
+				minReplicas int32
+				maxReplicas int32
+			}{
+				minReplicas: 0,
+				maxReplicas: 0,
+			},
 		},
 	}
 
@@ -684,7 +640,11 @@ func TestCalculateMaxReplicas(t *testing.T) {
 					WorkerGroupSpecs: tt.specs,
 				},
 			}
-			assert.Equal(t, tt.expected, CalculateMaxReplicas(cluster))
+
+			// Check min replicas
+			assert.Equal(t, tt.expected.minReplicas, CalculateMinReplicas(cluster))
+			// Check max replicas
+			assert.Equal(t, tt.expected.maxReplicas, CalculateMaxReplicas(cluster))
 		})
 	}
 }
@@ -872,42 +832,75 @@ func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 }
 
 func TestIsAutoscalingEnabled(t *testing.T) {
-	// Test: RayCluster
-	cluster := &rayv1.RayCluster{}
-	assert.False(t, IsAutoscalingEnabled(&cluster.Spec))
-
-	cluster = &rayv1.RayCluster{
-		Spec: rayv1.RayClusterSpec{
-			EnableInTreeAutoscaling: ptr.To[bool](true),
+	tests := map[string]struct {
+		spec     *rayv1.RayClusterSpec
+		expected bool
+	}{
+		"should be false when spec is nil": {
+			spec:     nil,
+			expected: false,
 		},
-	}
-	assert.True(t, IsAutoscalingEnabled(&cluster.Spec))
-
-	// Test: RayJob
-	job := &rayv1.RayJob{}
-	assert.False(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
-
-	job = &rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To[bool](true),
+		"should be false when enableInTreeAutoscaling is nil": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: nil,
 			},
+			expected: false,
 		},
-	}
-	assert.True(t, IsAutoscalingEnabled(job.Spec.RayClusterSpec))
-
-	// Test: RayService
-	service := &rayv1.RayService{}
-	assert.False(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
-
-	service = &rayv1.RayService{
-		Spec: rayv1.RayServiceSpec{
-			RayClusterSpec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To[bool](true),
+		"should be false when enableInTreeAutoscaling is false": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(false),
 			},
+			expected: false,
+		},
+		"should be true when enableInTreeAutoscaling is true": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+			},
+			expected: true,
 		},
 	}
-	assert.True(t, IsAutoscalingEnabled(&service.Spec.RayClusterSpec))
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsAutoscalingEnabled(tc.spec))
+		})
+	}
+}
+
+func TestIsAutoscalingV2Enabled(t *testing.T) {
+	tests := map[string]struct {
+		spec     *rayv1.RayClusterSpec
+		expected bool
+	}{
+		"should be false when spec is nil": {
+			spec:     nil,
+			expected: false,
+		},
+		"should be false when autoscaler options is nil": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: nil,
+			},
+			expected: false,
+		},
+		"should be false when autoscaler options is not v2": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV1)},
+			},
+			expected: false,
+		},
+		"should be true when autoscaler options is v2": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV2)},
+			},
+			expected: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsAutoscalingV2Enabled(tc.spec))
+		})
+	}
 }
 
 func TestIsGCSFaultToleranceEnabled(t *testing.T) {

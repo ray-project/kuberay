@@ -339,7 +339,7 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    ptr.To[int32](expectReplicaNum),
+					Replicas:    ptr.To(expectReplicaNum),
 					MinReplicas: ptr.To[int32](0),
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
@@ -527,9 +527,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 			numRandomDelete := expectedNumWorkersToDelete - (len(tc.workersToDelete) - len(nonExistentPodSet))
 			assert.Equal(t, tc.numRandomDelete, numRandomDelete)
@@ -624,9 +622,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 		})
 	}
@@ -674,10 +670,8 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	assert.Len(t, podList.Items, int(localExpectReplicaNum),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Fatalf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
+	for _, pod := range podList.Items {
+		assert.NotContainsf(t, workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 	}
 }
 
@@ -1157,16 +1151,6 @@ func TestReconcileHeadlessService(t *testing.T) {
 	})
 	require.NoError(t, err, "Fail to get service list")
 	assert.Len(t, serviceList.Items, 1, "Service list len is wrong")
-}
-
-func contains(slice []string, item string) bool {
-	set := make(map[string]struct{}, len(slice))
-	for _, s := range slice {
-		set[s] = struct{}{}
-	}
-
-	_, ok := set[item]
-	return ok
 }
 
 func getNotFailedPodItemNum(podList corev1.PodList) int {
@@ -1938,7 +1922,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	setupTest(t)
 
-	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To[bool](true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To(true)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
@@ -3670,5 +3654,19 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 				creationTime,
 			)
 		})
+	}
+}
+
+func TestSetDefaults(t *testing.T) {
+	setupTest(t)
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.RayStartParams = nil
+	cluster.Spec.WorkerGroupSpecs[0].RayStartParams = nil
+
+	setDefaults(cluster)
+
+	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
 	}
 }

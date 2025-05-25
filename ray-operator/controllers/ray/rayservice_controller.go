@@ -153,7 +153,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
-	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
+	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil &&
+		!shouldPrepareNewCluster(ctx, rayServiceInstance, activeRayClusterInstance, nil, false) {
 		// Only reconcile serve applications for the active cluster when there is no pending cluster. That is, during the upgrade process,
 		// in-place update and updating the serve application status for the active cluster will not work.
 		logger.Info("Reconciling the Serve applications for active cluster", "clusterName", activeRayClusterInstance.Name)

@@ -38,6 +38,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayJobSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayJobStatus"):
 		return &rayv1.RayJobStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayJobStatusInfo"):
+		return &rayv1.RayJobStatusInfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayService"):
 		return &rayv1.RayServiceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayServiceSpec"):

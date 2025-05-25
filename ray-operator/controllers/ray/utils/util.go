@@ -212,11 +212,11 @@ func TrimJobName(jobName string) string {
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
 func CheckLabel(s string) string {
-	maxLenght := 63
+	maxLength := 63
 
-	if len(s) > maxLenght {
+	if len(s) > maxLength {
 		// shorten the name
-		offset := int(math.Abs(float64(maxLenght) - float64(len(s))))
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
 		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
 		s = s[offset:]
 	}
@@ -235,6 +235,14 @@ func CheckLabel(s string) string {
 // for digit values >= 10.
 func FormatInt32(n int32) string {
 	return strconv.FormatInt(int64(n), 10)
+}
+
+// SafeUint64ToInt64 safely converts a uint64 to int64. If the uint64 value exceeds the maximum int64 value, the function will panic.
+func SafeUint64ToInt64(n uint64) int64 {
+	if n > uint64(1<<63-1) {
+		panic(fmt.Sprintf("uint64 to int64 overflow: %d", n))
+	}
+	return int64(n)
 }
 
 // GetNamespace return namespace
@@ -643,6 +651,10 @@ func ManagedByExternalController(controllerName *string) *string {
 func IsAutoscalingEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec != nil && spec.EnableInTreeAutoscaling != nil &&
 		*spec.EnableInTreeAutoscaling
+}
+
+func IsAutoscalingV2Enabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV2
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.

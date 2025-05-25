@@ -127,7 +127,7 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 					corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
 					corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 				).
-				WithEnv(corev1ac.EnvVar().WithName("RAY_enable_autoscaler_v2").WithValue("1")).
+				WithEnv(corev1ac.EnvVar().WithName(utils.RAY_ENABLE_AUTOSCALER_V2).WithValue("1")).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("300m"),

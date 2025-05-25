@@ -61,6 +61,10 @@ env_vars:
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 
+		LogWithTimestamp(test.T(), "Checking that the RayJob status info has been set correctly.")
+		g.Expect(rayJob.Status.RayJobStatusInfo.StartTime).NotTo(BeNil())
+		g.Expect(rayJob.Status.RayJobStatusInfo.EndTime).NotTo(BeNil())
+
 		// Assert the RayCluster has been torn down
 		g.Eventually(func() error {
 			_, err = GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)

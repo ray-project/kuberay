@@ -65,7 +65,7 @@ build: fmt vet fumpt lint ## Build api server binary.
 ##@ Docker Build
 
 docker-image: ## Build image for the security proxy.
-	$(ENGINE) build -t ${IMG} .
+	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
