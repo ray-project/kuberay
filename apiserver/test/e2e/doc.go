@@ -8,6 +8,7 @@
 //
 //   - types.go -- provides for data types
 //   - utils.go -- provides for utility functions
+//   - exec.go -- provides functions for exec command with kubectl exec
 //   - cluster_server_e2e_test.go -- provides the test function for the Cluster GRPC Server
 //   - config_server_e2e_test.go -- provides the test function for the Config GRPC Server
 //   - job_server_e2e_test.go -- provides the test function for the Job GRPC Server

@@ -2,6 +2,7 @@ package apiserversdk
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -74,9 +75,14 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 }
 
 func withRayHttpClient() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
 		var err error
-		testingContext.rayHttpClient, err = rayv1.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+		remoteExecClient, err := newRemoteExecuteClient()
+		require.NoError(t, err)
+		rt := &ExecRoundTripper{ExecClient: remoteExecClient}
+		httpClient := &http.Client{Transport: rt}
+
+		testingContext.rayHttpClient, err = rayv1.NewForConfigAndClient(&rest.Config{Host: testingContext.apiServerBaseURL}, httpClient)
 		if err != nil {
 			return err
 		}
@@ -85,9 +91,15 @@ func withRayHttpClient() contextOption {
 }
 
 func withK8sHttpClient() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
 		var err error
-		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+
+		remoteExecClient, err := newRemoteExecuteClient()
+		require.NoError(t, err)
+		rt := &ExecRoundTripper{ExecClient: remoteExecClient}
+		httpClient := &http.Client{Transport: rt}
+
+		testingContext.k8sHttpClient, err = kubernetes.NewForConfigAndClient(&rest.Config{Host: testingContext.apiServerBaseURL}, httpClient)
 		if err != nil {
 			return err
 		}
@@ -106,7 +118,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
