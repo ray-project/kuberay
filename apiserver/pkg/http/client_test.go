@@ -28,12 +28,12 @@ type mockTransport struct {
 // RoundTrip returns the mock HTTP response. When all statuses in
 // m.statusSequence are consumed, it returns status 200 (OK).
 func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	index := m.callCount
+	m.callCount++
+
 	if m.returnDoError {
 		return nil, errors.New("mock go error")
 	}
-
-	index := m.callCount
-	m.callCount++
 
 	status := http.StatusOK
 	if index < len(m.statusSequence) {
@@ -128,13 +128,26 @@ func TestAPIServerClientRetry(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		expectErr    error
-		transport    http.RoundTripper
-		expectStatus *rpcStatus.Status
-		name         string
-		expectBody   []byte
-		maxRetry     int
+		expectErr       error
+		transport       *mockTransport
+		expectStatus    *rpcStatus.Status
+		name            string
+		expectBody      []byte
+		maxRetry        int
+		expectCallCount int
 	}{
+		{
+			name:     "Succeeds on first attempt when maxRetry is 0",
+			maxRetry: 0,
+			transport: &mockTransport{
+				statusSequence: []int{http.StatusOK},
+				body:           succeedBody,
+			},
+			expectCallCount: 1,
+			expectErr:       nil,
+			expectStatus:    nil,
+			expectBody:      []byte(succeedBody),
+		},
 		{
 			name:     "Retries and succeeds on third retry",
 			maxRetry: 3,
@@ -143,21 +156,23 @@ func TestAPIServerClientRetry(t *testing.T) {
 				statusSequence: []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusOK},
 				body:           succeedBody,
 			},
-			expectErr:    nil,
-			expectStatus: nil,
-			expectBody:   []byte(succeedBody),
+			expectCallCount: 4,
+			expectErr:       nil,
+			expectStatus:    nil,
+			expectBody:      []byte(succeedBody),
 		},
 		{
 			name:     "Fails after max retries with internal server error (retryable)",
 			maxRetry: 2,
 			transport: &mockTransport{
 				// For 3 attempts (maxRetry + 1)
-				statusSequence: []int{http.StatusServiceUnavailable, http.StatusInternalServerError, http.StatusInternalServerError},
+				statusSequence: []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusServiceUnavailable},
 				statusErr:      statusErr,
 			},
-			expectStatus: statusErr,
+			expectCallCount: 3,
+			expectStatus:    statusErr,
 			expectErr: &KuberayAPIServerClientError{
-				HTTPStatusCode: http.StatusInternalServerError,
+				HTTPStatusCode: http.StatusServiceUnavailable,
 			},
 			expectBody: nil,
 		},
@@ -168,7 +183,8 @@ func TestAPIServerClientRetry(t *testing.T) {
 				statusSequence: []int{http.StatusForbidden},
 				statusErr:      &rpcStatus.Status{Code: 7, Message: "Permission Denied"},
 			},
-			expectStatus: &rpcStatus.Status{Code: 7, Message: "Permission Denied"},
+			expectCallCount: 1,
+			expectStatus:    &rpcStatus.Status{Code: 7, Message: "Permission Denied"},
 			expectErr: &KuberayAPIServerClientError{
 				HTTPStatusCode: http.StatusForbidden,
 			},
@@ -180,9 +196,10 @@ func TestAPIServerClientRetry(t *testing.T) {
 			transport: &mockTransport{
 				returnDoError: true,
 			},
-			expectErr:    errors.New("mock go error"),
-			expectStatus: nil,
-			expectBody:   nil,
+			expectCallCount: 1,
+			expectErr:       errors.New("mock go error"),
+			expectStatus:    nil,
+			expectBody:      nil,
 		},
 	}
 
@@ -200,6 +217,9 @@ func TestAPIServerClientRetry(t *testing.T) {
 			client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
 
 			body, status, err := client.executeRequest(req, "http://mock/test")
+
+			// Check call count is as expected
+			require.Equal(t, tt.expectCallCount, tt.transport.callCount)
 
 			if tt.expectErr == nil {
 				require.NoError(t, err)
