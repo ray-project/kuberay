@@ -184,9 +184,7 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 			cmd := NewCreateClusterCommand(cmdFactory, testStreams)
 			cmd.SetArgs(tc.args)
 			// Parse the flags before checking for incompatible flags
-			if err := cmd.Flags().Parse(tc.args); err != nil {
-				t.Fatalf("failed to parse flags: %v", err)
-			}
+			require.NoError(t, cmd.Flags().Parse(tc.args), "failed to parse flags")
 			err := flagsIncompatibleWithConfigFilePresent(cmd)
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
@@ -214,6 +212,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		workerMemory: "1Gi",
 		workerGPU:    "1",
 		workerTPU:    "0",
+		autoscaler:   generation.AutoscalerV2,
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
@@ -268,6 +267,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 				"--worker-node-selectors", fmt.Sprintf("app=ray,env=dev,%s=tpu-v5,%s=2x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
 				"--labels", "app=ray,env=dev",
 				"--annotations", "ttl-hours=24,owner=chthulu",
+				"--autoscaler", "v2",
 				"--dry-run",
 				"--wait",
 				"--timeout", "10s",

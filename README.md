@@ -14,6 +14,10 @@ KubeRay is a powerful, open-source Kubernetes operator that simplifies the deplo
 
 * **RayService**: RayService is made up of two parts: a RayCluster and a Ray Serve deployment graph. RayService offers zero-downtime upgrades for RayCluster and high availability.
 
+**Kubectl Plugin**: Starting from KubeRay v1.3.0, you can use the `kubectl ray` plugin to simplify
+common workflows when deploying Ray on Kubernetes. If you aren’t familiar with Kubernetes, this
+plugin simplifies running Ray on Kubernetes.
+
 **Community-managed components (optional)**: Some components are maintained by the KubeRay community.
 
 * **KubeRay APIServer**: It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
@@ -47,7 +51,6 @@ The KubeRay repository only contains documentation related to the development an
 * [Using Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
 * [Profiling with py-spy](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/pyspy.html#kuberay-pyspy-integration)
 * [KubeRay integration with Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html#kuberay-volcano)
-* [Kubeflow: an interactive development solution](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/kubeflow.html#kuberay-kubeflow-integration)
 * [MCAD: A Kubernetes Solution for Queuing and Gang Dispatching jobs on Single or Multi-Cluster environment](https://github.com/ray-project/kuberay/blob/master/docs/guidance/kuberay-with-MCAD.md)
 
 ## External Blog Posts

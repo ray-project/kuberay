@@ -15,6 +15,13 @@ updates:
       kubernetes:
         patterns:
           - "k8s.io/*"
+          - "sigs.k8s.io/*"
       google-golang:
         patterns:
           - "google.golang.org/*"
+      github-dependencies:
+        patterns:
+          - "github.com/*"
+      all-dependencies: # for all other dependencies not listed above
+        patterns:
+          - "*"

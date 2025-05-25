@@ -57,7 +57,7 @@ help: ## Display this help.
 ##@ Deployment
 
 .PHONY: start-local-apiserver
-start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install ## Build and start apiserver from scratch.
 
 .PHONY: clear-local-apiserver
 clear-local-apiserver: clean-cluster ## Clear local apiserver.
@@ -112,12 +112,13 @@ e2e-test: ## Run end to end tests using a pre-existing cluster.
 
 # 1. Clean up the cluster if it exists.
 # 2. Create a fresh kind cluster.
-# 3. Install the kuberay apiserver into the cluster.
-# 4. Deploy the kuberay operator into the cluster.
-# 5. Run the end to end tests.
-# 6. Clean up the cluster.
+# 3. Deploy the kuberay operator into the cluster.
+# 4. Install the kuberay apiserver into the cluster.
+# 5. Load the ray test image into the cluster.
+# 6. Run the end to end tests.
+# 7. Clean up the cluster.
 .PHONY: local-e2e-test
-local-e2e-test: clean-cluster cluster install operator-image load-operator-image deploy-operator load-ray-test-image e2e-test clean-cluster
+local-e2e-test: clean-cluster start-local-apiserver load-ray-test-image e2e-test clean-cluster
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml

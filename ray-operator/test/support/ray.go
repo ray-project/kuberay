@@ -6,7 +6,6 @@ import (
 
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -175,14 +174,19 @@ func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
-func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) []corev1.Pod {
+func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) ([]corev1.Pod, error) {
 	t.T().Helper()
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
 		common.RayClusterGroupPodsAssociationOptions(rayCluster, group).ToMetaV1ListOptions(),
 	)
-	require.NoError(t.T(), err)
-	return pods.Items
+	return pods.Items, err
+}
+
+func GroupPods(t Test, rayCluster *rayv1.RayCluster, group string) func() ([]corev1.Pod, error) {
+	return func() ([]corev1.Pod, error) {
+		return GetGroupPods(t, rayCluster, group)
+	}
 }
 
 func RayClusterManagedBy(rayCluster *rayv1.RayCluster) *string {
