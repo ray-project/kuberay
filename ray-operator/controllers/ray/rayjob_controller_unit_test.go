@@ -624,3 +624,143 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestSubmitterTemplateLabels(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	customLabels := map[string]string{
+		"custom-label1": "value1",
+		"custom-label2": "value2",
+		"app":           "ray",
+	}
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			Labels:    customLabels,
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "test-url",
+			JobId:        "test-job-id",
+		},
+	}
+
+	// Test: Create a new k8s job and verify labels are propagated
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayCluster, rayJob).Build()
+	ctx := context.TODO()
+
+	rayJobReconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: &record.FakeRecorder{},
+	}
+
+	err := rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
+	require.NoError(t, err)
+
+	// Check the created job
+	k8sJob := &batchv1.Job{}
+	err = fakeClient.Get(ctx, types.NamespacedName{
+		Namespace: rayJob.Namespace,
+		Name:      rayJob.Name,
+	}, k8sJob, nil)
+	require.NoError(t, err)
+
+	// Verify system labels
+	assert.Equal(t, rayJob.Name, k8sJob.Labels[utils.RayOriginatedFromCRNameLabelKey])
+	assert.Equal(t, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD), k8sJob.Labels[utils.RayOriginatedFromCRDLabelKey])
+	assert.Equal(t, utils.ComponentName, k8sJob.Labels[utils.KubernetesCreatedByLabelKey])
+
+	// Verify custom labels from RayJob are propagated
+	for key, value := range customLabels {
+		assert.Equal(t, value, k8sJob.Labels[key])
+	}
+
+	// Verify labels propagated to pod template
+	for key, value := range customLabels {
+		assert.Equal(t, value, k8sJob.Spec.Template.Labels[key])
+	}
+	assert.Equal(t, rayJob.Name, k8sJob.Spec.Template.Labels[utils.RayOriginatedFromCRNameLabelKey])
+	assert.Equal(t, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD), k8sJob.Spec.Template.Labels[utils.RayOriginatedFromCRDLabelKey])
+}
+
+func TestMergeLabels(t *testing.T) {
+	tests := []struct {
+		name     string
+		maps     []map[string]string
+		expected map[string]string
+	}{
+		{
+			name: "merge empty maps",
+			maps: []map[string]string{
+				{},
+				{},
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "merge with empty map",
+			maps: []map[string]string{
+				{"key1": "value1"},
+				{},
+			},
+			expected: map[string]string{"key1": "value1"},
+		},
+		{
+			name: "right map takes precedence",
+			maps: []map[string]string{
+				{"key1": "value1", "key2": "value2"},
+				{"key1": "newvalue1", "key3": "value3"},
+			},
+			expected: map[string]string{
+				"key1": "newvalue1",
+				"key2": "value2",
+				"key3": "value3",
+			},
+		},
+		{
+			name: "merge multiple maps",
+			maps: []map[string]string{
+				{"key1": "value1"},
+				{"key2": "value2"},
+				{"key3": "value3"},
+			},
+			expected: map[string]string{
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mergeLabels(tt.maps...)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
