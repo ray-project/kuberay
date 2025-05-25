@@ -847,6 +847,64 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 }
 
+func TestBuildPod_WithDefaultCommandOverwriteWithAutoscalingEnabled(t *testing.T) {
+	cluster := instance.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+	ctx := context.Background()
+
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{
+		{
+			Name:  "KUBERAY_DEFAULT_CONTAINER_COMMAND",
+			Value: "/bin/bash -c --",
+		},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{
+		{
+			Name:  "KUBERAY_DEFAULT_CONTAINER_COMMAND",
+			Value: "/bin/bash -c --",
+		},
+	}
+
+	// Test head pod
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "")
+
+	// Check environment variables
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, "/bin/bash -c --")
+
+	// In head, init container contains KUBERAY_DEFAULT_CONTAINER_COMMAND.
+	for _, initContainer := range pod.Spec.InitContainers {
+		checkContainerEnv(t, initContainer, utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, "/bin/bash -c --")
+	}
+
+	// Check command is applied to container including Autoscaler.
+	for _, container := range pod.Spec.Containers {
+		assert.Equal(t, []string{"/bin/bash", "-c", "--"}, container.Command)
+	}
+
+	// testing worker pod
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP)
+
+	// Check environment variables
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, "/bin/bash -c --")
+
+	// In woker, init container contains KUBERAY_DEFAULT_CONTAINER_COMMAND.
+	for _, initContainer := range pod.Spec.InitContainers {
+		checkContainerEnv(t, initContainer, utils.KUBERAY_DEFAULT_CONTAINER_COMMAND, "/bin/bash -c --")
+	}
+
+	// Check command is applied to container.
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, pod.Spec.Containers[0].Command)
+	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, pod.Spec.InitContainers[0].Command)
+}
+
 // Check that autoscaler container overrides work as expected.
 func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	ctx := context.Background()

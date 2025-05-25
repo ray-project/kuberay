@@ -201,6 +201,35 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+
+	// Test 7: Check KUBERAY_DEFAULT_CONTAINER_COMMAND
+	rayJobInstanceWithTemplate = &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint: "echo no quote 'single quote' \"double quote\"",
+			SubmitterPodTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Env: []corev1.EnvVar{
+								{
+									Name:  utils.KUBERAY_DEFAULT_CONTAINER_COMMAND,
+									Value: "container-command",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "test-url",
+			JobId:        "test-job-id",
+		},
+	}
+	submitterTemplate, err = getSubmitterTemplate(ctx, rayJobInstanceWithTemplate, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"container-command"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
+	assert.Equal(t, []string{"-ce", "if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
