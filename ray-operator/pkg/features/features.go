@@ -24,9 +24,6 @@ const (
 	//
 	// Enables new deletion policy API in RayJob
 	RayJobDeletionPolicy featuregate.Feature = "RayJobDeletionPolicy"
-
-	// Enables the bash login feature for RayCluster.
-	RayClusterLoginBash featuregate.Feature = "RayClusterLoginBash"
 )
 
 func init() {
@@ -36,7 +33,6 @@ func init() {
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions: {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:       {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterLoginBash:        {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

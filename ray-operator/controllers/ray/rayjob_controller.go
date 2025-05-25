@@ -555,7 +555,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 			return corev1.PodTemplateSpec{}, err
 		}
 		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
-		if features.Enabled(features.RayClusterLoginBash) {
+		if common.GetEnableLoginBash() {
 			submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-l"}
 		}
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.

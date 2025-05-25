@@ -18,7 +18,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -34,10 +33,13 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
-	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
-	NeuronCoreRayResourceName          = "neuron_cores"
-	TPUContainerResourceName           = "google.com/tpu"
-	TPURayResourceName                 = "TPU"
+
+	// EnableLoginBashEnvKey is the environment variable to enable login bash for Ray containers.
+	EnableLoginBashEnvKey           = "ENABLE_LOGIN_BASH"
+	NeuronCoreContainerResourceName = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName       = "neuron_cores"
+	TPUContainerResourceName        = "google.com/tpu"
+	TPURayResourceName              = "TPU"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -241,6 +243,13 @@ func getEnableProbesInjection() bool {
 	return true
 }
 
+func GetEnableLoginBash() bool {
+	if s := os.Getenv(EnableLoginBashEnvKey); strings.ToLower(s) == "true" {
+		return true
+	}
+	return false
+}
+
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -304,7 +313,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 				},
 			},
 		}
-		if features.Enabled(features.RayClusterLoginBash) {
+		if GetEnableLoginBash() {
 			initContainer.Command = []string{"/bin/bash", "-lc", "--"}
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
@@ -470,7 +479,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
 		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
-		if features.Enabled(features.RayClusterLoginBash) {
+		if GetEnableLoginBash() {
 			pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
 		}
 		if cmd != "" {
@@ -558,7 +567,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 			},
 		},
 	}
-	if features.Enabled(features.RayClusterLoginBash) {
+	if GetEnableLoginBash() {
 		container.Command = []string{"/bin/bash", "-lc", "--"}
 	}
 	return container

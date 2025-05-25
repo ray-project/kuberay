@@ -20,7 +20,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var testMemoryLimit = resource.MustParse("1Gi")
@@ -850,7 +849,8 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 
 func TestBuildPod_WithFeatureFlagLoginBash(t *testing.T) {
 	ctx := context.Background()
-	features.SetFeatureGateDuringTest(t, features.RayClusterLoginBash, true)
+	os.Setenv(EnableLoginBashEnvKey, "true")
+	defer os.Unsetenv(EnableLoginBashEnvKey)
 
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
