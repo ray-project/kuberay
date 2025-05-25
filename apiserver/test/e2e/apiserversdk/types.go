@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -76,13 +75,14 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 
 func withRayHttpClient() contextOption {
 	return func(t *testing.T, testingContext *End2EndTestingContext) error {
-		var err error
-		remoteExecClient, err := newRemoteExecuteClient()
+		kubernetesConfig, err := config.GetConfig()
 		require.NoError(t, err)
-		rt := &ExecRoundTripper{ExecClient: remoteExecClient}
+
+		rt, err := newProxyRoundTripper(kubernetesConfig)
+		require.NoError(t, err)
 		httpClient := &http.Client{Transport: rt}
 
-		testingContext.rayHttpClient, err = rayv1.NewForConfigAndClient(&rest.Config{Host: testingContext.apiServerBaseURL}, httpClient)
+		testingContext.rayHttpClient, err = rayv1.NewForConfigAndClient(kubernetesConfig, httpClient)
 		if err != nil {
 			return err
 		}
@@ -92,14 +92,10 @@ func withRayHttpClient() contextOption {
 
 func withK8sHttpClient() contextOption {
 	return func(t *testing.T, testingContext *End2EndTestingContext) error {
-		var err error
-
-		remoteExecClient, err := newRemoteExecuteClient()
+		kubernetesConfig, err := config.GetConfig()
 		require.NoError(t, err)
-		rt := &ExecRoundTripper{ExecClient: remoteExecClient}
-		httpClient := &http.Client{Transport: rt}
 
-		testingContext.k8sHttpClient, err = kubernetes.NewForConfigAndClient(&rest.Config{Host: testingContext.apiServerBaseURL}, httpClient)
+		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(kubernetesConfig)
 		if err != nil {
 			return err
 		}
