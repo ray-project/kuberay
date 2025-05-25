@@ -1,11 +1,14 @@
 package e2eautoscaler
 
 import (
+	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/utils/ptr"
@@ -824,5 +827,117 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "gpu_actor"})
 			g.Eventually(GroupPods(test, rayCluster, gpuGroup), TestTimeoutMedium).Should(gomega.BeEmpty())
 		})
+	}
+}
+
+func TestRayClusterAutoscalerPlacementGroup(t *testing.T) {
+	for _, tc := range tests {
+		for _, setting := range []struct {
+			workerGroupRayStartParams   map[string]string
+			createPlacementGroupCMD     []string
+			expectedWorkerGroupReplicas int
+			workerGroupMaxReplicas      int32
+		}{
+			{
+				workerGroupRayStartParams:   map[string]string{"num-cpus": "2"},
+				workerGroupMaxReplicas:      3,
+				createPlacementGroupCMD:     []string{"python", "/home/ray/test_scripts/create_detached_placement_group.py", "--num-cpus-per-bundle=1", "--num-bundles=2", "--strategy=STRICT_PACK"},
+				expectedWorkerGroupReplicas: 1,
+			},
+			{
+				workerGroupRayStartParams:   map[string]string{"num-cpus": "2"},
+				workerGroupMaxReplicas:      3,
+				createPlacementGroupCMD:     []string{"python", "/home/ray/test_scripts/create_detached_placement_group.py", "--num-cpus-per-bundle=1", "--num-bundles=2", "--strategy=PACK"},
+				expectedWorkerGroupReplicas: 1,
+			},
+			{
+				workerGroupRayStartParams:   map[string]string{"num-cpus": "2"},
+				workerGroupMaxReplicas:      3,
+				createPlacementGroupCMD:     []string{"python", "/home/ray/test_scripts/create_detached_placement_group.py", "--num-cpus-per-bundle=1", "--num-bundles=2", "--strategy=STRICT_SPREAD"},
+				expectedWorkerGroupReplicas: 2,
+			},
+			{
+				workerGroupRayStartParams:   map[string]string{"num-cpus": "1"},
+				workerGroupMaxReplicas:      3,
+				createPlacementGroupCMD:     []string{"python", "/home/ray/test_scripts/create_detached_placement_group.py", "--num-cpus-per-bundle=1", "--num-bundles=2", "--strategy=SPREAD"},
+				expectedWorkerGroupReplicas: 2,
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				test := With(t)
+				g := gomega.NewWithT(t)
+
+				// Create a namespace
+				namespace := test.NewTestNamespace()
+
+				// Mount the scripts as a ConfigMap
+				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_placement_group.py", "check_placement_group_ready.py"))
+				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+				LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+				rayClusterSpecAC := rayv1ac.RayClusterSpec().
+					WithEnableInTreeAutoscaling(true).
+					WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+						WithIdleTimeoutSeconds(10)).
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{"num-cpus": "0"}).
+						WithTemplate(tc.HeadPodTemplateGetter())).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithReplicas(0).
+						WithMinReplicas(0).
+						WithMaxReplicas(setting.workerGroupMaxReplicas).
+						WithGroupName("cpu-group").
+						WithRayStartParams(setting.workerGroupRayStartParams).
+						WithTemplate(tc.WorkerPodTemplateGetter()))
+				rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+					WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+				rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+				LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+				// Wait for RayCluster to become ready
+				g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+					Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+				g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+				headPod, err := GetHeadPod(test, rayCluster)
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+				LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+				// Create a detached placement group, and workers should be created.
+				ExecPodCmd(test, headPod, common.RayHeadContainer, setting.createPlacementGroupCMD)
+				g.Eventually(GroupPods(test, rayCluster, "cpu-group"), TestTimeoutMedium).Should(gomega.HaveLen(setting.expectedWorkerGroupReplicas))
+
+				// check if the placement group is ready.
+				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/check_placement_group_ready.py"})
+
+				// Delete those workers.
+				pods, err := GroupPods(test, rayCluster, "cpu-group")()
+				g.Expect(err).NotTo(gomega.HaveOccurred())
+				for _, pod := range pods {
+					err := test.Client().Core().CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+					g.Expect(err).NotTo(gomega.HaveOccurred())
+				}
+
+				// The same number of workers should come back.
+				g.Eventually(GroupPods(test, rayCluster, "cpu-group"), TestTimeoutMedium).Should(
+					gomega.WithTransform(func(latestPods []corev1.Pod) []corev1.Pod {
+						return slices.DeleteFunc(latestPods, func(pod corev1.Pod) bool {
+							for _, old := range pods {
+								if pod.Name == old.Name {
+									return true
+								}
+							}
+							return false
+						})
+					}, gomega.HaveLen(setting.expectedWorkerGroupReplicas)))
+
+				// check if the placement group is ready again.
+				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/check_placement_group_ready.py"})
+			})
+		}
 	}
 }
