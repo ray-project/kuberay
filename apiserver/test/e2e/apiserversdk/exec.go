@@ -1,11 +1,9 @@
 package apiserversdk
 
 import (
+	"k8s.io/client-go/rest"
 	"net/http"
 	"path"
-	"strings"
-
-	"k8s.io/client-go/rest"
 )
 
 type ProxyRoundTripper struct {
@@ -31,10 +29,6 @@ func (rt *ProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		"/api/v1/namespaces/ray-system/services/kuberay-apiserver:8888/proxy",
 		req.URL.Path,
 	)
-
-	if !strings.HasSuffix(newReq.URL.Path, "/") {
-		newReq.URL.Path = newReq.URL.Path + "/"
-	}
 
 	return rt.Transport.RoundTrip(newReq)
 }
