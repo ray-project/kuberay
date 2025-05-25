@@ -31,6 +31,8 @@ body:
       options:
         - "ray-operator"
         - "apiserver"
+        - "kubectl-plugin"
+        - "dashboard"
         - "ci"
         - "Others"
     validations:
