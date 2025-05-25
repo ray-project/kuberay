@@ -111,12 +111,10 @@ e2e-test: ## Run end to end tests using a pre-existing cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
 # 1. Clean up the cluster if it exists.
-# 2. Create a fresh kind cluster.
-# 3. Deploy the kuberay operator into the cluster.
-# 4. Install the kuberay apiserver into the cluster.
-# 5. Load the ray test image into the cluster.
-# 6. Run the end to end tests.
-# 7. Clean up the cluster.
+# 2. Create a fresh kind cluster with api server and operator installed.
+# 3. Load the ray test image into the cluster.
+# 4. Run the end to end tests.
+# 5. Clean up the cluster.
 .PHONY: local-e2e-test
 local-e2e-test: clean-cluster start-local-apiserver load-ray-test-image e2e-test clean-cluster
 
