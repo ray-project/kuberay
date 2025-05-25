@@ -94,7 +94,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
-	require.True(t, clusterSpecEqual(clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec should match the request")
+	require.True(t, clusterSpecEqual(clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec should match the request. Expected: %v, Actual: %v", clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec)
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 
 	// Get number of workers
@@ -120,7 +120,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	require.True(t, jobSpecEqual(createActorRequest.Job, actualJob), "Job spec should match the request")
+	require.True(t, jobSpecEqual(createActorRequest.Job, actualJob), "Job spec should match the request. Expected: %v, Actual: %v", createActorRequest.Job, actualJob)
 	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 
 	// worker pod should be created as part of job execution
@@ -150,7 +150,7 @@ func TestCreateClusterAutoscaler(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	require.True(t, jobSpecEqual(deleteActorRequest.Job, actualJob), "Job spec should match the request")
+	require.True(t, jobSpecEqual(deleteActorRequest.Job, actualJob), "Job spec should match the request. Expected: %v, Actual: %v", deleteActorRequest.Job, actualJob)
 	waitForRayJobInExpectedStatuses(t, tCtx, createActorRequest.Job.Name, []rayv1api.JobStatus{rayv1api.JobStatusSucceeded})
 	g.Eventually(func() int32 {
 		rayCluster, err := tCtx.GetRayClusterByName(actualCluster.Name)

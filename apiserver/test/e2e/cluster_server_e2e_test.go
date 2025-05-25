@@ -455,7 +455,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualCluster, "A cluster is expected")
-				require.True(t, clusterSpecEqual(tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec is not as expected")
+				require.True(t, clusterSpecEqual(tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec is not as expected. Expected: %v, Actual: %v", tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec)
 				waitForRunningCluster(t, tCtx, actualCluster.Name)
 				tCtx.DeleteRayCluster(t, actualCluster.Name)
 			} else {
