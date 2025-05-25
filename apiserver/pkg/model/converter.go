@@ -459,10 +459,15 @@ func FromCrdToAPIJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		}
 	}()
 
+	var version string
+	if job.Spec.RayClusterSpec != nil {
+		version = job.Spec.RayClusterSpec.RayVersion
+	}
 	pbJob = &api.RayJob{
 		Name:                     job.Name,
 		Namespace:                job.Namespace,
 		User:                     job.Labels[util.RayClusterUserLabelKey],
+		Version:                  version,
 		Entrypoint:               job.Spec.Entrypoint,
 		Metadata:                 job.Spec.Metadata,
 		RuntimeEnv:               job.Spec.RuntimeEnvYAML,
@@ -550,6 +555,7 @@ func FromCrdToAPIService(service *rayv1api.RayService, events []corev1.Event) *a
 		Name:           service.Name,
 		Namespace:      service.Namespace,
 		User:           service.Labels[util.RayClusterUserLabelKey],
+		Version:        service.Spec.RayClusterSpec.RayVersion,
 		ServeConfig_V2: service.Spec.ServeConfigV2,
 		ClusterSpec:    PopulateRayClusterSpec(service.Spec.RayClusterSpec),
 		ServiceUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(

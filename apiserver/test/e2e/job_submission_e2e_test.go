@@ -78,6 +78,7 @@ func TestCreateJobSubmission(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
+	require.True(t, clusterSpecEqual(clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster specs should be equal")
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 
 	// Submit job
