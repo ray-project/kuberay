@@ -5,6 +5,10 @@ KubeRay APIServer. For a detailed introduction and more advanced usage with Kube
 please refer to [this
 guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html).
 
+> [!IMPORTANT]
+> If you encounter any problems while following this guide, please refer to the [Troubleshooting](../Troubleshooting.md)
+> page.
+
 ## Preparation
 
 - Install [Helm](https://helm.sh/docs/intro/install/) (>= v3.4),
