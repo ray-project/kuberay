@@ -17,6 +17,8 @@ to install the latest stable KubeRay operator from the Helm repository.
 
 ## Step 3: Install APIServer with Helm
 
+### With security proxy
+
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
@@ -24,9 +26,18 @@ helm repo update
 helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 ```
 
+### Without security proxy
+
+```sh
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+helm repo update
+# Install KubeRay APIServer without security proxy
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0 --set security=null
+```
+
 ## Step 4: Validate installation
 
-Check that the KubeRay APIServer is running in the "default" namespaces.
+Check that the KubeRay APIServer is running in the "default" namespace.
 
 ```sh
 kubectl get pods
