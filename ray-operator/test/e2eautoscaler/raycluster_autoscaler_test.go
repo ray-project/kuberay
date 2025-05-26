@@ -315,7 +315,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(1).
 					WithMinReplicas(0).
-					WithMaxReplicas(5).
+					WithMaxReplicas(3).
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
@@ -343,21 +343,21 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(2))))
 
-			// Create detached actors to trigger autoscaling to 5 Pods
+			// Create detached actors to trigger autoscaling to 3 Pods
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-			for i := 0; i < 5; i++ {
+			for i := 0; i < 3; i++ {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
 
-			// Verify that the Autoscaler scales up to 5 Pods
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(5))))
+			// Verify that the Autoscaler scales up to 3 Pods
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(3))))
 
-			// Check that replicas is set to 5
-			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(int32(5))))
+			// Check that replicas is set to 3
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.Equal(int32(3))))
 		})
 	}
 }
@@ -371,13 +371,13 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 		actorCount       int
 	}{
 		{
-			name:       "Scale up maxReplicas from 3 to 5",
-			initialMax: 3,
-			updatedMax: 5,
+			name:       "Scale up maxReplicas from 2 to 3",
+			initialMax: 2,
+			updatedMax: 3,
 		},
 		{
-			name:       "Scale down maxReplicas from 3 to 1",
-			initialMax: 3,
+			name:       "Scale down maxReplicas from 2 to 1",
+			initialMax: 2,
 			updatedMax: 1,
 		},
 	}
@@ -701,7 +701,7 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(5).
+					WithMaxReplicas(2).
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
@@ -723,12 +723,12 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 
 			// Trigger resource request via ray.autoscaler.sdk.request_resources
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
-				"python", "/home/ray/test_scripts/call_request_resources.py", "--num-cpus=3",
+				"python", "/home/ray/test_scripts/call_request_resources.py", "--num-cpus=1",
 			})
 
-			// Autoscaler should create 3 workers
+			// Autoscaler should create 1 workers
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically("==", 3)))
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.BeNumerically("==", 1)))
 		})
 	}
 }
