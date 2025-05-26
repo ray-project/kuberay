@@ -127,6 +127,31 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 	})
 
+	It("successfully submits RayJob without TTL", func() {
+		runtimeEnvFilePath := path.Join(kubectlRayJobWorkingDir, runtimeEnvSampleFileName)
+		cmd := exec.Command(
+			"kubectl", "ray", "job", "submit",
+			"--namespace", namespace,
+			"--name", rayJobName,
+			"--runtime-env", runtimeEnvFilePath,
+			"--head-cpu", "1",
+			"--head-memory", "2Gi",
+			"--worker-cpu", "1",
+			"--worker-memory", "2Gi",
+			"--",
+			"python",
+			entrypointSampleFileName,
+		)
+		output, err := cmd.CombinedOutput()
+		Expect(err).NotTo(HaveOccurred())
+		// Retrieve the Job ID from the output
+		cmdOutputJobID := extractRayJobID(string(output))
+
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		Expect(rayJob.Spec.TTLSecondsAfterFinished).To(Equal(int32(0)))
+		Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeFalse())
+	})
+
 	It("succeed in submitting RayJob with ttl-seconds-after-finished set to 10 with yaml config", func() {
 		cmd := exec.Command(
 			"kubectl", "ray", "job", "submit",
