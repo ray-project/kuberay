@@ -702,15 +702,3 @@ func GetClusterType() bool {
 	}
 	return false
 }
-
-// GetJobDeploymentStatusFromTerminalJobStatus maps a terminal Ray JobStatus to its corresponding JobDeploymentStatus
-func GetJobDeploymentStatusFromTerminalJobStatus(jobStatus rayv1.JobStatus) rayv1.JobDeploymentStatus {
-	switch jobStatus {
-	case rayv1.JobStatusFailed:
-		return rayv1.JobDeploymentStatusFailed
-	case rayv1.JobStatusSucceeded, rayv1.JobStatusStopped:
-		return rayv1.JobDeploymentStatusComplete
-	default:
-		return rayv1.JobDeploymentStatusComplete
-	}
-}

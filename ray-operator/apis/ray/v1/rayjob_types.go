@@ -70,9 +70,9 @@ func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
 type JobFailedReason string
 
 const (
-	SubmissionFailed             JobFailedReason = "SubmissionFailed"
-	DeadlineExceeded             JobFailedReason = "DeadlineExceeded"
-	AppFailed                    JobFailedReason = "AppFailed"
+	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
+	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 )
 
