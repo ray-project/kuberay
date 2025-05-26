@@ -73,7 +73,7 @@ const (
 	SubmissionFailed             JobFailedReason = "SubmissionFailed"
 	DeadlineExceeded             JobFailedReason = "DeadlineExceeded"
 	AppFailed                    JobFailedReason = "AppFailed"
-	SubmitterGracePeriodExceeded JobFailedReason = "SubmitterGracePeriodExceeded"
+	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 )
 
 type JobSubmissionMode string
