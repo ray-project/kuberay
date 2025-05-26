@@ -915,18 +915,18 @@ func TestRayClusterAutoscalerPlacementGroup(t *testing.T) {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/check_placement_group_ready.py"})
 
 				// Delete those workers.
-				pods, err := GroupPods(test, rayCluster, "cpu-group")()
+				oldPods, err := GetGroupPods(test, rayCluster, "cpu-group")
 				g.Expect(err).NotTo(gomega.HaveOccurred())
-				for _, pod := range pods {
+				for _, pod := range oldPods {
 					err := test.Client().Core().CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 					g.Expect(err).NotTo(gomega.HaveOccurred())
 				}
 
-				// The same number of workers should come back.
+				// Wait until all old pods are deleted and an equal number of new worker pods are created.
 				g.Eventually(GroupPods(test, rayCluster, "cpu-group"), TestTimeoutMedium).Should(
 					gomega.WithTransform(func(latestPods []corev1.Pod) []corev1.Pod {
 						return slices.DeleteFunc(latestPods, func(pod corev1.Pod) bool {
-							for _, old := range pods {
+							for _, old := range oldPods {
 								if pod.Name == old.Name {
 									return true
 								}
