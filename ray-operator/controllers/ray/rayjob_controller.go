@@ -938,7 +938,7 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 		}
 		rayJob.Status.Reason = rayv1.SubmitterGracePeriodExceeded
-		rayJob.Status.Message = fmt.Sprintf("Maybe Ray's bug. The RayJob has passed the submitter complete grace period. EndTime: %v. submitterGracePeriodTime: %d", rayJob.Status.EndTime, submitterGracePeriodTime)
+		rayJob.Status.Message = fmt.Sprintf("JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state.")
 		return true
 	}
 	return false
