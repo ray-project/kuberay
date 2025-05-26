@@ -149,7 +149,7 @@ const (
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
 	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within
-	// `RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds of `JobStatus`
+	// `RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds after `JobStatus`
 	// reaching a terminal state, KubeRay will still update `JobDeploymentStatus` to either
 	// `Complete` or `Failed`.
 
