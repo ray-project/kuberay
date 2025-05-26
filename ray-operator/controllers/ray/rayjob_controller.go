@@ -936,8 +936,7 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 			return false
 		}
 		logger.Info("JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state.", "EndTime", rayJob.Status.RayJobStatusInfo.EndTime, "rayJobDeploymentGracePeriodTime", rayJobDeploymentGracePeriodTime)
-		jobDeploymentStatus := utils.GetJobDeploymentStatusFromTerminalJobStatus(rayJob.Status.JobStatus)
-		rayJob.Status.JobDeploymentStatus = jobDeploymentStatus
+		rayJob.Status.JobDeploymentStatus = utils.GetJobDeploymentStatusFromTerminalJobStatus(rayJob.Status.JobStatus)
 		rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
 		rayJob.Status.Message = fmt.Sprintf("JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state.")
 		return true
