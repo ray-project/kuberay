@@ -13,7 +13,6 @@ import (
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	klog "k8s.io/klog/v2"
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
@@ -660,21 +659,28 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 
+	doReq := func() (*http.Response, error) {
+		response, err := krc.httpClient.Do(httpRequest)
+		if err != nil {
+			return nil, err
+		}
+
+		defer func() {
+			response.Body.Close()
+		}()
+
+		return response, err
+	}
+
 	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
 	for attempt := 0; attempt <= krc.retryCfg.MaxRetry; attempt++ {
-		response, err := krc.httpClient.Do(httpRequest)
+		response, err := doReq()
 		// Error in sending the request, treated as non-retryable error
 		if err != nil {
 			lastStatus = nil
 			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
 			break
 		}
-
-		defer func() {
-			if closeErr := response.Body.Close(); closeErr != nil {
-				klog.Errorf("failed to close http response body because %+v", closeErr)
-			}
-		}()
 
 		bodyBytes, err := io.ReadAll(response.Body)
 		// Error in reading response body, treated as non-retryable error
@@ -721,6 +727,39 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 	}
 	return nil, lastStatus, lastErr
+}
+
+func RunWithRetry(f func() error, isRetriable func(err error) bool, cfg RetryConfig) error {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.OverallTimeout)
+	defer cancel()
+
+	var lastErr error
+
+	for attempt := 0; attempt <= cfg.MaxRetry; attempt++ {
+		err := f()
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+
+		if !isRetriable(err) {
+			break
+		}
+
+		sleep := cfg.InitBackoff * time.Duration(math.Pow(cfg.BackoffFactor, float64(attempt)))
+		if sleep > cfg.MaxBackoff {
+			sleep = cfg.MaxBackoff
+		}
+
+		select {
+		case <-time.After(sleep):
+		case <-ctx.Done():
+			return fmt.Errorf("retry timeout exceeded: %w", ctx.Err())
+		}
+	}
+
+	return lastErr
 }
 
 func isRetryableHTTPStatus(statusCode int) bool {
