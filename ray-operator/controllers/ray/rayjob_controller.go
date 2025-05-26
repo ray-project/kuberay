@@ -527,7 +527,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitterTemplate = common.GetDefaultSubmitterTemplate(rayClusterInstance)
+		submitterTemplate = common.GetDefaultSubmitterTemplate(rayClusterInstance, rayJobInstance)
 		logger.Info("default submitter template is used")
 	} else {
 		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()

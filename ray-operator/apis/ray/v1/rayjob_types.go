@@ -96,6 +96,15 @@ type SubmitterConfig struct {
 	// BackoffLimit of the submitter k8s job.
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// +optional
+	Resources *SubmitterResources `json:"resources,omitempty"`
+}
+
+type SubmitterResources struct {
+	// +optional
+	Requests *corev1.ResourceList `json:"requests,omitempty"`
+	// +optional
+	Limits *corev1.ResourceList `json:"limits,omitempty"`
 }
 
 // RayJobSpec defines the desired state of RayJob
