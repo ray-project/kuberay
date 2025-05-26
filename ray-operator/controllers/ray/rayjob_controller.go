@@ -797,7 +797,7 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
 
-		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed || rayv1.IsJobTerminal(newRayJobStatus.JobStatus) {
+		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
 
