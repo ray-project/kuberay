@@ -332,7 +332,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			rayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To(int32(2))
-			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{FieldValidation: metav1.FieldValidationIgnore})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
@@ -435,7 +435,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 				rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(rtc.updatedMax)
-				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{FieldValidation: metav1.FieldValidationIgnore})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
 				// Check that replicas is set to the updatedMax
