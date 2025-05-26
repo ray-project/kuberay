@@ -282,7 +282,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-		logger.Info("GetJobInfo", "Job Info", jobInfo)
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
@@ -311,6 +310,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
+		// It is safe to convert uint64 to int64 here because Ray Core uses `int64_t` under the hood,
+		// even though the type defined in `message JobTableData` (gcs.proto) is `uint64`.
+		// See `gcs_job_manager.cc` and the function `current_sys_time_ms` for more details.
+		if jobInfo.StartTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.StartTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.StartTime))}
+		}
+		if jobInfo.EndTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
+		}
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -341,6 +349,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
+		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 

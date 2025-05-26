@@ -1,1 +1,0 @@
-../../clients/python-apiserver-client/README.md
