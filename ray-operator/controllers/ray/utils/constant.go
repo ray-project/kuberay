@@ -151,7 +151,7 @@ const (
 	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within
 	// `RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds after `JobStatus`
 	// reaches a terminal state, KubeRay will update `JobDeploymentStatus` to either
-	// `Complete` or `Failed`.
+	// `Complete` or `Failed` directly.
 
 	// If this occurs, it is likely due to a system-level issue (e.g., a Ray bug) that prevents the
 	// `ray job submit` process in the Kubernetes Job submitter from exiting.
