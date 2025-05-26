@@ -67,6 +67,10 @@ logging:
 #       batchScheduler:
 #         name: yunikorn
 #
+#  4. Use PodGroup
+#       batchScheduler:
+#         name: kube-scheduler
+#
 batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
