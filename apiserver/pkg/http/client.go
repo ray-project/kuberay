@@ -659,38 +659,33 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 
-	doReq := func() (*http.Response, error) {
+	doReq := func() ([]byte, int, error) {
 		response, err := krc.httpClient.Do(httpRequest)
 		if err != nil {
-			return nil, err
+			return nil, 0, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
 		}
-
-		defer func() {
-			response.Body.Close()
-		}()
-
-		return response, err
-	}
-
-	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
-	for attempt := 0; attempt <= krc.retryCfg.MaxRetry; attempt++ {
-		response, err := doReq()
-		// Error in sending the request, treated as non-retryable error
-		if err != nil {
-			lastStatus = nil
-			lastErr = fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
-			break
-		}
+		defer response.Body.Close()
 
 		bodyBytes, err := io.ReadAll(response.Body)
 		// Error in reading response body, treated as non-retryable error
 		if err != nil {
+			return nil, 0, fmt.Errorf("failed to read response body bytes: %w", err)
+		}
+
+		return bodyBytes, response.StatusCode, err
+	}
+
+	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
+	for attempt := 0; attempt <= krc.retryCfg.MaxRetry; attempt++ {
+		bodyBytes, statusCode, err := doReq()
+		// Error in sending the request, treated as non-retryable error
+		if err != nil {
 			lastStatus = nil
-			lastErr = fmt.Errorf("failed to read response body bytes: %w", err)
+			lastErr = err
 			break
 		}
 
-		if response.StatusCode == http.StatusOK {
+		if statusCode == http.StatusOK {
 			return bodyBytes, nil, nil
 		}
 
@@ -704,11 +699,11 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 		lastStatus = status
 		lastErr = &KuberayAPIServerClientError{
-			HTTPStatusCode: response.StatusCode,
+			HTTPStatusCode: statusCode,
 		}
 
 		// Retry only for HTTP status in the list
-		if !isRetryableHTTPStatus(response.StatusCode) {
+		if !isRetryableHTTPStatus(statusCode) {
 			break
 		}
 
@@ -727,39 +722,6 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 	}
 	return nil, lastStatus, lastErr
-}
-
-func RunWithRetry(f func() error, isRetriable func(err error) bool, cfg RetryConfig) error {
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.OverallTimeout)
-	defer cancel()
-
-	var lastErr error
-
-	for attempt := 0; attempt <= cfg.MaxRetry; attempt++ {
-		err := f()
-		if err == nil {
-			return nil
-		}
-
-		lastErr = err
-
-		if !isRetriable(err) {
-			break
-		}
-
-		sleep := cfg.InitBackoff * time.Duration(math.Pow(cfg.BackoffFactor, float64(attempt)))
-		if sleep > cfg.MaxBackoff {
-			sleep = cfg.MaxBackoff
-		}
-
-		select {
-		case <-time.After(sleep):
-		case <-ctx.Done():
-			return fmt.Errorf("retry timeout exceeded: %w", ctx.Err())
-		}
-	}
-
-	return lastErr
 }
 
 func isRetryableHTTPStatus(statusCode int) bool {
