@@ -53,6 +53,8 @@ func TestRayClusterAutoscaler(t *testing.T) {
 		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -121,6 +123,8 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 		test.T().Run(tc.name, func(_ *testing.T) {
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -184,6 +188,8 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -308,6 +314,8 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -398,6 +406,8 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 				rayClusterSpecAC := rayv1ac.RayClusterSpec().
 					WithEnableInTreeAutoscaling(true).
+					WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+						WithIdleTimeoutSeconds(10)).
 					WithRayVersion(GetRayVersion()).
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 						WithRayStartParams(map[string]string{"num-cpus": "0"}).
@@ -557,6 +567,8 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithIdleTimeoutSeconds(10)).
 				WithRayVersion(GetRayVersion()).
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
