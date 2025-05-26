@@ -156,7 +156,7 @@ const (
 	// If this occurs, it is likely due to a system-level issue (e.g., a Ray bug) that prevents the
 	// `ray job submit` process in the Kubernetes Job submitter from exiting.
 	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
-	DEFAULT_RAYJOB_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
+	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
