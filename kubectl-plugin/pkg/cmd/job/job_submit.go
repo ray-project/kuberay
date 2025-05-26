@@ -507,7 +507,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		rayJobID = options.submissionID
 		// Wait for command to finish when using predefined submission ID
 		if cmdErr := <-cmdErrChan; cmdErr != nil {
-			return fmt.Errorf("ray job submit command failed: %w", cmdErr)
+			return fmt.Errorf("Ray job submit command failed: %w", cmdErr)
 		}
 	} else {
 		// Create a channel to receive rayJobID from the API
@@ -536,17 +536,17 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		select {
 		case cmdErr := <-cmdErrChan:
 			if cmdErr != nil {
-				return fmt.Errorf("ray job submit command failed: %w", cmdErr)
+				return fmt.Errorf("Ray job submit command failed: %w", cmdErr)
 			}
 			// Command finished successfully, wait for job ID
 			if jobID, ok := <-rayJobIDChan; ok {
 				rayJobID = jobID
 			} else {
-				return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v seconds", jobIDTimeout)
+				return fmt.Errorf("Timeout waiting for job ID from API after %v seconds", jobIDTimeout)
 			}
 		case jobID, ok := <-rayJobIDChan:
 			if !ok {
-				return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v seconds", jobIDTimeout)
+				return fmt.Errorf("Timeout waiting for job ID from API after %v seconds", jobIDTimeout)
 			}
 			rayJobID = jobID
 		}
@@ -567,6 +567,10 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.noWait {
 		fmt.Printf("Ray job submitted with ID %s\n", rayJobID)
 		return nil
+	}
+	// Wait for Ray job submit to finish.
+	if err := <-cmdErrChan; err != nil {
+		return fmt.Errorf("Ray job submit command failed: %w", err)
 	}
 	// Wait for the Ray job to finish
 	watcher, err := k8sClients.RayClient().RayV1().
