@@ -702,3 +702,10 @@ func GetClusterType() bool {
 	}
 	return false
 }
+
+func GetContainerCommand() []string {
+	if s := os.Getenv(ENABLE_LOGIN_SHELL); strings.ToLower(s) == "true" {
+		return []string{"/bin/bash", "-lc", "--"}
+	}
+	return []string{"/bin/bash", "-c", "--"}
+}

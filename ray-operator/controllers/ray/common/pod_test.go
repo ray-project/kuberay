@@ -849,8 +849,8 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 
 func TestBuildPod_WithFeatureFlagLoginBash(t *testing.T) {
 	ctx := context.Background()
-	os.Setenv(EnableLoginBashEnvKey, "true")
-	defer os.Unsetenv(EnableLoginBashEnvKey)
+	os.Setenv(utils.ENABLE_LOGIN_SHELL, "true")
+	defer os.Unsetenv(utils.ENABLE_LOGIN_SHELL)
 
 	cluster := instance.DeepCopy()
 	cluster.Spec.EnableInTreeAutoscaling = &trueFlag

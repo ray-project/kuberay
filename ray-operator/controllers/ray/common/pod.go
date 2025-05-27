@@ -33,13 +33,10 @@ const (
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
 	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
-
-	// EnableLoginBashEnvKey is the environment variable to enable login bash for Ray containers.
-	EnableLoginBashEnvKey           = "ENABLE_LOGIN_BASH"
-	NeuronCoreContainerResourceName = "aws.amazon.com/neuroncore"
-	NeuronCoreRayResourceName       = "neuron_cores"
-	TPUContainerResourceName        = "google.com/tpu"
-	TPURayResourceName              = "TPU"
+	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName          = "neuron_cores"
+	TPUContainerResourceName           = "google.com/tpu"
+	TPURayResourceName                 = "TPU"
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -243,13 +240,6 @@ func getEnableProbesInjection() bool {
 	return true
 }
 
-func GetEnableLoginBash() bool {
-	if s := os.Getenv(EnableLoginBashEnvKey); strings.ToLower(s) == "true" {
-		return true
-	}
-	return false
-}
-
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -269,7 +259,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-c", "--"},
+			Command:         utils.GetContainerCommand(),
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -312,9 +302,6 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 					corev1.ResourceMemory: resource.MustParse("256Mi"),
 				},
 			},
-		}
-		if GetEnableLoginBash() {
-			initContainer.Command = []string{"/bin/bash", "-lc", "--"}
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
@@ -478,10 +465,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-c", "--"}
-		if GetEnableLoginBash() {
-			pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
-		}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand()
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -548,11 +532,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				Value: "v1",
 			},
 		},
-		Command: []string{
-			"/bin/bash",
-			"-c",
-			"--",
-		},
+		Command: utils.GetContainerCommand(),
 		Args: []string{
 			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},
@@ -566,9 +546,6 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				corev1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
-	}
-	if GetEnableLoginBash() {
-		container.Command = []string{"/bin/bash", "-lc", "--"}
 	}
 	return container
 }
