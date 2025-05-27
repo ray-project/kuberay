@@ -730,7 +730,6 @@ func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.I
 
 // addGatewayListenersForRayService is a helper function to returns Gateway Listeners
 func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
-	// servePorts := serveService.Spec.Ports
 	listeners := make([]gwv1.Listener, 0, 1)
 	listenerName := fmt.Sprintf("%s-listener", rayServiceInstance.Name)
 	listener := gwv1.Listener{
@@ -741,26 +740,6 @@ func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gw
 	listeners = append(listeners, listener)
 
 	return listeners
-
-	// Add listener for Serve Ports
-	// for _, servicePort := range servePorts {
-	// 	// Conditionally format unique Listener name. servicePort.Name is required
-	// 	// for services with multiple Service Ports.
-	// 	var listenerName string
-	// 	if servicePort.Name != "" {
-	// 		listenerName = fmt.Sprintf("%s-%s-listener", serveService.Name, servicePort.Name)
-	// 	} else {
-	// 		listenerName = fmt.Sprintf("%s-listener", serveService.Name)
-	// 	}
-
-	// 	listener := gwv1.Listener{
-	// 		Name:     gwv1.SectionName(listenerName),
-	// 		Protocol: gwv1.HTTPProtocolType, // only support HTTP
-	// 		Port:     gwv1.PortNumber(servicePort.Port),
-	// 	}
-	// 	listeners = append(listeners, listener)
-	// }
-	// return listeners
 }
 
 // Check where we are running. We are trying to distinguish here whether

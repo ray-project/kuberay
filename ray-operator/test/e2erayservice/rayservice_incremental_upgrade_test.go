@@ -11,6 +11,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -30,6 +31,8 @@ func GetHeadServiceExternalIP(t *testing.T, clusterName, namespace string) (stri
 }
 
 func TestRayServiceIncrementalUpgrade(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
 	test := With(t)
 	g := NewWithT(t)
 
