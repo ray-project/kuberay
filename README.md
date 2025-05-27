@@ -79,7 +79,7 @@ See [KubeRay Ecosystem](https://docs.ray.io/en/latest/cluster/kubernetes/k8s-eco
 * [How Rubrik Unlocked AI at Scale with Ray Serve | Ray Summit 2024](https://youtu.be/Md5vww4ardo?si=leiuvNkDy2fKeK8r) Rubrik
 * [Supercharge Your AI Platform with KubeRay | KubeCon 2023 NA](https://youtu.be/DgfJR6wR4BQ?si=QuK3j7VEkteSwglA) Anyscale + Google
 * [Sailing Ray Workloads with KubeRay and Kueue in Kubernetes](https://www.youtube.com/watch?v=Q-sQLDMeJ8M) Volcano + DaoCloud
-* [Serving Large Language Models with KubeRay on TPUs](https://raysummit.anyscale.com/agenda/sessions/135) Google
+* [Serving Large Language Models with KubeRay on TPUs](https://www.youtube.com/watch?v=RK_u6cfPnnw) Google
 
 ## Development
 
