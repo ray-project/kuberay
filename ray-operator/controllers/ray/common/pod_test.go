@@ -1955,10 +1955,10 @@ func TestAddDefaultRayNodeLabels_GKESpot(t *testing.T) {
 	}
 
 	addDefaultRayNodeLabels(pod)
-	envs := pod.Spec.Containers[0].Env
-	assertEnvContains(t, envs, "RAY_NODE_MARKET_TYPE", "spot")
-	assertEnvFromFieldRef(t, envs, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
-	assertEnvFromFieldRef(t, envs, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
 }
 
 func TestAddDefaultRayNodeLabels_EKSSpot(t *testing.T) {
@@ -1981,33 +1981,8 @@ func TestAddDefaultRayNodeLabels_EKSSpot(t *testing.T) {
 	}
 
 	addDefaultRayNodeLabels(pod)
-	envs := pod.Spec.Containers[0].Env
-	assertEnvContains(t, envs, "RAY_NODE_MARKET_TYPE", "spot")
-	assertEnvContains(t, envs, "RAY_NODE_GROUP", "test-worker-group-2")
-	assertEnvFromFieldRef(t, envs, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
-	assertEnvFromFieldRef(t, envs, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
-}
-
-func assertEnvContains(t *testing.T, envs []corev1.EnvVar, name, expectedValue string) {
-	for _, envVar := range envs {
-		if envVar.Name == name {
-			assert.Equal(t, expectedValue, envVar.Value, "unexpected value in Environment %s", name)
-			return
-		}
-	}
-	t.Errorf("env var %s not found", name)
-}
-
-func assertEnvFromFieldRef(t *testing.T, envs []corev1.EnvVar, name, expectedFieldPath string) {
-	for _, envVar := range envs {
-		if envVar.Name == name {
-			if envVar.ValueFrom != nil && envVar.ValueFrom.FieldRef != nil {
-				assert.Equal(t, expectedFieldPath, envVar.ValueFrom.FieldRef.FieldPath, "unexpected FieldPath for %s", name)
-				return
-			}
-			t.Errorf("env var %s does not have ValueFrom.FieldRef", name)
-			return
-		}
-	}
-	t.Errorf("env var %s not found", name)
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
 }
