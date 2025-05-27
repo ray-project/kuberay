@@ -3,8 +3,10 @@ package job
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,7 +29,6 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
@@ -35,13 +36,10 @@ const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
 	portforwardtimeout = 60.0
-	jobIDTimeout       = 60.0
-	jobIDPollInterval  = 1.0
 )
 
 type SubmitJobOptions struct {
 	cmdFactory               cmdutil.Factory
-	dashboardClient          utils.RayDashboardClientInterface
 	ioStreams                *genericiooptions.IOStreams
 	RayJob                   *rayv1.RayJob
 	workerNodeSelectors      map[string]string
@@ -471,10 +469,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	fmt.Printf("Portforwarding started on %s\n", dashboardAddr)
 
-	// Initialize dashboard client after port-forwarding is ready
-	options.dashboardClient = &utils.RayDashboardClient{}
-	if err := options.dashboardClient.InitClient(portforwardctx, strings.TrimPrefix(dashboardAddr, "http://"), nil); err != nil {
-		return fmt.Errorf("failed to initialize dashboard client: %w", err)
+	// If submission ID is not provided by the user, generate one.
+	if options.submissionID == "" {
+		generatedID, err := generateSubmissionID()
+		if err != nil {
+			return fmt.Errorf("failed to generate submission ID: %w", err)
+		}
+		options.submissionID = generatedID
+		fmt.Printf("Generated submission ID for Ray job: %s\n", options.submissionID)
 	}
 
 	// Submitting ray job to cluster
@@ -503,38 +505,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 	}()
 
-	var rayJobID string
-	if options.submissionID != "" {
-		rayJobID = options.submissionID
-	} else {
-		// Create a channel to receive rayJobID from the API
-		rayJobIDChan := make(chan string)
-
-		// Poll the API for the rayJobID
-		go func() {
-			pollStart := time.Now()
-			for {
-				jobID, err := options.getJobIDViaAPI(portforwardctx)
-				if err == nil {
-					rayJobIDChan <- jobID
-					break
-				}
-				if time.Since(pollStart).Seconds() > jobIDTimeout {
-					close(rayJobIDChan)
-					break
-				}
-				sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
-				time.Sleep(sleepDur)
-			}
-		}()
-
-		// Wait till rayJobID is populated or the timeout occurs
-		jobID, ok := <-rayJobIDChan
-		if !ok {
-			return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v", jobIDTimeout)
-		}
-		rayJobID = jobID
-	}
+	rayJobID := options.submissionID
 
 	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
 	rayCmdStdErrScanner := bufio.NewScanner(rayCmdStdErr)
@@ -693,24 +664,6 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	return raySubmitCmd, nil
 }
 
-// Get the job ID from the dashboard API
-func (options *SubmitJobOptions) getJobIDViaAPI(ctx context.Context) (string, error) {
-	jobs, err := options.dashboardClient.ListJobs(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to list jobs via dashboard client: %w", err)
-	}
-
-	if jobs == nil || len(*jobs) == 0 {
-		return "", fmt.Errorf("no jobs returned from dashboard")
-	}
-
-	// Basically, there is only one job in the list, so we can just return the first one.
-	for _, job := range *jobs {
-		return job.SubmissionId, nil
-	}
-	return "", fmt.Errorf("no jobs found from dashboard")
-}
-
 // Decode RayJob YAML if we decide to submit job using kube client
 func decodeRayJobYaml(rayJobFilePath string) (*rayv1.RayJob, error) {
 	decodedRayJob := &rayv1.RayJob{}
@@ -750,4 +703,22 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 
 func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
 	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready
+}
+
+// Generates a 16-character random ID with a prefix, mimicking Ray Job submission_id.
+// ref: ray/python/ray/dashboard/modules/job/job_manager.py
+func generateSubmissionID() (string, error) {
+	// ASCII letters and digits, excluding confusing characters I, l, O, 0, o.
+	const possibleChars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789"
+
+	idRunes := make([]rune, 16)
+	for i := range idRunes {
+		// Securely generate a random index.
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(possibleChars))))
+		if err != nil {
+			return "", err
+		}
+		idRunes[i] = rune(possibleChars[idx.Int64()])
+	}
+	return fmt.Sprintf("raysubmit_%s", string(idRunes)), nil
 }
