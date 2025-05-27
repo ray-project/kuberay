@@ -493,6 +493,9 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType)
 	}
 
+	// add downward API environment variables for Ray default node labels
+	addDefaultRayNodeLabels(&pod)
+
 	return pod
 }
 
@@ -681,6 +684,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 	container.Env = append(container.Env, rayCloudInstanceID)
 
 	// RAY_NODE_TYPE_NAME is used by Ray Autoscaler V2 (alpha). See https://github.com/ray-project/kuberay/issues/1965 for more details.
+	// This value can be used to set the ray.io/node-group default Ray node label.
 	nodeGroupNameEnv := corev1.EnvVar{
 		Name: utils.RAY_NODE_TYPE_NAME,
 		ValueFrom: &corev1.EnvVarSource{
@@ -1033,4 +1037,54 @@ func isGPUResourceKey(key string) bool {
 	// reference: https://github.com/NVIDIA/k8s-device-plugin#configuration-option-details
 	match, _ := regexp.MatchString(`nvidia\.com/mig-\d+g\.\d+gb$`, key)
 	return match
+}
+
+// addDefaultRayNodeLabels passes default Ray node labels to Ray runtime environment
+func addDefaultRayNodeLabels(pod *corev1.Pod) {
+	pod.Spec.Containers[utils.RayContainerIndex].Env = append(
+		pod.Spec.Containers[utils.RayContainerIndex].Env,
+		// used to set the ray.io/market-type node label
+		corev1.EnvVar{
+			Name:  "RAY_NODE_MARKET_TYPE",
+			Value: getRayMarketTypeFromNodeSelector(pod),
+		},
+		// used to set the ray.io/node-group node label
+		corev1.EnvVar{
+			Name:  "RAY_NODE_GROUP",
+			Value: pod.Labels[utils.RayNodeGroupLabelKey],
+		},
+		// uses downward api to set the ray.io/availability-zone node label
+		corev1.EnvVar{
+			Name: "RAY_NODE_ZONE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.labels['topology.kubernetes.io/zone']",
+				},
+			},
+		},
+		// uses downward api  to set the ray.io/availability-region node label
+		corev1.EnvVar{
+			Name: "RAY_NODE_REGION",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.labels['topology.kubernetes.io/region']",
+				},
+			},
+		},
+	)
+}
+
+// getRayMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type label
+// based on user-provided Kubernetes nodeSelector values.
+func getRayMarketTypeFromNodeSelector(pod *corev1.Pod) string {
+	selector := pod.Spec.NodeSelector
+	// check for GKE spot instance selector
+	if val, ok := selector["cloud.google.com/gke-spot"]; ok && val == "true" {
+		return "spot"
+	}
+	// check for EKS spot instance selector
+	if val, ok := selector["eks.amazonaws.com/capacityType"]; ok && val == "SPOT" {
+		return "spot"
+	}
+	return "on-demand"
 }
