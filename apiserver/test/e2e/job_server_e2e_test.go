@@ -215,6 +215,7 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", tc.Input.Job, actualJob)
 				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
@@ -593,15 +594,16 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 			Name: "Submit a correct job on an already running cluster",
 			Input: &api.CreateRayJobRequest{
 				Job: &api.RayJob{
-					Name:                    tCtx.GetNextName(),
-					Namespace:               tCtx.GetNamespaceName(),
-					User:                    "r2d2",
-					Version:                 tCtx.GetRayVersion(),
-					Entrypoint:              "python /home/ray/samples/counter_sample.py",
-					Metadata:                map[string]string{},
-					RuntimeEnv:              "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
-					ClusterSelector:         map[string]string{"ray.io/cluster": cluster.Name},
-					TtlSecondsAfterFinished: 60,
+					Name:                     tCtx.GetNextName(),
+					Namespace:                tCtx.GetNamespaceName(),
+					User:                     "r2d2",
+					Version:                  tCtx.GetRayVersion(),
+					Entrypoint:               "python /home/ray/samples/counter_sample.py",
+					Metadata:                 map[string]string{},
+					RuntimeEnv:               "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+					ClusterSelector:          map[string]string{"ray.io/cluster": cluster.Name},
+					ShutdownAfterJobFinishes: true,
+					TtlSecondsAfterFinished:  60,
 					JobSubmitter: &api.RayJobSubmitter{
 						Image: cluster.ClusterSpec.HeadGroupSpec.Image,
 					},
@@ -642,6 +644,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", tc.Input.Job, actualJob)
 				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
@@ -720,6 +723,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
+	require.True(t, jobSpecEqual(testJobRequest.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", testJobRequest.Job, actualJob)
 	waitForRayJobInExpectedStatuses(t, tCtx, testJobRequest.Job.Name, expectedJobStatues)
 	return testJobRequest
 }

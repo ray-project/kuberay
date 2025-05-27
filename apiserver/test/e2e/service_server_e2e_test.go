@@ -137,6 +137,7 @@ func TestCreateServiceV2(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualService, "A service is expected")
+				require.True(t, serviceSpecEqual(tc.Input.Service, actualService), "Service spec should match the request. Expected: %v, Actual: %v", tc.Input.Service, actualService)
 				tCtx.DeleteRayService(t, actualService.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -601,6 +602,7 @@ func createTestServiceV2(t *testing.T, tCtx *End2EndTestingContext) *api.CreateR
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualService, "A service is expected")
+	require.True(t, serviceSpecEqual(testServiceRequest.Service, actualService), "The service spec should be equal. Expected: %v, Actual: %v", testServiceRequest.Service, actualService)
 	checkRayServiceCreatedSuccessfully(t, tCtx, actualService.Name)
 	return testServiceRequest
 }
