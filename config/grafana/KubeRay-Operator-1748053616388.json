@@ -231,130 +231,6 @@
       "type": "timeseries"
     },
     {
-      "cards": {},
-      "color": {
-        "cardColor": "#b4ff00",
-        "colorScale": "sqrt",
-        "colorScheme": "interpolateBlues",
-        "exponent": 0.5,
-        "mode": "spectrum"
-      },
-      "dataFormat": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "scaleDistribution": {
-              "type": "linear"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 9
-      },
-      "heatmap": {},
-      "hideZeroBuckets": true,
-      "highlightCards": true,
-      "id": 62,
-      "legend": {
-        "show": true
-      },
-      "options": {
-        "calculate": true,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size",
-            "value": "1min"
-          }
-        },
-        "cellGap": 2,
-        "cellValues": {},
-        "color": {
-          "exponent": 0.5,
-          "fill": "#b4ff00",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "Blues",
-          "steps": 128
-        },
-        "exemplars": {
-          "color": "rgba(255,0,255,0.7)"
-        },
-        "filterValues": {
-          "le": 1e-9
-        },
-        "legend": {
-          "show": true
-        },
-        "rowsFrame": {
-          "layout": "auto"
-        },
-        "showValue": "never",
-        "tooltip": {
-          "show": true,
-          "yHistogram": false
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "decimals": 0,
-          "reverse": false,
-          "unit": "s"
-        }
-      },
-      "pluginVersion": "10.0.2",
-      "reverseYBuckets": false,
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
-          },
-          "editorMode": "code",
-          "exemplar": true,
-          "expr": "sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])) by (pod,le,controller)",
-          "format": "time_series",
-          "hide": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Reconciling Latency Over Time",
-      "tooltip": {
-        "show": true,
-        "showHistogram": false
-      },
-      "type": "heatmap",
-      "xAxis": {
-        "show": true
-      },
-      "xBucketSize": "1min",
-      "yAxis": {
-        "decimals": 0,
-        "format": "s",
-        "logBase": 1,
-        "show": true,
-        "splitFactor": 1
-      },
-      "yBucketBound": "auto"
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -458,8 +334,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 24,
+        "x": 0,
         "y": 9
       },
       "id": 54,
@@ -562,8 +438,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -579,7 +454,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 18
+            "y": 26
           },
           "id": 46,
           "options": {
@@ -670,8 +545,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -687,7 +561,7 @@
             "h": 10,
             "w": 9,
             "x": 0,
-            "y": 26
+            "y": 34
           },
           "id": 43,
           "options": {
@@ -781,8 +655,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -846,7 +719,7 @@
             "h": 10,
             "w": 15,
             "x": 9,
-            "y": 26
+            "y": 34
           },
           "id": 32,
           "options": {
@@ -955,8 +828,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1020,7 +892,7 @@
             "h": 9,
             "w": 13,
             "x": 0,
-            "y": 36
+            "y": 44
           },
           "id": 55,
           "options": {
@@ -1116,8 +988,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1181,7 +1052,7 @@
             "h": 9,
             "w": 11,
             "x": 13,
-            "y": 36
+            "y": 44
           },
           "id": 45,
           "options": {
@@ -1296,8 +1167,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1313,7 +1183,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 19
+            "y": 27
           },
           "id": 61,
           "options": {
@@ -1414,8 +1284,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1430,7 +1299,7 @@
             "h": 9,
             "w": 13,
             "x": 0,
-            "y": 27
+            "y": 35
           },
           "id": 63,
           "options": {
@@ -1524,8 +1393,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1589,7 +1457,7 @@
             "h": 9,
             "w": 11,
             "x": 13,
-            "y": 27
+            "y": 35
           },
           "id": 64,
           "options": {
@@ -1670,7 +1538,7 @@
       "type": "row"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1678,699 +1546,700 @@
         "y": 19
       },
       "id": 57,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "align": "center",
+                "cellOptions": {
+                  "type": "color-text"
+                },
+                "filterable": false,
+                "inspect": false
+              },
+              "mappings": [],
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 19
+          },
+          "id": 58,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": true
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Microservices"
+              }
+            ]
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "count(kuberay_job_info) by (namespace)",
+              "format": "table",
+              "instant": true,
+              "interval": "",
+              "legendFormat": "",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Namespace Resource Statistics",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "Time 1": 2,
+                  "Time 2": 4,
+                  "Time 3": 6,
+                  "Value #A": 3,
+                  "Value #C": 5,
+                  "Value #D": 1,
+                  "namespace": 0
+                },
+                "renameByName": {
+                  "Time 1": "",
+                  "Time 2": "",
+                  "Value": "RayJob",
+                  "Value #A": "Pod",
+                  "Value #B": "Configuration",
+                  "Value #C": "SVC",
+                  "Value #D": "Microservices",
+                  "Value #E": "Passwords",
+                  "namespace": "Namespace"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Displays the average time duration from RayJob CR initialization to reaching a terminal state in the selected namespace(s)",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 9,
+            "x": 0,
+            "y": 27
+          },
+          "id": 59,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "avg(kuberay_job_execution_duration_seconds{namespace=~\"$namespace\"})",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Seconds",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Execution Duration (Avg)",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "__name__": true,
+                  "container": true,
+                  "endpoint": true,
+                  "instance": true,
+                  "job": true,
+                  "namespace": true,
+                  "pod": true,
+                  "service": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "Value #A": 11,
+                  "__name__": 1,
+                  "container": 2,
+                  "endpoint": 3,
+                  "exported_namespace": 7,
+                  "instance": 4,
+                  "job": 5,
+                  "name": 6,
+                  "namespace": 8,
+                  "pod": 9,
+                  "service": 10
+                },
+                "renameByName": {
+                  "Value": "Seconds",
+                  "Value #A": "Second"
+                }
+              }
+            }
+          ],
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "\n",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pod"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 259
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "cluster_name"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 227
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "__name__ 1"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 160
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "name"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 224
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 15,
+            "x": 9,
+            "y": 27
+          },
+          "id": 60,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "frameIndex": 0,
+            "showHeader": true,
+            "sortBy": []
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "kuberay_job_execution_duration_seconds{namespace=~\"$namespace\"}",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Execution Duration ",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Value": false,
+                  "Value #A": false,
+                  "Value #B": true,
+                  "__name__": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "container": true,
+                  "container 1": true,
+                  "container 2": true,
+                  "endpoint": true,
+                  "endpoint 1": true,
+                  "endpoint 2": true,
+                  "instance": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "job": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job_deployment_status": false,
+                  "namespace 2": true,
+                  "pod": true,
+                  "pod 1": true,
+                  "pod 2": true,
+                  "retry_count": false,
+                  "service": true,
+                  "service 1": true,
+                  "service 2": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "Value": 12,
+                  "__name__": 3,
+                  "container": 4,
+                  "endpoint": 5,
+                  "instance": 6,
+                  "job": 7,
+                  "job_deployment_status": 8,
+                  "name": 1,
+                  "namespace": 2,
+                  "pod": 9,
+                  "retry_count": 10,
+                  "service": 11
+                },
+                "renameByName": {
+                  "Value": "seconds",
+                  "Value #A": "seconds"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 9,
+            "x": 0,
+            "y": 37
+          },
+          "id": 67,
+          "options": {
+            "displayLabels": [
+              "percent"
+            ],
+            "legend": {
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "values": []
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum(kuberay_job_deployment_status{namespace=~\"$namespace\"}) by (deployment_status)",
+              "format": "time_series",
+              "instant": true,
+              "interval": "",
+              "legendFormat": "{{deployment_status}}",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Deployment Status",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "Time 4": true,
+                  "Time 5": true
+                },
+                "includeByName": {},
+                "indexByName": {
+                  "Time 1": 2,
+                  "Time 2": 4,
+                  "Time 3": 6,
+                  "Value #A": 3,
+                  "Value #C": 5,
+                  "Value #D": 1,
+                  "namespace": 0
+                },
+                "renameByName": {
+                  "Time 1": "",
+                  "Time 2": "",
+                  "Value": "RayJob",
+                  "Value #A": "Pod",
+                  "Value #B": "Configuration",
+                  "Value #C": "SVC",
+                  "Value #D": "Microservices",
+                  "Value #E": "Passwords",
+                  "namespace": "Namespace"
+                }
+              }
+            }
+          ],
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "\n",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pod"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 259
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "cluster_name"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 227
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "__name__ 1"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 160
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "name"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 224
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 15,
+            "x": 9,
+            "y": 37
+          },
+          "id": 68,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "frameIndex": 0,
+            "showHeader": true,
+            "sortBy": []
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "kuberay_job_deployment_status{namespace=~\"$namespace\", deployment_status=~\"Failed|Suspending|Suspended|Retrying|Waiting\"}",
+              "format": "table",
+              "hide": false,
+              "instant": true,
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Deployment Status (Failed / Suspending / Suspended / Retrying / Waiting)",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Value": true,
+                  "Value #A": false,
+                  "Value #B": true,
+                  "__name__": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "container": true,
+                  "container 1": true,
+                  "container 2": true,
+                  "endpoint": true,
+                  "endpoint 1": true,
+                  "endpoint 2": true,
+                  "instance": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "job": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job_deployment_status": false,
+                  "namespace 2": true,
+                  "pod": true,
+                  "pod 1": true,
+                  "pod 2": true,
+                  "retry_count": false,
+                  "service": true,
+                  "service 1": true,
+                  "service 2": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "Value": 11,
+                  "__name__": 4,
+                  "container": 5,
+                  "deployment_status": 3,
+                  "endpoint": 6,
+                  "instance": 7,
+                  "job": 8,
+                  "name": 1,
+                  "namespace": 2,
+                  "pod": 9,
+                  "service": 10
+                },
+                "renameByName": {
+                  "Value": "",
+                  "Value #A": "seconds"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        }
+      ],
       "title": "RayJob",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "align": "center",
-            "cellOptions": {
-              "type": "color-text"
-            },
-            "filterable": false,
-            "inspect": false
-          },
-          "mappings": [],
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 20
-      },
-      "id": 58,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": true
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Microservices"
-          }
-        ]
-      },
-      "pluginVersion": "10.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "count(kuberay_job_info) by (namespace)",
-          "format": "table",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Namespace Resource Statistics",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Time 1": true,
-              "Time 2": true,
-              "Time 3": true,
-              "Time 4": true,
-              "Time 5": true
-            },
-            "includeByName": {},
-            "indexByName": {
-              "Time 1": 2,
-              "Time 2": 4,
-              "Time 3": 6,
-              "Value #A": 3,
-              "Value #C": 5,
-              "Value #D": 1,
-              "namespace": 0
-            },
-            "renameByName": {
-              "Time 1": "",
-              "Time 2": "",
-              "Value": "RayJob",
-              "Value #A": "Pod",
-              "Value #B": "Configuration",
-              "Value #C": "SVC",
-              "Value #D": "Microservices",
-              "Value #E": "Passwords",
-              "namespace": "Namespace"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Displays the average time duration from RayJob CR initialization to reaching a terminal state in the selected namespace(s)",
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 9,
-        "x": 0,
-        "y": 28
-      },
-      "id": 59,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "avg(kuberay_job_execution_duration_seconds{namespace=~\"$namespace\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Seconds",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Execution Duration (Avg)",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "__name__": true,
-              "container": true,
-              "endpoint": true,
-              "instance": true,
-              "job": true,
-              "namespace": true,
-              "pod": true,
-              "service": true
-            },
-            "indexByName": {
-              "Time": 0,
-              "Value #A": 11,
-              "__name__": 1,
-              "container": 2,
-              "endpoint": 3,
-              "exported_namespace": 7,
-              "instance": 4,
-              "job": 5,
-              "name": 6,
-              "namespace": 8,
-              "pod": 9,
-              "service": 10
-            },
-            "renameByName": {
-              "Value": "Seconds",
-              "Value #A": "Second"
-            }
-          }
-        }
-      ],
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "\n",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "pod"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 259
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cluster_name"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 227
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "__name__ 1"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 160
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "name"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 224
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 15,
-        "x": 9,
-        "y": 28
-      },
-      "id": 60,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "frameIndex": 0,
-        "showHeader": true,
-        "sortBy": []
-      },
-      "pluginVersion": "10.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "kuberay_job_execution_duration_seconds{namespace=~\"$namespace\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Execution Duration ",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Time 1": true,
-              "Time 2": true,
-              "Value": false,
-              "Value #A": false,
-              "Value #B": true,
-              "__name__": true,
-              "__name__ 1": true,
-              "__name__ 2": true,
-              "container": true,
-              "container 1": true,
-              "container 2": true,
-              "endpoint": true,
-              "endpoint 1": true,
-              "endpoint 2": true,
-              "instance": true,
-              "instance 1": true,
-              "instance 2": true,
-              "job": true,
-              "job 1": true,
-              "job 2": true,
-              "job_deployment_status": false,
-              "namespace 2": true,
-              "pod": true,
-              "pod 1": true,
-              "pod 2": true,
-              "retry_count": false,
-              "service": true,
-              "service 1": true,
-              "service 2": true
-            },
-            "indexByName": {
-              "Time": 0,
-              "Value": 12,
-              "__name__": 3,
-              "container": 4,
-              "endpoint": 5,
-              "instance": 6,
-              "job": 7,
-              "job_deployment_status": 8,
-              "name": 1,
-              "namespace": 2,
-              "pod": 9,
-              "retry_count": 10,
-              "service": 11
-            },
-            "renameByName": {
-              "Value": "seconds",
-              "Value #A": "seconds"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": []
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 9,
-        "x": 0,
-        "y": 38
-      },
-      "id": 67,
-      "options": {
-        "displayLabels": [
-          "percent"
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true,
-          "values": []
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(kuberay_job_deployment_status{namespace=~\"$namespace\"}) by (deployment_status)",
-          "format": "time_series",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "{{deployment_status}}",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Deployment Status",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Time 1": true,
-              "Time 2": true,
-              "Time 3": true,
-              "Time 4": true,
-              "Time 5": true
-            },
-            "includeByName": {},
-            "indexByName": {
-              "Time 1": 2,
-              "Time 2": 4,
-              "Time 3": 6,
-              "Value #A": 3,
-              "Value #C": 5,
-              "Value #D": 1,
-              "namespace": 0
-            },
-            "renameByName": {
-              "Time 1": "",
-              "Time 2": "",
-              "Value": "RayJob",
-              "Value #A": "Pod",
-              "Value #B": "Configuration",
-              "Value #C": "SVC",
-              "Value #D": "Microservices",
-              "Value #E": "Passwords",
-              "namespace": "Namespace"
-            }
-          }
-        }
-      ],
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "\n",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "pod"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 259
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cluster_name"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 227
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "__name__ 1"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 160
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "name"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 224
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 15,
-        "x": 9,
-        "y": 38
-      },
-      "id": 68,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "frameIndex": 0,
-        "showHeader": true,
-        "sortBy": []
-      },
-      "pluginVersion": "10.0.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "kuberay_job_deployment_status{namespace=~\"$namespace\", deployment_status=~\"Failed|Suspending|Suspended|Retrying|Waiting\"}",
-          "format": "table",
-          "hide": false,
-          "instant": true,
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Deployment Status (Failed / Suspending / Suspended / Retrying / Waiting)",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Time 1": true,
-              "Time 2": true,
-              "Value": true,
-              "Value #A": false,
-              "Value #B": true,
-              "__name__": true,
-              "__name__ 1": true,
-              "__name__ 2": true,
-              "container": true,
-              "container 1": true,
-              "container 2": true,
-              "endpoint": true,
-              "endpoint 1": true,
-              "endpoint 2": true,
-              "instance": true,
-              "instance 1": true,
-              "instance 2": true,
-              "job": true,
-              "job 1": true,
-              "job 2": true,
-              "job_deployment_status": false,
-              "namespace 2": true,
-              "pod": true,
-              "pod 1": true,
-              "pod 2": true,
-              "retry_count": false,
-              "service": true,
-              "service 1": true,
-              "service 2": true
-            },
-            "indexByName": {
-              "Time": 0,
-              "Value": 11,
-              "__name__": 4,
-              "container": 5,
-              "deployment_status": 3,
-              "endpoint": 6,
-              "instance": 7,
-              "job": 8,
-              "name": 1,
-              "namespace": 2,
-              "pod": 9,
-              "service": 10
-            },
-            "renameByName": {
-              "Value": "",
-              "Value #A": "seconds"
-            }
-          }
-        }
-      ],
-      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -2433,7 +2302,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "raycluster",
           "value": "raycluster"
         },
@@ -2460,8 +2329,8 @@
       {
         "current": {
           "selected": false,
-          "text": "kuberay-operator-7879df585-ght6f",
-          "value": "kuberay-operator-7879df585-ght6f"
+          "text": "kuberay-operator-7879df585-dggj7",
+          "value": "kuberay-operator-7879df585-dggj7"
         },
         "datasource": {
           "type": "prometheus",
@@ -2486,7 +2355,7 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
