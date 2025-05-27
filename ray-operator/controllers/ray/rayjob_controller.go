@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -230,6 +231,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
+		if shouldUpdate := checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
 
@@ -920,4 +925,27 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
 	return true
+}
+
+func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
+		rayJobDeploymentGracePeriodTime, err := strconv.Atoi(os.Getenv(utils.RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS))
+		if err != nil {
+			rayJobDeploymentGracePeriodTime = utils.DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
+		}
+
+		if time.Now().Before(rayJob.Status.RayJobStatusInfo.EndTime.Add(time.Duration(rayJobDeploymentGracePeriodTime) * time.Second)) {
+			return false
+		}
+		logger.Info("JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state.", "EndTime", rayJob.Status.RayJobStatusInfo.EndTime, "rayJobDeploymentGracePeriodTime", rayJobDeploymentGracePeriodTime)
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+		if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+		}
+		rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
+		rayJob.Status.Message = "JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state."
+		return true
+	}
+	return false
 }

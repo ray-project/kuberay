@@ -40,42 +40,44 @@ const (
 )
 
 type SubmitJobOptions struct {
-	cmdFactory          cmdutil.Factory
-	dashboardClient     utils.RayDashboardClientInterface
-	ioStreams           *genericiooptions.IOStreams
-	RayJob              *rayv1.RayJob
-	workerNodeSelectors map[string]string
-	headNodeSelectors   map[string]string
-	logColor            string
-	image               string
-	fileName            string
-	workingDir          string
-	runtimeEnv          string
-	headers             string
-	verify              string
-	cluster             string
-	runtimeEnvJson      string
-	entryPointResource  string
-	metadataJson        string
-	logStyle            string
-	submissionID        string
-	rayjobName          string
-	rayVersion          string
-	entryPoint          string
-	headCPU             string
-	headMemory          string
-	headGPU             string
-	workerCPU           string
-	workerMemory        string
-	workerGPU           string
-	namespace           string
-	entryPointMemory    int
-	entryPointGPU       float32
-	workerReplicas      int32
-	entryPointCPU       float32
-	noWait              bool
-	dryRun              bool
-	verbose             bool
+	cmdFactory               cmdutil.Factory
+	dashboardClient          utils.RayDashboardClientInterface
+	ioStreams                *genericiooptions.IOStreams
+	RayJob                   *rayv1.RayJob
+	workerNodeSelectors      map[string]string
+	headNodeSelectors        map[string]string
+	logColor                 string
+	image                    string
+	fileName                 string
+	workingDir               string
+	runtimeEnv               string
+	headers                  string
+	verify                   string
+	cluster                  string
+	runtimeEnvJson           string
+	entryPointResource       string
+	metadataJson             string
+	logStyle                 string
+	submissionID             string
+	rayjobName               string
+	rayVersion               string
+	entryPoint               string
+	headCPU                  string
+	headMemory               string
+	headGPU                  string
+	workerCPU                string
+	workerMemory             string
+	workerGPU                string
+	namespace                string
+	entryPointMemory         int
+	entryPointGPU            float32
+	workerReplicas           int32
+	entryPointCPU            float32
+	noWait                   bool
+	dryRun                   bool
+	verbose                  bool
+	shutdownAfterJobFinishes bool
+	ttlSecondsAfterFinished  int32
 }
 
 type JobInfo struct {
@@ -142,7 +144,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 			if err := options.Complete(cmd); err != nil {
 				return err
 			}
-			if err := options.Validate(); err != nil {
+			if err := options.Validate(cmd); err != nil {
 				return err
 			}
 			return options.Run(cmd.Context(), cmdFactory)
@@ -178,6 +180,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
+	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
 
 	return cmd
 }
@@ -202,7 +205,7 @@ func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
 	return nil
 }
 
-func (options *SubmitJobOptions) Validate() error {
+func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 	if len(options.runtimeEnv) > 0 {
 		info, err := os.Stat(options.runtimeEnv)
 		if os.IsNotExist(err) {
@@ -220,6 +223,14 @@ func (options *SubmitJobOptions) Validate() error {
 		if len(runtimeEnvWorkingDir) > 0 && options.workingDir == "" {
 			options.workingDir = runtimeEnvWorkingDir
 		}
+	}
+
+	if cmd.Flags().Changed("ttl-seconds-after-finished") {
+		options.shutdownAfterJobFinishes = true
+	}
+
+	if options.ttlSecondsAfterFinished < 0 {
+		return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
 	}
 
 	// Take care of case where there is a filename input
@@ -261,6 +272,18 @@ func (options *SubmitJobOptions) Validate() error {
 			}
 			options.runtimeEnvJson = string(runtimeJson)
 		}
+
+		if cmd.Flags().Changed("ttl-seconds-after-finished") {
+			options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
+			options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
+		}
+
+		if options.RayJob.Spec.TTLSecondsAfterFinished < 0 {
+			return fmt.Errorf("ttlSecondsAfterFinished must be greater than or equal to 0")
+		}
+		if !options.RayJob.Spec.ShutdownAfterJobFinishes && options.RayJob.Spec.TTLSecondsAfterFinished > 0 {
+			return fmt.Errorf("ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true")
+		}
 	} else if strings.TrimSpace(options.rayjobName) == "" {
 		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
 	}
@@ -296,9 +319,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.fileName == "" {
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
-			RayJobName:     options.rayjobName,
-			Namespace:      options.namespace,
-			SubmissionMode: "InteractiveMode",
+			RayJobName:               options.rayjobName,
+			Namespace:                options.namespace,
+			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
+			SubmissionMode:           "InteractiveMode",
 			// Prior to kuberay 1.2.2, the entry point is required. To maintain
 			// backwards compatibility with 1.2.x, we submit the entry point
 			// here, even though it will be ignored.
