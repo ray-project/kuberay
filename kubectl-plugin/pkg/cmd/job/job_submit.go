@@ -708,15 +708,8 @@ func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
 // Generates a 16-character random ID with a prefix, mimicking Ray Job submission_id.
 // ref: ray/python/ray/dashboard/modules/job/job_manager.py
 func generateSubmissionID() (string, error) {
-	// baseChars are uppercase/lowercase letters + numbers.
-	const baseChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	// possibleChars removes easily confusable characters from baseChars.
-	var possibleChars []rune
-	for _, c := range baseChars {
-		if !strings.ContainsRune("IlO0o", c) {
-			possibleChars = append(possibleChars, c)
-		}
-	}
+	// ASCII letters and digits, excluding confusing characters I, l, O, 0, o.
+	const possibleChars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789"
 
 	idRunes := make([]rune, 16)
 	for i := range idRunes {
@@ -725,7 +718,7 @@ func generateSubmissionID() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		idRunes[i] = possibleChars[idx.Int64()]
+		idRunes[i] = rune(possibleChars[idx.Int64()])
 	}
 	return fmt.Sprintf("raysubmit_%s", string(idRunes)), nil
 }
