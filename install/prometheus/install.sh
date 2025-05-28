@@ -6,6 +6,10 @@ AUTO_LOAD_DASHBOARD=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --auto-load-dashboard)
+      if [[ "$2" != "true" && "$2" != "false" ]]; then
+        echo "Error: --auto-load-dashboard value must be 'true' or 'false'"
+        exit 1
+      fi
       AUTO_LOAD_DASHBOARD="$2"
       shift 2
       ;;
