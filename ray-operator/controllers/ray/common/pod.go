@@ -1048,11 +1048,6 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 			Name:  "RAY_NODE_MARKET_TYPE",
 			Value: getRayMarketTypeFromNodeSelector(pod),
 		},
-		// used to set the ray.io/node-group node label
-		corev1.EnvVar{
-			Name:  "RAY_NODE_GROUP",
-			Value: pod.Labels[utils.RayNodeGroupLabelKey],
-		},
 		// uses downward api to set the ray.io/availability-zone node label
 		corev1.EnvVar{
 			Name: "RAY_NODE_ZONE",
