@@ -208,7 +208,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 		test := With(t)
 		g := gomega.NewWithT(t)
 
-		const maxReplica = 3
+		const maxReplica = 2
 		// Set the scale down window to a large enough value, so scale down could be disabled to avoid test flakiness.
 		const scaleDownWaitSec = 3600
 

@@ -105,12 +105,12 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
-						corev1.ResourceMemory: resource.MustParse("1G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("2G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
-						corev1.ResourceMemory: resource.MustParse("2G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("4G"),
 					}))))
 }
 
@@ -130,12 +130,12 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 				WithEnv(corev1ac.EnvVar().WithName(utils.RAY_ENABLE_AUTOSCALER_V2).WithValue("1")).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
-						corev1.ResourceMemory: resource.MustParse("1G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("2G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
-						corev1.ResourceMemory: resource.MustParse("2G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("4G"),
 					}))))
 }
 
@@ -147,11 +147,11 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 				WithImage(GetRayImage()).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}))))
 }
@@ -165,11 +165,11 @@ func workerPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfi
 				WithImage(GetRayImage()).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}))))
 }
