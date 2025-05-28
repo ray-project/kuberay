@@ -377,7 +377,7 @@ def test_cluster():
     cluster = Cluster(
         name="test",
         namespace="default",
-        user="boris",
+        user="kuberay",
         version="2.9.0",
         cluster_spec=spec,
         deployment_environment=Environment.DEV,

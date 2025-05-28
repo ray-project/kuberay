@@ -3,7 +3,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
 --data '{
   "name": "test-cluster",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",

@@ -819,7 +819,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 --data '{
   "name": "job-test",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "version": "2.9.0",
   "environment": "DEV",
   "clusterSpec": {
@@ -874,7 +874,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
 {
    "name":"job-test",
    "namespace":"default",
-   "user":"boris",
+   "user":"kuberay",
    "version":"2.9.0",
    "clusterSpec":{
       "headGroupSpec":{
@@ -947,7 +947,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --data '{
   "name": "job-test",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "version": "2.9.0",
   "entrypoint": "python /home/ray/samples/sample_code.py",
   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
@@ -968,7 +968,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 {
    "name":"job-test",
    "namespace":"default",
-   "user":"boris",
+   "user":"kuberay",
    "entrypoint":"python /home/ray/samples/sample_code.py",
    "runtimeEnv":"pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
    "clusterSelector":{
@@ -1035,7 +1035,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --data '{
   "name": "job-test",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "version": "2.9.0",
   "entrypoint": "python /home/ray/samples/sample_code.py",
    "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
@@ -1054,7 +1054,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 {
    "name":"job-test",
    "namespace":"default",
-   "user":"boris",
+   "user":"kuberay",
    "entrypoint":"python /home/ray/samples/sample_code.py",
    "runtimeEnv":"pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
    "clusterSelector":{
