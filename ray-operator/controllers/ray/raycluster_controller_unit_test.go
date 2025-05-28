@@ -3007,6 +3007,111 @@ func Test_RedisCleanup(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupWithLoginShell(t *testing.T) {
+	setupTest(t)
+
+	os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, "true")
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
+	ctx := context.Background()
+
+	tests := []struct {
+		name             string
+		enableLoginShell string
+		expectedCommands []string
+	}{
+		{
+			name:             "Enable login shell",
+			enableLoginShell: "true",
+			expectedCommands: []string{"/bin/bash", "-lc", "--"},
+		},
+		{
+			name:             "Disable login shell",
+			enableLoginShell: "false",
+			expectedCommands: []string{"/bin/bash", "-c", "--"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.enableLoginShell == "true" {
+				os.Setenv(utils.ENABLE_LOGIN_SHELL, "true")
+				defer os.Unsetenv(utils.ENABLE_LOGIN_SHELL)
+			} else {
+				os.Unsetenv(utils.ENABLE_LOGIN_SHELL)
+			}
+
+			cluster := gcsFTEnabledCluster.DeepCopy()
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithObjects(cluster).
+				WithStatusSubresource(cluster).
+				Build()
+
+			// Initialize the reconciler
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   &record.FakeRecorder{},
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			rayClusterList := rayv1.RayClusterList{}
+			err := fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get RayCluster list")
+			assert.Len(t, rayClusterList.Items, 1)
+			assert.Empty(t, rayClusterList.Items[0].Finalizers)
+
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			// Check the RayCluster's finalizer
+			rayClusterList = rayv1.RayClusterList{}
+			err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get RayCluster list")
+			assert.Len(t, rayClusterList.Items, 1)
+			assert.Len(t, rayClusterList.Items[0].Finalizers, 1)
+
+			assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
+
+			// No Pod should be created before adding the GCS FT Redis cleanup finalizer.
+			podList := corev1.PodList{}
+			err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get Pod list")
+			assert.Empty(t, podList.Items)
+
+			// Set the RayCluster's DeletionTimestamp to trigger the Redis cleanup job.
+			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+
+			// Reconcile the RayCluster again. The controller should create Pods.
+			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			// Get finalizer jobs
+			redisCleanupJobs := batchv1.JobList{}
+			err = fakeClient.List(ctx, &redisCleanupJobs, common.RayClusterRedisCleanupJobAssociationOptions(&rayClusterList.Items[0]).ToListOptions()...)
+			require.NoError(t, err, "Fail to get Pod list")
+			assert.NotEmpty(t, redisCleanupJobs.Items)
+			assert.Len(t, redisCleanupJobs.Items, 1)
+
+			// Check if it has the login shell enabled
+			assert.Equal(t, tc.expectedCommands, redisCleanupJobs.Items[0].Spec.Template.Spec.Containers[0].Command)
+		})
+	}
+}
+
 func TestReconcile_Replicas_Optional(t *testing.T) {
 	setupTest(t)
 
