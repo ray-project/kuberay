@@ -101,7 +101,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --data '{
   "name": "create-actor",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "entrypoint": "python /home/ray/samples/detached_actor.py actor1",
   "clusterSelector": {
     "ray.io/cluster": "test-cluster"
@@ -136,7 +136,7 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/jobs' \
 --data '{
   "name": "delete-actor",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "entrypoint": "python /home/ray/samples/terminate_detached_actor.py actor1",
   "clusterSelector": {
     "ray.io/cluster": "test-cluster"
