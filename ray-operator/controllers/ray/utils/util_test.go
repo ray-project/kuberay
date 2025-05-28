@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1180,6 +1181,50 @@ func TestCalculateResources(t *testing.T) {
 			assert.Equal(t, tt.expected.minResources.Cpu().String(), minResource.Cpu().String())
 			assert.Equal(t, tt.expected.minResources.Memory().String(), minResource.Memory().String())
 			assert.Equal(t, deepCopyCluster, tt.cluster)
+		})
+	}
+}
+
+func TestGetContainerCommand(t *testing.T) {
+	tests := []struct {
+		name              string
+		additionalOptions []string
+		expected          []string
+		enableLoginShell  bool
+	}{
+		{
+			name:              "enable login shell is false",
+			enableLoginShell:  false,
+			additionalOptions: []string{},
+			expected:          []string{"/bin/bash", "-c", "--"},
+		},
+		{
+			name:              "enable login shell is true",
+			enableLoginShell:  true,
+			additionalOptions: []string{},
+			expected:          []string{"/bin/bash", "-cl", "--"},
+		},
+		{
+			name:              "enable login shell is false and additional options is not empty",
+			enableLoginShell:  false,
+			additionalOptions: []string{"e"},
+			expected:          []string{"/bin/bash", "-ce", "--"},
+		},
+		{
+			name:              "enable login shell is true and additional options is not empty",
+			enableLoginShell:  true,
+			additionalOptions: []string{"e"},
+			expected:          []string{"/bin/bash", "-cel", "--"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.enableLoginShell {
+				os.Setenv("ENABLE_LOGIN_SHELL", "true")
+				defer os.Unsetenv("ENABLE_LOGIN_SHELL")
+			}
+			assert.Equal(t, test.expected, GetContainerCommand(test.additionalOptions))
 		})
 	}
 }

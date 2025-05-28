@@ -703,9 +703,12 @@ func GetClusterType() bool {
 	return false
 }
 
-func GetContainerCommand() []string {
+func GetContainerCommand(additionalOptions []string) []string {
+	bashOptions := []string{"c"}
+	bashOptions = append(bashOptions, additionalOptions...)
 	if s := os.Getenv(ENABLE_LOGIN_SHELL); strings.ToLower(s) == "true" {
-		return []string{"/bin/bash", "-lc", "--"}
+		bashOptions = append(bashOptions, "l")
 	}
-	return []string{"/bin/bash", "-c", "--"}
+	bashOptionsStr := strings.Join(bashOptions, "")
+	return []string{"/bin/bash", "-" + bashOptionsStr, "--"}
 }
