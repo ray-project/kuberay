@@ -116,6 +116,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
+	entrypoint = strings.ReplaceAll(entrypoint, ";", "\\;")
 	k8sJobCommand = append(k8sJobCommand, "--", entrypoint, ";", "fi", ";")
 	k8sJobCommand = append(k8sJobCommand, jobFollowCommand...)
 
