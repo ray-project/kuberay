@@ -847,79 +847,68 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 }
 
-func TestBuildPod_WithFeatureFlagLoginBash(t *testing.T) {
-	ctx := context.Background()
-	os.Setenv(utils.ENABLE_LOGIN_SHELL, "true")
-	defer os.Unsetenv(utils.ENABLE_LOGIN_SHELL)
-
-	cluster := instance.DeepCopy()
-	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
-	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.RayServiceCRD, "")
-
-	// make sure head container with login bash.
-	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, headContainer.Command)
-
-	// make sure autoscaler container with login bash.
-	index := getAutoscalerContainerIndex(headPod)
-	autoscalerContainer := headPod.Spec.Containers[index]
-	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, autoscalerContainer.Command)
-
-	worker := cluster.Spec.WorkerGroupSpecs[0]
-	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP)
-
-	// make sure worker container with login bash.
-	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, workerContainer.Command)
-
-	// make init container with login bash.
-	initContainers := workerPod.Spec.InitContainers
-	for _, initContainer := range initContainers {
-		if initContainer.Name == "wait-gcs-ready" {
-			assert.Equal(t, []string{"/bin/bash", "-lc", "--"}, initContainer.Command)
-		}
+func TestBuildPod_WithLoginBash(t *testing.T) {
+	tests := []struct {
+		name            string
+		expectedCmd     []string
+		enableLoginBash bool
+	}{
+		{
+			name:            "With login bash enabled",
+			enableLoginBash: true,
+			expectedCmd:     []string{"/bin/bash", "-cl", "--"},
+		},
+		{
+			name:            "Without login bash enabled",
+			enableLoginBash: false,
+			expectedCmd:     []string{"/bin/bash", "-c", "--"},
+		},
 	}
-}
 
-func TestBuildPod_WithoutFeatureFlagLoginBash(t *testing.T) {
-	ctx := context.Background()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.enableLoginBash {
+				os.Setenv(utils.ENABLE_LOGIN_SHELL, "true")
+				defer os.Unsetenv(utils.ENABLE_LOGIN_SHELL)
+			}
 
-	cluster := instance.DeepCopy()
-	cluster.Spec.EnableInTreeAutoscaling = &trueFlag
-	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.RayServiceCRD, "")
+			cluster := instance.DeepCopy()
+			cluster.Spec.EnableInTreeAutoscaling = &trueFlag
 
-	// make sure head container with login bash.
-	headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, headContainer.Command)
+			// Test head pod
+			podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+			headPod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.RayServiceCRD, "")
 
-	// make sure autoscaler container with login bash.
-	index := getAutoscalerContainerIndex(headPod)
-	autoscalerContainer := headPod.Spec.Containers[index]
-	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, autoscalerContainer.Command)
+			// Verify head container command
+			headContainer := headPod.Spec.Containers[utils.RayContainerIndex]
+			assert.Equal(t, tc.expectedCmd, headContainer.Command)
 
-	worker := cluster.Spec.WorkerGroupSpecs[0]
-	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
-	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP)
+			// Verify autoscaler container command
+			index := getAutoscalerContainerIndex(headPod)
+			autoscalerContainer := headPod.Spec.Containers[index]
+			assert.Equal(t, tc.expectedCmd, autoscalerContainer.Command)
 
-	// make sure worker container with login bash.
-	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, []string{"/bin/bash", "-c", "--"}, workerContainer.Command)
+			// Test worker pod
+			worker := cluster.Spec.WorkerGroupSpecs[0]
+			podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+			fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+			podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+			workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP)
 
-	// make init container with login bash.
-	initContainers := workerPod.Spec.InitContainers
-	for _, initContainer := range initContainers {
-		if initContainer.Name == "wait-gcs-ready" {
-			assert.Equal(t, []string{"/bin/bash", "-c", "--"}, initContainer.Command)
-		}
+			// Verify worker container command
+			workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
+			assert.Equal(t, tc.expectedCmd, workerContainer.Command)
+
+			// Verify init container command
+			initContainers := workerPod.Spec.InitContainers
+			for _, initContainer := range initContainers {
+				if initContainer.Name == "wait-gcs-ready" {
+					assert.Equal(t, tc.expectedCmd, initContainer.Command)
+				}
+			}
+		})
 	}
 }
 
