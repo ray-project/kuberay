@@ -13,5 +13,4 @@ spec:
     protocol: TCP
     name: http
   selector:
-    app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "kuberay-operator.selectorLabels" . | nindent 4 }}

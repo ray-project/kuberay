@@ -5,26 +5,17 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
-    {{- with .Values.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "kuberay-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
-        {{- with .Values.labels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
+        {{- include "kuberay-operator.labels" . | nindent 8 }}
       {{- with .Values.annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}

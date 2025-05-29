@@ -38,17 +38,24 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{/*
-Common labels
-*/}}
+{{- /* Common labels */ -}}
 {{- define "kuberay-operator.labels" -}}
-app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
 helm.sh/chart: {{ include "kuberay-operator.chart" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{ include "kuberay-operator.selectorLabels" . }}
+app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
+{{- with .Chart.AppVersion }}
+app.kubernetes.io/version: {{ . | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.labels }}
+{{ . | toYaml }}
+{{- end }}
+{{- end -}}
+
+{{- /* Selector labels */ -}}
+{{- define "kuberay-operator.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- /* Create the name of the deployment to use. */ -}}
