@@ -146,6 +146,10 @@ func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url st
 		Stderr:    true,
 	}, runtime.NewParameterCodec(scheme.Scheme))
 
+	// TODO: Consider migrating to WebSocketExecutor for streaming APIs in the future.
+	// SPDYExecutor is currently used, but SPDY is being deprecated in Kubernetes.
+	// See: https://kubernetes.io/blog/2024/08/20/websockets-transition/
+	// API Reference: https://pkg.go.dev/k8s.io/client-go/tools/remotecommand#NewWebSocketExecutor
 	exec, err := remotecommand.NewSPDYExecutor(rec.RestConfig, "POST", req.URL())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize executor: %w", err)
