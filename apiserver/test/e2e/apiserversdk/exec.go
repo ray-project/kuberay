@@ -1,6 +1,7 @@
 package apiserversdk
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 
@@ -14,7 +15,7 @@ type ProxyRoundTripper struct {
 func newProxyRoundTripper(cfg *rest.Config) (*ProxyRoundTripper, error) {
 	transport, err := rest.TransportFor(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create http RoundTripper: %w", err)
 	}
 
 	return &ProxyRoundTripper{
