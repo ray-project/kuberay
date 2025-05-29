@@ -648,6 +648,15 @@ func (krc *KuberayAPIServerClient) doDelete(deleteURL string) (*rpcStatus.Status
 	return status, err
 }
 
+var retryableHTTPStatusCodes = map[int]struct{}{
+	http.StatusRequestTimeout:      {}, // 408
+	http.StatusTooManyRequests:     {}, // 429
+	http.StatusInternalServerError: {}, // 500
+	http.StatusBadGateway:          {}, // 502
+	http.StatusServiceUnavailable:  {}, // 503
+	http.StatusGatewayTimeout:      {}, // 504
+}
+
 func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error) {
 	// Set the overall timeout
 	ctx, cancel := context.WithTimeout(context.Background(), krc.retryCfg.OverallTimeout)
@@ -703,7 +712,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		}
 
 		// Retry only for HTTP status in the list
-		if !isRetryableHTTPStatus(statusCode) {
+		if _, retryable := retryableHTTPStatusCodes[statusCode]; !retryable {
 			break
 		}
 
@@ -722,19 +731,6 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 
 	}
 	return nil, lastStatus, lastErr
-}
-
-func isRetryableHTTPStatus(statusCode int) bool {
-	switch statusCode {
-	case http.StatusRequestTimeout, // 408
-		http.StatusTooManyRequests,    // 429
-		http.StatusBadGateway,         // 502
-		http.StatusServiceUnavailable, // 503
-		http.StatusGatewayTimeout:     // 504
-		return true
-	default:
-		return false
-	}
 }
 
 func (krc *KuberayAPIServerClient) extractStatus(bodyBytes []byte) (*rpcStatus.Status, error) {
