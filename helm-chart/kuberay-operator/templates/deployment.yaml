@@ -30,11 +30,6 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-    {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
-      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
         - name: kuberay-logs
@@ -136,6 +131,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -146,5 +145,6 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
-        {{- toYaml . | nindent 8 }}
+      {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}

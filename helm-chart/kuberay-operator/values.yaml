@@ -22,7 +22,7 @@ image:
   pullPolicy: IfNotPresent
 
 # -- Image pull secrets for private image registry.
-imagePullSecrets:
+imagePullSecrets: []
 # - name: image-pull-secret-1
 # - name: image-pull-secret-2
 
@@ -121,10 +121,10 @@ crNamespacedRbacEnable: true
 #   to resource events within its own namespace.
 singleNamespaceInstall: false
 
-# The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
-# watchNamespace:
-#   - n1
-#   - n2
+# -- The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
+watchNamespace: []
+# - ns1
+# - ns2
 
 # -- Environment variables.
 
@@ -186,13 +186,13 @@ affinity: {}
 # -- List of node taints to tolerate for kuberay-operator pods.
 tolerations: []
 
-# @Ignore -- Pod liveness probe configuration.
+# @ignore -- Pod liveness probe configuration.
 livenessProbe:
   initialDelaySeconds: 10
   periodSeconds: 5
   failureThreshold: 5
 
-# @Ignore -- Pod readiness probe configuration.
+# @ignore -- Pod readiness probe configuration.
 readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 5
