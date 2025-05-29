@@ -30,7 +30,7 @@ Refer to [this document](../helm-chart/kuberay-apiserver/README.md) to install t
 Use the following command for port-forwarding to access the APIServer through port 31888:
 
 ```sh
-kubectl port-forward service/kuberay-apiserver-service 31888:8888 > /dev/null &
+kubectl port-forward service/kuberay-apiserver-service 31888:8888
 ```
 
 ### For Development: Start a Local APIServer

@@ -61,7 +61,7 @@ tolerations: []
 
 # Only one service type needs to be picked
 service:
-  # Nodeport service
+# Nodeport service
   # type: NodePort
   # ports:
   # - name: http
