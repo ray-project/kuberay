@@ -11,6 +11,9 @@ image:
   tag: nightly
   pullPolicy: IfNotPresent
 
+cors:
+  # allowOrigin: "*"
+
 labels:
   # key1: value1
   # key2: value2

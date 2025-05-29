@@ -165,8 +165,27 @@ func startHttpProxy() {
 		topMux = http.NewServeMux()
 	}
 
-	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
-	topMux.Handle("/", runtimeMux)
+	if allowedOrigin := os.Getenv("CORS_ALLOW_ORIGIN"); allowedOrigin != "" {
+		// Add CORS middleware
+		corsHandler := func(h http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				h.ServeHTTP(w, r)
+			})
+		}
+
+		topMux.Handle("/", corsHandler(runtimeMux))
+	} else {
+		// Seems /apis (matches /apis/v1alpha1/clusters) works fine
+		topMux.Handle("/", runtimeMux)
+	}
+
 	topMux.Handle("/metrics", promhttp.Handler())
 	topMux.HandleFunc("/swagger/", serveSwaggerFile)
 	topMux.HandleFunc("/healthz", serveHealth)

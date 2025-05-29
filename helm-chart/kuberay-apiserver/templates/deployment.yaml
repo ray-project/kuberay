@@ -52,6 +52,13 @@ spec:
           httpGet:
             path: /healthz
             port: http
+        env:
+        {{- if .Values.cors }}
+          {{- with .Values.cors.allowOrigin }}
+          - name: CORS_ALLOW_ORIGIN
+            value: {{ . | quote }}
+          {{- end }}
+        {{- end }}
       {{- if .Values.security }}
       - name: security-proxy-container
         image: "{{ .Values.security.proxy.repository }}:{{ .Values.security.proxy.tag }}"
