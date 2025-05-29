@@ -1,27 +1,31 @@
-curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
---header 'Content-Type: application/json' \
---data '{
+{
   "name": "test-cluster",
   "namespace": "default",
-  "user": "kuberay",
+  "user": "boris",
+  "annotations": {
+    "ray.io/enable-serve-service": "true"
+  },
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
       "image": "rayproject/ray:2.9.0-py310",
-      "serviceType": "NodePort",
+      "serviceType": "ClusterIP",
       "rayStartParams": {
-         "dashboard-host": "0.0.0.0",
-         "metrics-export-port": "8080"
-       },
-       "volumes": [
-         {
-           "name": "code-sample",
-           "mountPath": "/home/ray/samples",
-           "volumeType": "CONFIGMAP",
-           "source": "ray-job-code-sample",
-           "items": {"sample_code.py" : "sample_code.py"}
-         }
-       ]
+        "dashboard-host": "0.0.0.0",
+        "metrics-export-port": "8080",
+        "dashboard-agent-listen-port": "52365"
+      },
+      "volumes": [
+        {
+          "name": "code-sample",
+          "mountPath": "/home/ray/samples",
+          "volumeType": "CONFIGMAP",
+          "source": "ray-job-code-sample",
+          "items": {
+            "sample_code.py": "sample_code.py"
+          }
+        }
+      ]
     },
     "workerGroupSpec": [
       {
@@ -32,18 +36,20 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/clusters' \
         "minReplicas": 0,
         "maxReplicas": 5,
         "rayStartParams": {
-           "node-ip-address": "$MY_POD_IP"
-         },
+          "node-ip-address": "$MY_POD_IP"
+        },
         "volumes": [
           {
             "name": "code-sample",
             "mountPath": "/home/ray/samples",
             "volumeType": "CONFIGMAP",
             "source": "ray-job-code-sample",
-            "items": {"sample_code.py" : "sample_code.py"}
+            "items": {
+              "sample_code.py": "sample_code.py"
+            }
           }
         ]
       }
     ]
   }
-}'
+}

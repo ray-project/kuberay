@@ -3,7 +3,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/jobs' \
 --data '{
   "name": "job-test",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "entrypoint": "python /home/ray/samples/sample_code.py",
   "activeDeadlineSeconds": 120,
   "runtimeEnv": "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
