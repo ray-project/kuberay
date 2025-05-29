@@ -21,6 +21,11 @@ image:
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
+# -- Image pull secrets for private image registry.
+imagePullSecrets:
+# - name: image-pull-secret-1
+# - name: image-pull-secret-2
+
 # -- Extra labels.
 labels: {}
 
@@ -171,6 +176,15 @@ resources:
   # requests:
   #   cpu: 100m
   #   memory: 512Mi
+
+# -- Node selector for kuberay-operator pods.
+nodeSelector: {}
+
+# -- Affinity for kuberay-operator pods.
+affinity: {}
+
+# -- List of node taints to tolerate for kuberay-operator pods.
+tolerations: []
 
 # @Ignore -- Pod liveness probe configuration.
 livenessProbe:
