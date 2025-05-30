@@ -30,39 +30,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-      {{- toYaml . | nindent 6 }}
-      {{- end }}
-      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
-      {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
-      volumes:
-      - name: kuberay-logs
-        {{- if .Values.logging.sizeLimit }}
-        emptyDir:
-          sizeLimit: {{ .Values.logging.sizeLimit }}
-        {{- else }}
-        emptyDir: {}
-        {{- end }}
-      {{- end }}
-      {{- with .Values.podSecurityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       containers:
       - name: {{ .Chart.Name }}
-        {{- with .Values.securityContext }}
-        securityContext:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         {{- with .Values.image.pullPolicy }}
         imagePullPolicy: {{ . }}
-        {{- end }}
-        {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
-        volumeMounts:
-        - name: kuberay-logs
-          mountPath: "{{ .Values.logging.baseDir }}"
         {{- end }}
         command:
         - {{ .Values.operatorCommand }}
@@ -109,13 +81,22 @@ spec:
         {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
         {{- end -}}
         {{- $argList | toYaml | nindent 8 }}
+        {{- with .Values.env }}
+        env:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+        volumeMounts:
+        - name: kuberay-logs
+          mountPath: "{{ .Values.logging.baseDir }}"
+        {{- end }}
         ports:
         - name: http
           containerPort: 8080
           protocol: TCP
-        {{- with .Values.env }}
-        env:
-        {{- toYaml . | nindent 8 }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
         {{- end }}
         livenessProbe:
           httpGet:
@@ -131,10 +112,24 @@ spec:
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
           failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-        {{- with .Values.resources }}
-        resources:
+        {{- with .Values.securityContext }}
+        securityContext:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+      volumes:
+      - name: kuberay-logs
+        {{- if .Values.logging.sizeLimit }}
+        emptyDir:
+          sizeLimit: {{ .Values.logging.sizeLimit }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -146,4 +141,9 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
       {{- toYaml . | nindent 6 }}
+      {{- end }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
