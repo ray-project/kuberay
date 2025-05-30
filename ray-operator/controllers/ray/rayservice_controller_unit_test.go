@@ -1860,7 +1860,7 @@ func makeHTTPRoute(name, namespace string, isReady bool) *gwv1.HTTPRoute {
 func TestCheckIfNeedIncrementalUpgradeUpdate(t *testing.T) {
 	rayServiceName := "test-rayservice"
 	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
-	httpRouteName := fmt.Sprintf("%s-%s", "httproute-", rayServiceName)
+	httpRouteName := fmt.Sprintf("%s-%s", "httproute", rayServiceName)
 	namespace := "test-ns"
 
 	tests := []struct {

@@ -1,4 +1,4 @@
-package e2erayservice
+package e2eincrementalupgrade
 
 import (
 	"fmt"
@@ -78,10 +78,14 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		return updatedPod
 	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
 
+	// Get the Gateway endpoint to send requests to
+	gatewayIP := GetGatewayIP(gateway)
+	g.Expect(gatewayIP).NotTo(BeEmpty())
+
 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-	stdout, _ := CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 	// Trigger incremental upgrade by updating RayService serve config

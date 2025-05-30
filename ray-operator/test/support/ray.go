@@ -243,11 +243,3 @@ func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
 		return GetGateway(t, namespace, name)
 	}
 }
-
-// func IsGatewayReady(gateway *gwv1.Gateway) bool {
-// 	return meta.IsStatusConditionTrue(gateway.Status.Conditions, string(gwv1.GatewayConditionAccepted))
-// }
-
-// func IsHTTPRouteReady(httpRoute *gwv1.HTTPRoute) bool {
-// 	return meta.IsStatusConditionTrue(httpRoute.Status.Conditions, string(gwv1.RouteConditionAccepted))
-// }

@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
-	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -91,46 +90,6 @@ func CurlRayServicePod(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
-func CurlRayServiceHeadService(
-	t Test,
-	headSvcName string,
-	rayService *rayv1.RayService,
-	curlPod *corev1.Pod,
-	curlPodContainerName,
-	rayServicePath,
-	body string,
-) (bytes.Buffer, bytes.Buffer) {
-	cmd := []string{
-		"curl",
-		"-X", "POST",
-		"-H", "Content-Type: application/json",
-		fmt.Sprintf("%s.%s.svc.cluster.local:8000%s", headSvcName, rayService.Namespace, rayServicePath),
-		"-d", body,
-	}
-
-	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
-}
-
-// func CurlRayServiceGateway(
-// 	t Test,
-// 	gatewayName string,
-// 	rayService *rayv1.RayService,
-// 	curlPod *corev1.Pod,
-// 	curlPodContainerName,
-// 	rayServicePath,
-// 	body string,
-// ) (bytes.Buffer, bytes.Buffer) {
-// 	cmd := []string{
-// 		"curl",
-// 		"-X", "POST",
-// 		"-H", "Content-Type: application/json",
-// 		fmt.Sprintf("%s.%s.svc.cluster.local:8000%s", headSvcName, rayService.Namespace, rayServicePath),
-// 		"-d", body,
-// 	}
-
-// 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
-// }
-
 func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
       - name: fruit_app
@@ -202,24 +161,4 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
 								})))))),
 		)
-}
-
-func IncrementalUpgradeRayServiceApplyConfiguration(
-	stepSizePercent, intervalSeconds, maxSurgePercent *int32,
-) *rayv1ac.RayServiceSpecApplyConfiguration {
-	spec := RayServiceSampleYamlApplyConfiguration()
-
-	spec.RayClusterSpec.EnableInTreeAutoscaling = ptr.To(true)
-	spec.WithUpgradeStrategy(rayv1ac.RayServiceUpgradeStrategy().
-		WithType(rayv1.IncrementalUpgrade).
-		WithIncrementalUpgradeOptions(
-			rayv1ac.IncrementalUpgradeOptions().
-				WithGatewayClassName("istio").
-				WithStepSizePercent(*stepSizePercent).
-				WithIntervalSeconds(*intervalSeconds).
-				WithMaxSurgePercent(*maxSurgePercent),
-		),
-	)
-
-	return spec
 }
