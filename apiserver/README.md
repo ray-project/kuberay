@@ -33,6 +33,10 @@ Use the following command for port-forwarding to access the APIServer through po
 kubectl port-forward service/kuberay-apiserver-service 31888:8888
 ```
 
+> [!IMPORTANT]
+> If you receive an "Unauthorized" error when making a request, please add an
+> authorization header to the request: `-H 'Authorization: 12345'`
+
 ### For Development: Start a Local APIServer
 
 You can build and start the APIServer from scratch in your local environment with a single command. This will deploy all the necessary components to a local kind cluster.
@@ -44,10 +48,6 @@ make start-local-apiserver
 ### Verify the installation
 
 The APIServer supports HTTP requests, so you can easily verify its successful startup by issuing two simple curl commands.
-
-> [!IMPORTANT]
-> If you receive an "Unauthorized" error when making a request, please add an
-> authorization header to the request: `-H 'Authorization: 12345'`
 
 ```sh
 # Create complete template.
