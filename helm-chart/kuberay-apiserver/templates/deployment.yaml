@@ -36,6 +36,11 @@ spec:
         args:
           {{- $argList := list -}}
           {{- $argList = append $argList (printf "--enable-api-server-v2=%t" .Values.enableAPIServerV2) -}}
+          {{- if .Values.cors }}
+            {{- with .Values.cors.allowOrigin }}
+              {{- $argList = append $argList (printf "--cors-allow-origin=%s" .) -}}
+            {{- end }}
+          {{- end }}
           {{- (printf "\n") -}}
           {{- $argList | toYaml | indent 10 }}
         ports:
@@ -52,13 +57,6 @@ spec:
           httpGet:
             path: /healthz
             port: http
-        env:
-        {{- if .Values.cors }}
-          {{- with .Values.cors.allowOrigin }}
-          - name: CORS_ALLOW_ORIGIN
-            value: {{ . | quote }}
-          {{- end }}
-        {{- end }}
       {{- if .Values.security }}
       - name: security-proxy-container
         image: "{{ .Values.security.proxy.repository }}:{{ .Values.security.proxy.tag }}"
