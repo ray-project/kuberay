@@ -85,6 +85,16 @@ featureGates:
 metrics:
   # -- Whether KubeRay operator should emit control plane metrics.
   enabled: true
+  serviceMonitor:
+    # -- Enable a prometheus ServiceMonitor
+    enabled: false
+    # -- Prometheus ServiceMonitor interval
+    interval: 30s
+    # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
+    honorLabels: false
+    # -- Prometheus ServiceMonitor selector
+    selector: { }
+      #  release: prometheus
 
 # -- Path to the operator binary
 operatorCommand: /manager
@@ -161,12 +171,6 @@ env:
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
 #   value: "false"
 
-# For kuberay-operator metric export by prometheus operator
-serviceMonitor:
-  # If enabled, serviceMonitor will be created, expose /metrics http endpoint to prometheus
-  enabled: false
-  interval: 30s
-  honorLabels: true
 # -- Resource requests and limits for containers.
 resources:
   limits:

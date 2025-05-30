@@ -1,14 +1,18 @@
-{{- if .Values.serviceMonitor.enabled }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "kuberay-operator.fullname" . }}
+  labels:
+    {{- with .Values.metrics.serviceMonitor.selector }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   endpoints:
     - path: /metrics
       targetPort: http
-      interval: {{ .Values.serviceMonitor.interval | default "30s" }}
-      honorLabels: {{ .Values.serviceMonitor.honorLabels | default true }}
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      honorLabels: {{ .Values.metrics.serviceMonitor.honorLabels }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}
