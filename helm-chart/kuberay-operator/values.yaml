@@ -95,6 +95,8 @@ metrics:
     # -- Prometheus ServiceMonitor selector
     selector: { }
       #  release: prometheus
+    # -- Prometheus ServiceMonitor namespace
+    namespace: "" # "monitoring"
 
 # -- Path to the operator binary
 operatorCommand: /manager
