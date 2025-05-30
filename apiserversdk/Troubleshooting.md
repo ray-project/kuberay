@@ -8,8 +8,3 @@ If you receive an "Unauthorized" error when making a request, and you installed 
 using the Helm chart, please try the following solution
 
 - Install the APIServer without a security proxy. Refer to the [Installation](./Installation.md) guide.
-- Add an authorization header to the request: `--header 'Authorization: 12345'`.
-
-## Getting "403 Forbidden" when sending a request
-
-Please try the APIServer without a security proxy. Refer to the [Installation](./Installation.md) guide.

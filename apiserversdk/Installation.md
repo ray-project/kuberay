@@ -34,13 +34,14 @@ helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 # Step1: Clone KubeRay repository
 
 # Step2: Navigate to `helm-chart/kuberay-apiserver`
+cd helm-chart/kuberay-apiserver
 
 # Step3: Install the KubeRay apiserver
 helm install kuberay-apiserver .
 ```
 
 > [!IMPORTANT]
-> You may receive an "403 Forbidden" error when making a request if you install the
+> You may receive an "Unauthorized" error when making a request if you install the
 > APIServer with security proxy. Please try the APIServer without a security proxy.
 
 ### Without security proxy
