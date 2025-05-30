@@ -308,4 +308,23 @@ rules:
   verbs:
   - get
 {{- end -}}
+{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "kube-scheduler") }}
+- apiGroups:
+  - scheduling.x-k8s.io
+  resources:
+  - podgroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+{{- end -}}
 {{- end -}}

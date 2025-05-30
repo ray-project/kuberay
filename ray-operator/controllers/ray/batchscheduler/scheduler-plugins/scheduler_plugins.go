@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -43,6 +43,7 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rc *r
 	if !k.isGangSchedulingEnabled(rc) {
 		return nil
 	}
+	// we set replica as 1 for the head pod
 	replica := int32(1)
 	for _, workerGroup := range rc.Spec.WorkerGroupSpecs {
 		if workerGroup.Replicas == nil {
@@ -80,9 +81,8 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rc *r
 // AddMetadataToPod adds essential labels and annotations to the Ray pods
 // the scheduler needs these labels and annotations in order to do the scheduling properly
 func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	// when gang scheduling is enabled, extra annotations need to be added to all pods
+	// when gang scheduling is enabled, extra labels need to be added to all pods
 	if k.isGangSchedulingEnabled(app) {
-		// the group name for the head and each of the worker group should be different
 		pod.Labels[KubeSchedulerPodGroupLabelKey] = app.Name
 	}
 }
@@ -93,8 +93,27 @@ func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
 }
 
 func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedulerinterface.BatchScheduler, error) {
+	extClient, err := apiextensionsclient.NewForConfig(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
+	}
+
+	podGroupName := "podgroups.scheduling.x-k8s.io"
+	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
+		ctx,
+		podGroupName,
+		metav1.GetOptions{},
+	); err != nil {
+		if _, err := extClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(
+			ctx,
+			podGroupName,
+			metav1.GetOptions{},
+		); err != nil {
+			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
+		}
+	}
+
 	scheme := runtime.NewScheme()
-	_ = clientscheme.AddToScheme(scheme)
 	_ = v1alpha1.AddToScheme(scheme)
 	ccache, err := cache.New(c, cache.Options{
 		Scheme: scheme,
