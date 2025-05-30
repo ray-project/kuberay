@@ -173,3 +173,20 @@ func workerPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfi
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}))))
 }
+
+var tests = []struct {
+	HeadPodTemplateGetter   func() *corev1ac.PodTemplateSpecApplyConfiguration
+	WorkerPodTemplateGetter func() *corev1ac.PodTemplateSpecApplyConfiguration
+	name                    string
+}{
+	{
+		HeadPodTemplateGetter:   headPodTemplateApplyConfiguration,
+		WorkerPodTemplateGetter: workerPodTemplateApplyConfiguration,
+		name:                    "Create a RayCluster with autoscaling enabled",
+	},
+	{
+		HeadPodTemplateGetter:   headPodTemplateApplyConfigurationV2,
+		WorkerPodTemplateGetter: workerPodTemplateApplyConfigurationV2,
+		name:                    "Create a RayCluster with autoscaler v2 enabled",
+	},
+}
