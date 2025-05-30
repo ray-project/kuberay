@@ -54,6 +54,7 @@ func deployTestRayCluster(ns string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
+//nolint:unparam // Currently all tests use the same param; will remove the parameter once more test cases are added
 func getAndCheckRayJob(
 	namespace,
 	name,

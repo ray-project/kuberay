@@ -3,8 +3,10 @@ package job
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,7 +29,6 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayscheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 )
 
@@ -35,47 +36,46 @@ const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
 	portforwardtimeout = 60.0
-	jobIDTimeout       = 60.0
-	jobIDPollInterval  = 1.0
 )
 
 type SubmitJobOptions struct {
-	cmdFactory          cmdutil.Factory
-	dashboardClient     utils.RayDashboardClientInterface
-	ioStreams           *genericiooptions.IOStreams
-	RayJob              *rayv1.RayJob
-	workerNodeSelectors map[string]string
-	headNodeSelectors   map[string]string
-	logColor            string
-	image               string
-	fileName            string
-	workingDir          string
-	runtimeEnv          string
-	headers             string
-	verify              string
-	cluster             string
-	runtimeEnvJson      string
-	entryPointResource  string
-	metadataJson        string
-	logStyle            string
-	submissionID        string
-	rayjobName          string
-	rayVersion          string
-	entryPoint          string
-	headCPU             string
-	headMemory          string
-	headGPU             string
-	workerCPU           string
-	workerMemory        string
-	workerGPU           string
-	namespace           string
-	entryPointMemory    int
-	entryPointGPU       float32
-	workerReplicas      int32
-	entryPointCPU       float32
-	noWait              bool
-	dryRun              bool
-	verbose             bool
+	cmdFactory               cmdutil.Factory
+	ioStreams                *genericiooptions.IOStreams
+	RayJob                   *rayv1.RayJob
+	workerNodeSelectors      map[string]string
+	headNodeSelectors        map[string]string
+	logColor                 string
+	image                    string
+	fileName                 string
+	workingDir               string
+	runtimeEnv               string
+	headers                  string
+	verify                   string
+	cluster                  string
+	runtimeEnvJson           string
+	entryPointResource       string
+	metadataJson             string
+	logStyle                 string
+	submissionID             string
+	rayjobName               string
+	rayVersion               string
+	entryPoint               string
+	headCPU                  string
+	headMemory               string
+	headGPU                  string
+	workerCPU                string
+	workerMemory             string
+	workerGPU                string
+	namespace                string
+	entryPointMemory         int
+	entryPointGPU            float32
+	workerReplicas           int32
+	entryPointCPU            float32
+	noWait                   bool
+	dryRun                   bool
+	verbose                  bool
+	shutdownAfterJobFinishes bool
+	ttlSecondsAfterFinished  int32
 }
 
 type JobInfo struct {
@@ -142,7 +142,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 			if err := options.Complete(cmd); err != nil {
 				return err
 			}
-			if err := options.Validate(); err != nil {
+			if err := options.Validate(cmd); err != nil {
 				return err
 			}
 			return options.Run(cmd.Context(), cmdFactory)
@@ -178,6 +178,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
+	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
 
 	return cmd
 }
@@ -202,7 +203,7 @@ func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
 	return nil
 }
 
-func (options *SubmitJobOptions) Validate() error {
+func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 	if len(options.runtimeEnv) > 0 {
 		info, err := os.Stat(options.runtimeEnv)
 		if os.IsNotExist(err) {
@@ -220,6 +221,14 @@ func (options *SubmitJobOptions) Validate() error {
 		if len(runtimeEnvWorkingDir) > 0 && options.workingDir == "" {
 			options.workingDir = runtimeEnvWorkingDir
 		}
+	}
+
+	if cmd.Flags().Changed("ttl-seconds-after-finished") {
+		options.shutdownAfterJobFinishes = true
+	}
+
+	if options.ttlSecondsAfterFinished < 0 {
+		return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
 	}
 
 	// Take care of case where there is a filename input
@@ -261,6 +270,18 @@ func (options *SubmitJobOptions) Validate() error {
 			}
 			options.runtimeEnvJson = string(runtimeJson)
 		}
+
+		if cmd.Flags().Changed("ttl-seconds-after-finished") {
+			options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
+			options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
+		}
+
+		if options.RayJob.Spec.TTLSecondsAfterFinished < 0 {
+			return fmt.Errorf("ttlSecondsAfterFinished must be greater than or equal to 0")
+		}
+		if !options.RayJob.Spec.ShutdownAfterJobFinishes && options.RayJob.Spec.TTLSecondsAfterFinished > 0 {
+			return fmt.Errorf("ttlSecondsAfterFinished is only supported when shutdownAfterJobFinishes is set to true")
+		}
 	} else if strings.TrimSpace(options.rayjobName) == "" {
 		return fmt.Errorf("Must set either yaml file (--filename) or set Ray job name (--name)")
 	}
@@ -296,9 +317,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if options.fileName == "" {
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
-			RayJobName:     options.rayjobName,
-			Namespace:      options.namespace,
-			SubmissionMode: "InteractiveMode",
+			RayJobName:               options.rayjobName,
+			Namespace:                options.namespace,
+			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
+			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
+			SubmissionMode:           "InteractiveMode",
 			// Prior to kuberay 1.2.2, the entry point is required. To maintain
 			// backwards compatibility with 1.2.x, we submit the entry point
 			// here, even though it will be ignored.
@@ -446,10 +469,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	fmt.Printf("Portforwarding started on %s\n", dashboardAddr)
 
-	// Initialize dashboard client after port-forwarding is ready
-	options.dashboardClient = &utils.RayDashboardClient{}
-	if err := options.dashboardClient.InitClient(portforwardctx, strings.TrimPrefix(dashboardAddr, "http://"), nil); err != nil {
-		return fmt.Errorf("failed to initialize dashboard client: %w", err)
+	// If submission ID is not provided by the user, generate one.
+	if options.submissionID == "" {
+		generatedID, err := generateSubmissionID()
+		if err != nil {
+			return fmt.Errorf("failed to generate submission ID: %w", err)
+		}
+		options.submissionID = generatedID
+		fmt.Printf("Generated submission ID for Ray job: %s\n", options.submissionID)
 	}
 
 	// Submitting ray job to cluster
@@ -478,38 +505,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 	}()
 
-	var rayJobID string
-	if options.submissionID != "" {
-		rayJobID = options.submissionID
-	} else {
-		// Create a channel to receive rayJobID from the API
-		rayJobIDChan := make(chan string)
-
-		// Poll the API for the rayJobID
-		go func() {
-			pollStart := time.Now()
-			for {
-				jobID, err := options.getJobIDViaAPI(portforwardctx)
-				if err == nil {
-					rayJobIDChan <- jobID
-					break
-				}
-				if time.Since(pollStart).Seconds() > jobIDTimeout {
-					close(rayJobIDChan)
-					break
-				}
-				sleepDur := time.Duration(jobIDPollInterval * float64(time.Second))
-				time.Sleep(sleepDur)
-			}
-		}()
-
-		// Wait till rayJobID is populated or the timeout occurs
-		jobID, ok := <-rayJobIDChan
-		if !ok {
-			return fmt.Errorf("submit failed: timeout waiting for job ID from API after %v", jobIDTimeout)
-		}
-		rayJobID = jobID
-	}
+	rayJobID := options.submissionID
 
 	rayCmdStdOutScanner := bufio.NewScanner(rayCmdStdOut)
 	rayCmdStdErrScanner := bufio.NewScanner(rayCmdStdErr)
@@ -668,24 +664,6 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	return raySubmitCmd, nil
 }
 
-// Get the job ID from the dashboard API
-func (options *SubmitJobOptions) getJobIDViaAPI(ctx context.Context) (string, error) {
-	jobs, err := options.dashboardClient.ListJobs(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to list jobs via dashboard client: %w", err)
-	}
-
-	if jobs == nil || len(*jobs) == 0 {
-		return "", fmt.Errorf("no jobs returned from dashboard")
-	}
-
-	// Basically, there is only one job in the list, so we can just return the first one.
-	for _, job := range *jobs {
-		return job.SubmissionId, nil
-	}
-	return "", fmt.Errorf("no jobs found from dashboard")
-}
-
 // Decode RayJob YAML if we decide to submit job using kube client
 func decodeRayJobYaml(rayJobFilePath string) (*rayv1.RayJob, error) {
 	decodedRayJob := &rayv1.RayJob{}
@@ -725,4 +703,22 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 
 func isRayClusterReady(rayCluster *rayv1.RayCluster) bool {
 	return meta.IsStatusConditionTrue(rayCluster.Status.Conditions, "Ready") || rayCluster.Status.State == rayv1.Ready
+}
+
+// Generates a 16-character random ID with a prefix, mimicking Ray Job submission_id.
+// ref: ray/python/ray/dashboard/modules/job/job_manager.py
+func generateSubmissionID() (string, error) {
+	// ASCII letters and digits, excluding confusing characters I, l, O, 0, o.
+	const possibleChars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789"
+
+	idRunes := make([]rune, 16)
+	for i := range idRunes {
+		// Securely generate a random index.
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(possibleChars))))
+		if err != nil {
+			return "", err
+		}
+		idRunes[i] = rune(possibleChars[idx.Int64()])
+	}
+	return fmt.Sprintf("raysubmit_%s", string(idRunes)), nil
 }

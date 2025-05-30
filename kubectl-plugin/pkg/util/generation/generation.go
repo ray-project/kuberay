@@ -122,6 +122,8 @@ type RayJobYamlObject struct {
 	SubmissionMode string
 	Entrypoint     string
 	RayClusterConfig
+	TTLSecondsAfterFinished  int32
+	ShutdownAfterJobFinishes bool
 }
 
 func (rayClusterConfig *RayClusterConfig) GenerateRayClusterApplyConfig() *rayv1ac.RayClusterApplyConfiguration {
@@ -138,6 +140,8 @@ func (rayJobObject *RayJobYamlObject) GenerateRayJobApplyConfig() *rayv1ac.RayJo
 		WithSpec(rayv1ac.RayJobSpec().
 			WithSubmissionMode(rayv1.JobSubmissionMode(rayJobObject.SubmissionMode)).
 			WithEntrypoint(rayJobObject.Entrypoint).
+			WithTTLSecondsAfterFinished(rayJobObject.TTLSecondsAfterFinished).
+			WithShutdownAfterJobFinishes(rayJobObject.ShutdownAfterJobFinishes).
 			WithRayClusterSpec(rayJobObject.generateRayClusterSpec()))
 
 	return rayJobApplyConfig

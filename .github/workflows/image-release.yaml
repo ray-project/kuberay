@@ -213,7 +213,8 @@ jobs:
       run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
     - name: Set up Docker
-      uses: docker-practice/actions-setup-docker@master
+      uses: docker/setup-docker-action@v4
+
 
     - name: Log in to Quay.io
       uses: docker/login-action@v2

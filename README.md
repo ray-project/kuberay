@@ -14,16 +14,17 @@ KubeRay is a powerful, open-source Kubernetes operator that simplifies the deplo
 
 * **RayService**: RayService is made up of two parts: a RayCluster and a Ray Serve deployment graph. RayService offers zero-downtime upgrades for RayCluster and high availability.
 
-**Kubectl Plugin**: Starting from KubeRay v1.3.0, you can use the `kubectl ray` plugin to simplify
+**KubeRay ecosystem**: Some optional components.
+
+* **Kubectl Plugin** (Beta): Starting from KubeRay v1.3.0, you can use the `kubectl ray` plugin to simplify
 common workflows when deploying Ray on Kubernetes. If you aren’t familiar with Kubernetes, this
-plugin simplifies running Ray on Kubernetes.
+plugin simplifies running Ray on Kubernetes. See [kubectl-plugin](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kubectl-plugin.html#kubectl-plugin) for more details.
 
-**Community-managed components (optional)**: Some components are maintained by the KubeRay community.
-
-* **KubeRay APIServer**: It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
+* **KubeRay APIServer** (Alpha): It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
 by some organizations to back user interfaces for KubeRay resource management.
 
-* **KubeRay Python client**: This Python client library provides APIs to handle RayCluster from your Python application.
+* **KubeRay Dashboard** (Experimental): Starting from KubeRay v1.4.0, we have introduced a new dashboard that enables users to view and manage KubeRay resources.
+While it is not yet production-ready, we welcome your feedback.
 
 ## Documentation
 
@@ -38,67 +39,47 @@ The KubeRay repository only contains documentation related to the development an
 
 ## Examples
 
-* [Ray Train XGBoostTrainer on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/ml-example.html#kuberay-ml-example) (CPU-only)
-* [Train PyTorch ResNet model with GPUs on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/gpu-training-example.html#kuberay-gpu-training-example)
-* [Serve a MobileNet image classifier on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/mobilenet-rayservice.html#kuberay-mobilenet-rayservice-example) (CPU-only)
-* [Serve a StableDiffusion text-to-image model on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/stable-diffusion-rayservice.html#kuberay-stable-diffusion-rayservice-example)
-* [Serve a text summarizer on Kubernetes](https://docs.ray.io/en/master/cluster/kubernetes/examples/text-summarizer-rayservice.html#kuberay-text-summarizer-rayservice-example)
-* [RayJob Batch Inference Example](https://docs.ray.io/en/master/cluster/kubernetes/examples/rayjob-batch-inference-example.html#kuberay-batch-inference-example)
+KubeRay examples are hosted on the [Ray documentation](https://docs.ray.io/en/latest/cluster/kubernetes/examples.html).
+Examples span a wide range of use cases, including training, LLM online inference, batch inference, and more.
 
 ## Kubernetes Ecosystem
 
-* [Ingress: AWS Application Load Balancer, GKE Ingress, Nginx](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#kuberay-ingress)
-* [Using Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
-* [Profiling with py-spy](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/pyspy.html#kuberay-pyspy-integration)
-* [KubeRay integration with Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html#kuberay-volcano)
-* [MCAD: A Kubernetes Solution for Queuing and Gang Dispatching jobs on Single or Multi-Cluster environment](https://github.com/ray-project/kuberay/blob/master/docs/guidance/kuberay-with-MCAD.md)
+KubeRay integrates with the Kubernetes ecosystem, including observability tools (e.g., Prometheus, Grafana, py-spy), queuing systems (e.g., Volcano, Apache YuniKorn, Kueue), ingress controllers (e.g., Nginx), and more.
+See [KubeRay Ecosystem](https://docs.ray.io/en/latest/cluster/kubernetes/k8s-ecosystem.html) for more details.
 
-## External Blog Posts
+## Blog Posts
 
-1. [Evolving Niantic AR Mapping Infrastructures with Ray](https://nianticlabs.com/news/ray) Niantic (September 6, 2023)
-2. [Building a Modern Machine Learning Platform with Ray at Samsara](https://www.samsara.com/blog/building-a-modern-machine-learning-platform-with-ray) Samsara (August 29, 2023)
-3. [Using Ray on Kubernetes with KubeRay at Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay) Google (August 15, 2023)
-4. [How DoorDash Built an Ensemble Learning Model for Time Series Forecasting with KubeRay](https://doordash.engineering/2023/06/20/how-doordash-built-an-ensemble-learning-model-for-time-series-forecasting/) Doordash (June 20, 2023)
-5. [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat (May 15, 2023)
-6. [A cloud-native, open-source stack for accelerating foundation model innovation](https://research.ibm.com/blog/openshift-foundation-model-stack) IBM (May 9, 2023)
-7. [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) Instacart (March 17, 2023)
-8. [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) Spotify (February 1, 2023)
-9. [Best Practices For Ray Cluster On ACK](https://www.alibabacloud.com/blog/best-practices-for-ray-clusters---ray-on-ack_600925) Alibaba Cloud (Mar 12, 2024)
+* [Scaling Ray to 10K Models and Beyond](https://medium.com/workday-engineering/scaling-ray-to-10k-models-and-beyond-92799b4c9fc3) Workday
+* [How Klaviyo built a robust model serving platform with Ray Serve](https://klaviyo.tech/how-klaviyo-built-a-robust-model-serving-platform-with-ray-serve-c02ec65788b3) Klaviyo
+* [Evolving Niantic AR Mapping Infrastructures with Ray](https://nianticlabs.com/news/ray) Niantic
+* [Building a Modern Machine Learning Platform with Ray at Samsara](https://www.samsara.com/blog/building-a-modern-machine-learning-platform-with-ray) Samsara
+* [Using Ray on Kubernetes with KubeRay at Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay) Google
+* [How DoorDash Built an Ensemble Learning Model for Time Series Forecasting with KubeRay](https://doordash.engineering/2023/06/20/how-doordash-built-an-ensemble-learning-model-for-time-series-forecasting/) Doordash
+* [AI/ML Models Batch Training at Scale with Open Data Hub](https://cloud.redhat.com/blog/ai/ml-models-batch-training-at-scale-with-open-data-hub) Red Hat
+* [Distributed Machine Learning at Instacart](https://tech.instacart.com/distributed-machine-learning-at-instacart-4b11d7569423) Instacart
+* [Unleashing ML Innovation at Spotify with Ray](https://engineering.atspotify.com/2023/02/unleashing-ml-innovation-at-spotify-with-ray/) Spotify
+* [Best Practices For Ray Cluster On ACK](https://www.alibabacloud.com/blog/best-practices-for-ray-clusters---ray-on-ack_600925) Alibaba Cloud
 
 ## Talks
 
-1. [Supercharge Your AI Platform with KubeRay](https://youtu.be/DgfJR6wR4BQ?si=QuK3j7VEkteSwglA) Anyscale + Google (November 8, 2023)
-2. [Sailing Ray Workloads with KubeRay and Kueue in Kubernetes](https://www.youtube.com/watch?v=Q-sQLDMeJ8M) Volcano + DaoCloud (October 17, 2023)
-3. [Serving Large Language Models with KubeRay on TPUs](https://raysummit.anyscale.com/agenda/sessions/135) Google (September 19, 2023)
-4. [KubeRay: A Ray Cluster Management Solution on Kubernetes](https://raysummit.anyscale.com/agenda/sessions/184) Anyscale (September 18, 2023)
-5. [The Different Shades of using KubeRay with Kubernetes](https://raysummit.anyscale.com/agenda/sessions/140) Microsoft (September 18, 2023)
-6. [On-Demand Ray Clusters in ML Workflows via KubeRay & Sematic](https://raysummit.anyscale.com/agenda/sessions/164) Sematic (September 18, 2023)
-7. [KubeRay - A Kubernetes Ray Clustering Solution](https://www.youtube.com/watch?v=tMEwSAeC1jo) Microsoft (February 8, 2023)
-8. [KubeRay x Flyte Integration](https://www.youtube.com/watch?v=RmGynLp5u4Q) Flyte (August 24, 2022)
-9. [Operationalizing Ray Serve on Kubernetes](https://youtu.be/NekkpRrcAWg?si=bpX7z64AuZiM_iUv) Anyscale (August 24, 2022)
-
-## Helm Charts
-
-KubeRay Helm charts are hosted on the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository.
-Please read [kuberay-operator](helm-chart/kuberay-operator/README.md) to deploy the operator and [ray-cluster](helm-chart/ray-cluster/README.md) to deploy a configurable Ray cluster.
-To deploy the optional KubeRay API Server, see [kuberay-apiserver](helm-chart/kuberay-apiserver/README.md).
-
-```sh
-# Add the Helm repo
-helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-helm repo update
-
-# Confirm the repo exists
-helm search repo kuberay --devel
-
-# Install both CRDs and KubeRay operator v1.1.0.
-helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0
-
-# Check the KubeRay operator Pod in `default` namespace
-kubectl get pods
-# NAME                                READY   STATUS    RESTARTS   AGE
-# kuberay-operator-6fcbb94f64-mbfnr   1/1     Running   0          17s
-```
+* [Advanced Model Serving Techniques with Ray on Kubernetes | KubeCon 2024 NA](https://youtu.be/mASxYpfWUNU?si=iCuXakrP7ORAg37z) Anyscale + Google
+* [Building Scalable AI Infrastructure with Kuberay and Kubernetes | Ray Summit 2024](https://youtu.be/bbKpBTGf_AU?si=BkdCL7FGOde71t_P) Anyscale + Google
+* [Ray at Scale: Apple's Approach to Elastic GPU Management | Ray Summit 2024](https://youtu.be/ZCRZQVt-r3g?si=1Gxkpy8CNVVDDBP0) Apple
+* [Scaling Ray Train to 10K Kubernetes Nodes on GKE | Ray Summit 2024](https://youtu.be/9S5WznGnIpE?si=O6Rqpor9QmAvdv6u) Google
+* [KubeSecRay: Fortifying Multi-Tenant Ray Clusters on Kubernetes | Ray Summit 2024](https://youtu.be/Y-kLmZ3nklQ?si=N9FIc5Nk_rWwKBRp) Microsoft
+* [Scaling LLM Inference: AWS Inferentia Meets Ray Serve on EKS | Ray Summit 2024](https://youtu.be/6rNfYlm6s1k?si=WZeXZXrMDtRbbVKO) AWS
+* [How Roblox Scaled Machine Learning by Leveraging Ray for Efficient Batch Inference | Ray Summit 2024](https://youtu.be/BN1CVDZjQRE?si=9pN9A3bReSL26Pc-) Roblox
+* [Airbnb's LLM Evolution: Fine-Tuning with Ray | Ray Summit 2024](https://youtu.be/jYQ9ry8uXY0?si=3P56QNo8Qwovv4Vf) Airbnb
+* [Ray @ eBay: Pioneering a Next-Gen AI Platform | Ray Summit 2024](https://youtu.be/5KuTdRq9Zto?si=8m485B1411ixfdlx) eBay
+* [Spotify Harnesses Ray for Next-Gen AI Infrastructure | Ray Summit 2024](https://youtu.be/4kw3EYBz1Gs?si=PswsNR88xe6Mxuas) Spotify
+* [Spotify's Approach to Distributed LLM Training with Ray on GKE | Ray Summit 2024](https://youtu.be/2l1lVBdmNIQ?si=PwCeZD1-XajPNLam) Spotify
+* [Reddit's ML Evolution: Scaling with Ray and KubeRay | Ray Summit 2024](https://youtu.be/XwrGk0SM6ls?si=xNMQo548lOonKLiK) Reddit
+* [IBM's Approach to Building a Cloud-Native AI Platform | Ray Summit 2024](https://youtu.be/Q27JFtLE6b4?si=QQhVMZyBRelkLC13) IBM
+* [Exploring Hinge's ML Platform Evolution with Ray | Ray Summit 2024](https://youtu.be/_nsTcYtfnXU?si=dKNasWOxiTRJgyvj) Hinge
+* [How Rubrik Unlocked AI at Scale with Ray Serve | Ray Summit 2024](https://youtu.be/Md5vww4ardo?si=leiuvNkDy2fKeK8r) Rubrik
+* [Supercharge Your AI Platform with KubeRay | KubeCon 2023 NA](https://youtu.be/DgfJR6wR4BQ?si=QuK3j7VEkteSwglA) Anyscale + Google
+* [Sailing Ray Workloads with KubeRay and Kueue in Kubernetes](https://www.youtube.com/watch?v=Q-sQLDMeJ8M) Volcano + DaoCloud
+* [Serving Large Language Models with KubeRay on TPUs](https://www.youtube.com/watch?v=RK_u6cfPnnw) Google
 
 ## Development
 
@@ -108,9 +89,11 @@ Please read our [CONTRIBUTING](CONTRIBUTING.md) guide before making a pull reque
 
 Join [Ray's Slack workspace](https://docs.google.com/forms/d/e/1FAIpQLSfAcoiLCHOguOm8e7Jnn-JJdZaCxPGjgVCvFijHB5PLaQLeig/viewform), and search the following public channels:
 
-* `#kuberay-questions` (KubeRay users): This channel aims to help KubeRay users with their questions. The messages will be closely monitored by the Ray and KubeRay maintainers.
+* `#kuberay-questions`: This channel aims to help KubeRay users with their questions. The messages will be closely monitored by the Ray and KubeRay maintainers.
 
-* `#kuberay-discuss` (KubeRay contributors): This channel is for contributors to discuss what to do next with KubeRay (e.g. issues, pull requests, feature requests, design docs, KubeRay ecosystem integrations). All KubeRay maintainers and core contributors are in the channel.
+KubeRay contributors are welcome to join the bi-weekly KubeRay community meetings.
+
+* Add the [Ray/KubeRay Google calendar](https://calendar.google.com/calendar/u/1?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your calendar.
 
 ## Security
 

@@ -128,7 +128,7 @@ def test_cluster():
     t_cluster = Cluster(
         name="test",
         namespace="default",
-        user="boris",
+        user="kuberay",
         version="2.9.0",
         cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker]),
     )
@@ -229,7 +229,7 @@ def test_job_submission():
     t_cluster = Cluster(
         name="test-job",
         namespace="default",
-        user="boris",
+        user="kuberay",
         version="2.9.0",
         cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker], autoscaling_options=autoscaling),
     )

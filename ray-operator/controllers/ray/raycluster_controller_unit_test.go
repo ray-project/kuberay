@@ -2987,6 +2987,7 @@ func Test_RedisCleanup(t *testing.T) {
 				assert.Len(t, rayClusterList.Items, 1)
 				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 				assert.Equal(t, int64(300), *jobList.Items[0].Spec.ActiveDeadlineSeconds)
+				assert.Equal(t, []string{"/bin/bash", "-c", "--"}, jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex].Command)
 
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
