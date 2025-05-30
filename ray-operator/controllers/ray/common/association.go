@@ -40,13 +40,13 @@ func RayClusterHeadlessServiceListOptions(instance *rayv1.RayCluster) []client.L
 	}
 }
 
-func RayClusterHeadServiceListOptions(instance *rayv1.RayCluster) []client.ListOption {
+func RayClusterHeadServiceListOptions(ctx context.Context, instance *rayv1.RayCluster) []client.ListOption {
 	return []client.ListOption{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels(map[string]string{
 			utils.RayClusterLabelKey:  instance.Name,
 			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
-			utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(instance.Name, rayv1.HeadNode)),
+			utils.RayIDLabelKey:       utils.CheckLabel(ctx, utils.GenerateIdentifier(instance.Name, rayv1.HeadNode)),
 		}),
 	}
 }

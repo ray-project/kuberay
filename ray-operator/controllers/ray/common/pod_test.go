@@ -1006,7 +1006,7 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	// Repeat ServiceAccountName check with long cluster name.
 	cluster.Name = longString(t) // 200 chars long
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
-	assert.Equal(t, shortString(t), podTemplateSpec.Spec.ServiceAccountName)
+	assert.Equal(t, shortString(ctx, t), podTemplateSpec.Spec.ServiceAccountName)
 }
 
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {

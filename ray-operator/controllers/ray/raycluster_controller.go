@@ -447,7 +447,7 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 	}
 
 	if len(headRoutes.Items) == 0 {
-		route, err := common.BuildRouteForHeadService(*instance)
+		route, err := common.BuildRouteForHeadService(ctx, *instance)
 		if err != nil {
 			return err
 		}
@@ -499,7 +499,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	services := corev1.ServiceList{}
-	filterLabels := common.RayClusterHeadServiceListOptions(instance)
+	filterLabels := common.RayClusterHeadServiceListOptions(ctx, instance)
 
 	if err := r.List(ctx, &services, filterLabels...); err != nil {
 		return err
@@ -933,7 +933,7 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 	logger := ctrl.LoggerFrom(ctx)
 
 	// making sure the name is valid
-	ingress.Name = utils.CheckName(ingress.Name)
+	ingress.Name = utils.CheckName(ctx, ingress.Name)
 	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
 		return err
 	}
@@ -1144,7 +1144,7 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Trim the job name to ensure it is within the 63-character limit.
-	jobName := utils.TrimJobName(fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"))
+	jobName := utils.TrimJobName(ctx, fmt.Sprintf("%s-%s", instance.Name, "redis-cleanup"))
 
 	redisCleanupJob := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1369,15 +1369,15 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
-	if err := r.List(ctx, &runtimeServices, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
+	if err := r.List(ctx, &runtimeServices, common.RayClusterHeadServiceListOptions(ctx, instance)...); err != nil {
 		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
-		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
+		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(ctx, instance))
 	} else if len(runtimeServices.Items) > 1 {
-		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
+		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(ctx, instance))
 	} else if runtimeServices.Items[0].Spec.ClusterIP == "" {
-		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
+		return "", "", fmt.Errorf("head service IP is empty. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(ctx, instance))
 	} else if runtimeServices.Items[0].Spec.ClusterIP == corev1.ClusterIPNone {
 		// We return Head Pod IP if the Head service is headless.
 		headPod, err := common.GetRayClusterHeadPod(ctx, r, instance)
@@ -1399,7 +1399,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	// We assume we can find the right one by filtering Services with appropriate label selectors
 	// and picking the first one. We may need to select by name in the future if the Service naming is stable.
 	rayHeadSvc := corev1.ServiceList{}
-	filterLabels := common.RayClusterHeadServiceListOptions(instance)
+	filterLabels := common.RayClusterHeadServiceListOptions(ctx, instance)
 	if err := r.List(ctx, &rayHeadSvc, filterLabels...); err != nil {
 		return err
 	}
@@ -1488,7 +1488,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 		}
 
 		// making sure the name is valid
-		serviceAccount.Name = utils.CheckName(serviceAccount.Name)
+		serviceAccount.Name = utils.CheckName(ctx, serviceAccount.Name)
 
 		// Set controller reference
 		if err := controllerutil.SetControllerReference(instance, serviceAccount, r.Scheme); err != nil {
@@ -1531,7 +1531,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 		}
 
 		// making sure the name is valid
-		role.Name = utils.CheckName(role.Name)
+		role.Name = utils.CheckName(ctx, role.Name)
 		// Set controller reference
 		if err := controllerutil.SetControllerReference(instance, role, r.Scheme); err != nil {
 			return err
@@ -1567,13 +1567,13 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 		}
 
 		// Create role bindings for autoscaler if there's no existing one in the cluster.
-		roleBinding, err := common.BuildRoleBinding(instance)
+		roleBinding, err := common.BuildRoleBinding(ctx, instance)
 		if err != nil {
 			return err
 		}
 
 		// making sure the name is valid
-		roleBinding.Name = utils.CheckName(roleBinding.Name)
+		roleBinding.Name = utils.CheckName(ctx, roleBinding.Name)
 		// Set controller reference
 		if err := controllerutil.SetControllerReference(instance, roleBinding, r.Scheme); err != nil {
 			return err

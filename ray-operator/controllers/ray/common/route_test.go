@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ var instanceWithRouteEnabled = &rayv1.RayCluster{
 }
 
 func TestBuildRouteForHeadService(t *testing.T) {
-	route, err := BuildRouteForHeadService(*instanceWithRouteEnabled)
+	route, err := BuildRouteForHeadService(context.Background(), *instanceWithRouteEnabled)
 	require.NoError(t, err)
 
 	// Test name

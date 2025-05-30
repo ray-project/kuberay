@@ -2,7 +2,6 @@ package ray
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"reflect"
 	"time"
@@ -232,7 +231,6 @@ func checkServeApplicationExists(ctx context.Context, rayService *rayv1.RayServi
 			return false, err
 		}
 		for appName := range rayService.Status.ActiveServiceStatus.Applications {
-			fmt.Println("checkServeApplicationExists: appName", appName)
 			if appName == serveAppName {
 				return true, nil
 			}

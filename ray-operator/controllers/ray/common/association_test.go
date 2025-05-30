@@ -144,6 +144,8 @@ func TestRayClusterHeadlessServiceListOptions(t *testing.T) {
 }
 
 func TestRayClusterHeadServiceListOptions(t *testing.T) {
+	ctx := context.Background()
+
 	instance := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster",
@@ -151,7 +153,7 @@ func TestRayClusterHeadServiceListOptions(t *testing.T) {
 		},
 	}
 
-	labels := HeadServiceLabels(instance)
+	labels := HeadServiceLabels(ctx, instance)
 	delete(labels, utils.KubernetesCreatedByLabelKey)
 	delete(labels, utils.KubernetesApplicationNameLabelKey)
 
@@ -159,7 +161,7 @@ func TestRayClusterHeadServiceListOptions(t *testing.T) {
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels(labels),
 	}
-	result := RayClusterHeadServiceListOptions(&instance)
+	result := RayClusterHeadServiceListOptions(ctx, &instance)
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Expected %v, got %v", expected, result)
 	}
