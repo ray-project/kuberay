@@ -11,6 +11,8 @@ image:
   tag: nightly
   pullPolicy: IfNotPresent
 
+# Uncomment allowOrigin to enable CORS
+# It'll set the Access-Control-Allow-Origin response header for the HTTP proxy.
 cors:
   # allowOrigin: "*"
 
