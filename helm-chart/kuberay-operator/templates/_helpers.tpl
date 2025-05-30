@@ -56,6 +56,13 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- include "kuberay-operator.fullname" . }}
 {{- end -}}
 
+{{- /* Create the name of the image to use. */ -}}
+{{- define "kuberay-operator.image" -}}
+{{- $imageRepository := .Values.image.repository | default "kuberay/operator" }}
+{{- $imageTag := .Values.image.tag | default "latest" }}
+{{- printf "%s:%s" $imageRepository $imageTag }}
+{{- end -}}
+
 {{/*
 FeatureGates
 */}}

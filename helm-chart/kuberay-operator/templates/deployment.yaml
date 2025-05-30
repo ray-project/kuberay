@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: {{ .Chart.Name }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: {{ include "kuberay-operator.image" . }}
         {{- with .Values.image.pullPolicy }}
         imagePullPolicy: {{ . }}
         {{- end }}
