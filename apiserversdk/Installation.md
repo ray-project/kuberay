@@ -40,9 +40,8 @@ helm install kuberay-apiserver .
 ```
 
 > [!IMPORTANT]
-> You may receive an "Unauthorized" error when making a request if you install the
-> APIServer with security proxy. Please add an authorization header to the request when
-> getting the error: `-H 'Authorization: 12345'`.
+> You may receive an "403 Forbidden" error when making a request if you install the
+> APIServer with security proxy. Please try the APIServer without a security proxy.
 
 ### Without security proxy
 
