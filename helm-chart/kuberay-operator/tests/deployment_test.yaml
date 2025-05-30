@@ -139,6 +139,99 @@ tests:
             seccompProfile:
               type: RuntimeDefault
 
+  - it: Should add feature gates to arguments if specified
+    set:
+      featureGates:
+      - name: RayClusterStatusConditions
+        enabled: true
+      - name: RayJobDeletionPolicy
+        enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=false
+
+  - it: Should enable batch scheduler if `batchScheduler.enabled` is set to `true`
+    set:
+      batchScheduler:
+        enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --enable-batch-scheduler
+
+  - it: Should use the specified batch scheduler name if `batchScheduler.name` is set
+    set:
+      batchScheduler:
+        name: test-batch-scheduler
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --batch-scheduler=test-batch-scheduler
+
+  - it: Should watch the release namespace if `singleNamespaceInstall` is `true` and `watchNamespace` is empty
+    set:
+      singleNamespaceInstall: true
+      watchNamespace: []
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --watch-namespace=kuberay-system
+
+  - it: Should watch the specified namespaces if `watchNamespace` is set
+    set:
+      watchNamespace:
+        - ns1
+        - ns2
+        - ns3
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --watch-namespace=ns1,ns2,ns3
+
+  - it: Should use the specified logging stdout encoder if `stdoutEncoder` is set
+    set:
+      logging:
+        stdoutEncoder: test-stdout-encoder
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --log-stdout-encoder=test-stdout-encoder
+
+  - it: Should use the specified logging file encoder if `stdoutEncoder` is set
+    set:
+      logging:
+        fileEncoder: test-file-encoder
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --log-file-encoder=test-file-encoder
+
+  - it: Should use kubernetes proxy if `useKubernetesProxy` is set to `true`
+    set:
+      useKubernetesProxy: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --use-kubernetes-proxy=true
+
+  - it: Should enable leader election if `leaderElectionEnabled` is set to `true`
+    set:
+      leaderElectionEnabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --enable-leader-election=true
+
+  - it: Should enable metrics if `metrics.enabled` is set to `true`
+    set:
+      metrics:
+        enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: --enable-metrics=true
+
   - it: Should add environment variables if `env` is set
     set:
       env:

@@ -129,7 +129,7 @@ crNamespacedRbacEnable: true
 singleNamespaceInstall: false
 
 # -- The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
-watchNamespace:
+watchNamespace: []
 # - ns1
 # - ns2
 
