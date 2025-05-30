@@ -184,13 +184,13 @@ resources:
   #   cpu: 100m
   #   memory: 512Mi
 
-# @Ignore -- Pod liveness probe configuration.
+# @ignore -- Pod liveness probe configuration.
 livenessProbe:
   initialDelaySeconds: 10
   periodSeconds: 5
   failureThreshold: 5
 
-# @Ignore -- Pod readiness probe configuration.
+# @ignore -- Pod readiness probe configuration.
 readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 5
