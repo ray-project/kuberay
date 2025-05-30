@@ -18,6 +18,7 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -42,7 +43,7 @@ var (
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	enableAPIServerV2  = flag.Bool("enable-api-server-v2", true, "Enable API server V2")
-	corsAllowOrigin    = flag.String("cors-allow-origin", "", "Set Access-Control-Allow-Origin response header for HTTP proxy.")
+	corsAllowOrigin    = flag.String("cors-allow-origin", "", "Set the Access-Control-Allow-Origin response header for the HTTP proxy.")
 	healthy            int32
 )
 
@@ -167,22 +168,14 @@ func startHttpProxy() {
 	}
 
 	if *corsAllowOrigin != "" {
-		// Add CORS middleware
-		corsHandler := func(h http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Access-Control-Allow-Origin", *corsAllowOrigin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-				if r.Method == http.MethodOptions {
-					w.WriteHeader(http.StatusOK)
-					return
-				}
-				h.ServeHTTP(w, r)
-			})
-		}
+		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
+		handler := cors.New(cors.Options{
+			AllowedOrigins: []string{*corsAllowOrigin},
+		}).Handler(runtimeMux)
 
-		topMux.Handle("/", corsHandler(runtimeMux))
+		topMux.Handle("/", handler)
 	} else {
+		klog.Info("Access-Control-Allow-Origin not set, CORS is disabled.")
 		// Seems /apis (matches /apis/v1alpha1/clusters) works fine
 		topMux.Handle("/", runtimeMux)
 	}
