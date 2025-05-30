@@ -39,43 +39,35 @@ const (
 )
 
 type SubmitJobOptions struct {
-	cmdFactory               cmdutil.Factory
-	ioStreams                *genericiooptions.IOStreams
-	RayJob                   *rayv1.RayJob
-	workerNodeSelectors      map[string]string
-	headNodeSelectors        map[string]string
-	logColor                 string
-	image                    string
-	fileName                 string
-	workingDir               string
-	runtimeEnv               string
-	headers                  string
-	verify                   string
-	cluster                  string
-	runtimeEnvJson           string
-	entryPointResource       string
-	metadataJson             string
-	logStyle                 string
-	submissionID             string
-	rayjobName               string
-	rayVersion               string
-	entryPoint               string
-	headCPU                  string
-	headMemory               string
-	headGPU                  string
-	workerCPU                string
-	workerMemory             string
-	workerGPU                string
-	namespace                string
+	headNodeSelectors  map[string]string
+	RayJob             *rayv1.RayJob
+	logStyle           string
+	runtimeEnvJson     string
+	image              string
+	fileName           string
+	workingDir         string
+	runtimeEnv         string
+	headers            string
+	verify             string
+	cluster            string
+	headGPU            string
+	entryPointResource string
+	rayjobName         string
+	logColor           string
+	submissionID       string
+	metadataJson       string
+	entryPoint         string
+	headCPU            string
+	headMemory         string
+	util.KubectlPluginCommonOptions
 	entryPointMemory         int
 	entryPointGPU            float32
-	workerReplicas           int32
 	entryPointCPU            float32
+	ttlSecondsAfterFinished  int32
 	noWait                   bool
 	dryRun                   bool
 	verbose                  bool
 	shutdownAfterJobFinishes bool
-	ttlSecondsAfterFinished  int32
 }
 
 type JobInfo struct {
@@ -120,8 +112,10 @@ var (
 
 func NewJobSubmitOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SubmitJobOptions {
 	return &SubmitJobOptions{
-		cmdFactory: cmdFactory,
-		ioStreams:  &streams,
+		KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+			CmdFactory: cmdFactory,
+			IoStreams:  &streams,
+		},
 	}
 }
 
@@ -165,19 +159,19 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().BoolVar(&options.noWait, "no-wait", false, "If present, will not stream logs and wait for job to finish")
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.RayVersion, "ray-version", util.RayVersion, "Ray version to use")
+	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.RayVersion), "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
-	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired worker group replicas")
-	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
-	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
-	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
+	cmd.Flags().Int32Var(&options.WorkerReplicas, "worker-replicas", 1, "desired worker group replicas")
+	cmd.Flags().StringVar(&options.WorkerCPU, "worker-cpu", "2", "number of CPUs in each worker group replica")
+	cmd.Flags().StringVar(&options.WorkerMemory, "worker-memory", "4Gi", "amount of memory in each worker group replica")
+	cmd.Flags().StringVar(&options.WorkerGPU, "worker-gpu", "0", "number of GPUs in each worker group replica")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster. Only works when filename is not provided")
 	cmd.Flags().BoolVarP(&options.verbose, "verbose", "v", false, "Passing the '--verbose' flag to the 'ray job submit' command")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
-	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
+	cmd.Flags().StringToStringVar(&options.WorkerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
 
 	return cmd
@@ -188,9 +182,9 @@ func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
-	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
+	options.Namespace = namespace
+	if options.Namespace == "" {
+		options.Namespace = "default"
 	}
 
 	if len(options.runtimeEnv) > 0 {
@@ -294,9 +288,9 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		"head-cpu":      options.headCPU,
 		"head-gpu":      options.headGPU,
 		"head-memory":   options.headMemory,
-		"worker-cpu":    options.workerCPU,
-		"worker-gpu":    options.workerGPU,
-		"worker-memory": options.workerMemory,
+		"worker-cpu":    options.WorkerCPU,
+		"worker-gpu":    options.WorkerGPU,
+		"worker-memory": options.WorkerMemory,
 	}
 
 	for name, value := range resourceFields {
@@ -320,7 +314,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		// Genarate the Ray job.
 		rayJobObject := generation.RayJobYamlObject{
 			RayJobName:               options.rayjobName,
-			Namespace:                options.namespace,
+			Namespace:                options.Namespace,
 			ShutdownAfterJobFinishes: options.shutdownAfterJobFinishes,
 			TTLSecondsAfterFinished:  options.ttlSecondsAfterFinished,
 			SubmissionMode:           "InteractiveMode",
@@ -330,7 +324,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			// See https://github.com/ray-project/kuberay/issues/3126.
 			Entrypoint: options.entryPoint,
 			RayClusterConfig: generation.RayClusterConfig{
-				RayVersion: &options.rayVersion,
+				RayVersion: &options.RayVersion,
 				Image:      &options.image,
 				Head: &generation.Head{
 					CPU:           &options.headCPU,
@@ -340,11 +334,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				},
 				WorkerGroups: []generation.WorkerGroup{
 					{
-						CPU:           &options.workerCPU,
-						Memory:        &options.workerMemory,
-						GPU:           &options.workerGPU,
-						Replicas:      options.workerReplicas,
-						NodeSelectors: options.workerNodeSelectors,
+						CPU:           &options.WorkerCPU,
+						Memory:        &options.WorkerMemory,
+						GPU:           &options.WorkerGPU,
+						Replicas:      options.WorkerReplicas,
+						NodeSelectors: options.WorkerNodeSelectors,
 					},
 				},
 			},
@@ -363,14 +357,14 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 
 		// Apply the generated yaml
-		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(options.namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
+		rayJobApplyConfigResult, err := k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Apply(ctx, rayJobApplyConfig, v1.ApplyOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Failed to apply generated YAML: %w", err)
 		}
 		options.RayJob = &rayv1.RayJob{}
 		options.RayJob.SetName(rayJobApplyConfigResult.Name)
 	} else {
-		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
+		options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Create(ctx, options.RayJob, v1.CreateOptions{FieldManager: util.FieldManager})
 		if err != nil {
 			return fmt.Errorf("Error when creating RayJob CR: %w", err)
 		}
@@ -380,7 +374,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	if len(options.RayJob.GetName()) > 0 {
 		// Add timeout?
 		for len(options.RayJob.Status.RayClusterName) == 0 {
-			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+			options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("Failed to get Ray Job status")
 			}
@@ -399,7 +393,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	fmt.Printf("Checking Cluster Status for cluster %s...\n", options.cluster)
 	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= clusterTimeout {
 		time.Sleep(2 * time.Second)
-		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
+		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(options.Namespace).Get(ctx, options.cluster, v1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to get cluster information with error: %w", err)
 		}
@@ -412,7 +406,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 
 	if !clusterReady {
 		fmt.Printf("Deleting RayJob...\n")
-		err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
+		err = k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Delete(ctx, options.RayJob.GetName(), v1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("Failed to clean up Ray job after time out.: %w", err)
 		}
@@ -421,13 +415,13 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Timed out waiting for cluster")
 	}
 
-	svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
+	svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.Namespace, util.RayCluster, options.cluster)
 	if err != nil {
 		return fmt.Errorf("Failed to find service name: %w", err)
 	}
 
 	// start port forward section
-	portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
+	portForwardCmd := portforward.NewCmdPortForward(factory, *options.IoStreams)
 	portForwardCmd.SetArgs([]string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)})
 
 	// create new context for port-forwarding so we can cancel the context to stop the port forwarding only
@@ -527,7 +521,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		for {
 			currErrToken := rayCmdStdErrScanner.Text()
 			if currErrToken != "" {
-				fmt.Fprintf(options.ioStreams.ErrOut, "%s\n", currErrToken)
+				fmt.Fprintf(options.IoStreams.ErrOut, "%s\n", currErrToken)
 			}
 			scanNotDone := rayCmdStdErrScanner.Scan()
 			if !scanNotDone {
@@ -537,13 +531,13 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}()
 
 	// Add annotation to RayJob with the correct Ray job ID and update the CR
-	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
+	options.RayJob, err = k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Get(ctx, options.RayJob.GetName(), v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to get latest version of Ray job: %w", err)
 	}
 	options.RayJob.Spec.JobId = rayJobID
 
-	_, err = k8sClients.RayClient().RayV1().RayJobs(options.namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
+	_, err = k8sClients.RayClient().RayV1().RayJobs(options.Namespace).Update(ctx, options.RayJob, v1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("Error occurred when trying to add job ID to RayJob: %w", err)
 	}
@@ -559,7 +553,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	}
 	// Wait for the Ray job to finish
 	watcher, err := k8sClients.RayClient().RayV1().
-		RayJobs(options.namespace).
+		RayJobs(options.Namespace).
 		Watch(ctx, v1.ListOptions{
 			FieldSelector: "metadata.name=" + options.RayJob.GetName(),
 		})
@@ -572,7 +566,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	for evt := range watcher.ResultChan() {
 		job, ok := evt.Object.(*rayv1.RayJob)
 		if !ok {
-			fmt.Fprintf(options.ioStreams.ErrOut, "unexpected watch event type %T\n", evt.Object)
+			fmt.Fprintf(options.IoStreams.ErrOut, "unexpected watch event type %T\n", evt.Object)
 			continue
 		}
 
@@ -602,7 +596,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 	}
 
-	fmt.Fprintf(options.ioStreams.ErrOut,
+	fmt.Fprintf(options.IoStreams.ErrOut,
 		"rayjob %s watch ended without a clear terminal state\n", options.RayJob.GetName())
 	return nil
 }
