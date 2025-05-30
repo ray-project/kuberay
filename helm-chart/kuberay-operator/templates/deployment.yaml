@@ -39,48 +39,40 @@ spec:
         command:
         - {{ .Values.operatorCommand }}
         args:
-        {{- $argList := list -}}
-        {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
-        {{- if .Values.batchScheduler -}}
-        {{- if .Values.batchScheduler.enabled -}}
-        {{- $argList = append $argList "--enable-batch-scheduler" -}}
-        {{- end -}}
-        {{- if .Values.batchScheduler.name -}}
-        {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
-        {{- end -}}
-        {{- end -}}
-        {{- $watchNamespace := "" -}}
-        {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
-        {{- $watchNamespace = .Release.Namespace -}}
-        {{- else if .Values.watchNamespace -}}
-        {{- $watchNamespace = join "," .Values.watchNamespace -}}
-        {{- end -}}
-        {{- if $watchNamespace -}}
-        {{- $argList = append $argList "--watch-namespace" -}}
-        {{- $argList = append $argList $watchNamespace -}}
-        {{- end -}}
-        {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) -}}
-        {{- $argList = append $argList "--log-file-path" -}}
-        {{- $argList = append $argList (printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName) -}}
-        {{- end -}}
-        {{- if .Values.logging.stdoutEncoder -}}
-        {{- $argList = append $argList "--log-stdout-encoder" -}}
-        {{- $argList = append $argList .Values.logging.stdoutEncoder -}}
-        {{- end -}}
-        {{- if .Values.logging.fileEncoder -}}
-        {{- $argList = append $argList "--log-file-encoder" -}}
-        {{- $argList = append $argList .Values.logging.fileEncoder -}}
-        {{- end -}}
-        {{- if hasKey .Values "useKubernetesProxy" -}}
-        {{- $argList = append $argList (printf "--use-kubernetes-proxy=%t" .Values.useKubernetesProxy) -}}
-        {{- end -}}
-        {{- if hasKey .Values "leaderElectionEnabled" -}}
-        {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
-        {{- end -}}
-        {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
-        {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
-        {{- end -}}
-        {{- $argList | toYaml | nindent 8 }}
+        {{- $featureGates := list }}
+        {{- range $featureGate := .Values.featureGates }}
+        {{- $featureGates = append $featureGates (printf "%s=%t" $featureGate.name $featureGate.enabled) }}
+        {{- end }}
+        {{- with $featureGates }}
+        - --feature-gates={{ . | join "," }}
+        {{- end }}
+        {{- if .Values.batchScheduler.enabled }}
+        - --enable-batch-scheduler
+        {{- end }}
+        {{- with .Values.batchScheduler.name }}
+        - --batch-scheduler={{ . }}
+        {{- end }}
+        {{- $namespaces := list }}
+        {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) }}
+        {{- $namespaces = append $namespaces .Release.Namespace }}
+        {{- else if .Values.watchNamespace }}
+        {{- $namespaces = concat $namespaces .Values.watchNamespace }}
+        {{- end }}
+        {{- with $namespaces }}
+        - --watch-namespace={{ . | join "," }}
+        {{- end }}
+        {{- if and .Values.logging.baseDir .Values.logging.fileName }}
+        - --log-file-path={{ printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName }}
+        {{- end }}
+        {{- with .Values.logging.stdoutEncoder }}
+        - --log-stdout-encoder={{ . }}
+        {{- end }}
+        {{- with .Values.logging.fileEncoder }}
+        - --log-file-encoder={{ . }}
+        {{- end }}
+        - --use-kubernetes-proxy={{ .Values.useKubernetesProxy }}
+        - --enable-leader-election={{ .Values.leaderElectionEnabled }}
+        - --enable-metrics={{ .Values.metrics.enabled }}
         {{- with .Values.env }}
         env:
         {{- toYaml . | nindent 8 }}

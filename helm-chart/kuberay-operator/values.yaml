@@ -101,9 +101,9 @@ metrics:
 # -- Path to the operator binary
 operatorCommand: /manager
 
-# if userKubernetesProxy is set to true, the KubeRay operator will be configured with the --use-kubernetes-proxy flag.
-# Using this option to configure kuberay-operator to comunitcate to Ray head pods by proxying through the Kubernetes API Server.
-# useKubernetesProxy: true
+# if useKubernetesProxy is set to true, the KubeRay operator will be configured with the --use-kubernetes-proxy flag.
+# Using this option to configure kuberay-operator to communicate to Ray head pods by proxying through the Kubernetes API Server.
+useKubernetesProxy: false
 
 # -- If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true
@@ -128,10 +128,10 @@ crNamespacedRbacEnable: true
 #   to resource events within its own namespace.
 singleNamespaceInstall: false
 
-# The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
-# watchNamespace:
-#   - n1
-#   - n2
+# -- The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
+watchNamespace:
+# - ns1
+# - ns2
 
 # -- Environment variables.
 
