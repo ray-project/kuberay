@@ -15,8 +15,9 @@ If this flag is enabled, an `http` port at the `/metrics` endpoint provides APIS
 ### Deploy KubeRay operator and APIServer
 
 Refer to the [Install with Helm](README.md#install-with-helm) section in the README for
-setting up the KubeRay operator and APIServer. This will set the flag `collectMetricsFlag`
-to `true`, which enables metrics collection.
+setting up the KubeRay operator and APIServer, and port-forward the HTTP endpoint to local
+port 31888. This will set the flag `collectMetricsFlag` to `true`, which enables metrics
+collection.
 
 > [!IMPORTANT]
 > All the following guidance requires you to switch your working directory to the KubeRay project root.

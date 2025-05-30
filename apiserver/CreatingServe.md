@@ -18,7 +18,8 @@ creating the cluster:
 ## Setup
 
 Refer to the [Install with Helm](README.md#install-with-helm) section in the README for
-setting up the KubeRay operator and APIServer.
+setting up the KubeRay operator and APIServer, and port-forward the HTTP endpoint to local
+port 31888.
 
 ## Example
 
