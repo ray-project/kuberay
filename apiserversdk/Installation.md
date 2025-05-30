@@ -67,7 +67,15 @@ cd helm-chart/kuberay-apiserver
 helm install kuberay-apiserver . --set security=null
 ```
 
-## Step 4: Validate installation
+## Step 4: Port-forwarding the APIServer service
+
+Use the following command for port-forwarding to access the APIServer through port 31888:
+
+```sh
+kubectl port-forward service/kuberay-apiserver-service 31888:8888
+```
+
+## Step 5: Validate installation
 
 Check that the KubeRay APIServer is running in the "default" namespace.
 

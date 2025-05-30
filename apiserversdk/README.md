@@ -17,7 +17,8 @@ Consider using the APIServer if:
 
 ## Installation
 
-Please follow the [Installation](./Installation.md) guide to install the APIServer.
+Please follow the [Installation](./Installation.md) guide to install the APIServer, and
+port-forward the HTTP endpoint to local port 31888.
 
 ## Quick Start
 
