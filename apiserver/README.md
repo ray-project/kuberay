@@ -35,7 +35,8 @@ kubectl port-forward service/kuberay-apiserver-service 31888:8888
 
 > [!IMPORTANT]
 > If you receive an "Unauthorized" error when making a request, please add an
-> authorization header to the request: `-H 'Authorization: 12345'`
+> authorization header to the request: `-H 'Authorization: 12345'` or install the
+> APIServer without a security proxy.
 
 ### For Development: Start a Local APIServer
 
