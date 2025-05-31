@@ -1934,3 +1934,55 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestAddDefaultRayNodeLabels_GKESpot(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"ray.io/group":                  "test-worker-group-1",
+				"topology.kubernetes.io/region": "us-central2",
+				"topology.kubernetes.io/zone":   "us-central2-b",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "ray"},
+			},
+			NodeSelector: map[string]string{
+				"cloud.google.com/gke-spot": "true",
+			},
+		},
+	}
+
+	addDefaultRayNodeLabels(pod)
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
+}
+
+func TestAddDefaultRayNodeLabels_EKSSpot(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"ray.io/group":                  "test-worker-group-2",
+				"topology.kubernetes.io/region": "us-west4",
+				"topology.kubernetes.io/zone":   "us-west4-a",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "ray"},
+			},
+			NodeSelector: map[string]string{
+				"eks.amazonaws.com/capacityType": "SPOT",
+			},
+		},
+	}
+
+	addDefaultRayNodeLabels(pod)
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
+	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
+}
