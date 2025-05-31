@@ -32,7 +32,7 @@ Refer to [this document](https://docs.ray.io/en/master/cluster/kubernetes/gettin
 
 #### Install KubeRay APIServer
 
-Refer to [this document](../helm-chart/kuberay-apiserver/README.md) to install the latest
+Refer to [this document](../helm-chart/kuberay-apiserver/README.md#without-security-proxy) to install the latest
 stable KubeRay operator and APIServer (without the security proxy) from the Helm
 repository.
 
