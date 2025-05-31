@@ -22,6 +22,7 @@ require (
 	github.com/orcaman/concurrent-map/v2 v2.0.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
+	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
