@@ -23,7 +23,14 @@ Refer to [this document](https://docs.ray.io/en/master/cluster/kubernetes/gettin
 
 #### Install KubeRay APIServer
 
-Refer to [this document](../helm-chart/kuberay-apiserver/README.md) to install the latest stable KubeRay apiserver.
+Refer to [this document](../helm-chart/kuberay-apiserver/README.md) to install the latest
+stable KubeRay operator and APIServer (without the security proxy) from the Helm
+repository.
+
+> [!IMPORTANT]
+> If you install APIServer with security proxy, you may receive an "Unauthorized" error
+> when making a request. Please add an authorization header to the request: `-H 'Authorization: 12345'`
+> or install the APIServer without a security proxy.
 
 #### Port-forwarding the APIServer service
 
@@ -32,11 +39,6 @@ Use the following command for port-forwarding to access the APIServer through po
 ```sh
 kubectl port-forward service/kuberay-apiserver-service 31888:8888
 ```
-
-> [!IMPORTANT]
-> If you receive an "Unauthorized" error when making a request, please add an
-> authorization header to the request: `-H 'Authorization: 12345'` or install the
-> APIServer without a security proxy.
 
 ### For Development: Start a Local APIServer
 

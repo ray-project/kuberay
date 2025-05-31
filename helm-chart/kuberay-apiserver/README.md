@@ -13,6 +13,29 @@ helm version
 
 ## Install KubeRay API Server
 
+### Without security proxy
+
+- Install a stable version via Helm repository
+
+```sh
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+helm repo update
+# Install KubeRay APIServer without security proxy
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0 --set security=null
+```
+
+- Install the nightly version
+
+```sh
+# Step1: Clone KubeRay repository
+
+# Step2: Navigate to `helm-chart/kuberay-apiserver`
+cd helm-chart/kuberay-apiserver
+
+# Step3: Install the KubeRay apiserver
+helm install kuberay-apiserver . --set security=null
+```
+
 ### With security proxy
 
 - Install a stable version via Helm repository
@@ -40,29 +63,6 @@ helm install kuberay-apiserver .
 > If you receive an "Unauthorized" error when making a request, please add an
 > authorization header to the request: `-H 'Authorization: 12345'` or install the
 > APIServer without a security proxy.
-
-### Without security proxy
-
-- Install a stable version via Helm repository
-
-```sh
-helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-helm repo update
-# Install KubeRay APIServer without security proxy
-helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0 --set security=null
-```
-
-- Install the nightly version
-
-```sh
-# Step1: Clone KubeRay repository
-
-# Step2: Navigate to `helm-chart/kuberay-apiserver`
-cd helm-chart/kuberay-apiserver
-
-# Step3: Install the KubeRay apiserver
-helm install kuberay-apiserver . --set security=null
-```
 
 ## List the chart
 
