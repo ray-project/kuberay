@@ -9,13 +9,55 @@ The KubeRay APIServer is an optional component that provides a layer of simplifi
 
 ## Installation
 
-### Start a local apiserver
+### Install with Helm
+
+Ensure that the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+
+```sh
+helm version
+```
+
+#### Create a Kubernetes cluster
+
+Create a local Kubernetes cluster using [Kind](https://kind.sigs.k8s.io/). If you already
+have a Kubernetes cluster, you can skip this step.
+
+```sh
+kind create cluster --image=kindest/node:v1.26.0
+```
+
+#### Install KubeRay Operator
+
+Refer to [this document](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy) to install the latest stable KubeRay operator.
+
+#### Install KubeRay APIServer
+
+Refer to [this document](../helm-chart/kuberay-apiserver/README.md#without-security-proxy) to install the latest
+stable KubeRay operator and APIServer (without the security proxy) from the Helm
+repository.
+
+> [!IMPORTANT]
+> If you install APIServer with security proxy, you may receive an "Unauthorized" error
+> when making a request. Please add an authorization header to the request: `-H 'Authorization: 12345'`
+> or install the APIServer without a security proxy.
+
+#### Port-forwarding the APIServer service
+
+Use the following command for port-forwarding to access the APIServer through port 31888:
+
+```sh
+kubectl port-forward service/kuberay-apiserver-service 31888:8888
+```
+
+### For Development: Start a Local APIServer
 
 You can build and start the APIServer from scratch in your local environment with a single command. This will deploy all the necessary components to a local kind cluster.
 
 ```sh
 make start-local-apiserver
 ```
+
+### Verify the installation
 
 The APIServer supports HTTP requests, so you can easily verify its successful startup by issuing two simple curl commands.
 
@@ -38,82 +80,6 @@ curl --silent -X 'GET' \
     -H 'accept: application/json'
 ```
 
-### Install with Helm
-
-Ensure that the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
-
-```sh
-helm version
-```
-
-#### Install KubeRay Operator
-
-Refer to [this document](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy) to install the latest stable KubeRay operator.
-
-#### Install KubeRay APIServer
-
-- Install a stable version via the Helm repository (supports KubeRay v0.4.0+ only)
-
-  ```sh
-  # Install the KubeRay helm repo
-  helm repo add kuberay https://ray-project.github.io/kuberay-helm/
-
-  # Install KubeRay APIServer.
-  helm install kuberay-apiserver kuberay/kuberay-apiserver
-
-  # Check the KubeRay APIServer Pod in `default` namespace
-  kubectl get pods
-  # NAME                                             READY   STATUS    RESTARTS   AGE
-  # kuberay-apiserver-857869f665-b94px               1/1     Running   0          86m
-  # kuberay-operator-7456c6b69b-t6pt7                1/1     Running   0          172m
-  ```
-
-- Install the nightly version
-
-  ```sh
-  # Step1: Clone KubeRay repository
-
-  # Step2: Move to `helm-chart/kuberay-apiserver`
-  cd helm-chart/kuberay-apiserver
-
-  # Step3: Install KubeRay APIServer
-  helm install kuberay-apiserver .
-  ```
-
-- Install the current working branch version
-
-  ```sh
-  # Step1: Clone KubeRay repository
-
-  # Step2: Change directory to the api server
-  cd apiserver
-
-  # Step3: Build docker image, create a local kind cluster and deploy api server (using helm)
-  make docker-image cluster load-image deploy
-  ```
-
-#### List the chart
-
-To list the deployed charts:
-
-```sh
-helm ls
-# NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-apiserver       default         1               2023-09-25 10:42:34.267328 +0300 EEST   deployed        kuberay-apiserver-1.0.0
-# kuberay-operator        default         1               2023-09-25 10:41:48.355831 +0300 EEST   deployed        kuberay-operator-1.0.0
-```
-
-#### Uninstall the Chart
-
-```sh
-# Uninstall the `kuberay-apiserver` release
-helm uninstall kuberay-apiserver
-
-# The KubeRay APIServer Pod should be removed.
-kubectl get pods
-# No resources found in default namespace.
-```
-
 ## Usage
 
 After deployment, you can use the `{{baseUrl}}` to access the service. Refer to the [Swagger support section](https://ray-project.github.io/kuberay/components/apiserver/#swagger-support) for complete API definitions.
@@ -122,7 +88,7 @@ After deployment, you can use the `{{baseUrl}}` to access the service. Refer to 
 
 - for ingress access, you will need to create your own ingress
 
-Details of the request parameters can be found in [KubeRay Swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger). This document only provides basic examples.
+Details of the request parameters can be found in [KubeRay Swagger](https://github.com/ray-project/kuberay/tree/master/proto/swagger). This README provides only basic examples.
 
 ### Setup a smoke test
 

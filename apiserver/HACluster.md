@@ -17,7 +17,9 @@ We will provide a detailed example on how to create this highly available APISer
 
 ### Setup Ray Operator and APIServer
 
-Refer to the [README](README.md) for setting up the KubeRay operator and APIServer.
+Refer to the [Install with Helm](README.md#install-with-helm) section in the README for
+setting up the KubeRay operator and APIServer, and port-forward the HTTP endpoint to local
+port 31888.
 
 ## Example
 
