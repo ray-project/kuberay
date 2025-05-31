@@ -28,9 +28,9 @@ kind create cluster --image=kindest/node:v1.26.0
 
 ## Step 2: Install KubeRay operator and APIServer
 
-Follow [Installation Guide](../Installation.md) to install the latest stable KubeRay
-operator and APIServer from the Helm repository, and port-forward the HTTP endpoint to
-local port 31888.
+Follow the [Installation Guide](../Installation.md) to install the latest stable KubeRay
+operator and APIServer (without the security proxy) from the Helm repository, and
+port-forward the HTTP endpoint to local port 31888.
 
 ## Step 3: Install a RayJob
 
