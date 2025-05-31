@@ -38,27 +38,7 @@ spec:
               items:
                 - key: sample_code.py
                   path: sample_code.py
-  workerGroupSpecs:
-  - replicas: 1
-    minReplicas: 1
-    maxReplicas: 5
-    groupName: small-group
-    rayStartParams: {}
-    template:
-      spec:
-        containers:
-        - name: ray-worker
-          image: rayproject/ray:2.46.0
-          env:
-           - name: RAY_RUNTIME_ENV_HOOK
-             value: ray._private.runtime_env.uv_runtime_env_hook.hook
-          resources:
-            limits:
-              cpu: "1"
-              memory: "1G"
-            requests:
-              cpu: "500m"
-              memory: "1G"
+
 ---
 apiVersion: v1
 kind: ConfigMap
