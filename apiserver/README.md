@@ -17,6 +17,15 @@ Ensure that the version of Helm is v3+. Currently, [existing CI tests](https://g
 helm version
 ```
 
+#### Create a Kubernetes cluster
+
+Create a local Kubernetes cluster using [Kind](https://kind.sigs.k8s.io/). If you already
+have a Kubernetes cluster, you can skip this step.
+
+```sh
+kind create cluster --image=kindest/node:v1.26.0
+```
+
 #### Install KubeRay Operator
 
 Refer to [this document](https://docs.ray.io/en/master/cluster/kubernetes/getting-started/kuberay-operator-installation.html#kuberay-operator-deploy) to install the latest stable KubeRay operator.
