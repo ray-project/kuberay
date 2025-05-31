@@ -80,7 +80,7 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rc *r
 
 // AddMetadataToPod adds essential labels and annotations to the Ray pods
 // the scheduler needs these labels and annotations in order to do the scheduling properly
-func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
 	// when gang scheduling is enabled, extra labels need to be added to all pods
 	if k.isGangSchedulingEnabled(app) {
 		pod.Labels[KubeSchedulerPodGroupLabelKey] = app.Name

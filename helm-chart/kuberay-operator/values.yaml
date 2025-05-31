@@ -50,7 +50,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", and "yunikorn".
+#    "default", "volcano", "yunikorn", and "kube-scheduler".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
