@@ -14,14 +14,14 @@ spec:
       another_env_var: "second_env_var"
 
   rayClusterSpec:
-    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.46.0' # should match the Ray version in the image of the containers
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.46.0
               ports:
                 - containerPort: 6379
                   name: gcs-server
@@ -44,7 +44,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.41.0
+                image: rayproject/ray:2.46.0
                 resources:
                   limits:
                     cpu: "1"
