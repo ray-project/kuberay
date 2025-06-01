@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   gcsFaultToleranceOptions:
     # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
     # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
@@ -28,7 +28,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.41.0
+            image: rayproject/ray:2.46.0
             resources:
               limits:
                 cpu: "1"
@@ -73,7 +73,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.46.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs
