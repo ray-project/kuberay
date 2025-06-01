@@ -169,7 +169,6 @@ The APIServer supports HTTP requests. For detailed specifications, check out the
 ## Advanced Usage
 
 - [Creating Autoscaling clusters using API server](./Autoscaling.md)
-- [Creating a cluster with RayServe support](./CreatingServe.md)
 - [Setting Up a Highly Available Cluster via the API Server](./HACluster.md)
 - [RayJob Submission using API server](./JobSubmission.md)
 - [Monitoring API server and created RayClusters](./Monitoring.md)
