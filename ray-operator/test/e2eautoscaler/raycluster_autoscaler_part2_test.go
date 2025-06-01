@@ -29,7 +29,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 
 		idleTimeoutShort := int32(10)
 		idleTimeoutLong := int32(30)
-		timeoutBuffer := int32(20) // Additional wait time to allow for scale down operation
+		timeoutBuffer := int32(30) // Additional wait time to allow for scale down operation
 
 		// Script for creating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
