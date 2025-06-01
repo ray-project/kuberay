@@ -21,12 +21,12 @@ async function _createJob(
   //     "name": "rayjob-test-long-running4",
   //     "namespace": "kubeflow-ml",
   //     "user": "3cp0",
-  //     "version": "2.9.0",
+  //     "version": "2.46.0",
   //     "entrypoint": "python -c \"import time; time.sleep(100)\"",
   //     "clusterSpec": {
   //       "headGroupSpec": {
   //         "computeTemplate": "default-template",
-  //         "image": "rayproject/ray:2.9.0",
+  //         "image": "rayproject/ray:2.46.0",
   //         "serviceType": "NodePort",
   //         "rayStartParams": {
   //           "dashboard-host": "0.0.0.0"
@@ -39,7 +39,7 @@ async function _createJob(
   //         {
   //           "groupName": "small-wg",
   //           "computeTemplate": "default-template",
-  //           "image": "rayproject/ray:2.9.0",
+  //           "image": "rayproject/ray:2.46.0",
   //           "replicas": 1,
   //           "minReplicas": 0,
   //           "maxReplicas": 1,
@@ -58,12 +58,12 @@ async function _createJob(
     name: jobName,
     namespace: "default",
     user: "steve-han",
-    version: "2.9.0",
+    version: "2.46.0",
     entrypoint: entrypoint,
     shutdownAfterJobFinishes: true,
     ttlSecondsAfterFinished: 60,
     jobSubmitter: {
-      image: "rayproject/ray:2.22.0",
+      image: "rayproject/ray:2.46.0",
     },
     clusterSpec: {
       headGroupSpec: {

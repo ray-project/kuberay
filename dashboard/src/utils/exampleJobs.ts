@@ -8,7 +8,7 @@ let jobs = [
     clusterSpec: {
       headGroupSpec: {
         computeTemplate: "default-template",
-        image: "rayproject/ray:2.9.0",
+        image: "rayproject/ray:2.46.0",
         serviceType: "NodePort",
         rayStartParams: {
           "dashboard-host": "0.0.0.0",
@@ -18,7 +18,7 @@ let jobs = [
         {
           groupName: "small-wg",
           computeTemplate: "default-template",
-          image: "rayproject/ray:2.9.0",
+          image: "rayproject/ray:2.46.0",
           replicas: 1,
           minReplicas: 1,
           maxReplicas: 1,
@@ -42,7 +42,7 @@ let jobs = [
     clusterSpec: {
       headGroupSpec: {
         computeTemplate: "default-template",
-        image: "rayproject/ray:2.9.0",
+        image: "rayproject/ray:2.46.0",
         serviceType: "NodePort",
         rayStartParams: {
           "dashboard-host": "0.0.0.0",
@@ -52,7 +52,7 @@ let jobs = [
         {
           groupName: "small-wg",
           computeTemplate: "default-template",
-          image: "rayproject/ray:2.9.0",
+          image: "rayproject/ray:2.46.0",
           replicas: 1,
           minReplicas: 1,
           maxReplicas: 1,
@@ -76,7 +76,7 @@ let jobs = [
     clusterSpec: {
       headGroupSpec: {
         computeTemplate: "default-template",
-        image: "rayproject/ray:2.9.0",
+        image: "rayproject/ray:2.46.0",
         serviceType: "NodePort",
         rayStartParams: {
           "dashboard-host": "0.0.0.0",
@@ -86,7 +86,7 @@ let jobs = [
         {
           groupName: "small-wg",
           computeTemplate: "default-template",
-          image: "rayproject/ray:2.9.0",
+          image: "rayproject/ray:2.46.0",
           replicas: 1,
           minReplicas: 1,
           maxReplicas: 1,
@@ -110,7 +110,7 @@ let jobs = [
     clusterSpec: {
       headGroupSpec: {
         computeTemplate: "default-template",
-        image: "rayproject/ray:2.9.0",
+        image: "rayproject/ray:2.46.0",
         serviceType: "NodePort",
         rayStartParams: {
           "dashboard-host": "0.0.0.0",
@@ -120,7 +120,7 @@ let jobs = [
         {
           groupName: "small-wg",
           computeTemplate: "default-template",
-          image: "rayproject/ray:2.9.0",
+          image: "rayproject/ray:2.46.0",
           replicas: 1,
           minReplicas: 1,
           maxReplicas: 1,

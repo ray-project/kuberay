@@ -13,9 +13,9 @@ GO_TEST_FLAGS ?=
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64, $(shell go env GOARCH))
-	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310-aarch64
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.46.0-py310-aarch64
 else
-	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.46.0-py310
 endif
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?= http://localhost:31888

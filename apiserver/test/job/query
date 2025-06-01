@@ -27,7 +27,7 @@ All of them return the same value (for our case with a single job deployed):
     "clusterSpec":{
         "headGroupSpec":{
             "computeTemplate":"default-template",
-            "image":"rayproject/ray:2.6.3-py310",
+            "image":"rayproject/ray:2.46.0-py310",
             "serviceType":"NodePort",
             "rayStartParams":{
                 "dashboard-host":"0.0.0.0",
@@ -47,7 +47,7 @@ All of them return the same value (for our case with a single job deployed):
             {
                 "groupName":"small-wg",
                 "computeTemplate":"default-template",
-                "image":"rayproject/ray:2.6.3-py310",
+                "image":"rayproject/ray:2.46.0-py310",
                 "replicas":1,
                 "minReplicas":5,
                 "maxReplicas":1,
