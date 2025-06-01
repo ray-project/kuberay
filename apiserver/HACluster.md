@@ -1,5 +1,8 @@
 # Creating HA cluster with APIServer
 
+> Note: The KubeRay API server V1 does not support `gcsFaultToleranceOptions` yet.
+> Therefore, this example uses the legacy method to create a RayCluster with GCS fault tolerance.
+
 One of the issues with long-running Ray applications (e.g., RayServe) is that if the Ray head node
 dies, the whole cluster has to be restarted. Fortunately, the KubeRay cluster solves this by
 introducing the [Fault Tolerance Ray Cluster](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html).
@@ -37,23 +40,7 @@ Comprehensive documentation on creating a Redis cluster on Kubernetes can be fou
 [RedisYAML]. Simply download this YAML file and run:
 
 ```sh
-kubectl create ns redis
-kubectl apply -f redis.yaml -n redis
-```
-
-Note that we created a new `redis` namespace and deploy redis in it.
-
-Alternatively, if you run on the cloud, you can use a managed version of HA Redis, which will not require
-you to set up, run, manage, and monitor your own version of Redis.
-
-Check if Redis is successfully set up with the following command. You should see
-`redis-config` in the list:
-
-```sh
-kubectl get configmaps -n redis
-
-# NAME               DATA   AGE
-# redis-config       1      19s
+kubectl apply -f redis.yaml
 ```
 
 ### Create Redis password secret
@@ -90,56 +77,6 @@ curl -X POST 'localhost:31888/apis/v1/namespaces/default/compute_templates' \
 curl -X POST 'localhost:31888/apis/v1/namespaces/default/clusters' \
     --header 'Content-Type: application/json' \
     --data @docs/api-example/ha_clusters.json
-```
-
-To enable the RayCluster's GCS fault tolerance feature, add the annotation:
-
-```json
-"annotations" : {
-    "ray.io/ft-enabled": "true"
-}
-```
-
-For connecting to Redis, we also added the following content in `rayStartParams` of `headGroupSpec`,
-which sets the Redis password and the number of CPUs. Setting `num-cpu` to 0 ensures that no
-application code runs on a head node.
-
-```json
-{
-    "redis-password:: "$REDIS_PASSWORD"
-    "num-cpu": "0"
-}
-```
-
-Here, the `$REDIS_PASSWORD` is defined in the `headGroupSpec`'s environment variable below:
-
-```json
-"environment": {
-    "values": {
-        "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
-    },
-    "valuesFrom": {
-        "REDIS_PASSWORD": {
-            "source": 1,
-            "name": "redis-password-secret",
-            "key": "password"
-        }
-    }
-},
-```
-
-For the `workerGroupSpecs`, we set the `gcs_rpc_server_reconnect_timeout` environment
-variable, which controls the GCS heartbeat timeout (default 60 seconds). This controls how
-long after the head node dies we kill the worker node. While it takes time to restart
-the head node, we want these values to be large enough to prevent the worker node from being
-killed during the restarting period.
-
-```json
-"environment": {
-    "values": {
-        "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-    }
-},
 ```
 
 ### Validate that RayCluster is deployed correctly
