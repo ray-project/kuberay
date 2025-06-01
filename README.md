@@ -14,7 +14,7 @@ KubeRay is a powerful, open-source Kubernetes operator that simplifies the deplo
 
 * **RayService**: RayService is made up of two parts: a RayCluster and a Ray Serve deployment graph. RayService offers zero-downtime upgrades for RayCluster and high availability.
 
-**KubeRay ecosystem**: Some optional components.
+**KubeRay ecosystem**: Some optional componentss.
 
 * **Kubectl Plugin** (Beta): Starting from KubeRay v1.3.0, you can use the `kubectl ray` plugin to simplify
 common workflows when deploying Ray on Kubernetes. If you aren’t familiar with Kubernetes, this
