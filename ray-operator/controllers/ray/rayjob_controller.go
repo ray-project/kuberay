@@ -383,8 +383,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if features.Enabled(features.RayJobDeletionPolicy) &&
 			rayJobInstance.Spec.DeletionPolicy != nil &&
-			*rayJobInstance.Spec.DeletionPolicy != rayv1.DeleteNoneDeletionPolicy &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
+
+			deleteResource := rayv1.DeleteNone
+			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
+				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.DeleteResource
+			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
+				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnFailure.DeleteResource
+			}
+			if deleteResource == rayv1.DeleteNone {
+				break
+			}
+
 			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionPolicy)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
@@ -392,14 +402,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
 
-			switch *rayJobInstance.Spec.DeletionPolicy {
-			case rayv1.DeleteClusterDeletionPolicy:
+			switch deleteResource {
+			case rayv1.DeleteCluster:
 				logger.Info("Deleting RayCluster", "RayCluster", rayJobInstance.Status.RayClusterName)
 				_, err = r.deleteClusterResources(ctx, rayJobInstance)
-			case rayv1.DeleteWorkersDeletionPolicy:
+			case rayv1.DeleteWorkers:
 				logger.Info("Suspending all worker groups", "RayCluster", rayJobInstance.Status.RayClusterName)
 				err = r.suspendWorkerGroups(ctx, rayJobInstance)
-			case rayv1.DeleteSelfDeletionPolicy:
+			case rayv1.DeleteSelf:
 				logger.Info("Deleting RayJob")
 				err = r.Client.Delete(ctx, rayJobInstance)
 			default:

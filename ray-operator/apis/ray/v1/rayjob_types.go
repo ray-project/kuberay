@@ -84,13 +84,24 @@ const (
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
-type DeletionPolicy string
+type DeleteResource string
+
+type DeletionPolicy struct {
+	OnSuccess *DeletionConfig
+	OnFailure *DeletionConfig
+}
+
+type DeletionConfig struct {
+	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deleteResource field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
+	DeleteResource *DeleteResource
+}
 
 const (
-	DeleteClusterDeletionPolicy DeletionPolicy = "DeleteCluster" // Deletion policy to delete the entire RayCluster custom resource on job completion.
-	DeleteWorkersDeletionPolicy DeletionPolicy = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
-	DeleteSelfDeletionPolicy    DeletionPolicy = "DeleteSelf"    // Deletion policy to delete the RayJob custom resource (and all associated resources) on job completion.
-	DeleteNoneDeletionPolicy    DeletionPolicy = "DeleteNone"    // Deletion policy to delete no resources on job completion.
+	DeleteCluster DeleteResource = "DeleteCluster" // Deletion policy to delete the entire RayCluster custom resource on job completion.
+	DeleteWorkers DeleteResource = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
+	DeleteSelf    DeleteResource = "DeleteSelf"    // Deletion policy to delete the RayJob custom resource (and all associated resources) on job completion.
+	DeleteNone    DeleteResource = "DeleteNone"    // Deletion policy to delete no resources on job completion.
 )
 
 type SubmitterConfig struct {
@@ -144,11 +155,9 @@ type RayJobSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
-	// DeletionPolicy indicates what resources of the RayJob are deleted upon job completion.
-	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// DeletionPolicy indicates what resources of the RayJob and how they are deleted upon job completion.
 	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
 	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
-	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deletionPolicy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
 	// +optional
 	DeletionPolicy *DeletionPolicy `json:"deletionPolicy,omitempty"`
 	// Entrypoint represents the command to start execution.

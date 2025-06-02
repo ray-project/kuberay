@@ -891,13 +891,30 @@ var _ = Context("RayJob with different submission modes", func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletecluster", namespace)
-			deletionPolicy := rayv1.DeleteClusterDeletionPolicy
-			rayJob.Spec.DeletionPolicy = &deletionPolicy
+
+			onSuccessDeleteResource := rayv1.DeleteCluster
+			onFailureDeleteResource := rayv1.DeleteCluster
+			deletionPolicy := &rayv1.DeletionPolicy{
+				OnSuccess: &rayv1.DeletionConfig{
+					DeleteResource: &onSuccessDeleteResource,
+				},
+				OnFailure: &rayv1.DeletionConfig{
+					DeleteResource: &onFailureDeleteResource,
+				},
+			}
+			rayJob.Spec.DeletionPolicy = deletionPolicy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteClusterDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{
+						DeleteResource: &onSuccessDeleteResource,
+					},
+					OnFailure: &rayv1.DeletionConfig{
+						DeleteResource: &onFailureDeleteResource,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {
@@ -1013,13 +1030,30 @@ var _ = Context("RayJob with different submission modes", func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deleteworkers", namespace)
-			deletionPolicy := rayv1.DeleteWorkersDeletionPolicy
+
+			onSuccessDeleteResource := rayv1.DeleteWorkers
+			onFailureDeleteResource := rayv1.DeleteWorkers
+			deletionPolicy := rayv1.DeletionPolicy{
+				OnSuccess: &rayv1.DeletionConfig{
+					DeleteResource: &onSuccessDeleteResource,
+				},
+				OnFailure: &rayv1.DeletionConfig{
+					DeleteResource: &onFailureDeleteResource,
+				},
+			}
 			rayJob.Spec.DeletionPolicy = &deletionPolicy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteWorkersDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{
+						DeleteResource: &onSuccessDeleteResource,
+					},
+					OnFailure: &rayv1.DeletionConfig{
+						DeleteResource: &onFailureDeleteResource,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {
@@ -1152,7 +1186,17 @@ var _ = Context("RayJob with different submission modes", func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-deleteself", namespace)
-			deletionPolicy := rayv1.DeleteSelfDeletionPolicy
+
+			onSuccessDeleteResource := rayv1.DeleteSelf
+			onFailureDeleteResource := rayv1.DeleteSelf
+			deletionPolicy := rayv1.DeletionPolicy{
+				OnSuccess: &rayv1.DeletionConfig{
+					DeleteResource: &onSuccessDeleteResource,
+				},
+				OnFailure: &rayv1.DeletionConfig{
+					DeleteResource: &onFailureDeleteResource,
+				},
+			}
 			rayJob.Spec.DeletionPolicy = &deletionPolicy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
@@ -1258,13 +1302,30 @@ var _ = Context("RayJob with different submission modes", func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletenone", namespace)
-			deletionPolicy := rayv1.DeleteNoneDeletionPolicy
+
+			onSuccessDeleteResource := rayv1.DeleteNone
+			onFailureDeleteResource := rayv1.DeleteNone
+			deletionPolicy := rayv1.DeletionPolicy{
+				OnSuccess: &rayv1.DeletionConfig{
+					DeleteResource: &onSuccessDeleteResource,
+				},
+				OnFailure: &rayv1.DeletionConfig{
+					DeleteResource: &onFailureDeleteResource,
+				},
+			}
 			rayJob.Spec.DeletionPolicy = &deletionPolicy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteNoneDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{
+						DeleteResource: &onSuccessDeleteResource,
+					},
+					OnFailure: &rayv1.DeletionConfig{
+						DeleteResource: &onFailureDeleteResource,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {

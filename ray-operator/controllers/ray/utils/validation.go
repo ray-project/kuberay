@@ -192,22 +192,30 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.DeletionPolicy != nil {
-		policy := *rayJob.Spec.DeletionPolicy
+		onSuccessPolicy := *rayJob.Spec.DeletionPolicy.OnSuccess
+		onFailurePolicy := *rayJob.Spec.DeletionPolicy.OnFailure
 		if isClusterSelectorMode {
-			switch policy {
-			case rayv1.DeleteClusterDeletionPolicy:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster")
-			case rayv1.DeleteWorkersDeletionPolicy:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers")
+			switch *onSuccessPolicy.DeleteResource {
+			case rayv1.DeleteCluster:
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on success")
+			case rayv1.DeleteWorkers:
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers on success")
+			}
+
+			switch *onFailurePolicy.DeleteResource {
+			case rayv1.DeleteCluster:
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on failure")
+			case rayv1.DeleteWorkers:
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers on failure")
 			}
 		}
 
-		if policy == rayv1.DeleteWorkersDeletionPolicy && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
+		if (*onSuccessPolicy.DeleteResource == rayv1.DeleteWorkers || *onFailurePolicy.DeleteResource == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
 			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
 			return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 		}
 
-		if rayJob.Spec.ShutdownAfterJobFinishes && policy == rayv1.DeleteNoneDeletionPolicy {
+		if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.DeleteResource == rayv1.DeleteNone || *onFailurePolicy.DeleteResource == rayv1.DeleteNone) {
 			return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 		}
 	}
