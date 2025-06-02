@@ -18,7 +18,7 @@ type RayJobSpecApplyConfiguration struct {
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
 	ManagedBy                *string                                   `json:"managedBy,omitempty"`
-	DeletionPolicy           *rayv1.DeletionPolicy                     `json:"deletionPolicy,omitempty"`
+	DeletionPolicy           *DeletionPolicyApplyConfiguration         `json:"deletionPolicy,omitempty"`
 	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
 	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
 	JobId                    *string                                   `json:"jobId,omitempty"`
@@ -116,8 +116,8 @@ func (b *RayJobSpecApplyConfiguration) WithManagedBy(value string) *RayJobSpecAp
 // WithDeletionPolicy sets the DeletionPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeletionPolicy field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithDeletionPolicy(value rayv1.DeletionPolicy) *RayJobSpecApplyConfiguration {
-	b.DeletionPolicy = &value
+func (b *RayJobSpecApplyConfiguration) WithDeletionPolicy(value *DeletionPolicyApplyConfiguration) *RayJobSpecApplyConfiguration {
+	b.DeletionPolicy = value
 	return b
 }
 

@@ -87,14 +87,14 @@ const (
 type DeleteResource string
 
 type DeletionPolicy struct {
-	OnSuccess *DeletionConfig
-	OnFailure *DeletionConfig
+	OnSuccess *DeletionConfig `json:"on_success"`
+	OnFailure *DeletionConfig `json:"on_failure"`
 }
 
 type DeletionConfig struct {
 	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
 	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deleteResource field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
-	DeleteResource *DeleteResource
+	DeleteResource *DeleteResource `json:"delete_resource"`
 }
 
 const (
