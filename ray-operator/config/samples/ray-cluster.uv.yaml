@@ -12,8 +12,8 @@ spec:
         - name: ray-head
           image: rayproject/ray:2.46.0
           env:
-           - name: RAY_RUNTIME_ENV_HOOK
-             value: ray._private.runtime_env.uv_runtime_env_hook.hook
+          - name: RAY_RUNTIME_ENV_HOOK
+            value: ray._private.runtime_env.uv_runtime_env_hook.hook
           resources:
             limits:
               cpu: 1
@@ -32,12 +32,12 @@ spec:
           - mountPath: /home/ray/samples
             name: code-sample
         volumes:
-          - name: code-sample
-            configMap:
-              name: ray-uv-code-sample
-              items:
-                - key: sample_code.py
-                  path: sample_code.py
+        - name: code-sample
+          configMap:
+            name: ray-uv-code-sample
+            items:
+            - key: sample_code.py
+              path: sample_code.py
 
 ---
 apiVersion: v1

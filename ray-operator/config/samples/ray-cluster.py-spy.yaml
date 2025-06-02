@@ -36,15 +36,15 @@ spec:
           - containerPort: 10001
             name: client
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: profiling-example-configmap
+          - mountPath: /home/ray/samples
+            name: profiling-example-configmap
         volumes:
-          - name: profiling-example-configmap
-            configMap:
-              name: ray-example
-              items:
-                - key: long_running_task.py
-                  path: long_running_task.py
+        - name: profiling-example-configmap
+          configMap:
+            name: ray-example
+            items:
+            - key: long_running_task.py
+              path: long_running_task.py
 ---
 apiVersion: v1
 kind: ConfigMap

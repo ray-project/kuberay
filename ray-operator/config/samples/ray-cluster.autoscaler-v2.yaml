@@ -54,18 +54,18 @@ spec:
               cpu: "1"
               memory: "2G"
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: ray-example-configmap
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: detached_actor.py
-                  path: detached_actor.py
-                - key: terminate_detached_actor.py
-                  path: terminate_detached_actor.py
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: detached_actor.py
+              path: detached_actor.py
+            - key: terminate_detached_actor.py
+              path: terminate_detached_actor.py
   workerGroupSpecs:
   # the Pod replicas in this group typed worker
   - replicas: 0

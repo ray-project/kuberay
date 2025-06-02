@@ -25,8 +25,8 @@ spec:
           - name: ray-head
             image: rayproject/ray-ml:2.46.0.0e19ea-py39-gpu
             volumeMounts:
-              - mountPath: /tmp/ray
-                name: ray-logs
+            - mountPath: /tmp/ray
+              name: ray-logs
             resources:
               limits:
                 cpu: "2"
@@ -35,8 +35,8 @@ spec:
                 cpu: "2"
                 memory: "8G"
           volumes:
-            - name: ray-logs
-              emptyDir: {}
+          - name: ray-logs
+            emptyDir: {}
     workerGroupSpecs:
     # The pod replicas in this group typed worker
     - replicas: 1
@@ -61,7 +61,7 @@ spec:
                 nvidia.com/gpu: 1
           # Please add the following taints to the GPU node.
           tolerations:
-            - key: "ray.io/node-type"
-              operator: "Equal"
-              value: "worker"
-              effect: "NoSchedule"
+          - key: "ray.io/node-type"
+            operator: "Equal"
+            value: "worker"
+            effect: "NoSchedule"

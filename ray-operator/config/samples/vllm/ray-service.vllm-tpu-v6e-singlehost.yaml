@@ -88,36 +88,36 @@ spec:
           # replace $KSA_NAME with your Kubernetes Service Account
           serviceAccountName: $KSA_NAME
           containers:
-            - name: ray-worker
-              # replace $VLLM_IMAGE with your vLLM container image
-              image: $VLLM_IMAGE
-              imagePullPolicy: IfNotPresent
-              resources:
-                limits:
-                  cpu: "100"
-                  google.com/tpu: "8"
-                  ephemeral-storage: 40G
-                  memory: 200G
-                requests:
-                  cpu: "100"
-                  google.com/tpu: "8"
-                  ephemeral-storage: 40G
-                  memory: 200G
-              env:
-                - name: JAX_PLATFORMS
-                  value: "tpu"
-                - name: HUGGING_FACE_HUB_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: hf-secret
-                      key: hf_api_token
-                - name: VLLM_XLA_CACHE_PATH
-                  value: "/data"
-              volumeMounts:
-              - name: gcs-fuse-csi-ephemeral
-                mountPath: /data
-              - name: dshm
-                mountPath: /dev/shm
+          - name: ray-worker
+            # replace $VLLM_IMAGE with your vLLM container image
+            image: $VLLM_IMAGE
+            imagePullPolicy: IfNotPresent
+            resources:
+              limits:
+                cpu: "100"
+                google.com/tpu: "8"
+                ephemeral-storage: 40G
+                memory: 200G
+              requests:
+                cpu: "100"
+                google.com/tpu: "8"
+                ephemeral-storage: 40G
+                memory: 200G
+            env:
+            - name: JAX_PLATFORMS
+              value: "tpu"
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: hf_api_token
+            - name: VLLM_XLA_CACHE_PATH
+              value: "/data"
+            volumeMounts:
+            - name: gcs-fuse-csi-ephemeral
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
           volumes:
           - name: gke-gcsfuse-cache
             emptyDir:

@@ -14,12 +14,12 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: ray-cluster-kuberay-head-svc # Your head pod service
-                port:
-                  number: 8265
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ray-cluster-kuberay-head-svc # Your head pod service
+            port:
+              number: 8265

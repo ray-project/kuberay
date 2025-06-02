@@ -43,18 +43,18 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command: ["/bin/sh","-c","/home/ray/samples/ray_cluster_resources.sh"]
+                command: ["/bin/sh", "-c", "/home/ray/samples/ray_cluster_resources.sh"]
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: ray-example-configmap
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: ray_cluster_resources.sh
-                  path: ray_cluster_resources.sh
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: ray_cluster_resources.sh
+              path: ray_cluster_resources.sh
 ---
 apiVersion: v1
 kind: ConfigMap
