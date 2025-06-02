@@ -71,6 +71,6 @@ spec:
                 nvidia.com/gpu: "2"
           # Please add the following taints to the GPU node.
           tolerations:
-            - key: "nvidia.com/gpu"
-              operator: "Exists"
-              effect: "NoSchedule"
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"

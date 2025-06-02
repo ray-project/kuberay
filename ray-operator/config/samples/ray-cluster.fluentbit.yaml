@@ -1,4 +1,3 @@
----
 # RayCluster CR with a FluentBit sidecar
 apiVersion: ray.io/v1
 kind: RayCluster

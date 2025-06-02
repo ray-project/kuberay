@@ -1,4 +1,3 @@
----
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -61,39 +60,39 @@ spec:
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray:2.46.0
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 2Gi
-                requests:
-                  cpu: 1
-                  memory: 2Gi
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: 1
+                memory: 2Gi
+              requests:
+                cpu: 1
+                memory: 2Gi
     workerGroupSpecs:
-      # the pod replicas in this group typed worker
-      - replicas: 2
-        minReplicas: 1
-        maxReplicas: 5
-        # logical group name, for this called small-group, also can be functional
-        groupName: worker
-        # The `rayStartParams` are used to configure the `ray start` command.
-        # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-        # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-        rayStartParams: {}
-        #pod template
-        template:
-          spec:
-            containers:
-              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray:2.46.0
-                resources:
-                  limits:
-                    cpu: 1
-                    memory: 2Gi
-                  requests:
-                    cpu: 1
-                    memory: 2Gi
+    # the pod replicas in this group typed worker
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 5
+      # logical group name, for this called small-group, also can be functional
+      groupName: worker
+      # The `rayStartParams` are used to configure the `ray start` command.
+      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+      rayStartParams: {}
+      #pod template
+      template:
+        spec:
+          containers:
+          - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: 1
+                memory: 2Gi
+              requests:
+                cpu: 1
+                memory: 2Gi
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -130,15 +129,15 @@ spec:
     command: ["/bin/bash", "-c", "--"]
     args: ["while true; do sleep 30; done;"]
     volumeMounts:
-      - mountPath: /home/ray/samples
-        name: query-configmap
+    - mountPath: /home/ray/samples
+      name: query-configmap
   volumes:
-    - name: query-configmap
-      configMap:
-        name: query-config
-        items:
-          - key: query.py
-            path: query.py
+  - name: query-configmap
+    configMap:
+      name: query-config
+      items:
+      - key: query.py
+        path: query.py
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -165,8 +164,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: redis
-      port: 6379
+  - name: redis
+    port: 6379
   selector:
     app: redis
 ---
@@ -187,22 +186,22 @@ spec:
         app: redis
     spec:
       containers:
-        - name: redis
-          image: redis:7.4.0
-          command:
-            - "sh"
-            - "-c"
-            - "redis-server /usr/local/etc/redis/redis.conf"
-          ports:
-            - containerPort: 6379
-          volumeMounts:
-            - name: config
-              mountPath: /usr/local/etc/redis/redis.conf
-              subPath: redis.conf
-      volumes:
+      - name: redis
+        image: redis:7.4.0
+        command:
+        - "sh"
+        - "-c"
+        - "redis-server /usr/local/etc/redis/redis.conf"
+        ports:
+        - containerPort: 6379
+        volumeMounts:
         - name: config
-          configMap:
-            name: redis-config
+          mountPath: /usr/local/etc/redis/redis.conf
+          subPath: redis.conf
+      volumes:
+      - name: config
+        configMap:
+          name: redis-config
 ---
 # Redis password
 apiVersion: v1
