@@ -944,6 +944,56 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "OnSuccess unset",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy: &rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionConfig{
+						Policy: ptr.To(rayv1.DeleteNone),
+					},
+				}, ShutdownAfterJobFinishes: true,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "OnSuccess.Policy unset",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy: &rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{},
+					OnFailure: &rayv1.DeletionConfig{
+						Policy: ptr.To(rayv1.DeleteNone),
+					},
+				}, ShutdownAfterJobFinishes: true,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "OnFailure unset",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy: &rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{
+						Policy: ptr.To(rayv1.DeleteNone),
+					},
+				}, ShutdownAfterJobFinishes: true,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "OnFailure.Policy unset",
+			spec: rayv1.RayJobSpec{
+				DeletionPolicy: &rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionConfig{
+						Policy: ptr.To(rayv1.DeleteNone),
+					},
+					OnFailure: &rayv1.DeletionConfig{},
+				}, ShutdownAfterJobFinishes: true,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
 			name: "headGroupSpec should have at least one container",
 			spec: rayv1.RayJobSpec{
 				RayClusterSpec: &rayv1.RayClusterSpec{

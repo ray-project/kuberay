@@ -385,13 +385,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Spec.DeletionPolicy != nil &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
 
-			deleteResource := rayv1.DeleteNone
+			policy := rayv1.DeleteNone
 			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
-				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.Policy
+				policy = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.Policy
 			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
-				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnFailure.Policy
+				policy = *rayJobInstance.Spec.DeletionPolicy.OnFailure.Policy
 			}
-			if deleteResource == rayv1.DeleteNone {
+
+			// no need to continue as the selected policy is DeleteNone
+			if policy == rayv1.DeleteNone {
 				break
 			}
 
@@ -402,7 +404,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
 
-			switch deleteResource {
+			switch policy {
 			case rayv1.DeleteCluster:
 				logger.Info("Deleting RayCluster", "RayCluster", rayJobInstance.Status.RayClusterName)
 				_, err = r.deleteClusterResources(ctx, rayJobInstance)
