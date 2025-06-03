@@ -13,7 +13,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	e2e "github.com/ray-project/kuberay/ray-operator/test/e2erayservice"
-	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -54,14 +53,8 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	curlContainerName := "curl-container"
 
 	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
-	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(func(g Gomega) *corev1.Pod {
-		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		return updatedCurlPod
-	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
 	// Validate RayService is able to serve requests
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
