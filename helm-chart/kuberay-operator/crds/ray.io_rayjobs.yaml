@@ -60,9 +60,9 @@ spec:
                 type: object
               deletionPolicy:
                 properties:
-                  on_failure:
+                  onFailure:
                     properties:
-                      delete_resource:
+                      deleteResource:
                         type: string
                         x-kubernetes-validations:
                         - message: the deleteResource field value must be either 'DeleteCluster',
@@ -70,11 +70,11 @@ spec:
                           rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
                             'DeleteNone']
                     required:
-                    - delete_resource
+                    - deleteResource
                     type: object
-                  on_success:
+                  onSuccess:
                     properties:
-                      delete_resource:
+                      deleteResource:
                         type: string
                         x-kubernetes-validations:
                         - message: the deleteResource field value must be either 'DeleteCluster',
@@ -82,11 +82,11 @@ spec:
                           rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
                             'DeleteNone']
                     required:
-                    - delete_resource
+                    - deleteResource
                     type: object
                 required:
-                - on_failure
-                - on_success
+                - onFailure
+                - onSuccess
                 type: object
               entrypoint:
                 type: string

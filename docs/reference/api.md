@@ -55,19 +55,6 @@ _Appears in:_
 
 
 
-#### DeleteResource
-
-_Underlying type:_ _string_
-
-
-
-
-
-_Appears in:_
-- [DeletionConfig](#deletionconfig)
-
-
-
 #### DeletionConfig
 
 
@@ -81,7 +68,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `delete_resource` _[DeleteResource](#deleteresource)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
+| `deleteResource` _[Policy](#policy)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
 
 
 #### DeletionPolicy
@@ -97,8 +84,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `on_success` _[DeletionConfig](#deletionconfig)_ |  |  |  |
-| `on_failure` _[DeletionConfig](#deletionconfig)_ |  |  |  |
+| `onSuccess` _[DeletionConfig](#deletionconfig)_ |  |  |  |
+| `onFailure` _[DeletionConfig](#deletionconfig)_ |  |  |  |
 
 
 
@@ -154,6 +141,19 @@ _Underlying type:_ _string_
 
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
+
+
+
+#### Policy
+
+_Underlying type:_ _string_
+
+
+
+
+
+_Appears in:_
+- [DeletionConfig](#deletionconfig)
 
 
 
