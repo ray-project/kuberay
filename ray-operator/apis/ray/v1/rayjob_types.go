@@ -94,7 +94,7 @@ type DeletionPolicy struct {
 type DeletionConfig struct {
 	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
 	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deleteResource field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
-	DeleteResource *Policy `json:"deleteResource"`
+	Policy *Policy `json:"policy"`
 }
 
 const (

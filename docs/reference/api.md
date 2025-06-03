@@ -68,7 +68,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `deleteResource` _[Policy](#policy)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
+| `policy` _[Policy](#policy)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
 
 
 #### DeletionPolicy

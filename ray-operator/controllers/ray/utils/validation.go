@@ -198,25 +198,25 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if onSuccessPolicy == nil {
 			return fmt.Errorf("the OnSuccess field cannot be unset when DeletionPolicy is enabled")
 		}
-		if onSuccessPolicy.DeleteResource == nil {
+		if onSuccessPolicy.Policy == nil {
 			return fmt.Errorf("the Policy field of DeletionPolicy.OnSuccess cannot be unset when DeletionPolicy is enabled")
 		}
 		if onFailurePolicy == nil {
 			return fmt.Errorf("the OnFairlure field cannot be unset when DeletionPolicy is enabled")
 		}
-		if onFailurePolicy.DeleteResource == nil {
+		if onFailurePolicy.Policy == nil {
 			return fmt.Errorf("the Policy field of DeletionPolicy.OnFailure cannot be unset when DeletionPolicy is enabled")
 		}
 
 		if isClusterSelectorMode {
-			switch *onSuccessPolicy.DeleteResource {
+			switch *onSuccessPolicy.Policy {
 			case rayv1.DeleteCluster:
 				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on success")
 			case rayv1.DeleteWorkers:
 				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers on success")
 			}
 
-			switch *onFailurePolicy.DeleteResource {
+			switch *onFailurePolicy.Policy {
 			case rayv1.DeleteCluster:
 				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on failure")
 			case rayv1.DeleteWorkers:
@@ -224,12 +224,12 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 			}
 		}
 
-		if (*onSuccessPolicy.DeleteResource == rayv1.DeleteWorkers || *onFailurePolicy.DeleteResource == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
+		if (*onSuccessPolicy.Policy == rayv1.DeleteWorkers || *onFailurePolicy.Policy == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
 			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
 			return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 		}
 
-		if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.DeleteResource == rayv1.DeleteNone || *onFailurePolicy.DeleteResource == rayv1.DeleteNone) {
+		if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
 			return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 		}
 	}

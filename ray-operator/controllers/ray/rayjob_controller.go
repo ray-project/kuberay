@@ -387,9 +387,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 			deleteResource := rayv1.DeleteNone
 			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
-				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.DeleteResource
+				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.Policy
 			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
-				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnFailure.DeleteResource
+				deleteResource = *rayJobInstance.Spec.DeletionPolicy.OnFailure.Policy
 			}
 			if deleteResource == rayv1.DeleteNone {
 				break
