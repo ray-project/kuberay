@@ -1,7 +1,7 @@
 {
   "name": "test-cluster",
   "namespace": "default",
-  "user": "boris",
+  "user": "kuberay",
   "clusterSpec": {
     "enableInTreeAutoscaling": true,
     "autoscalerOptions": {
@@ -12,11 +12,8 @@
     },
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.9.0-py310",
-      "serviceType": "NodePort",
+      "image": "rayproject/ray:2.46.0-py310",
       "rayStartParams": {
-        "dashboard-host": "0.0.0.0",
-        "metrics-export-port": "8080",
         "num-cpus": "0"
       },
       "volumes": [
@@ -36,25 +33,10 @@
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
+        "image": "rayproject/ray:2.46.0-py310",
         "replicas": 0,
         "minReplicas": 0,
-        "maxReplicas": 5,
-        "rayStartParams": {
-          "node-ip-address": "$MY_POD_IP"
-        },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-example",
-            "items": {
-              "detached_actor.py": "detached_actor.py",
-              "terminate_detached_actor.py": "terminate_detached_actor.py"
-            }
-          }
-        ]
+        "maxReplicas": 5
       }
     ]
   }

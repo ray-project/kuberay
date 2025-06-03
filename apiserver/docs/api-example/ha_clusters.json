@@ -1,8 +1,8 @@
 {
   "name": "ha-cluster",
   "namespace": "default",
-  "user": "boris",
-  "version": "2.9.0",
+  "user": "kuberay",
+  "version": "2.46.0",
   "environment": "DEV",
   "annotations": {
     "ray.io/ft-enabled": "true"
@@ -10,17 +10,14 @@
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.9.0-py310",
-      "serviceType": "NodePort",
+      "image": "rayproject/ray:2.46.0-py310",
       "rayStartParams": {
-        "dashboard-host": "0.0.0.0",
-        "metrics-export-port": "8080",
         "num-cpus": "0",
         "redis-password": "$REDIS_PASSWORD"
       },
       "environment": {
         "values": {
-          "RAY_REDIS_ADDRESS": "redis.redis.svc.cluster.local:6379"
+          "RAY_REDIS_ADDRESS": "redis.default.svc.cluster.local:6379"
         },
         "valuesFrom": {
           "REDIS_PASSWORD": {
@@ -47,31 +44,10 @@
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.9.0-py310",
+        "image": "rayproject/ray:2.46.0-py310",
         "replicas": 1,
         "minReplicas": 0,
-        "maxReplicas": 5,
-        "rayStartParams": {
-          "node-ip-address": "$MY_POD_IP",
-          "metrics-export-port": "8080"
-        },
-        "environment": {
-          "values": {
-            "RAY_gcs_rpc_server_reconnect_timeout_s": "300"
-          }
-        },
-        "volumes": [
-          {
-            "name": "code-sample",
-            "mountPath": "/home/ray/samples",
-            "volumeType": "CONFIGMAP",
-            "source": "ray-example",
-            "items": {
-              "detached_actor.py": "detached_actor.py",
-              "increment_counter.py": "increment_counter.py"
-            }
-          }
-        ]
+        "maxReplicas": 5
       }
     ]
   }

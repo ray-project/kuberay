@@ -14,7 +14,7 @@
     },
     "editable": true,
     "gnetId": null,
-    "graphTooltip": 0,
+    "graphTooltip": 1,
     "iteration": 1667344411089,
     "links": [],
     "panels": [
@@ -2292,7 +2292,7 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
-            "description": "Number of submitted tasks.",
+            "description": "Byte size of output blocks from finished tasks per second, grouped by node.",
             "fieldConfig": {
                 "defaults": {},
                 "overrides": []
@@ -2304,6 +2304,258 @@
                 "w": 12,
                 "x": 0,
                 "y": 9
+            },
+            "hiddenSeries": false,
+            "id": 43,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(rate(ray_data_bytes_outputs_of_finished_tasks_per_node{dataset=~\"$DatasetID\",SessionName=~\"$SessionName\",ray_io_cluster=~\"$Cluster\",}[1m])) by (dataset, node_ip)",
+                    "interval": "",
+                    "legendFormat": "Bytes output / Second: {{dataset}}, {{node_ip}}",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Output Bytes from Finished Tasks / Second (by Node)",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "Bps",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "Number of output blocks from finished tasks per second, grouped by node.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 9
+            },
+            "hiddenSeries": false,
+            "id": 48,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(rate(ray_data_blocks_outputs_of_finished_tasks_per_node{dataset=~\"$DatasetID\",SessionName=~\"$SessionName\",ray_io_cluster=~\"$Cluster\",}[1m])) by (dataset, node_ip)",
+                    "interval": "",
+                    "legendFormat": "Blocks output / Second: {{dataset}}, {{node_ip}}",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Blocks from Finished Tasks / Second (by Node)",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "blocks/s",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "Number of submitted tasks.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 10
             },
             "hiddenSeries": false,
             "id": 29,
@@ -2429,7 +2681,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 9
+                "y": 10
             },
             "hiddenSeries": false,
             "id": 30,
@@ -2555,7 +2807,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 10
+                "y": 11
             },
             "hiddenSeries": false,
             "id": 31,
@@ -2681,7 +2933,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 10
+                "y": 11
             },
             "hiddenSeries": false,
             "id": 32,
@@ -2796,7 +3048,7 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
-            "description": "Number of failed tasks.",
+            "description": "Number of finished tasks per second, grouped by node.",
             "fieldConfig": {
                 "defaults": {},
                 "overrides": []
@@ -2807,7 +3059,133 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 11
+                "y": 12
+            },
+            "hiddenSeries": false,
+            "id": 46,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(rate(ray_data_num_tasks_finished_per_node{dataset=~\"$DatasetID\",SessionName=~\"$SessionName\",ray_io_cluster=~\"$Cluster\",}[1m])) by (dataset, node_ip)",
+                    "interval": "",
+                    "legendFormat": "Finished Tasks: {{dataset}}, {{node_ip}}",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Task Throughput (by Node)",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "tasks/s",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "Number of failed tasks.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 12
             },
             "hiddenSeries": false,
             "id": 33,
@@ -2932,8 +3310,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 11
+                "x": 0,
+                "y": 13
             },
             "hiddenSeries": false,
             "id": 8,
@@ -3058,8 +3436,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 12
+                "x": 12,
+                "y": 13
             },
             "hiddenSeries": false,
             "id": 37,
@@ -3080,7 +3458,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -3184,8 +3562,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 12
+                "x": 0,
+                "y": 14
             },
             "hiddenSeries": false,
             "id": 13,
@@ -3310,8 +3688,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 13
+                "x": 12,
+                "y": 14
             },
             "hiddenSeries": false,
             "id": 14,
@@ -3332,7 +3710,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -3436,8 +3814,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 13
+                "x": 0,
+                "y": 15
             },
             "hiddenSeries": false,
             "id": 15,
@@ -3562,8 +3940,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 14
+                "x": 12,
+                "y": 15
             },
             "hiddenSeries": false,
             "id": 16,
@@ -3584,7 +3962,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -3688,8 +4066,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 14
+                "x": 0,
+                "y": 16
             },
             "hiddenSeries": false,
             "id": 34,
@@ -3710,7 +4088,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -3814,8 +4192,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 15
+                "x": 12,
+                "y": 16
             },
             "hiddenSeries": false,
             "id": 35,
@@ -3836,7 +4214,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -3940,8 +4318,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 15
+                "x": 0,
+                "y": 17
             },
             "hiddenSeries": false,
             "id": 36,
@@ -3962,7 +4340,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -4066,8 +4444,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 16
+                "x": 12,
+                "y": 17
             },
             "hiddenSeries": false,
             "id": 12,
@@ -4192,8 +4570,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 16
+                "x": 0,
+                "y": 18
             },
             "hiddenSeries": false,
             "id": 9,
@@ -4318,8 +4696,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
-                "y": 17
+                "x": 12,
+                "y": 18
             },
             "hiddenSeries": false,
             "id": 10,
@@ -4433,7 +4811,7 @@
     "schemaVersion": 27,
     "style": "dark",
     "tags": [
-        "rayVersion:2.41.0"
+        "rayVersion:2.46.0"
     ],
     "templating": {
         "list": [
@@ -4526,7 +4904,7 @@
                 "description": "Filter queries to specific Ray clusters for KubeRay. When ingesting metrics across multiple ray clusters, the ray_io_cluster label should be set per cluster. For KubeRay users, this is done automaticaly with Prometheus PodMonitor.",
                 "error": null,
                 "hide": 0,
-                "includeAll": false,
+                "includeAll": true,
                 "label": null,
                 "multi": false,
                 "name": "Cluster",

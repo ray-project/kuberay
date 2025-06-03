@@ -222,7 +222,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -356,7 +356,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -490,7 +490,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -1050,7 +1050,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -1176,7 +1176,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -1302,7 +1302,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -1956,7 +1956,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2232,7 +2232,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2358,7 +2358,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2484,7 +2484,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2610,7 +2610,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2736,7 +2736,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2862,7 +2862,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -2955,7 +2955,7 @@
     "schemaVersion": 27,
     "style": "dark",
     "tags": [
-        "rayVersion:2.41.0"
+        "rayVersion:2.46.0"
     ],
     "templating": {
         "list": [
@@ -3089,7 +3089,7 @@
                 "description": "Filter queries to specific Ray clusters for KubeRay. When ingesting metrics across multiple ray clusters, the ray_io_cluster label should be set per cluster. For KubeRay users, this is done automaticaly with Prometheus PodMonitor.",
                 "error": null,
                 "hide": 0,
-                "includeAll": false,
+                "includeAll": true,
                 "label": null,
                 "multi": false,
                 "name": "Cluster",

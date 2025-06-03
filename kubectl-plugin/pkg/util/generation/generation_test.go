@@ -890,8 +890,8 @@ labels:
 annotations:
   dead: beef
 
-ray-version: 2.44.0
-image: rayproject/ray:2.44.0
+ray-version: 2.46.0
+image: rayproject/ray:2.46.0
 
 head:
   cpu: 3
@@ -938,8 +938,8 @@ gke:
 				Name:        ptr.To("dxia-test"),
 				Labels:      map[string]string{"foo": "bar"},
 				Annotations: map[string]string{"dead": "beef"},
-				RayVersion:  ptr.To("2.44.0"),
-				Image:       ptr.To("rayproject/ray:2.44.0"),
+				RayVersion:  ptr.To("2.46.0"),
+				Image:       ptr.To("rayproject/ray:2.46.0"),
 				Head: &Head{
 					CPU:              ptr.To("3"),
 					Memory:           ptr.To("5Gi"),
