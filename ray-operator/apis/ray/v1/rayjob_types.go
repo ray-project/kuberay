@@ -98,10 +98,10 @@ type DeletionConfig struct {
 }
 
 const (
-	DeleteCluster DeleteResource = "DeleteCluster" // Deletion policy to delete the entire RayCluster custom resource on job completion.
-	DeleteWorkers DeleteResource = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
-	DeleteSelf    DeleteResource = "DeleteSelf"    // Deletion policy to delete the RayJob custom resource (and all associated resources) on job completion.
-	DeleteNone    DeleteResource = "DeleteNone"    // Deletion policy to delete no resources on job completion.
+	DeleteCluster DeleteResource = "DeleteCluster" // To delete the entire RayCluster custom resource on job completion.
+	DeleteWorkers DeleteResource = "DeleteWorkers" // To delete only the workers on job completion.
+	DeleteSelf    DeleteResource = "DeleteSelf"    // To delete the RayJob custom resource (and all associated resources) on job completion.
+	DeleteNone    DeleteResource = "DeleteNone"    // To delete no resources on job completion.
 )
 
 type SubmitterConfig struct {
