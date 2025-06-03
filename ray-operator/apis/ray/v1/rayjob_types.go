@@ -84,24 +84,24 @@ const (
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
-type DeleteResource string
+type Policy string
 
 type DeletionPolicy struct {
-	OnSuccess *DeletionConfig `json:"on_success"`
-	OnFailure *DeletionConfig `json:"on_failure"`
+	OnSuccess *DeletionConfig `json:"onSuccess"`
+	OnFailure *DeletionConfig `json:"onFailure"`
 }
 
 type DeletionConfig struct {
 	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
 	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deleteResource field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
-	DeleteResource *DeleteResource `json:"delete_resource"`
+	DeleteResource *Policy `json:"deleteResource"`
 }
 
 const (
-	DeleteCluster DeleteResource = "DeleteCluster" // To delete the entire RayCluster custom resource on job completion.
-	DeleteWorkers DeleteResource = "DeleteWorkers" // To delete only the workers on job completion.
-	DeleteSelf    DeleteResource = "DeleteSelf"    // To delete the RayJob custom resource (and all associated resources) on job completion.
-	DeleteNone    DeleteResource = "DeleteNone"    // To delete no resources on job completion.
+	DeleteCluster Policy = "DeleteCluster" // To delete the entire RayCluster custom resource on job completion.
+	DeleteWorkers Policy = "DeleteWorkers" // To delete only the workers on job completion.
+	DeleteSelf    Policy = "DeleteSelf"    // To delete the RayJob custom resource (and all associated resources) on job completion.
+	DeleteNone    Policy = "DeleteNone"    // To delete no resources on job completion.
 )
 
 type SubmitterConfig struct {

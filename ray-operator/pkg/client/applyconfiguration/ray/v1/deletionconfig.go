@@ -9,7 +9,7 @@ import (
 // DeletionConfigApplyConfiguration represents a declarative configuration of the DeletionConfig type for use
 // with apply.
 type DeletionConfigApplyConfiguration struct {
-	DeleteResource *rayv1.DeleteResource `json:"delete_resource,omitempty"`
+	DeleteResource *rayv1.Policy `json:"deleteResource,omitempty"`
 }
 
 // DeletionConfigApplyConfiguration constructs a declarative configuration of the DeletionConfig type for use with
@@ -21,7 +21,7 @@ func DeletionConfig() *DeletionConfigApplyConfiguration {
 // WithDeleteResource sets the DeleteResource field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DeleteResource field is set to the value of the last call.
-func (b *DeletionConfigApplyConfiguration) WithDeleteResource(value rayv1.DeleteResource) *DeletionConfigApplyConfiguration {
+func (b *DeletionConfigApplyConfiguration) WithDeleteResource(value rayv1.Policy) *DeletionConfigApplyConfiguration {
 	b.DeleteResource = &value
 	return b
 }

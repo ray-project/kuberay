@@ -199,13 +199,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 			return fmt.Errorf("the OnSuccess field cannot be unset when DeletionPolicy is enabled")
 		}
 		if onSuccessPolicy.DeleteResource == nil {
-			return fmt.Errorf("the DeleteResource field of DeletionPolicy.OnSuccess cannot be unset when DeletionPolicy is enabled")
+			return fmt.Errorf("the Policy field of DeletionPolicy.OnSuccess cannot be unset when DeletionPolicy is enabled")
 		}
 		if onFailurePolicy == nil {
 			return fmt.Errorf("the OnFairlure field cannot be unset when DeletionPolicy is enabled")
 		}
 		if onFailurePolicy.DeleteResource == nil {
-			return fmt.Errorf("the DeleteResource field of DeletionPolicy.OnFailure cannot be unset when DeletionPolicy is enabled")
+			return fmt.Errorf("the Policy field of DeletionPolicy.OnFailure cannot be unset when DeletionPolicy is enabled")
 		}
 
 		if isClusterSelectorMode {

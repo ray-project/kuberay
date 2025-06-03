@@ -5,8 +5,8 @@ package v1
 // DeletionPolicyApplyConfiguration represents a declarative configuration of the DeletionPolicy type for use
 // with apply.
 type DeletionPolicyApplyConfiguration struct {
-	OnSuccess *DeletionConfigApplyConfiguration `json:"on_success,omitempty"`
-	OnFailure *DeletionConfigApplyConfiguration `json:"on_failure,omitempty"`
+	OnSuccess *DeletionConfigApplyConfiguration `json:"onSuccess,omitempty"`
+	OnFailure *DeletionConfigApplyConfiguration `json:"onFailure,omitempty"`
 }
 
 // DeletionPolicyApplyConfiguration constructs a declarative configuration of the DeletionPolicy type for use with

@@ -108,7 +108,7 @@ func (in *DeletionConfig) DeepCopyInto(out *DeletionConfig) {
 	*out = *in
 	if in.DeleteResource != nil {
 		in, out := &in.DeleteResource, &out.DeleteResource
-		*out = new(DeleteResource)
+		*out = new(Policy)
 		**out = **in
 	}
 }
