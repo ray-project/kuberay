@@ -141,6 +141,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Total number of reconciliations in 5 minutes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -220,14 +221,14 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(controller_runtime_reconcile_total{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])",
+          "expr": "increase(controller_runtime_reconcile_total{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[5m])",
           "interval": "",
           "legendFormat": "{{controller}} - {{result}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Reconcile Rate",
+      "title": "Reconciliation Counts in 5 Minutes",
       "type": "timeseries"
     },
     {
@@ -235,6 +236,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -260,7 +262,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -287,50 +289,7 @@
           },
           "unit": "s"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/^.*\\s-\\smean$/i"
-            },
-            "properties": [
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    10,
-                    10
-                  ],
-                  "fill": "dash"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byValue",
-              "options": {
-                "op": "gte",
-                "reducer": "allIsZero",
-                "value": 0
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": true,
-                  "tooltip": true,
-                  "viz": false
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -342,15 +301,15 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull",
-            "max"
+            "max",
+            "mean"
           ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -363,12 +322,14 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "format": "time_series",
+          "hide": false,
           "instant": false,
           "interval": "",
-          "intervalFactor": 2,
-          "legendFormat": "{{controller}} - 50%",
+          "intervalFactor": 1,
+          "legendFormat": "{{controller}} - P50",
+          "range": true,
           "refId": "A"
         },
         {
@@ -378,10 +339,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
-          "intervalFactor": 2,
-          "legendFormat": "{{controller}} - 95%",
+          "intervalFactor": 1,
+          "legendFormat": "{{controller}} - P95",
           "range": true,
           "refId": "B"
         },
@@ -392,15 +353,15 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(controller_runtime_reconcile_time_seconds_sum{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (job,controller) / sum(rate(controller_runtime_reconcile_time_seconds_count{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (job,controller)",
+          "expr": "histogram_quantile(0.99, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
-          "intervalFactor": 2,
-          "legendFormat": "{{controller}} - mean",
+          "intervalFactor": 1,
+          "legendFormat": "{{controller}} - P99",
           "range": true,
           "refId": "C"
         }
       ],
-      "title": "Reconciling Latency Quantile",
+      "title": "Reconciling Latency",
       "type": "timeseries"
     },
     {
@@ -1571,8 +1532,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1679,8 +1639,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1790,8 +1749,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2078,8 +2036,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2329,8 +2286,8 @@
       {
         "current": {
           "selected": false,
-          "text": "kuberay-operator-7879df585-dggj7",
-          "value": "kuberay-operator-7879df585-dggj7"
+          "text": "kuberay-operator-6c6dd95c6b-vqfgg",
+          "value": "kuberay-operator-6c6dd95c6b-vqfgg"
         },
         "datasource": {
           "type": "prometheus",
@@ -2355,7 +2312,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
