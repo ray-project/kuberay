@@ -55,7 +55,7 @@ _Appears in:_
 
 
 
-#### DeletionPolicy
+#### DeleteResource
 
 _Underlying type:_ _string_
 
@@ -64,8 +64,41 @@ _Underlying type:_ _string_
 
 
 _Appears in:_
+- [DeletionConfig](#deletionconfig)
+
+
+
+#### DeletionConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [DeletionPolicy](#deletionpolicy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `delete_resource` _[DeleteResource](#deleteresource)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
+
+
+#### DeletionPolicy
+
+
+
+
+
+
+
+_Appears in:_
 - [RayJobSpec](#rayjobspec)
 
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `on_success` _[DeletionConfig](#deletionconfig)_ |  |  |  |
+| `on_failure` _[DeletionConfig](#deletionconfig)_ |  |  |  |
 
 
 
@@ -209,7 +242,7 @@ _Appears in:_
 | `clusterSelector` _object (keys:string, values:string)_ | clusterSelector is used to select running rayclusters by labels |  |  |
 | `submitterConfig` _[SubmitterConfig](#submitterconfig)_ | Configurations of submitter k8s job. |  |  |
 | `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayJob.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayJob which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
-| `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy indicates what resources of the RayJob are deleted upon job completion.<br />Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.<br />If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.<br />This field requires the RayJobDeletionPolicy feature gate to be enabled. |  |  |
+| `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy indicates what resources of the RayJob and how they are deleted upon job completion.<br />If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.<br />This field requires the RayJobDeletionPolicy feature gate to be enabled. |  |  |
 | `entrypoint` _string_ | Entrypoint represents the command to start execution. |  |  |
 | `runtimeEnvYAML` _string_ | RuntimeEnvYAML represents the runtime environment configuration<br />provided as a multi-line YAML string. |  |  |
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |  |  |
