@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: '$raycluster_name'
 spec:
-  rayVersion: '2.5.0'
+  rayVersion: '2.46.0'
   # Ray head pod template
   headGroupSpec:
     rayStartParams:
@@ -12,7 +12,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.5.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: 1
@@ -37,7 +37,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.5.0
+          image: rayproject/ray:2.46.0
           lifecycle:
             preStop:
               exec:

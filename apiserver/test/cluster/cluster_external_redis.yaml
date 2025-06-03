@@ -10,7 +10,7 @@ metadata:
     # ray.io/external-storage-namespace: "my-raycluster-storage"
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.9.0'
+  rayVersion: '2.46.0'
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
@@ -26,7 +26,7 @@ spec:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.9.0
+            image: rayproject/ray:2.46.0
             resources:
               limits:
                 cpu: "1"
@@ -84,7 +84,7 @@ spec:
         spec:
           containers:
             - name: ray-worker
-              image: rayproject/ray:2.9.0
+              image: rayproject/ray:2.46.0
               volumeMounts:
                 - mountPath: /tmp/ray
                   name: ray-logs

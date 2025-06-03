@@ -28,7 +28,7 @@ cluster_body: dict = {
         "name": "raycluster-mini-raw",
     },
     "spec": {
-        "rayVersion": "2.9.0",
+        "rayVersion": "2.46.0",
         "headGroupSpec": {
             "rayStartParams": {
                 "dashboard-host": "0.0.0.0",
@@ -39,7 +39,7 @@ cluster_body: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.9.0",
+                            "image": "rayproject/ray:2.46.0",
                             "resources": {
                                 "limits": {"cpu": 1, "memory": "2Gi"},
                                 "requests": {"cpu": "500m", "memory": "2Gi"},
@@ -66,7 +66,7 @@ cluster_body2: dict = {
         "name": "raycluster-complete-raw",
     },
     "spec": {
-        "rayVersion": "2.9.0",
+        "rayVersion": "2.46.0",
         "headGroupSpec": {
             "rayStartParams": {"dashboard-host": "0.0.0.0"},
             "template": {
@@ -75,7 +75,7 @@ cluster_body2: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.9.0",
+                            "image": "rayproject/ray:2.46.0",
                             "ports": [
                                 {"containerPort": 6379, "name": "gcs"},
                                 {"containerPort": 8265, "name": "dashboard"},
@@ -111,7 +111,7 @@ cluster_body2: dict = {
                         "containers": [
                             {
                                 "name": "ray-worker",
-                                "image": "rayproject/ray:2.9.0",
+                                "image": "rayproject/ray:2.46.0",
                                 "lifecycle": {
                                     "preStop": {
                                         "exec": {
