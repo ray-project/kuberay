@@ -7,7 +7,7 @@ spec:
   runtimeEnvYAML: |
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
     pip:
-      - jax[tpu]==0.4.33
+      - jax[tpu]==0.6.1
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
   rayClusterSpec:
     rayVersion: '2.46.0'
@@ -17,7 +17,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.46.0-py310
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -47,7 +47,7 @@ spec:
             runAsUser: 0
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.46.0-py310
             resources:
               limits:
                 cpu: "24"
