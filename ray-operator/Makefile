@@ -105,7 +105,7 @@ build: fmt vet ## Build manager binary.
 # 	go run ./main.go -enable-leader-election=false
 
 docker-image: ## Build image only
-	${ENGINE} build -t ${IMG} -f Dockerfile ..
+	${ENGINE} build -t ${IMG} .
 
 docker-build: build docker-image ## Build image with the manager.
 
