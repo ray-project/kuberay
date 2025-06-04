@@ -1564,23 +1564,31 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
 
-	// Create runtime objects for RayService
+	rayService := makeIncrementalUpgradeRayService(
+		true,
+		"incremental-ray-service-gateway",
+		ptr.To(int32(20)),
+		ptr.To(int32(30)),
+		ptr.To(int32(80)),
+		ptr.To(metav1.Now()),
+	)
+
 	activeService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-service",
-			Namespace: "test-ns",
+			Namespace: namespace,
 		},
 	}
 	pendingService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-service",
-			Namespace: "test-ns",
+			Namespace: namespace,
 		},
 	}
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-ray-cluster",
-			Namespace: "test-ns",
+			Namespace: namespace,
 		},
 		Status: rayv1.RayClusterStatus{
 			Head: rayv1.HeadInfo{
@@ -1591,7 +1599,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-ray-cluster",
-			Namespace: "test-ns",
+			Namespace: namespace,
 		},
 		Status: rayv1.RayClusterStatus{
 			Head: rayv1.HeadInfo{
@@ -1606,43 +1614,62 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 	}
 
-	// Prepare RayService instance
-	rayService := makeIncrementalUpgradeRayService(true, "test-gateway", ptr.To(int32(20)), ptr.To(int32(30)), ptr.To(int32(80)), ptr.To(metav1.Time{Time: time.Now()}))
-	runtimeObjects := []runtime.Object{rayService, activeService, pendingService, activeCluster, pendingCluster, gateway}
-
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-	reconciler := RayServiceReconciler{
-		Client:   fakeClient,
-		Scheme:   newScheme,
-		Recorder: record.NewFakeRecorder(10),
+	// Pre-existing HTTPRoute with incorrect weights
+	existingHTTPRoute := makeHTTPRoute(fmt.Sprintf("httproute-%s", rayService.Name), namespace, true)
+	existingHTTPRoute.Spec = gwv1.HTTPRouteSpec{
+		CommonRouteSpec: gwv1.CommonRouteSpec{
+			ParentRefs: []gwv1.ParentReference{{
+				Name:      gwv1.ObjectName("incremental-ray-service-gateway"),
+				Namespace: ptr.To(gwv1.Namespace(namespace)),
+			}},
+		},
+		Rules: []gwv1.HTTPRouteRule{{
+			BackendRefs: []gwv1.HTTPBackendRef{
+				{
+					BackendRef: gwv1.BackendRef{
+						BackendObjectReference: gwv1.BackendObjectReference{
+							Name:      "active-service",
+							Namespace: ptr.To(gwv1.Namespace(namespace)),
+							Port:      ptr.To(gwv1.PortNumber(8000)),
+						},
+						Weight: ptr.To(int32(5)),
+					},
+				},
+				{
+					BackendRef: gwv1.BackendRef{
+						BackendObjectReference: gwv1.BackendObjectReference{
+							Name:      "pending-service",
+							Namespace: ptr.To(gwv1.Namespace(namespace)),
+							Port:      ptr.To(gwv1.PortNumber(8000)),
+						},
+						Weight: ptr.To(int32(95)),
+					},
+				},
+			},
+		}},
 	}
 
 	tests := []struct {
 		name              string
-		setupHTTPRoute    func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute
 		expectedRouteName string
+		runtimeObjects    []runtime.Object
 		expectedWeight    int32
 	}{
 		{
-			name: "creates new HTTPRoute if Spec.HTTPRoute is nil",
-			setupHTTPRoute: func(_ *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
-				rs.Spec.HTTPRoute = nil
-				return nil
+			name: "creates new HTTPRoute if not present",
+			runtimeObjects: []runtime.Object{
+				rayService, activeService, pendingService,
+				activeCluster, pendingCluster, gateway,
 			},
 			expectedRouteName: "httproute-incremental-ray-service",
 			expectedWeight:    80,
 		},
 		{
-			name: "updates existing HTTPRoute if spec differs",
-			setupHTTPRoute: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.HTTPRoute {
-				desired, err := r.createHTTPRoute(ctx, rs)
-				require.NoError(t, err)
-
-				// Modify weight to trigger update
-				existing := desired.DeepCopy()
-				existing.Spec.Rules[0].BackendRefs[0].Weight = ptr.To(int32(5))
-				rs.Spec.HTTPRoute = existing
-				return desired
+			name: "updates HTTPRoute if spec differs",
+			runtimeObjects: []runtime.Object{
+				rayService, activeService, pendingService,
+				activeCluster, pendingCluster, gateway,
+				existingHTTPRoute,
 			},
 			expectedRouteName: "httproute-incremental-ray-service",
 			expectedWeight:    80,
@@ -1651,22 +1678,31 @@ func TestReconcileHTTPRoute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupHTTPRoute(&reconciler, rayService)
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(tt.runtimeObjects...).
+				Build()
+
+			reconciler := RayServiceReconciler{
+				Client:   fakeClient,
+				Scheme:   newScheme,
+				Recorder: record.NewFakeRecorder(10),
+			}
 
 			route, err := reconciler.reconcileHTTPRoute(ctx, rayService)
 			require.NoError(t, err)
 			require.NotNil(t, route)
+
 			assert.Equal(t, tt.expectedRouteName, route.Name)
 			assert.Equal(t, namespace, route.Namespace)
 
-			// Check updated weights match expected
+			require.Len(t, route.Spec.Rules[0].BackendRefs, 2)
 			assert.Equal(t, tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[0].Weight)
 			assert.Equal(t, 100-tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[1].Weight)
 
-			// Check ParentRef refers to the expected Gateway
 			parent := route.Spec.ParentRefs[0]
 			assert.Equal(t, gwv1.ObjectName("incremental-ray-service-gateway"), parent.Name)
-			assert.Equal(t, ptr.To(gwv1.Namespace("test-ns")), parent.Namespace)
+			assert.Equal(t, ptr.To(gwv1.Namespace(namespace)), parent.Namespace)
 		})
 	}
 }
@@ -1680,60 +1716,33 @@ func TestReconcileGateway(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
 
-	// Prepare RayService instance
 	rayService := makeIncrementalUpgradeRayService(
 		true,
 		"gateway-class",
 		ptr.To(int32(20)),
 		ptr.To(int32(30)),
 		ptr.To(int32(80)),
-		ptr.To(metav1.Time{Time: time.Now()}),
+		ptr.To(metav1.Now()),
 	)
-
-	runtimeObjects := []runtime.Object{
-		rayService,
-		rayService.Spec.ServeService,
-	}
-
-	fakeClient := clientFake.NewClientBuilder().
-		WithScheme(newScheme).
-		WithRuntimeObjects(runtimeObjects...).
-		Build()
-
-	reconciler := RayServiceReconciler{
-		Client:   fakeClient,
-		Scheme:   newScheme,
-		Recorder: record.NewFakeRecorder(10),
-	}
+	gateway := makeGateway(fmt.Sprintf("%s-gateway", rayService.Name), rayService.Namespace, true)
 
 	tests := []struct {
 		name                 string
-		setupGateway         func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway
 		expectedGatewayName  string
 		expectedClass        string
+		runtimeObjects       []runtime.Object
 		expectedNumListeners int
 	}{
 		{
-			name: "creates new Gateway if Spec.Gateway is missing during incremental upgrade",
-			setupGateway: func(_ *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
-				rs.Spec.Gateway = nil
-				return nil
-			},
+			name:                 "creates new Gateway if missing",
+			runtimeObjects:       []runtime.Object{rayService},
 			expectedGatewayName:  "incremental-ray-service-gateway",
 			expectedClass:        "gateway-class",
 			expectedNumListeners: 1,
 		},
 		{
-			name: "update existing Gateway if desired Gateway spec differs",
-			setupGateway: func(r *RayServiceReconciler, rs *rayv1.RayService) *gwv1.Gateway {
-				desired, err := r.createGateway(rs)
-				require.NoError(t, err)
-
-				existing := desired.DeepCopy()
-				existing.Spec.GatewayClassName = "some-other-class"
-				rs.Spec.Gateway = existing
-				return existing
-			},
+			name:                 "updates Gateway if spec differs",
+			runtimeObjects:       []runtime.Object{rayService, gateway},
 			expectedGatewayName:  "incremental-ray-service-gateway",
 			expectedClass:        "gateway-class",
 			expectedNumListeners: 1,
@@ -1742,7 +1751,16 @@ func TestReconcileGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupGateway(&reconciler, rayService)
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(tt.runtimeObjects...).
+				Build()
+
+			reconciler := RayServiceReconciler{
+				Client:   fakeClient,
+				Scheme:   newScheme,
+				Recorder: record.NewFakeRecorder(10),
+			}
 
 			gw, err := reconciler.reconcileGateway(ctx, rayService)
 			require.NoError(t, err)
@@ -1854,6 +1872,10 @@ func makeGateway(name, namespace string, isReady bool) *gwv1.Gateway {
 			Conditions: []metav1.Condition{
 				{
 					Type:   string(gwv1.GatewayConditionAccepted),
+					Status: status,
+				},
+				{
+					Type:   string(gwv1.GatewayConditionProgrammed),
 					Status: status,
 				},
 			},

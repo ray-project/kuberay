@@ -317,10 +317,10 @@ _Appears in:_
 | `serviceUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `deploymentUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `serveService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics. |  |  |
-| `gateway` _[Gateway](#gateway)_ | Gateway is the Gateway object for the RayService to serve traffics during an IncrementalUpgrade. |  |  |
-| `httpRoute` _[HTTPRoute](#httproute)_ | HTTPRoute is the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade. |  |  |
 | `upgradeStrategy` _[RayServiceUpgradeStrategy](#rayserviceupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayService. |  |  |
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
+| `gateway` _string_ | Gateway is the name of the Gateway object for the RayService to serve traffics during an IncrementalUpgrade. |  |  |
+| `httpRoute` _string_ | HTTPRoute is the name of the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
 
