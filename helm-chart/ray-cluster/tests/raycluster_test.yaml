@@ -19,11 +19,11 @@ tests:
   - it: Should set Ray version when `head.rayVersion` is set
     set:
       head:
-        rayVersion: 2.44.1
+        rayVersion: 2.46.0
     asserts:
       - equal:
           path: spec.rayVersion
-          value: 2.44.1
+          value: 2.46.0
 
   - it: Should enable in-tree auto scaling when `head.enableInTreeAutoscaling` is `true`
     set:

@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: client
-    image: rayproject/ray:2.9.0
+    image: rayproject/ray:2.46.0
     args: [/bin/sh, -c, 'python -c "import ray; ray.init(\"ray://$FQ_RAY_IP:10001\"); print(ray.cluster_resources())" && sleep infinity']
     env:
     - name: RAY_USE_TLS
@@ -21,30 +21,30 @@ spec:
     - name: FQ_RAY_IP
       value: raycluster-tls-head-svc.default.svc.cluster.local
     volumeMounts:
-      - mountPath: /etc/ca/tls
-        name: ca-tls
-        readOnly: true
-      - mountPath: /etc/ray/tls
-        name: ray-tls
-      - mountPath: /etc/gen/tls
-        name: gen-tls-script
+    - mountPath: /etc/ca/tls
+      name: ca-tls
+      readOnly: true
+    - mountPath: /etc/ray/tls
+      name: ray-tls
+    - mountPath: /etc/gen/tls
+      name: gen-tls-script
   initContainers:
   - name: gen-cert
-    image: rayproject/ray:2.9.0
+    image: rayproject/ray:2.46.0
     args: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
     volumeMounts:
-      - mountPath: /etc/ca/tls
-        name: ca-tls
-        readOnly: true
-      - mountPath: /etc/ray/tls
-        name: ray-tls
-      - mountPath: /etc/gen/tls
-        name: gen-tls-script
+    - mountPath: /etc/ca/tls
+      name: ca-tls
+      readOnly: true
+    - mountPath: /etc/ray/tls
+      name: ray-tls
+    - mountPath: /etc/gen/tls
+      name: gen-tls-script
     env:
-      - name: POD_IP
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
   volumes:
   - name: gen-tls-script
     configMap:

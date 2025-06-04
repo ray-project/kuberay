@@ -8,36 +8,36 @@ spec:
     pip:
       - modin[all]==0.31.0
   rayClusterSpec:
-    rayVersion: "2.41.0"
+    rayVersion: "2.46.0"
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray:2.41.0
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-              resources:
-                limits:
-                  cpu: "1"
-                requests:
-                  cpu: "200m"
-              volumeMounts:
-                - mountPath: /home/ray/samples
-                  name: code-sample
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                cpu: "1"
+              requests:
+                cpu: "200m"
+            volumeMounts:
+            - mountPath: /home/ray/samples
+              name: code-sample
           volumes:
-            - name: code-sample
-              configMap:
-                name: ray-job-code-sample
-                items:
-                  - key: sample_code.py
-                    path: sample_code.py
+          - name: code-sample
+            configMap:
+              name: ray-job-code-sample
+              items:
+              - key: sample_code.py
+                path: sample_code.py
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -11,6 +11,11 @@ image:
   tag: nightly
   pullPolicy: IfNotPresent
 
+# Uncomment allowOrigin to enable CORS
+# It'll set the Access-Control-Allow-Origin response header for the HTTP proxy.
+cors:
+  # allowOrigin: "*"
+
 labels:
   # key1: value1
   # key2: value2
@@ -61,28 +66,17 @@ tolerations: []
 
 # Only one service type needs to be picked
 service:
-  # Nodeport service
-  type: NodePort
+# ClusterIP service
+  type: ClusterIP
   ports:
   - name: http
+    protocol: TCP
     port: 8888
     targetPort: 8888
-    nodePort: 31888
   - name: rpc
+    protocol: TCP
     port: 8887
     targetPort: 8887
-    nodePort: 31887
-# ClusterIP service
-#  type: ClusterIP
-#  ports:
-#    - name: http
-#      protocol: TCP
-#      port: 8888
-#      targetPort: 8888
-#    - name: rpc
-#      protocol: TCP
-#      port: 8887
-#      targetPort: 8887
 
 # You can only enable an ingress or route, if you are using OpenShift cluster
 # Also note that in order to enable ingress or route you need to use ClusterIP service

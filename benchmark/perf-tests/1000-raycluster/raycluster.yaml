@@ -5,7 +5,7 @@ metadata:
   labels:
     perf-test: ray-cluster
 spec:
-  rayVersion: '2.9.3'
+  rayVersion: '2.46.0'
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:

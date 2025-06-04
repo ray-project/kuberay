@@ -26,7 +26,7 @@ spec:
             requests:
               cpu: "10m"
   rayClusterSpec:
-    rayVersion: '2.9.3'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         disable-usage-stats: 'true'

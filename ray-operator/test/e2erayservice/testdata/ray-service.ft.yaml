@@ -20,7 +20,7 @@ spec:
             ray_actor_options:
               num_cpus: 1
   rayClusterConfig:
-    rayVersion: "2.41.0"
+    rayVersion: "2.46.0"
     gcsFaultToleranceOptions:
       # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
       # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
@@ -40,7 +40,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.46.0
               env:
                 - name: RAY_gcs_rpc_server_reconnect_timeout_s
                   value: "20"
@@ -62,7 +62,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.41.0
+                image: rayproject/ray:2.46.0
                 resources:
                   requests:
                     cpu: 300m

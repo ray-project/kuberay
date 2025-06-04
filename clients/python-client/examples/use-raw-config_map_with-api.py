@@ -47,7 +47,7 @@ cluster_body: dict = {
     "name": "raycluster-getting-started"
   },
   "spec": {
-    "rayVersion": "2.9.0",
+    "rayVersion": "2.46.0",
     "headGroupSpec": {
       "rayStartParams": {
         "dashboard-host": "0.0.0.0",
@@ -58,7 +58,7 @@ cluster_body: dict = {
           "containers": [
             {
               "name": "ray-head",
-              "image": "rayproject/ray:2.9.0",
+              "image": "rayproject/ray:2.46.0",
               "volumeMounts": [
                 {
                   "mountPath": "/opt",

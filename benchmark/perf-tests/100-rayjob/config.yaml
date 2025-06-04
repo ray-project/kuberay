@@ -39,7 +39,7 @@ steps:
     - basename: pytorch-mnist
       objectTemplatePath: pytorch-mnist-rayjob.yaml
       templateFillMap:
-        Image: "rayproject/ray:2.9.3" # replace with image built from images/ray-pytorch
+        Image: "rayproject/ray:2.46.0" # replace with image built from images/ray-pytorch
 - name: Creating RayJobs for Ray Data Image Resizing
   phases:
   - namespaceRange:
@@ -51,7 +51,7 @@ steps:
     - basename: ray-data-image-resize
       objectTemplatePath: ray-data-image-resize.yaml
       templateFillMap:
-        Image: "rayproject/ray:2.9.3" # replace with image built from images/ray-pytorch
+        Image: "rayproject/ray:2.46.0" # replace with image built from images/ray-pytorch
 - name: Wait for RayJobs complete
   measurements:
   - Identifier: WaitForRayJob

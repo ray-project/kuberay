@@ -60,7 +60,7 @@ class ClusterBuilder(IClusterBuilder):
         name: str,
         k8s_namespace: str = "default",
         labels: dict = None,
-        ray_version: str = "2.9.0",
+        ray_version: str = "2.46.0",
     ):
         """Builds the metadata and ray version of the cluster.
 
@@ -68,7 +68,7 @@ class ClusterBuilder(IClusterBuilder):
         - name (str): The name of the cluster.
         - k8s_namespace (str, optional): The namespace in which the Ray cluster exists. Defaults to "default".
         - labels (dict, optional): A dictionary of key-value pairs to add as labels to the cluster. Defaults to None.
-        - ray_version (str, optional): The version of Ray to use for the cluster. Defaults to "2.9.0".
+        - ray_version (str, optional): The version of Ray to use for the cluster. Defaults to "2.46.0".
         """
         self.cluster = self.cluster_utils.populate_meta(
             cluster=self.cluster,
@@ -81,7 +81,7 @@ class ClusterBuilder(IClusterBuilder):
 
     def build_head(
         self,
-        ray_image: str = "rayproject/ray:2.9.0",
+        ray_image: str = "rayproject/ray:2.46.0",
         service_type: str = "ClusterIP",
         cpu_requests: str = "2",
         memory_requests: str = "3G",
@@ -94,7 +94,7 @@ class ClusterBuilder(IClusterBuilder):
         """Build head node of the ray cluster.
 
         Parameters:
-        - ray_image (str): Docker image for the head node. Default value is "rayproject/ray:2.9.0".
+        - ray_image (str): Docker image for the head node. Default value is "rayproject/ray:2.46.0".
         - service_type (str): Service type of the head node. Default value is "ClusterIP", which creates a headless ClusterIP service.
         - cpu_requests (str): CPU requests for the head node. Default value is "2".
         - memory_requests (str): Memory requests for the head node. Default value is "3G".
@@ -118,7 +118,7 @@ class ClusterBuilder(IClusterBuilder):
     def build_worker(
         self,
         group_name: str,
-        ray_image: str = "rayproject/ray:2.9.0",
+        ray_image: str = "rayproject/ray:2.46.0",
         ray_command: Any = ["/bin/bash", "-lc"],
         init_image: str = "busybox:1.28",
         cpu_requests: str = "1",
@@ -136,7 +136,7 @@ class ClusterBuilder(IClusterBuilder):
 
         Parameters:
         - group_name (str): name of the worker group.
-        - ray_image (str, optional): Docker image for the Ray process. Default is "rayproject/ray:2.9.0".
+        - ray_image (str, optional): Docker image for the Ray process. Default is "rayproject/ray:2.46.0".
         - ray_command (Any, optional): Command to run in the Docker container. Default is ["/bin/bash", "-lc"].
         - init_image (str, optional): Docker image for the init container. Default is "busybox:1.28".
         - cpu_requests (str, optional): CPU requests for the worker pods. Default is "1".
