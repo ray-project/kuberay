@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // Checks whether the old and new RayClusterStatus are inconsistent by comparing different fields. If the only
@@ -31,16 +32,9 @@ func InconsistentRayClusterStatus(oldStatus rayv1.RayClusterStatus, newStatus ra
 	}
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
 		// Also check for changes in IncrementalUpgrade related Status fields.
-		if oldStatus.TrafficRoutedPercent != newStatus.TrafficRoutedPercent {
-			logger.Info("inconsistentRayServiceStatus RayService updated TrafficRoutedPercent", "old TrafficRoutedPercent", oldStatus.TrafficRoutedPercent, "new TrafficRoutedPercent", newStatus.TrafficRoutedPercent)
-			return true
-		}
-		if oldStatus.TargetCapacity != newStatus.TargetCapacity {
-			logger.Info("inconsistentRayServiceStatus RayService updated TargetCapacity", "old TargetCapacity", oldStatus.TargetCapacity, "new TargetCapacity", newStatus.TargetCapacity)
-			return true
-		}
-		if oldStatus.LastTrafficMigratedTime != newStatus.LastTrafficMigratedTime {
-			logger.Info("inconsistentRayServiceStatus RayService updated LastTrafficMigratedTime", "old LastTrafficMigratedTime", oldStatus.LastTrafficMigratedTime, "new LastTrafficMigratedTime", newStatus.LastTrafficMigratedTime)
+		if oldStatus.TrafficRoutedPercent != newStatus.TrafficRoutedPercent ||
+			oldStatus.TargetCapacity != newStatus.TargetCapacity ||
+			oldStatus.LastTrafficMigratedTime != newStatus.LastTrafficMigratedTime {
 			return true
 		}
 	}

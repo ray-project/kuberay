@@ -1776,6 +1776,7 @@ func TestReconcileGateway(t *testing.T) {
 
 func TestReconcileServeTargetCapacity(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
 	tests := []struct {
 		name                    string
 		updatedCluster          string
@@ -1834,11 +1835,19 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 				},
 			}
 
+			var rayCluster *rayv1.RayCluster
+			if tt.updatedCluster == "active" {
+				rayCluster = &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}
+			} else {
+				rayCluster = &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "pending"}}
+			}
+
 			fakeDashboard := &utils.FakeRayDashboardClient{}
 			reconciler := &RayServiceReconciler{
 				ServeConfigs: lru.New(10), // empty initial cache
 			}
-			err := reconciler.reconcileServeTargetCapacity(ctx, rayService, fakeDashboard)
+
+			err := reconciler.reconcileServeTargetCapacity(ctx, rayService, rayCluster, fakeDashboard)
 			require.NoError(t, err)
 			require.NotEmpty(t, fakeDashboard.LastUpdatedConfig)
 

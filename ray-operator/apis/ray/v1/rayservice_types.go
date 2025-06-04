@@ -117,22 +117,50 @@ type RayServiceSpec struct {
 
 // RayServiceStatuses defines the observed state of RayService
 type RayServiceStatuses struct {
-	LastUpdateTime       *metav1.Time       `json:"lastUpdateTime,omitempty"`
-	ServiceStatus        ServiceStatus      `json:"serviceStatus,omitempty"`
-	Conditions           []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-	ActiveServiceStatus  RayServiceStatus   `json:"activeServiceStatus,omitempty"`
-	PendingServiceStatus RayServiceStatus   `json:"pendingServiceStatus,omitempty"`
-	ObservedGeneration   int64              `json:"observedGeneration,omitempty"`
-	NumServeEndpoints    int32              `json:"numServeEndpoints,omitempty"`
+	// Represents the latest available observations of a RayService's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// LastUpdateTime represents the timestamp when the RayService status was last updated.
+	// +optional
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Deprecated: `ServiceStatus` is deprecated - use `Conditions` instead. `Running` means the RayService is ready to
+	// serve requests. An empty `ServiceStatus` means the RayService is not ready to serve requests. The definition of
+	// `ServiceStatus` is equivalent to the `RayServiceReady` condition.
+	// +optional
+	ServiceStatus ServiceStatus `json:"serviceStatus,omitempty"`
+	// +optional
+	ActiveServiceStatus RayServiceStatus `json:"activeServiceStatus,omitempty"`
+	// Pending Service Status indicates a RayCluster will be created or is being created.
+	// +optional
+	PendingServiceStatus RayServiceStatus `json:"pendingServiceStatus,omitempty"`
+	// NumServeEndpoints indicates the number of Ray Pods that are actively serving or have been selected by the serve service.
+	// Ray Pods without a proxy actor or those that are unhealthy will not be counted.
+	// +optional
+	NumServeEndpoints int32 `json:"numServeEndpoints,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
+	// RayService's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 type RayServiceStatus struct {
-	Applications            map[string]AppStatus `json:"applicationStatuses,omitempty"`
-	TargetCapacity          *int32               `json:"targetCapacity,omitempty"`
-	TrafficRoutedPercent    *int32               `json:"trafficRoutedPercent,omitempty"`
-	LastTrafficMigratedTime *metav1.Time         `json:"lastTrafficMigratedTime,omitempty"`
-	RayClusterName          string               `json:"rayClusterName,omitempty"`
-	RayClusterStatus        RayClusterStatus     `json:"rayClusterStatus,omitempty"`
+	// Important: Run "make" to regenerate code after modifying this file
+	// +optional
+	Applications map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	// +optional
+	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
+	// +optional
+	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
+	// +optional
+	LastTrafficMigratedTime *metav1.Time `json:"lastTrafficMigratedTime,omitempty"`
+	// +optional
+	RayClusterName string `json:"rayClusterName,omitempty"`
+	// +optional
+	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 }
 
 type AppStatus struct {
@@ -184,8 +212,9 @@ const (
 type RayService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RayServiceSpec     `json:"spec,omitempty"`
-	Status            RayServiceStatuses `json:"status,omitempty"`
+	Spec              RayServiceSpec `json:"spec,omitempty"`
+	// +optional
+	Status RayServiceStatuses `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
