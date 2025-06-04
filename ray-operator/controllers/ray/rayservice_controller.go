@@ -553,8 +553,13 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 	if upgradeStrategy != nil {
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
-			if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.IncrementalUpgrade {
-				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.IncrementalUpgrade))
+			if features.Enabled(features.RayServiceIncrementalUpgrade) {
+				if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.IncrementalUpgrade {
+					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.IncrementalUpgrade))
+					return false
+				}
+			} else if *upgradeType != rayv1.NewCluster {
+				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to NewCluster.")
 				return false
 			}
 			return true
@@ -580,7 +585,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 	} else {
 		gatewayName = rayServiceInstance.Name + "-gateway"
 	}
-
+	gatewayName = utils.CheckGatewayName(gatewayName)
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
@@ -664,6 +669,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	} else {
 		httpRouteName = fmt.Sprintf("httproute-%s", rayServiceInstance.Name)
 	}
+	httpRouteName = utils.CheckHTTPRouteName(httpRouteName)
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteName,

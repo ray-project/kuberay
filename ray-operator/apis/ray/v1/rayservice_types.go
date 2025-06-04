@@ -78,6 +78,7 @@ type RayServiceUpgradeStrategy struct {
 	// +optional
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
 	// IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.
+	// RayServiceIncrementalUpgrade feature gate must be enabled to set IncrementalUpgradeOptions.
 	IncrementalUpgradeOptions *IncrementalUpgradeOptions `json:"incrementalUpgradeOptions,omitempty"`
 }
 
@@ -105,8 +106,10 @@ type RayServiceSpec struct {
 	// +optional
 	ServeConfigV2 string `json:"serveConfigV2,omitempty"`
 	// Gateway is the name of the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.
+	// RayServiceIncrementalUpgrade feature gate must be enabled set the Gateway name.
 	Gateway string `json:"gateway,omitempty"`
 	// HTTPRoute is the name of the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.
+	// RayServiceIncrementalUpgrade feature gate must be enabled to set the HTTPRoute name.
 	HTTPRoute      string         `json:"httpRoute,omitempty"`
 	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
 	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
