@@ -493,7 +493,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType)
 	}
 
-	// add downward API environment variables for Ray default node labels
+	// Add downward API environment variables for Ray's default node labels for Ray label-based scheduling.
 	addDefaultRayNodeLabels(&pod)
 
 	return pod
