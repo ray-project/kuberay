@@ -1039,47 +1039,66 @@ func isGPUResourceKey(key string) bool {
 	return match
 }
 
+// containsEnvVar is a helper function to check if a container contains a specified EnvVar
+func containsEnvVar(container corev1.Container, envVar string) bool {
+	for _, env := range container.Env {
+		if env.Name == envVar {
+			return true
+		}
+	}
+	return false
+}
+
 // addDefaultRayNodeLabels passes default Ray node labels to Ray runtime environment
 func addDefaultRayNodeLabels(pod *corev1.Pod) {
-	pod.Spec.Containers[utils.RayContainerIndex].Env = append(
-		pod.Spec.Containers[utils.RayContainerIndex].Env,
+	rayContainer := &pod.Spec.Containers[utils.RayContainerIndex]
+	envVars := rayContainer.Env
+
+	if !containsEnvVar(*rayContainer, utils.RayNodeMarketType) {
 		// used to set the ray.io/market-type node label
-		corev1.EnvVar{
-			Name:  "RAY_NODE_MARKET_TYPE",
-			Value: getRayMarketTypeFromNodeSelector(pod),
-		},
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  utils.RayNodeMarketType,
+			Value: string(getPodMarketTypeFromNodeSelector(pod)),
+		})
+	}
+	if !containsEnvVar(*rayContainer, utils.RayNodeZone) {
 		// uses downward api to set the ray.io/availability-zone node label
-		corev1.EnvVar{
-			Name: "RAY_NODE_ZONE",
+		// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+		envVars = append(envVars, corev1.EnvVar{
+			Name: utils.RayNodeZone,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.labels['topology.kubernetes.io/zone']",
 				},
 			},
-		},
-		// uses downward api  to set the ray.io/availability-region node label
-		corev1.EnvVar{
-			Name: "RAY_NODE_REGION",
+		})
+	}
+	if !containsEnvVar(*rayContainer, utils.RayNodeRegion) {
+		// uses downward api to set the ray.io/availability-region node label
+		// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion
+		envVars = append(envVars, corev1.EnvVar{
+			Name: utils.RayNodeRegion,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.labels['topology.kubernetes.io/region']",
 				},
 			},
-		},
-	)
+		})
+	}
+	rayContainer.Env = envVars
 }
 
-// getRayMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type label
+// getPodMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type label
 // based on user-provided Kubernetes nodeSelector values.
-func getRayMarketTypeFromNodeSelector(pod *corev1.Pod) string {
+func getPodMarketTypeFromNodeSelector(pod *corev1.Pod) utils.PodMarketType {
 	selector := pod.Spec.NodeSelector
 	// check for GKE spot instance selector
-	if val, ok := selector["cloud.google.com/gke-spot"]; ok && val == "true" {
-		return "spot"
+	if val, ok := selector[utils.GKESpotLabel]; ok && val == "true" {
+		return utils.SpotMarketType
 	}
 	// check for EKS spot instance selector
-	if val, ok := selector["eks.amazonaws.com/capacityType"]; ok && val == "SPOT" {
-		return "spot"
+	if val, ok := selector[utils.EKSCapacityTypeLabel]; ok && val == "SPOT" {
+		return utils.SpotMarketType
 	}
-	return "on-demand"
+	return utils.OnDemandMarketType
 }
