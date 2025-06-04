@@ -211,6 +211,40 @@ func CheckName(s string) string {
 	return s
 }
 
+func CheckGatewayName(name string) string {
+	const maxLength = 63
+
+	if len(name) > maxLength {
+		offset := len(name) - maxLength
+		fmt.Printf("Gateway name too long (len = %d), shortening by offset = %d", len(name), offset)
+		name = name[offset:]
+	}
+
+	// Cannot start with a digit or punctuation
+	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
+		name = "g" + name[1:]
+	}
+
+	return name
+}
+
+func CheckHTTPRouteName(name string) string {
+	const maxLength = 63
+
+	if len(name) > maxLength {
+		offset := len(name) - maxLength
+		fmt.Printf("HTTPRoute name too long (len = %d), shortening by offset = %d", len(name), offset)
+		name = name[offset:]
+	}
+
+	// Cannot start with a digit or punctuation
+	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
+		name = "h" + name[1:]
+	}
+
+	return name
+}
+
 // TrimJobName uses CheckLabel to trim Kubernetes job to constrains
 func TrimJobName(jobName string) string {
 	return CheckLabel(jobName)
