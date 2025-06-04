@@ -4,20 +4,20 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	applyconfigurationsmetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
 // RayServiceStatusesApplyConfiguration represents a declarative configuration of the RayServiceStatuses type for use
 // with apply.
 type RayServiceStatusesApplyConfiguration struct {
-	LastUpdateTime       *metav1.Time                                            `json:"lastUpdateTime,omitempty"`
-	ServiceStatus        *rayv1.ServiceStatus                                    `json:"serviceStatus,omitempty"`
-	Conditions           []applyconfigurationsmetav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
-	ActiveServiceStatus  *RayServiceStatusApplyConfiguration                     `json:"activeServiceStatus,omitempty"`
-	PendingServiceStatus *RayServiceStatusApplyConfiguration                     `json:"pendingServiceStatus,omitempty"`
-	ObservedGeneration   *int64                                                  `json:"observedGeneration,omitempty"`
-	NumServeEndpoints    *int32                                                  `json:"numServeEndpoints,omitempty"`
+	Conditions           []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	LastUpdateTime       *apismetav1.Time                     `json:"lastUpdateTime,omitempty"`
+	ServiceStatus        *rayv1.ServiceStatus                 `json:"serviceStatus,omitempty"`
+	ActiveServiceStatus  *RayServiceStatusApplyConfiguration  `json:"activeServiceStatus,omitempty"`
+	PendingServiceStatus *RayServiceStatusApplyConfiguration  `json:"pendingServiceStatus,omitempty"`
+	NumServeEndpoints    *int32                               `json:"numServeEndpoints,omitempty"`
+	ObservedGeneration   *int64                               `json:"observedGeneration,omitempty"`
 }
 
 // RayServiceStatusesApplyConfiguration constructs a declarative configuration of the RayServiceStatuses type for use with
@@ -26,10 +26,23 @@ func RayServiceStatuses() *RayServiceStatusesApplyConfiguration {
 	return &RayServiceStatusesApplyConfiguration{}
 }
 
+// WithConditions adds the given value to the Conditions field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Conditions field.
+func (b *RayServiceStatusesApplyConfiguration) WithConditions(values ...*metav1.ConditionApplyConfiguration) *RayServiceStatusesApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithConditions")
+		}
+		b.Conditions = append(b.Conditions, *values[i])
+	}
+	return b
+}
+
 // WithLastUpdateTime sets the LastUpdateTime field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LastUpdateTime field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithLastUpdateTime(value metav1.Time) *RayServiceStatusesApplyConfiguration {
+func (b *RayServiceStatusesApplyConfiguration) WithLastUpdateTime(value apismetav1.Time) *RayServiceStatusesApplyConfiguration {
 	b.LastUpdateTime = &value
 	return b
 }
@@ -39,19 +52,6 @@ func (b *RayServiceStatusesApplyConfiguration) WithLastUpdateTime(value metav1.T
 // If called multiple times, the ServiceStatus field is set to the value of the last call.
 func (b *RayServiceStatusesApplyConfiguration) WithServiceStatus(value rayv1.ServiceStatus) *RayServiceStatusesApplyConfiguration {
 	b.ServiceStatus = &value
-	return b
-}
-
-// WithConditions adds the given value to the Conditions field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the Conditions field.
-func (b *RayServiceStatusesApplyConfiguration) WithConditions(values ...*applyconfigurationsmetav1.ConditionApplyConfiguration) *RayServiceStatusesApplyConfiguration {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithConditions")
-		}
-		b.Conditions = append(b.Conditions, *values[i])
-	}
 	return b
 }
 
@@ -71,18 +71,18 @@ func (b *RayServiceStatusesApplyConfiguration) WithPendingServiceStatus(value *R
 	return b
 }
 
-// WithObservedGeneration sets the ObservedGeneration field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ObservedGeneration field is set to the value of the last call.
-func (b *RayServiceStatusesApplyConfiguration) WithObservedGeneration(value int64) *RayServiceStatusesApplyConfiguration {
-	b.ObservedGeneration = &value
-	return b
-}
-
 // WithNumServeEndpoints sets the NumServeEndpoints field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NumServeEndpoints field is set to the value of the last call.
 func (b *RayServiceStatusesApplyConfiguration) WithNumServeEndpoints(value int32) *RayServiceStatusesApplyConfiguration {
 	b.NumServeEndpoints = &value
+	return b
+}
+
+// WithObservedGeneration sets the ObservedGeneration field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ObservedGeneration field is set to the value of the last call.
+func (b *RayServiceStatusesApplyConfiguration) WithObservedGeneration(value int64) *RayServiceStatusesApplyConfiguration {
+	b.ObservedGeneration = &value
 	return b
 }
