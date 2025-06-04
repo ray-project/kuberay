@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
@@ -58,13 +59,22 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Validate Gateway and HTTPRoute objects have been created for incremental upgrade.
+	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", rayService.Namespace, gatewayName)
+	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
 	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
 
+	httpRouteName := fmt.Sprintf("%s-%s", "httproute", rayServiceName)
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
+	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
+		Should(Not(BeNil()))
 	httpRoute, err := GetHTTPRoute(test, namespace.Name, fmt.Sprintf("%s-%s", "httproute", rayServiceName))
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(httpRoute).NotTo(BeNil())
+	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
 
 	// Create curl pod to test traffic routing through Gateway to RayService
 	curlPodName := "curl-pod"
@@ -72,6 +82,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
+	LogWithTimestamp(test.T(), "Waiting for Curl Pod %s to be ready", curlPodName)
 	g.Eventually(func(g Gomega) *corev1.Pod {
 		updatedPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -104,6 +115,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Check that upgrade steps incrementally with traffic/capacity split between clusters
+	LogWithTimestamp(test.T(), "Validating gradual traffic migration during IncrementalUpgrade")
 	g.Eventually(func(g Gomega) {
 		rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 		g.Expect(err).NotTo(HaveOccurred())

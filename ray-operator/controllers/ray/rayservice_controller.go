@@ -147,21 +147,25 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Check if IncrementalUpgrade is enabled, if so reconcile Gateway objects.
-	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeRayClusterInstance != nil {
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// Creates a Gateway CR that points to the head services of
 		// the active and pending (if it exists) RayClusters. For incremental upgrades,
 		// the Gateway endpoint is used rather than the Serve service.
 		gateway, err := r.reconcileGateway(ctx, rayServiceInstance)
 		if err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 		}
-		rayServiceInstance.Spec.Gateway = gateway
+		if gateway != nil {
+			rayServiceInstance.Spec.Gateway = gateway.Name
+		}
 		// Create or update the HTTPRoute attached to this RayService's Gateway
 		httpRoute, err := r.reconcileHTTPRoute(ctx, rayServiceInstance)
 		if err != nil {
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 		}
-		rayServiceInstance.Spec.HTTPRoute = httpRoute
+		if httpRoute != nil {
+			rayServiceInstance.Spec.HTTPRoute = httpRoute.Name
+		}
 	}
 
 	// Reconcile serve applications for active and/or pending clusters
@@ -452,7 +456,13 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 	if options == nil {
 		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
 	}
-	gatewayName := rayServiceInstance.Name + "-gateway"
+
+	var gatewayName string
+	if rayServiceInstance.Spec.Gateway != "" {
+		gatewayName = rayServiceInstance.Spec.Gateway
+	} else {
+		gatewayName = rayServiceInstance.Name + "-gateway"
+	}
 
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
@@ -481,6 +491,10 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	if err != nil {
 		logger.Error(err, "Failed to build Gateway object for Rayservice")
 		return nil, err
+	}
+	if desiredGateway == nil {
+		logger.Info("Skipping Gateway reconciliation: desired Gateway is nil")
+		return nil, nil
 	}
 
 	// Check for existing RayService Gateway, create the desired Gateway if none is found
@@ -527,7 +541,12 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	}
 
 	// Define the desired HTTPRoute name and basic object
-	httpRouteName := fmt.Sprintf("httproute-%s", rayServiceInstance.Name)
+	var httpRouteName string
+	if rayServiceInstance.Spec.HTTPRoute != "" {
+		httpRouteName = rayServiceInstance.Spec.HTTPRoute
+	} else {
+		httpRouteName = fmt.Sprintf("httproute-%s", rayServiceInstance.Name)
+	}
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteName,
@@ -547,9 +566,13 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// Retrieve the active RayCluster
 	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
-	if err != nil || activeRayCluster == nil || activeRayCluster.Status.Head.ServiceName == "" {
-		logger.Info("No active RayCluster, skipping HTTPRoute creation")
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Failed to retrieve active RayCluster")
 		return nil, err
+	}
+	if activeRayCluster == nil || activeRayCluster.Status.Head.ServiceName == "" {
+		logger.Info("Active RayCluster not found, skipping HTTPRoute creation.")
+		return nil, nil
 	}
 	oldClusterHeadSvcName := activeRayCluster.Status.Head.ServiceName
 	oldHeadSvc := &corev1.Service{}
@@ -690,6 +713,10 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 	if err != nil {
 		logger.Error(err, "Failed to build HTTPRoute for RayService upgrade")
 		return nil, err
+	}
+	if desiredHTTPRoute == nil {
+		logger.Info("Skipping HTTPRoute reconciliation: desired HTTPRoute is nil")
+		return nil, nil
 	}
 
 	// Check for existing HTTPRoute for RayService

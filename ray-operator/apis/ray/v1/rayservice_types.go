@@ -3,7 +3,6 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -98,17 +97,17 @@ type RayServiceSpec struct {
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	// +optional
 	ServeService *corev1.Service `json:"serveService,omitempty"`
-	// Gateway is the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.
-	Gateway *gwv1.Gateway `json:"gateway,omitempty"`
-	// HTTPRoute is the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.
-	HTTPRoute *gwv1.HTTPRoute `json:"httpRoute,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	// +optional
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	// +optional
-	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
+	ServeConfigV2 string `json:"serveConfigV2,omitempty"`
+	// Gateway is the name of the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.
+	Gateway string `json:"gateway,omitempty"`
+	// HTTPRoute is the name of the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.
+	HTTPRoute      string         `json:"httpRoute,omitempty"`
 	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
 	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.

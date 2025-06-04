@@ -1251,16 +1251,23 @@ func TestCalculateResources(t *testing.T) {
 }
 
 // helper function to return a Gateway object with GatewayStatus Conditions for testing.
-func makeGatewayWithCondition(accepted bool) *gwv1.Gateway {
+func makeGatewayWithCondition(accepted bool, programmed bool) *gwv1.Gateway {
 	var conditions []metav1.Condition
+
 	if accepted {
-		conditions = []metav1.Condition{
-			{
-				Type:   string(gwv1.GatewayConditionAccepted),
-				Status: metav1.ConditionTrue,
-			},
-		}
+		conditions = append(conditions, metav1.Condition{
+			Type:   string(gwv1.GatewayConditionAccepted),
+			Status: metav1.ConditionTrue,
+		})
 	}
+
+	if programmed {
+		conditions = append(conditions, metav1.Condition{
+			Type:   string(gwv1.GatewayConditionProgrammed),
+			Status: metav1.ConditionTrue,
+		})
+	}
+
 	return &gwv1.Gateway{
 		Status: gwv1.GatewayStatus{
 			Conditions: conditions,
@@ -1280,13 +1287,18 @@ func TestIsGatewayReady(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Gateway created but missing accepted condition",
-			gateway:  makeGatewayWithCondition(false),
+			name:     "Gateway created with Programmed condition only",
+			gateway:  makeGatewayWithCondition(false, true),
 			expected: false,
 		},
 		{
-			name:     "Gateway created with accepted condition",
-			gateway:  makeGatewayWithCondition(true),
+			name:     "Gateway created with Accepted condition only",
+			gateway:  makeGatewayWithCondition(true, false),
+			expected: false,
+		},
+		{
+			name:     "Gateway created with both Accepted and Programmed conditions",
+			gateway:  makeGatewayWithCondition(true, true),
 			expected: true,
 		},
 	}

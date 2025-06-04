@@ -681,14 +681,20 @@ func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
 	if gatewayInstance == nil {
 		return false
 	}
+	hasAccepted := false
+	hasProgrammed := false
+
 	for _, condition := range gatewayInstance.Status.Conditions {
 		if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
-			return true
+			hasAccepted = true
+		}
+		if condition.Type == string(gwv1.GatewayConditionProgrammed) && condition.Status == metav1.ConditionTrue {
+			hasProgrammed = true
 		}
 	}
 
-	// If no accepted condition found then it is not ready yet
-	return false
+	// If no ready condition found return false
+	return hasAccepted && hasProgrammed
 }
 
 // IsHTTPRouteReady returns whether the HTTPRoute associated with a given Gateway has a ready condition
