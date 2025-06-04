@@ -15,26 +15,6 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-func CurlRayServiceHeadService(
-	t Test,
-	headSvcName string,
-	rayService *rayv1.RayService,
-	curlPod *corev1.Pod,
-	curlPodContainerName,
-	rayServicePath,
-	body string,
-) (bytes.Buffer, bytes.Buffer) {
-	cmd := []string{
-		"curl",
-		"-X", "POST",
-		"-H", "Content-Type: application/json",
-		fmt.Sprintf("%s.%s.svc.cluster.local:8000%s", headSvcName, rayService.Namespace, rayServicePath),
-		"-d", body,
-	}
-
-	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
-}
-
 func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,
@@ -45,6 +25,7 @@ func CurlRayServiceGateway(
 ) (bytes.Buffer, bytes.Buffer) {
 	cmd := []string{
 		"curl",
+		"--max-time", "10",
 		"-X", "POST",
 		"-H", "Content-Type: application/json",
 		fmt.Sprintf("%s:80%s", gatewayIP, rayServicePath),
@@ -140,8 +121,8 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
 								})))))).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-				WithReplicas(0).
-				WithMinReplicas(0).
+				WithReplicas(1).
+				WithMinReplicas(1).
 				WithMaxReplicas(4).
 				WithRayStartParams(map[string]string{"num-cpus": "1"}).
 				WithGroupName("small-group").
