@@ -669,6 +669,12 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastStatus *rpcStatus.Status
 
 	doReq := func() ([]byte, int, error) {
+		// new ReadCloser for httpRequest body
+		if httpRequest.Body != nil {
+			bodyBytes, _ := io.ReadAll(httpRequest.Body)
+			httpRequest.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
 		response, err := krc.httpClient.Do(httpRequest)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
