@@ -38,7 +38,7 @@ steps:
     objectBundle:
     - basename: pytorch-mnist
       objectTemplatePath: pytorch-mnist-rayjob.yaml
-      Image: "rayproject/ray:2.9.3"
+      Image: "rayproject/ray:2.46.0"
 - name: Creating RayJobs for Ray Data Image Resizing
   phases:
   - namespaceRange:
@@ -49,7 +49,7 @@ steps:
     objectBundle:
     - basename: ray-data-image-resize
       objectTemplatePath: ray-data-image-resize.yaml
-      Image: "rayproject/ray:2.9.3"
+      Image: "rayproject/ray:2.46.0"
 - name: Wait for RayJobs complete
   measurements:
   - Identifier: WaitForRayJob

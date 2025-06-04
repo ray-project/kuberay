@@ -71,7 +71,7 @@ export const CreateJobForm = () => {
   const [jobName, setJobName] = React.useState(
     "test-job" + Math.floor(Math.random() * 100)
   );
-  const [dockerImage, setDockerImage] = React.useState("rayproject/ray:2.24.0");
+  const [dockerImage, setDockerImage] = React.useState("rayproject/ray:2.46.0");
   const [entrypoint, setEntrypoint] = React.useState(
     'python -c \\"import time; time.sleep(10)\\"'
   );

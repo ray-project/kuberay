@@ -29,7 +29,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-ml:2.33.0.914af0-py311
+            image: rayproject/ray-ml:2.46.0.0e19ea-py311
             resources:
               limits:
                 cpu: "2"
@@ -53,7 +53,7 @@ spec:
         spec:
           containers:
           - name: llm
-            image: rayproject/ray-ml:2.33.0.914af0-py311
+            image: rayproject/ray-ml:2.46.0.0e19ea-py311
             env:
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
@@ -71,6 +71,6 @@ spec:
                 nvidia.com/gpu: "2"
           # Please add the following taints to the GPU node.
           tolerations:
-            - key: "nvidia.com/gpu"
-              operator: "Exists"
-              effect: "NoSchedule"
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"

@@ -107,7 +107,7 @@ def test_cluster():
     head = HeadNodeSpec(
         compute_template="default-template",
         ray_start_params={"metrics-export-port": "8080", "num-cpus": "0"},
-        image="rayproject/ray:2.9.3-py310",
+        image="rayproject/ray:2.46.0-py310",
         service_type=ServiceType.ClusterIP,
         volumes=[volume],
         environment=environment,
@@ -120,7 +120,7 @@ def test_cluster():
         min_replicas=1,
         max_replicas=1,
         ray_start_params=DEFAULT_WORKER_START_PARAMS,
-        image="rayproject/ray:2.9.3-py310",
+        image="rayproject/ray:2.46.0-py310",
         volumes=[volume],
         environment=environment,
         image_pull_policy="Always",
@@ -128,8 +128,8 @@ def test_cluster():
     t_cluster = Cluster(
         name="test",
         namespace="default",
-        user="boris",
-        version="2.9.0",
+        user="kuberay",
+        version="2.46.0",
         cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker]),
     )
     # create
@@ -207,7 +207,7 @@ def test_job_submission():
     head = HeadNodeSpec(
         compute_template="default-template",
         ray_start_params={"metrics-export-port": "8080", "num-cpus": "0"},
-        image="rayproject/ray:2.9.3-py310",
+        image="rayproject/ray:2.46.0-py310",
         service_type=ServiceType.ClusterIP,
         volumes=[volume],
         environment=environment,
@@ -220,7 +220,7 @@ def test_job_submission():
         min_replicas=0,
         max_replicas=2,
         ray_start_params=DEFAULT_WORKER_START_PARAMS,
-        image="rayproject/ray:2.9.3-py310",
+        image="rayproject/ray:2.46.0-py310",
         volumes=[volume],
         environment=environment,
         image_pull_policy="IfNotPresent",
@@ -229,8 +229,8 @@ def test_job_submission():
     t_cluster = Cluster(
         name="test-job",
         namespace="default",
-        user="boris",
-        version="2.9.0",
+        user="kuberay",
+        version="2.46.0",
         cluster_spec=ClusterSpec(head_node=head, worker_groups=[worker], autoscaling_options=autoscaling),
     )
     # create

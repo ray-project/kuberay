@@ -5,14 +5,14 @@ metadata:
   labels:
     ray.io/scheduler-name: volcano
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: "1"

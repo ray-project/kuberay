@@ -259,7 +259,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         utils.GetContainerCommand([]string{}),
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -465,7 +465,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -532,11 +532,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				Value: "v1",
 			},
 		},
-		Command: []string{
-			"/bin/bash",
-			"-lc",
-			"--",
-		},
+		Command: utils.GetContainerCommand([]string{}),
 		Args: []string{
 			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},

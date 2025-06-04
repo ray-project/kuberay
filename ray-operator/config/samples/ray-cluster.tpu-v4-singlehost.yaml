@@ -6,42 +6,42 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v4-singlehost
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
-          - name: ray-head
-            image: rayproject/ray:2.41.0
-            imagePullPolicy: IfNotPresent
-            resources:
-              limits:
-                cpu: "8"
-                ephemeral-storage: 20Gi
-                memory: 40G
-              requests:
-                cpu: "8"
-                ephemeral-storage: 10Gi
-                memory: 40G
-            env:
-              - name: RAY_memory_monitor_refresh_ms
-                value: "0"
-              - name: RAY_GRAFANA_IFRAME_HOST
-                value: http://${grafana_host}
-              - name: RAY_GRAFANA_HOST
-                value: http://grafana:80
-              - name: RAY_PROMETHEUS_HOST
-                value: http://frontend:9090
-            ports:
-              - containerPort: 6379
-                name: gcs
-              - containerPort: 8265
-                name: dashboard
-              - containerPort: 10001
-                name: client
-              - containerPort: 8000
-                name: serve
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "8"
+              ephemeral-storage: 20Gi
+              memory: 40G
+            requests:
+              cpu: "8"
+              ephemeral-storage: 10Gi
+              memory: 40G
+          env:
+          - name: RAY_memory_monitor_refresh_ms
+            value: "0"
+          - name: RAY_GRAFANA_IFRAME_HOST
+            value: http://${grafana_host}
+          - name: RAY_GRAFANA_HOST
+            value: http://grafana:80
+          - name: RAY_PROMETHEUS_HOST
+            value: http://frontend:9090
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8000
+            name: serve
   workerGroupSpecs:
   - rayStartParams: {}
     replicas: 1
@@ -52,20 +52,20 @@ spec:
     template:
       spec:
         containers:
-          - name: ray-worker
-            image: rayproject/ray:2.41.0
-            imagePullPolicy: IfNotPresent
-            resources:
-              limits:
-                cpu: "1"
-                ephemeral-storage: 20Gi
-                google.com/tpu: "4"
-                memory: 40G
-              requests:
-                cpu: "1"
-                ephemeral-storage: 10Gi
-                google.com/tpu: "4"
-                memory: 40G
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "1"
+              ephemeral-storage: 20Gi
+              google.com/tpu: "4"
+              memory: 40G
+            requests:
+              cpu: "1"
+              ephemeral-storage: 10Gi
+              google.com/tpu: "4"
+              memory: 40G
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
           cloud.google.com/gke-tpu-topology: 2x2x1

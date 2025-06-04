@@ -459,7 +459,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 			Version: AutoscalerV2,
 		},
 		RayVersion:     ptr.To("1.2.3"),
-		Image:          ptr.To("rayproject/ray:1.2.3"),
+		Image:          ptr.To("rayproject/ray:2.46.0"),
 		ServiceAccount: ptr.To("my-service-account"),
 		Head: &Head{
 			CPU:              ptr.To("1"),
@@ -512,7 +512,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 					Containers: []corev1ac.ContainerApplyConfiguration{
 						{
 							Name:  ptr.To("ray-head"),
-							Image: ptr.To("rayproject/ray:1.2.3"),
+							Image: ptr.To("rayproject/ray:2.46.0"),
 							Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 								Requests: &corev1.ResourceList{
 									corev1.ResourceCPU:                          resource.MustParse("1"),
@@ -564,7 +564,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
-								Image: ptr.To("rayproject/ray:1.2.3"),
+								Image: ptr.To("rayproject/ray:2.46.0"),
 								Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 									Requests: &corev1.ResourceList{
 										corev1.ResourceCPU:    resource.MustParse("2"),
@@ -592,7 +592,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
-								Image: ptr.To("rayproject/ray:1.2.3"),
+								Image: ptr.To("rayproject/ray:2.46.0"),
 								Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 									Requests: &corev1.ResourceList{
 										corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),
@@ -890,8 +890,8 @@ labels:
 annotations:
   dead: beef
 
-ray-version: 2.44.0
-image: rayproject/ray:2.44.0
+ray-version: 2.46.0
+image: rayproject/ray:2.46.0
 
 head:
   cpu: 3
@@ -938,8 +938,8 @@ gke:
 				Name:        ptr.To("dxia-test"),
 				Labels:      map[string]string{"foo": "bar"},
 				Annotations: map[string]string{"dead": "beef"},
-				RayVersion:  ptr.To("2.44.0"),
-				Image:       ptr.To("rayproject/ray:2.44.0"),
+				RayVersion:  ptr.To("2.46.0"),
+				Image:       ptr.To("rayproject/ray:2.46.0"),
 				Head: &Head{
 					CPU:              ptr.To("3"),
 					Memory:           ptr.To("5Gi"),

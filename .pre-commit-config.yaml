@@ -75,6 +75,12 @@ repos:
           - --ignore=.github/pull_request_template.md
           - --disable=MD033
 
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.17.0
+    hooks:
+      - id: yamlfmt
+        files: ^ray-operator/config/samples/
+
   - repo: https://github.com/norwoodj/helm-docs
     rev: v1.14.2
     hooks:
