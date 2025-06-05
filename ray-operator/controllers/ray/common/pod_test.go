@@ -1935,6 +1935,182 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 	}
 }
 
+func TestGetPodMarketTypeFromNodeSelector(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeSelector map[string]string
+		expectedType utils.PodMarketType
+	}{
+		{
+			name:         "GKE spot instance",
+			nodeSelector: map[string]string{utils.GKESpotLabel: "true"},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "EKS spot instance",
+			nodeSelector: map[string]string{utils.EKSCapacityTypeLabel: "SPOT"},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "on-demand instance (no selector provided)",
+			nodeSelector: nil,
+			expectedType: utils.OnDemandMarketType,
+		},
+		{
+			name:         "on-demand instance (non-spot selector provided)",
+			nodeSelector: map[string]string{"some-label": "value"},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualType := getPodMarketTypeFromNodeSelector(tt.nodeSelector)
+			if actualType != tt.expectedType {
+				t.Errorf("got market-type %v, but expected %v", actualType, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestGetPodMarketTypeFromNodeAffinity(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeAffinity *corev1.NodeAffinity
+		expectedType utils.PodMarketType
+	}{
+		{
+			name: "GKE spot instance from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.GKESpotLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name: "EKS spot instance from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.EKSCapacityTypeLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"SPOT"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "nil nodeAffinity",
+			nodeAffinity: nil,
+			expectedType: utils.OnDemandMarketType,
+		},
+		{
+			name: "nodeAffinity with other selectors provided",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "region",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"us-west4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualType := getPodMarketTypeFromNodeAffinity(tt.nodeAffinity)
+			if actualType != tt.expectedType {
+				t.Errorf("got market-type %v, but expected %v", actualType, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestGetPodMarketType(t *testing.T) {
+	tests := []struct {
+		name         string
+		pod          *corev1.Pod
+		expectedType utils.PodMarketType
+	}{
+		{
+			name: "GKE spot instance from nodeSelector",
+			pod: &corev1.Pod{
+				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						utils.GKESpotLabel: "true",
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name: "EKS spot from nodeAffinity when nodeSelector missing",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "eks-spot"},
+				Spec: corev1.PodSpec{
+					NodeSelector: nil,
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      utils.EKSCapacityTypeLabel,
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"SPOT"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "No nodeSelectors or nodeAffinity provided",
+			pod:          &corev1.Pod{},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			marketType := getPodMarketType(tt.pod)
+			if marketType != tt.expectedType {
+				t.Errorf("got market-type of %v, but expected %v", marketType, tt.expectedType)
+			}
+		})
+	}
+}
+
 func TestAddDefaultRayNodeLabels_GKESpot(t *testing.T) {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1982,7 +2158,7 @@ func TestAddDefaultRayNodeLabels_EKSSpot(t *testing.T) {
 
 	addDefaultRayNodeLabels(pod)
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
-	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
-	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
+	checkContainerEnv(t, rayContainer, utils.RayNodeMarketType, "spot")
+	checkContainerEnv(t, rayContainer, utils.RayNodeRegion, "metadata.labels['topology.kubernetes.io/region']")
+	checkContainerEnv(t, rayContainer, utils.RayNodeZone, "metadata.labels['topology.kubernetes.io/zone']")
 }

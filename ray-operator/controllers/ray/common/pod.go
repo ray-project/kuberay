@@ -1058,7 +1058,7 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 		// used to set the ray.io/market-type node label
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  utils.RayNodeMarketType,
-			Value: string(getPodMarketTypeFromNodeSelector(pod)),
+			Value: string(getPodMarketType(pod)),
 		})
 	}
 	if !containsEnvVar(*rayContainer, utils.RayNodeZone) {
@@ -1068,7 +1068,7 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 			Name: utils.RayNodeZone,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.labels['topology.kubernetes.io/zone']",
+					FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyZoneLabel),
 				},
 			},
 		})
@@ -1080,7 +1080,7 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 			Name: utils.RayNodeRegion,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.labels['topology.kubernetes.io/region']",
+					FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyRegionLabel),
 				},
 			},
 		})
@@ -1089,9 +1089,23 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 }
 
 // getPodMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type label
+// based on a Kubernetes Pod spec.
+func getPodMarketType(pod *corev1.Pod) utils.PodMarketType {
+	marketType := getPodMarketTypeFromNodeSelector(pod.Spec.NodeSelector)
+
+	if marketType == utils.OnDemandMarketType && pod.Spec.Affinity != nil {
+		// check for NodeAffinity if nodeSelector specifying spot instance not found
+		marketType = getPodMarketTypeFromNodeAffinity(pod.Spec.Affinity.NodeAffinity)
+	}
+	return marketType
+}
+
+// getPodMarketTypeFromNodeSelector returns a ray.io/market-type label
 // based on user-provided Kubernetes nodeSelector values.
-func getPodMarketTypeFromNodeSelector(pod *corev1.Pod) utils.PodMarketType {
-	selector := pod.Spec.NodeSelector
+func getPodMarketTypeFromNodeSelector(selector map[string]string) utils.PodMarketType {
+	if selector == nil {
+		return utils.OnDemandMarketType
+	}
 	// check for GKE spot instance selector
 	if val, ok := selector[utils.GKESpotLabel]; ok && val == "true" {
 		return utils.SpotMarketType
@@ -1100,5 +1114,47 @@ func getPodMarketTypeFromNodeSelector(pod *corev1.Pod) utils.PodMarketType {
 	if val, ok := selector[utils.EKSCapacityTypeLabel]; ok && val == "SPOT" {
 		return utils.SpotMarketType
 	}
+	return utils.OnDemandMarketType
+}
+
+// getPodMarketTypeFromNodeSelector returns a ray.io/market-type label
+// based on user-provided Kubernetes nodeAffinity values.
+func getPodMarketTypeFromNodeAffinity(nodeAffinity *corev1.NodeAffinity) utils.PodMarketType {
+	if nodeAffinity == nil {
+		return utils.OnDemandMarketType
+	}
+
+	// Only add the spot instance label if the Pod is guaranteed to be on a node of
+	// that type when scheduled.
+	requiredTerms := nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	if requiredTerms == nil {
+		return utils.OnDemandMarketType
+	}
+
+	for _, term := range requiredTerms.NodeSelectorTerms {
+		for _, expr := range term.MatchExpressions {
+			switch expr.Key {
+			// GKE specific check
+			case utils.GKESpotLabel:
+				if expr.Operator == corev1.NodeSelectorOpIn {
+					for _, val := range expr.Values {
+						if val == "true" {
+							return utils.SpotMarketType
+						}
+					}
+				}
+			// Amazon EKS specific check
+			case utils.EKSCapacityTypeLabel:
+				if expr.Operator == corev1.NodeSelectorOpIn {
+					for _, val := range expr.Values {
+						if val == "SPOT" {
+							return utils.SpotMarketType
+						}
+					}
+				}
+			}
+		}
+	}
+	// Default to on-demand instance type
 	return utils.OnDemandMarketType
 }
