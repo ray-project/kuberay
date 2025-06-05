@@ -6,7 +6,7 @@ raycluster_crd_schema=./schema/raycluster_v1.json
 
 if [ ! -f "$raycluster_crd_schema" ]; then
   echo "CRD schema not found: $raycluster_crd_schema"
-  echo 'Please run "pre-commit genearete-crd-schema --all-files" first'
+  echo 'Please run "pre-commit run generate-crd-schema --all-files" first'
   exit 1
 fi
 
