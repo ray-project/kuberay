@@ -50,7 +50,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", "yunikorn", and "kube-scheduler".
+#    "default", "volcano", "yunikorn", and "scheduler-plugins".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
@@ -69,7 +69,7 @@ logging:
 #
 #  4. Use PodGroup
 #       batchScheduler:
-#         name: kube-scheduler
+#         name: scheduler-plugins
 #
 batchScheduler:
   # Deprecated. This option will be removed in the future.

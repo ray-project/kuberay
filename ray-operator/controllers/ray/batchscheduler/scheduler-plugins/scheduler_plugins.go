@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ktypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	SchedulerName                 string = "kube-scheduler"
-	KubeSchedulerPodGroupLabelKey string = "scheduling.x-k8s.io/pod-group"
+	schedulerName                 string = "scheduler-plugins"
+	kubeSchedulerPodGroupLabelKey string = "scheduling.x-k8s.io/pod-group"
 )
 
 type KubeScheduler struct {
@@ -32,46 +32,55 @@ type KubeScheduler struct {
 type KubeSchedulerFactory struct{}
 
 func GetPluginName() string {
-	return SchedulerName
+	return schedulerName
 }
 
 func (k *KubeScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rc *rayv1.RayCluster) error {
-	if !k.isGangSchedulingEnabled(rc) {
+func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+	if !k.isGangSchedulingEnabled(app) {
 		return nil
 	}
+	podGroup := &v1alpha1.PodGroup{}
+	err := k.cli.Get(ctx, ktypes.NamespacedName{Namespace: app.Namespace, Name: app.Name}, podGroup)
+	if err == nil {
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
 	// we set replica as 1 for the head pod
 	replica := int32(1)
-	for _, workerGroup := range rc.Spec.WorkerGroupSpecs {
+	for _, workerGroup := range app.Spec.WorkerGroupSpecs {
 		if workerGroup.Replicas == nil {
 			continue
 		}
 		replica += *workerGroup.Replicas
 	}
 
-	podGroup := &v1alpha1.PodGroup{
+	podGroup = &v1alpha1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: rc.Namespace,
-			Name:      rc.Name,
+			Namespace: app.Namespace,
+			Name:      app.Name,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					Name:       rc.Name,
-					UID:        rc.UID,
-					APIVersion: rc.APIVersion,
-					Kind:       rc.Kind,
+					Name:       app.Name,
+					UID:        app.UID,
+					APIVersion: app.APIVersion,
+					Kind:       app.Kind,
 				},
 			},
 		},
 		Spec: v1alpha1.PodGroupSpec{
 			MinMember:    replica,
-			MinResources: utils.CalculateMinResources(rc),
+			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
 
-	err := k.cli.Create(ctx, podGroup)
+	err = k.cli.Create(ctx, podGroup)
 	if errors.IsAlreadyExists(err) {
 		return nil
 	}
@@ -83,7 +92,7 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, rc *r
 func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
 	// when gang scheduling is enabled, extra labels need to be added to all pods
 	if k.isGangSchedulingEnabled(app) {
-		pod.Labels[KubeSchedulerPodGroupLabelKey] = app.Name
+		pod.Labels[kubeSchedulerPodGroupLabelKey] = app.Name
 	}
 }
 
@@ -93,26 +102,6 @@ func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
 }
 
 func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedulerinterface.BatchScheduler, error) {
-	extClient, err := apiextensionsclient.NewForConfig(c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
-	}
-
-	podGroupName := "podgroups.scheduling.x-k8s.io"
-	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
-		ctx,
-		podGroupName,
-		metav1.GetOptions{},
-	); err != nil {
-		if _, err := extClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(
-			ctx,
-			podGroupName,
-			metav1.GetOptions{},
-		); err != nil {
-			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
-		}
-	}
-
 	scheme := runtime.NewScheme()
 	_ = v1alpha1.AddToScheme(scheme)
 	ccache, err := cache.New(c, cache.Options{
