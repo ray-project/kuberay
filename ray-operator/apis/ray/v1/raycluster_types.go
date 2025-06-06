@@ -9,6 +9,18 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// RayClusterTemplateSpec describes the data a RayCluster should have when created from a template
+type RayClusterTemplateSpec struct {
+	// Standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of the RayCluster.
+	// +optional
+	Spec RayClusterSpec `json:"spec,omitempty"`
+}
+
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
 	// Suspend indicates whether a RayCluster should be suspended.

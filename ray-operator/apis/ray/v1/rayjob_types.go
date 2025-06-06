@@ -120,6 +120,9 @@ type RayJobSpec struct {
 	// +kubebuilder:default:=0
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// Template describes the RayCluster that will be created.
+	// +optional
+	Template RayClusterTemplateSpec `json:"template,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
