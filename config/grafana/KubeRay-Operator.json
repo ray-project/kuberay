@@ -25,6 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
+  "id": 40,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -440,7 +441,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -547,6 +549,7 @@
                 "cellOptions": {
                   "type": "auto"
                 },
+                "filterable": true,
                 "inspect": false
               },
               "mappings": [],
@@ -554,7 +557,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -660,11 +664,12 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
+              "exemplar": false,
               "expr": "kuberay_cluster_provisioned_duration_seconds{namespace=~\"$namespace\"}",
               "format": "table",
               "hide": false,
-              "instant": false,
-              "range": true,
+              "instant": true,
+              "range": false,
               "refId": "A"
             }
           ],
@@ -729,7 +734,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -889,7 +895,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1068,7 +1075,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1185,7 +1193,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1294,7 +1303,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1472,7 +1482,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1488,7 +1499,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 45
+            "y": 62
           },
           "id": 58,
           "options": {
@@ -1579,6 +1590,7 @@
                 "cellOptions": {
                   "type": "auto"
                 },
+                "filterable": true,
                 "inspect": false
               },
               "mappings": [],
@@ -1586,7 +1598,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1650,7 +1663,7 @@
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 53
+            "y": 70
           },
           "id": 60,
           "options": {
@@ -1772,7 +1785,7 @@
             "h": 10,
             "w": 9,
             "x": 0,
-            "y": 63
+            "y": 80
           },
           "id": 67,
           "options": {
@@ -1875,7 +1888,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1939,7 +1953,7 @@
             "h": 10,
             "w": 15,
             "x": 9,
-            "y": 63
+            "y": 80
           },
           "id": 68,
           "options": {
@@ -2158,6 +2172,6 @@
   "timezone": "",
   "title": "KubeRay Operator",
   "uid": "kuberay_operator",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }
