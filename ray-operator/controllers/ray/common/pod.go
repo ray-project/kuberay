@@ -1062,34 +1062,68 @@ func addDefaultRayNodeLabels(pod *corev1.Pod) {
 		})
 	}
 	if !containsEnvVar(*rayContainer, utils.RayNodeZone) {
-		// uses downward api to set the ray.io/availability-zone node label
-		// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
-		envVars = append(envVars, corev1.EnvVar{
-			Name: utils.RayNodeZone,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyZoneLabel),
-				},
-			},
-		})
+		envVars = append(envVars, getPodZoneEnvVar(pod))
 	}
 	if !containsEnvVar(*rayContainer, utils.RayNodeRegion) {
-		// uses downward api to set the ray.io/availability-region node label
-		// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion
-		envVars = append(envVars, corev1.EnvVar{
-			Name: utils.RayNodeRegion,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyRegionLabel),
-				},
-			},
-		})
+		envVars = append(envVars, getPodRegionEnvVar(pod))
 	}
 	rayContainer.Env = envVars
 }
 
-// getPodMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type label
-// based on a Kubernetes Pod spec.
+// getPodZoneEnvVar is a helper function to determine the ray.io/availability-zone label value
+// based on a Pod spec - checking labels, nodeSelectors, and then falling back to downward API.
+func getPodZoneEnvVar(pod *corev1.Pod) corev1.EnvVar {
+	if podZone, ok := pod.Labels[utils.K8sTopologyZoneLabel]; ok && podZone != "" {
+		return corev1.EnvVar{
+			Name:  utils.RayNodeZone,
+			Value: podZone,
+		}
+	} else if podZone, ok := pod.Spec.NodeSelector[utils.K8sTopologyZoneLabel]; ok && podZone != "" {
+		return corev1.EnvVar{
+			Name:  utils.RayNodeZone,
+			Value: podZone,
+		}
+	}
+	// uses downward api to set the ray.io/availability-zone node label
+	// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesiozone
+	return corev1.EnvVar{
+		Name: utils.RayNodeZone,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyZoneLabel),
+			},
+		},
+	}
+}
+
+// getPodRegionEnvVar is a helper function to determine the ray.io/availability-region label value
+// based on a Pod spec - checking labels, nodeSelectors, and then falling back to downward API.
+func getPodRegionEnvVar(pod *corev1.Pod) corev1.EnvVar {
+	if podRegion, ok := pod.Labels[utils.K8sTopologyRegionLabel]; ok && podRegion != "" {
+		return corev1.EnvVar{
+			Name:  utils.RayNodeRegion,
+			Value: podRegion,
+		}
+	} else if podRegion, ok := pod.Spec.NodeSelector[utils.K8sTopologyRegionLabel]; ok && podRegion != "" {
+		return corev1.EnvVar{
+			Name:  utils.RayNodeRegion,
+			Value: podRegion,
+		}
+	}
+	// uses downward api to set the ray.io/availability-region node label
+	// Ref: https://kubernetes.io/docs/reference/labels-annotations-taints/#topologykubernetesioregion
+	return corev1.EnvVar{
+		Name: utils.RayNodeRegion,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: fmt.Sprintf("metadata.labels['%s']", utils.K8sTopologyRegionLabel),
+			},
+		},
+	}
+}
+
+// getPodMarketTypeFromNodeSelector is a helper function to determine the ray.io/market-type
+// label value based on a Kubernetes Pod spec - checking labels, nodeSelector, and nodeAffinity.
 func getPodMarketType(pod *corev1.Pod) utils.PodMarketType {
 	marketType := getPodMarketTypeFromNodeSelector(pod.Spec.NodeSelector)
 

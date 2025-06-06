@@ -2111,54 +2111,224 @@ func TestGetPodMarketType(t *testing.T) {
 	}
 }
 
-func TestAddDefaultRayNodeLabels_GKESpot(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{
-				"ray.io/group":                  "test-worker-group-1",
-				"topology.kubernetes.io/region": "us-central2",
-				"topology.kubernetes.io/zone":   "us-central2-b",
+func TestAddDefaultRayNodeLabels(t *testing.T) {
+	tests := []struct {
+		labels       map[string]string
+		nodeSelector map[string]string
+		nodeAffinity *corev1.NodeAffinity
+		expectedEnv  map[string]string
+		name         string
+	}{
+		{
+			name: "Availability zone vars set from region and zone topology labels",
+			labels: map[string]string{
+				utils.K8sTopologyRegionLabel: "us-west4",
+				utils.K8sTopologyZoneLabel:   "us-west4-a",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "us-west4",
+				utils.RayNodeZone:   "us-west4-a",
 			},
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{Name: "ray"},
+		{
+			name: "Availability zone vars set from region and zone topology nodeSelectors",
+			nodeSelector: map[string]string{
+				utils.K8sTopologyRegionLabel: "us-central2",
+				utils.K8sTopologyZoneLabel:   "us-central2-b",
 			},
-			NodeSelector: map[string]string{
-				"cloud.google.com/gke-spot": "true",
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "us-central2",
+				utils.RayNodeZone:   "us-central2-b",
+			},
+		},
+		{
+			name: "Availability zone vars set from downward API",
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "metadata.labels['topology.kubernetes.io/region']",
+				utils.RayNodeZone:   "metadata.labels['topology.kubernetes.io/zone']",
+			},
+		},
+		{
+			name: "Market type env var set from GKE Spot nodeSelector",
+			nodeSelector: map[string]string{
+				utils.GKESpotLabel:           "true",
+				utils.K8sTopologyRegionLabel: "me-central1",
+				utils.K8sTopologyZoneLabel:   "me-central1-a",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "me-central1",
+				utils.RayNodeZone:       "me-central1-a",
+			},
+		},
+		{
+			name: "Market type env var set from EKS Spot nodeSelector",
+			nodeSelector: map[string]string{
+				utils.EKSCapacityTypeLabel:   "SPOT",
+				utils.K8sTopologyRegionLabel: "us-central1",
+				utils.K8sTopologyZoneLabel:   "us-central1-c",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "us-central1",
+				utils.RayNodeZone:       "us-central1-c",
+			},
+		},
+		{
+			name: "Market type env var set from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.EKSCapacityTypeLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"SPOT"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "metadata.labels['topology.kubernetes.io/region']",
+				utils.RayNodeZone:       "metadata.labels['topology.kubernetes.io/zone']",
 			},
 		},
 	}
 
-	addDefaultRayNodeLabels(pod)
-	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, "RAY_NODE_MARKET_TYPE", "spot")
-	checkContainerEnv(t, rayContainer, "RAY_NODE_REGION", "metadata.labels['topology.kubernetes.io/region']")
-	checkContainerEnv(t, rayContainer, "RAY_NODE_ZONE", "metadata.labels['topology.kubernetes.io/zone']")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: tt.labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers:   []corev1.Container{{Name: "ray"}},
+					NodeSelector: tt.nodeSelector,
+				},
+			}
+			if tt.nodeAffinity != nil {
+				pod.Spec.Affinity = &corev1.Affinity{NodeAffinity: tt.nodeAffinity}
+			}
+			// validate default labels are set correctly from Pod spec as env vars
+			addDefaultRayNodeLabels(pod)
+			rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+			for key, expectedVar := range tt.expectedEnv {
+				foundVar := false
+				for _, env := range rayContainer.Env {
+					if env.Name == key {
+						if env.Value != "" {
+							if env.Value != expectedVar {
+								t.Errorf("%s: got value %q, but expected %q", key, env.Value, expectedVar)
+							}
+						} else if env.ValueFrom != nil && env.ValueFrom.FieldRef != nil {
+							if env.ValueFrom.FieldRef.FieldPath != expectedVar {
+								t.Errorf("%s: got FieldPath %q, but expected %q", key, env.ValueFrom.FieldRef.FieldPath, expectedVar)
+							}
+						} else {
+							t.Errorf("%s: environment var not set as expected", key)
+						}
+						foundVar = true
+						break
+					}
+				}
+				if !foundVar {
+					t.Errorf("%s: not found in container env", key)
+				}
+			}
+		})
+	}
 }
 
-func TestAddDefaultRayNodeLabels_EKSSpot(t *testing.T) {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{
-				"ray.io/group":                  "test-worker-group-2",
-				"topology.kubernetes.io/region": "us-west4",
-				"topology.kubernetes.io/zone":   "us-west4-a",
-			},
+func TestGetPodZoneEnvVar(t *testing.T) {
+	tests := []struct {
+		name         string
+		labels       map[string]string
+		nodeSelector map[string]string
+		expectedVar  string
+	}{
+		{
+			name:        "Retrieve topology zone from labels",
+			labels:      map[string]string{utils.K8sTopologyZoneLabel: "us-west4-a"},
+			expectedVar: "us-west4-a",
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{Name: "ray"},
-			},
-			NodeSelector: map[string]string{
-				"eks.amazonaws.com/capacityType": "SPOT",
-			},
+		{
+			name:         "Retrieve topology zone from nodeSelector",
+			nodeSelector: map[string]string{utils.K8sTopologyZoneLabel: "us-central2-b"},
+			expectedVar:  "us-central2-b",
+		},
+		{
+			name:        "Zone set using downward API",
+			expectedVar: "metadata.labels['topology.kubernetes.io/zone']",
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: tt.labels},
+				Spec:       corev1.PodSpec{NodeSelector: tt.nodeSelector},
+			}
+			// validate expected zone env var is parsed from Pod spec
+			result := getPodZoneEnvVar(pod)
+			if result.Value != "" {
+				if result.Value != tt.expectedVar {
+					t.Errorf("got env var %q, but expected %q", result.Value, tt.expectedVar)
+				}
+			} else if result.ValueFrom != nil {
+				if result.ValueFrom.FieldRef.FieldPath != tt.expectedVar {
+					t.Errorf("got FieldPath %q, but expected %q", result.ValueFrom.FieldRef.FieldPath, tt.expectedVar)
+				}
+			} else {
+				t.Errorf("getPodZoneEnvVar did not return expected env value")
+			}
+		})
+	}
+}
 
-	addDefaultRayNodeLabels(pod)
-	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RayNodeMarketType, "spot")
-	checkContainerEnv(t, rayContainer, utils.RayNodeRegion, "metadata.labels['topology.kubernetes.io/region']")
-	checkContainerEnv(t, rayContainer, utils.RayNodeZone, "metadata.labels['topology.kubernetes.io/zone']")
+func TestGetPodRegionEnvVar(t *testing.T) {
+	tests := []struct {
+		name         string
+		labels       map[string]string
+		nodeSelector map[string]string
+		expectedVar  string
+	}{
+		{
+			name:        "Retrieve topology region from labels",
+			labels:      map[string]string{utils.K8sTopologyRegionLabel: "us-central1"},
+			expectedVar: "us-central1",
+		},
+		{
+			name:         "Retrieve topology region from nodeSelector",
+			nodeSelector: map[string]string{utils.K8sTopologyRegionLabel: "us-central2"},
+			expectedVar:  "us-central2",
+		},
+		{
+			name:        "Region set using downward API",
+			expectedVar: "metadata.labels['topology.kubernetes.io/region']",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: tt.labels},
+				Spec:       corev1.PodSpec{NodeSelector: tt.nodeSelector},
+			}
+			// validate expected region env var is parsed from Pod spec
+			result := getPodRegionEnvVar(pod)
+			if result.Value != "" {
+				if result.Value != tt.expectedVar {
+					t.Errorf("got env var %q, but expected %q", result.Value, tt.expectedVar)
+				}
+			} else if result.ValueFrom != nil {
+				if result.ValueFrom.FieldRef.FieldPath != tt.expectedVar {
+					t.Errorf("got FieldPath %q, but expected %q", result.ValueFrom.FieldRef.FieldPath, tt.expectedVar)
+				}
+			} else {
+				t.Errorf("getPodRegionEnvVar did not return expected env value")
+			}
+		})
+	}
 }
