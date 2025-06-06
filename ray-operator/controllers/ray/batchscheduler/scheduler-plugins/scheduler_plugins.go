@@ -39,19 +39,7 @@ func (k *KubeScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
-	if !k.isGangSchedulingEnabled(app) {
-		return nil
-	}
-	podGroup := &v1alpha1.PodGroup{}
-	err := k.cli.Get(ctx, ktypes.NamespacedName{Namespace: app.Namespace, Name: app.Name}, podGroup)
-	if err == nil {
-		return nil
-	}
-	if !errors.IsNotFound(err) {
-		return err
-	}
-
+func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
 	// we set replica as 1 for the head pod
 	replica := int32(1)
 	for _, workerGroup := range app.Spec.WorkerGroupSpecs {
@@ -61,7 +49,7 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *
 		replica += *workerGroup.Replicas
 	}
 
-	podGroup = &v1alpha1.PodGroup{
+	podGroup := &v1alpha1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: app.Namespace,
 			Name:      app.Name,
@@ -79,6 +67,22 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *
 			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
+	return podGroup
+}
+
+func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+	if !k.isGangSchedulingEnabled(app) {
+		return nil
+	}
+	podGroup := &v1alpha1.PodGroup{}
+	err := k.cli.Get(ctx, ktypes.NamespacedName{Namespace: app.Namespace, Name: app.Name}, podGroup)
+	if err == nil {
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+	podGroup = createPodGroup(ctx, app)
 
 	err = k.cli.Create(ctx, podGroup)
 	if errors.IsAlreadyExists(err) {

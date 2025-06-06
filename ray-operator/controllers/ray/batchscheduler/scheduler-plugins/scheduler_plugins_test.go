@@ -1,6 +1,7 @@
 package schedulerplugins
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func createTestRayCluster(numOfHosts int32) rayv1.RayCluster {
@@ -77,19 +77,22 @@ func createTestRayCluster(numOfHosts int32) rayv1.RayCluster {
 	}
 }
 
-func TestCalculateDesiredResources(t *testing.T) {
+func TestCreatePodGroup(t *testing.T) {
 	a := assert.New(t)
 
 	cluster := createTestRayCluster(1)
 
-	totalResource := utils.CalculateDesiredResources(&cluster)
+	podGroup := createPodGroup(context.TODO(), &cluster)
 
 	// 256m * 3 (requests, not limits)
-	a.Equal("768m", totalResource.Cpu().String())
+	a.Equal("768m", podGroup.Spec.MinResources.Cpu().String())
 
 	// 256Mi * 3 (requests, not limits)
-	a.Equal("768Mi", totalResource.Memory().String())
+	a.Equal("768Mi", podGroup.Spec.MinResources.Memory().String())
 
 	// 2 GPUs total
-	a.Equal("2", totalResource.Name("nvidia.com/gpu", resource.BinarySI).String())
+	a.Equal("2", podGroup.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+
+	// 1 head and 2 workers
+	a.Equal(int32(3), podGroup.Spec.MinMember)
 }
