@@ -159,6 +159,9 @@ jobs:
         CC=$CC CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o manager-$GOARCH main.go
       working-directory: ${{env.working-directory}}
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Build MultiArch Image
       uses: docker/build-push-action@v5
       env:
