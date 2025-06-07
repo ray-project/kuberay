@@ -147,7 +147,7 @@ func SetupPortForward(t Test, podName, namespace string, localPort, remotePort i
 	return stopChan, nil
 }
 
-func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
+func CreateCurlPod(g *gomega.WithT, t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
 	// Define the podSpec spec
 	podSpec := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -164,5 +164,16 @@ func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Po
 			},
 		},
 	}
-	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
+
+	curlPod, err := t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// Wait until curl pod is created
+	g.Eventually(func(g gomega.Gomega) *corev1.Pod {
+		updatedCurlPod, err := t.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(t.Ctx(), curlPod.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return updatedCurlPod
+	}, TestTimeoutShort).Should(gomega.WithTransform(IsPodRunningAndReady, gomega.BeTrue()))
+
+	LogWithTimestamp(t.T(), "Curl pod %s/%s is running and ready", curlPod.Namespace, curlPod.Name)
+	return t.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(t.Ctx(), curlPod.Name, metav1.GetOptions{})
 }
