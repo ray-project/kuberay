@@ -668,11 +668,19 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 	var lastErr error
 	var lastStatus *rpcStatus.Status
 
+	var requestBodyBytes []byte
+	var err error
+	if httpRequest.Body != nil {
+		requestBodyBytes, err = io.ReadAll(httpRequest.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+	}
+
 	doReq := func() ([]byte, int, error) {
 		// new ReadCloser for httpRequest body
-		if httpRequest.Body != nil {
-			bodyBytes, _ := io.ReadAll(httpRequest.Body)
-			httpRequest.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		if requestBodyBytes != nil {
+			httpRequest.Body = io.NopCloser(bytes.NewBuffer(requestBodyBytes))
 		}
 
 		response, err := krc.httpClient.Do(httpRequest)
@@ -687,7 +695,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			return nil, 0, fmt.Errorf("failed to read response body bytes: %w", err)
 		}
 
-		return bodyBytes, response.StatusCode, err
+		return bodyBytes, response.StatusCode, nil
 	}
 
 	// Only retry for HTTP status codes defined as retryable in isRetryableHTTPStatus().
