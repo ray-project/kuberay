@@ -29,6 +29,7 @@ spec:
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
+        num-gpus: "0"
       template:
         spec:
           containers:
