@@ -58,12 +58,6 @@ spec:
               requests:
                 cpu: 2
                 memory: 4Gi
-            env:
-            - name: HUGGING_FACE_HUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hf-token
-                  key: hf_token
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
