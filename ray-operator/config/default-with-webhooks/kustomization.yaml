@@ -17,7 +17,7 @@ namespace: ray-system
 images:
 - name: kuberay/operator
   newName: quay.io/kuberay/operator
-  newTag: 1.4.0-rc.0
+  newTag: 1.4.0-rc.1
 
 
 replacements:
