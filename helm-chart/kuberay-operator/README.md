@@ -148,7 +148,7 @@ spec:
 | fullnameOverride | string | `"kuberay-operator"` | String to fully override release name. |
 | componentOverride | string | `"kuberay-operator"` | String to override component name. |
 | image.repository | string | `"quay.io/kuberay/operator"` | Image repository. |
-| image.tag | string | `"1.4.0-rc.0"` | Image tag. |
+| image.tag | string | `"v1.4.0-rc.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | labels | object | `{}` | Extra labels. |
 | annotations | object | `{}` | Extra annotations. |
