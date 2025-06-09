@@ -390,6 +390,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				policy = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.Policy
 			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
 				policy = *rayJobInstance.Spec.DeletionPolicy.OnFailure.Policy
+			} else {
+				logger.Error(errors.NewBadRequest("the job's status is unrecognized for deletion"), "job status", string(rayJobInstance.Status.JobStatus))
+				break
 			}
 
 			// no need to continue as the selected policy is DeleteNone
