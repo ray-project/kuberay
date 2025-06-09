@@ -38,17 +38,24 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{/*
-Common labels
-*/}}
+{{- /* Common labels */ -}}
 {{- define "kuberay-operator.labels" -}}
-app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
 helm.sh/chart: {{ include "kuberay-operator.chart" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{ include "kuberay-operator.selectorLabels" . }}
+app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
+{{- with .Chart.AppVersion }}
+app.kubernetes.io/version: {{ . | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.labels }}
+{{ . | toYaml }}
+{{- end }}
+{{- end -}}
+
+{{- /* Selector labels */ -}}
+{{- define "kuberay-operator.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- /* Create the name of the deployment to use. */ -}}
@@ -56,19 +63,12 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- include "kuberay-operator.fullname" . }}
 {{- end -}}
 
-{{/*
-FeatureGates
-*/}}
-{{- define "kuberay.featureGates" -}}
-{{- $features := "" }}
-{{- range .Values.featureGates }}
-  {{- $str := printf "%s=%t," .name .enabled }}
-  {{- $features = print $features $str }}
-{{- end }}
-{{- with .Values.featureGates }}
---feature-gates={{ $features | trimSuffix "," }}
-{{- end }}
-{{- end }}
+{{- /* Create the name of the image to use. */ -}}
+{{- define "kuberay-operator.image" -}}
+{{- $imageRepository := .Values.image.repository | default "kuberay/operator" }}
+{{- $imageTag := .Values.image.tag | default "latest" }}
+{{- printf "%s:%s" $imageRepository $imageTag }}
+{{- end -}}
 
 {{- /* Create the name of the service to use. */ -}}
 {{- define "kuberay-operator.service.name" -}}
