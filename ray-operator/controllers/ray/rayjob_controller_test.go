@@ -895,10 +895,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteCluster
 			onFailurePolicy := rayv1.DeleteNone
 			deletionStrategy := &rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -908,10 +908,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))
@@ -1034,10 +1034,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteNone
 			onFailurePolicy := rayv1.DeleteCluster
 			deletionStrategy := &rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1047,10 +1047,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))
@@ -1173,10 +1173,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteWorkers
 			onFailurePolicy := rayv1.DeleteNone
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1186,10 +1186,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))
@@ -1329,10 +1329,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteWorkers
 			onFailurePolicy := rayv1.DeleteWorkers
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1342,10 +1342,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))
@@ -1485,10 +1485,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteSelf
 			onFailurePolicy := rayv1.DeleteNone
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1601,10 +1601,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteNone
 			onFailurePolicy := rayv1.DeleteSelf
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1717,10 +1717,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteNone
 			onFailurePolicy := rayv1.DeleteNone
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1730,10 +1730,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))
@@ -1878,10 +1878,10 @@ var _ = Context("RayJob with different submission modes", func() {
 			onSuccessPolicy := rayv1.DeleteCluster
 			onFailurePolicy := rayv1.DeleteNone
 			deletionStrategy := rayv1.DeletionStrategy{
-				OnSuccess: rayv1.DeletionConfig{
+				OnSuccess: rayv1.DeletionPolicy{
 					Policy: &onSuccessPolicy,
 				},
-				OnFailure: rayv1.DeletionConfig{
+				OnFailure: rayv1.DeletionPolicy{
 					Policy: &onFailurePolicy,
 				},
 			}
@@ -1891,10 +1891,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("Verify RayJob spec", func() {
 				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionConfig{
+					OnSuccess: rayv1.DeletionPolicy{
 						Policy: &onSuccessPolicy,
 					},
-					OnFailure: rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionPolicy{
 						Policy: &onFailurePolicy,
 					},
 				}))

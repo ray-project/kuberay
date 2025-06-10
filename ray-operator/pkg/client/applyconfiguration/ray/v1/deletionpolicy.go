@@ -6,22 +6,22 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// DeletionConfigApplyConfiguration represents a declarative configuration of the DeletionConfig type for use
+// DeletionPolicyApplyConfiguration represents a declarative configuration of the DeletionPolicy type for use
 // with apply.
-type DeletionConfigApplyConfiguration struct {
+type DeletionPolicyApplyConfiguration struct {
 	Policy *rayv1.DeletionPolicyType `json:"policy,omitempty"`
 }
 
-// DeletionConfigApplyConfiguration constructs a declarative configuration of the DeletionConfig type for use with
+// DeletionPolicyApplyConfiguration constructs a declarative configuration of the DeletionPolicy type for use with
 // apply.
-func DeletionConfig() *DeletionConfigApplyConfiguration {
-	return &DeletionConfigApplyConfiguration{}
+func DeletionPolicy() *DeletionPolicyApplyConfiguration {
+	return &DeletionPolicyApplyConfiguration{}
 }
 
 // WithPolicy sets the Policy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Policy field is set to the value of the last call.
-func (b *DeletionConfigApplyConfiguration) WithPolicy(value rayv1.DeletionPolicyType) *DeletionConfigApplyConfiguration {
+func (b *DeletionPolicyApplyConfiguration) WithPolicy(value rayv1.DeletionPolicyType) *DeletionPolicyApplyConfiguration {
 	b.Policy = &value
 	return b
 }

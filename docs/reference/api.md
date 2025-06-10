@@ -55,7 +55,7 @@ _Appears in:_
 
 
 
-#### DeletionConfig
+#### DeletionPolicy
 
 
 
@@ -80,7 +80,7 @@ _Underlying type:_ _string_
 
 
 _Appears in:_
-- [DeletionConfig](#deletionconfig)
+- [DeletionPolicy](#deletionpolicy)
 
 
 
@@ -97,8 +97,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `onSuccess` _[DeletionConfig](#deletionconfig)_ |  |  |  |
-| `onFailure` _[DeletionConfig](#deletionconfig)_ |  |  |  |
+| `onSuccess` _[DeletionPolicy](#deletionpolicy)_ |  |  |  |
+| `onFailure` _[DeletionPolicy](#deletionpolicy)_ |  |  |  |
 
 
 
