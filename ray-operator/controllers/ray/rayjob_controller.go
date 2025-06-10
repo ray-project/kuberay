@@ -381,15 +381,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"Now", nowTime,
 			"ShutdownTime", shutdownTime)
 
-		if features.Enabled(features.RayJobDeletionPolicy) &&
-			rayJobInstance.Spec.DeletionPolicy != nil &&
+		if features.Enabled(features.RayJobDeletionStrategy) &&
+			rayJobInstance.Spec.DeletionStrategy != nil &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
 
 			policy := rayv1.DeleteNone
 			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
-				policy = *rayJobInstance.Spec.DeletionPolicy.OnSuccess.Policy
+				policy = *rayJobInstance.Spec.DeletionStrategy.OnSuccess.Policy
 			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
-				policy = *rayJobInstance.Spec.DeletionPolicy.OnFailure.Policy
+				policy = *rayJobInstance.Spec.DeletionStrategy.OnFailure.Policy
 			} else {
 				if shutdownTime.After(nowTime) {
 					delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
@@ -405,7 +405,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				break
 			}
 
-			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionPolicy)
+			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionStrategy)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
@@ -429,7 +429,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionPolicy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if (!features.Enabled(features.RayJobDeletionStrategy) || rayJobInstance.Spec.DeletionStrategy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			logger.Info("Shutdown behavior is defined by the `ShutdownAfterJobFinishes` flag", "shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())

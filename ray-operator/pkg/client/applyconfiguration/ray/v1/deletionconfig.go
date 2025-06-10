@@ -9,7 +9,7 @@ import (
 // DeletionConfigApplyConfiguration represents a declarative configuration of the DeletionConfig type for use
 // with apply.
 type DeletionConfigApplyConfiguration struct {
-	Policy *rayv1.Policy `json:"policy,omitempty"`
+	Policy *rayv1.DeletionPolicyType `json:"policy,omitempty"`
 }
 
 // DeletionConfigApplyConfiguration constructs a declarative configuration of the DeletionConfig type for use with
@@ -21,7 +21,7 @@ func DeletionConfig() *DeletionConfigApplyConfiguration {
 // WithPolicy sets the Policy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Policy field is set to the value of the last call.
-func (b *DeletionConfigApplyConfiguration) WithPolicy(value rayv1.Policy) *DeletionConfigApplyConfiguration {
+func (b *DeletionConfigApplyConfiguration) WithPolicy(value rayv1.DeletionPolicyType) *DeletionConfigApplyConfiguration {
 	b.Policy = &value
 	return b
 }

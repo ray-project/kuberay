@@ -78,7 +78,7 @@ batchScheduler:
 featureGates:
 - name: RayClusterStatusConditions
   enabled: true
-- name: RayJobDeletionPolicy
+- name: RayJobDeletionStrategy
   enabled: false
 
 # Configurations for KubeRay operator metrics.

@@ -22,8 +22,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionConfig"):
 		return &rayv1.DeletionConfigApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
-		return &rayv1.DeletionPolicyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
+		return &rayv1.DeletionStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
 		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):

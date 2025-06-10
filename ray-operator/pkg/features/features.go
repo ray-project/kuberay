@@ -23,7 +23,7 @@ const (
 	// alpha: v1.3
 	//
 	// Enables new deletion policy API in RayJob
-	RayJobDeletionPolicy featuregate.Feature = "RayJobDeletionPolicy"
+	RayJobDeletionStrategy featuregate.Feature = "RayJobDeletionStrategy"
 )
 
 func init() {
@@ -32,7 +32,7 @@ func init() {
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions: {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:       {Default: false, PreRelease: featuregate.Alpha},
+	RayJobDeletionStrategy:     {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

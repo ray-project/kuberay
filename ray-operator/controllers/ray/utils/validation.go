@@ -84,10 +84,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}
 
-	if !features.Enabled(features.RayJobDeletionPolicy) {
+	if !features.Enabled(features.RayJobDeletionStrategy) {
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroup.GroupName)
+				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionStrategy feature gate is enabled", workerGroup.GroupName)
 			}
 		}
 	}
@@ -187,46 +187,40 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
-	if !features.Enabled(features.RayJobDeletionPolicy) && rayJob.Spec.DeletionPolicy != nil {
-		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature")
+	if !features.Enabled(features.RayJobDeletionStrategy) && rayJob.Spec.DeletionStrategy != nil {
+		return fmt.Errorf("RayJobDeletionStrategy feature gate must be enabled to use the DeletionStrategy feature")
 	}
 
-	if rayJob.Spec.DeletionPolicy != nil {
-		onSuccessPolicy := rayJob.Spec.DeletionPolicy.OnSuccess
-		onFailurePolicy := rayJob.Spec.DeletionPolicy.OnFailure
+	if rayJob.Spec.DeletionStrategy != nil {
+		onSuccessPolicy := rayJob.Spec.DeletionStrategy.OnSuccess
+		onFailurePolicy := rayJob.Spec.DeletionStrategy.OnFailure
 
-		if onSuccessPolicy == nil {
-			return fmt.Errorf("the OnSuccess field cannot be unset when DeletionPolicy is enabled")
-		}
 		if onSuccessPolicy.Policy == nil {
-			return fmt.Errorf("the Policy field of DeletionPolicy.OnSuccess cannot be unset when DeletionPolicy is enabled")
-		}
-		if onFailurePolicy == nil {
-			return fmt.Errorf("the OnFairlure field cannot be unset when DeletionPolicy is enabled")
+			return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnSuccess cannot be unset when DeletionStrategy is enabled")
 		}
 		if onFailurePolicy.Policy == nil {
-			return fmt.Errorf("the Policy field of DeletionPolicy.OnFailure cannot be unset when DeletionPolicy is enabled")
+			return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnFailure cannot be unset when DeletionStrategy is enabled")
 		}
 
 		if isClusterSelectorMode {
 			switch *onSuccessPolicy.Policy {
 			case rayv1.DeleteCluster:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on success")
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster on success")
 			case rayv1.DeleteWorkers:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers on success")
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers on success")
 			}
 
 			switch *onFailurePolicy.Policy {
 			case rayv1.DeleteCluster:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster on failure")
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster on failure")
 			case rayv1.DeleteWorkers:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers on failure")
+				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers on failure")
 			}
 		}
 
 		if (*onSuccessPolicy.Policy == rayv1.DeleteWorkers || *onFailurePolicy.Policy == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
 			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
-			return fmt.Errorf("DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+			return fmt.Errorf("DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
 		}
 
 		if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {

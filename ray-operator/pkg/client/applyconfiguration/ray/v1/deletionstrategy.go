@@ -2,23 +2,23 @@
 
 package v1
 
-// DeletionPolicyApplyConfiguration represents a declarative configuration of the DeletionPolicy type for use
+// DeletionStrategyApplyConfiguration represents a declarative configuration of the DeletionStrategy type for use
 // with apply.
-type DeletionPolicyApplyConfiguration struct {
+type DeletionStrategyApplyConfiguration struct {
 	OnSuccess *DeletionConfigApplyConfiguration `json:"onSuccess,omitempty"`
 	OnFailure *DeletionConfigApplyConfiguration `json:"onFailure,omitempty"`
 }
 
-// DeletionPolicyApplyConfiguration constructs a declarative configuration of the DeletionPolicy type for use with
+// DeletionStrategyApplyConfiguration constructs a declarative configuration of the DeletionStrategy type for use with
 // apply.
-func DeletionPolicy() *DeletionPolicyApplyConfiguration {
-	return &DeletionPolicyApplyConfiguration{}
+func DeletionStrategy() *DeletionStrategyApplyConfiguration {
+	return &DeletionStrategyApplyConfiguration{}
 }
 
 // WithOnSuccess sets the OnSuccess field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the OnSuccess field is set to the value of the last call.
-func (b *DeletionPolicyApplyConfiguration) WithOnSuccess(value *DeletionConfigApplyConfiguration) *DeletionPolicyApplyConfiguration {
+func (b *DeletionStrategyApplyConfiguration) WithOnSuccess(value *DeletionConfigApplyConfiguration) *DeletionStrategyApplyConfiguration {
 	b.OnSuccess = value
 	return b
 }
@@ -26,7 +26,7 @@ func (b *DeletionPolicyApplyConfiguration) WithOnSuccess(value *DeletionConfigAp
 // WithOnFailure sets the OnFailure field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the OnFailure field is set to the value of the last call.
-func (b *DeletionPolicyApplyConfiguration) WithOnFailure(value *DeletionConfigApplyConfiguration) *DeletionPolicyApplyConfiguration {
+func (b *DeletionStrategyApplyConfiguration) WithOnFailure(value *DeletionConfigApplyConfiguration) *DeletionStrategyApplyConfiguration {
 	b.OnFailure = value
 	return b
 }

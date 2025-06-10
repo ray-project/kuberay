@@ -481,7 +481,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 			featureGate:  false,
 			expectError:  true,
-			errorMessage: fmt.Sprintf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroupSpecSuspended.GroupName),
+			errorMessage: fmt.Sprintf("worker group %s can be suspended only when the RayJobDeletionStrategy feature gate is enabled", workerGroupSpecSuspended.GroupName),
 		},
 		{
 			name: "suspend without autoscaler",
@@ -512,7 +512,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)
+			features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, tt.featureGate)
 			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
@@ -637,9 +637,9 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 	}
 
-	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, true)
 	defer func() {
-		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, false)
 	}()
 
 	for name, tc := range tests {
@@ -764,13 +764,13 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionPolicy feature",
+			name: "RayJobDeletionStrategy feature gate must be enabled to use the DeletionStrategy feature",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				},
@@ -860,13 +860,13 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "the ClusterSelector mode doesn't support DeletionPolicy=DeleteCluster",
+			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -874,13 +874,13 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "the ClusterSelector mode doesn't support DeletionPolicy=DeleteWorkers",
+			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -888,13 +888,13 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "DeletionPolicy=DeleteWorkers currently does not support RayCluster with autoscaling enabled",
+			name: "DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, RayClusterSpec: &rayv1.RayClusterSpec{
@@ -905,13 +905,13 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "valid RayJob with DeletionPolicy=DeleteCluster",
+			name: "valid RayJob with DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -920,9 +920,9 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "valid RayJob without DeletionPolicy",
+			name: "valid RayJob without DeletionStrategy",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy:           nil,
+				DeletionStrategy:         nil,
 				ShutdownAfterJobFinishes: true,
 				RayClusterSpec:           createBasicRayClusterSpec(),
 			},
@@ -931,11 +931,11 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		{
 			name: "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: &rayv1.DeletionConfig{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -946,8 +946,8 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		{
 			name: "OnSuccess unset",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnFailure: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -956,11 +956,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "OnSuccess.Policy unset",
+			name: "OnSuccess.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{},
-					OnFailure: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnFailure: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -971,8 +970,8 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		{
 			name: "OnFailure unset",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -981,13 +980,13 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "OnFailure.Policy unset",
+			name: "OnFailure.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
-				DeletionPolicy: &rayv1.DeletionPolicy{
-					OnSuccess: &rayv1.DeletionConfig{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionConfig{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: &rayv1.DeletionConfig{},
+					OnFailure: rayv1.DeletionConfig{},
 				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
@@ -1004,9 +1003,9 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		},
 	}
 
-	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, true)
 	defer func() {
-		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, false)
 	}()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
