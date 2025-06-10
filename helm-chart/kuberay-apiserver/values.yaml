@@ -8,7 +8,7 @@ name: kuberay-apiserver
 
 image:
   repository: quay.io/kuberay/apiserver
-  tag: 1.4.0-rc.0
+  tag: v1.4.0-rc.1
   pullPolicy: IfNotPresent
 
 # Uncomment allowOrigin to enable CORS
@@ -103,7 +103,7 @@ enableAPIServerV2: true
 security:
   proxy:
     repository: quay.io/kuberay/security-proxy
-    tag: 1.4.0-rc.0
+    tag: nightly
     pullPolicy: IfNotPresent
   env:
     HTTP_LOCAL_PORT: 8988
