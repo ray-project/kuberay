@@ -481,7 +481,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 			},
 			featureGate:  false,
 			expectError:  true,
-			errorMessage: fmt.Sprintf("worker group %s can be suspended only when the RayJobDeletionStrategy feature gate is enabled", workerGroupSpecSuspended.GroupName),
+			errorMessage: fmt.Sprintf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroupSpecSuspended.GroupName),
 		},
 		{
 			name: "suspend without autoscaler",
@@ -512,7 +512,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, tt.featureGate)
+			features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, tt.featureGate)
 			err := ValidateRayClusterSpec(&tt.rayCluster.Spec, tt.rayCluster.Annotations)
 			if tt.expectError {
 				require.Error(t, err)
@@ -637,9 +637,9 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 	}
 
-	features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, true)
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
 	defer func() {
-		features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, false)
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
 	}()
 
 	for name, tc := range tests {
@@ -764,7 +764,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayJobDeletionStrategy feature gate must be enabled to use the DeletionStrategy feature",
+			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
 					OnSuccess: rayv1.DeletionPolicy{
@@ -1003,9 +1003,9 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		},
 	}
 
-	features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, true)
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
 	defer func() {
-		features.SetFeatureGateDuringTest(t, features.RayJobDeletionStrategy, false)
+		features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, false)
 	}()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -58,7 +58,7 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              deletionPolicy:
+              deletionStrategy:
                 properties:
                   onFailure:
                     properties:

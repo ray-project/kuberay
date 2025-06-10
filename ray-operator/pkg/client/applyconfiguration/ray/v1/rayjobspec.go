@@ -18,7 +18,7 @@ type RayJobSpecApplyConfiguration struct {
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
 	ManagedBy                *string                                   `json:"managedBy,omitempty"`
-	DeletionStrategy         *DeletionStrategyApplyConfiguration       `json:"deletionPolicy,omitempty"`
+	DeletionStrategy         *DeletionStrategyApplyConfiguration       `json:"deletionStrategy,omitempty"`
 	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
 	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
 	JobId                    *string                                   `json:"jobId,omitempty"`

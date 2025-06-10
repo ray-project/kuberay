@@ -84,10 +84,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			" - use GcsFaultToleranceOptions.RedisUsername instead")
 	}
 
-	if !features.Enabled(features.RayJobDeletionStrategy) {
+	if !features.Enabled(features.RayJobDeletionPolicy) {
 		for _, workerGroup := range spec.WorkerGroupSpecs {
 			if workerGroup.Suspend != nil && *workerGroup.Suspend {
-				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionStrategy feature gate is enabled", workerGroup.GroupName)
+				return fmt.Errorf("worker group %s can be suspended only when the RayJobDeletionPolicy feature gate is enabled", workerGroup.GroupName)
 			}
 		}
 	}
@@ -187,8 +187,8 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
-	if !features.Enabled(features.RayJobDeletionStrategy) && rayJob.Spec.DeletionStrategy != nil {
-		return fmt.Errorf("RayJobDeletionStrategy feature gate must be enabled to use the DeletionStrategy feature")
+	if !features.Enabled(features.RayJobDeletionPolicy) && rayJob.Spec.DeletionStrategy != nil {
+		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature")
 	}
 
 	if rayJob.Spec.DeletionStrategy != nil {

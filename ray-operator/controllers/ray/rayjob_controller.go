@@ -381,7 +381,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"Now", nowTime,
 			"ShutdownTime", shutdownTime)
 
-		if features.Enabled(features.RayJobDeletionStrategy) &&
+		if features.Enabled(features.RayJobDeletionPolicy) &&
 			rayJobInstance.Spec.DeletionStrategy != nil &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
 
@@ -429,7 +429,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		if (!features.Enabled(features.RayJobDeletionStrategy) || rayJobInstance.Spec.DeletionStrategy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionStrategy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			logger.Info("Shutdown behavior is defined by the `ShutdownAfterJobFinishes` flag", "shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())

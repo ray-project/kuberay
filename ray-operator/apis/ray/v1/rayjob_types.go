@@ -159,7 +159,7 @@ type RayJobSpec struct {
 	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
 	// This field requires the RayJobDeletionStrategy feature gate to be enabled.
 	// +optional
-	DeletionStrategy *DeletionStrategy `json:"deletionPolicy,omitempty"`
+	DeletionStrategy *DeletionStrategy `json:"deletionStrategy,omitempty"`
 	// Entrypoint represents the command to start execution.
 	// +optional
 	Entrypoint string `json:"entrypoint,omitempty"`

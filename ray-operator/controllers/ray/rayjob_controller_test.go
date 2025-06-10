@@ -884,7 +884,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 	Describe("RayJob with DeletionStrategy", Ordered, func() {
 		JustBeforeEach(func() {
-			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionStrategy, true)
+			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true)
 		})
 
 		It("Delete cluster on success", func() {
