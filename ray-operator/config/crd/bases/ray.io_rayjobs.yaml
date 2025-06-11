@@ -65,7 +65,7 @@ spec:
                       policy:
                         type: string
                         x-kubernetes-validations:
-                        - message: the deleteResource field value must be either 'DeleteCluster',
+                        - message: the policy field value must be either 'DeleteCluster',
                             'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
                           rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
                             'DeleteNone']
@@ -77,7 +77,7 @@ spec:
                       policy:
                         type: string
                         x-kubernetes-validations:
-                        - message: the deleteResource field value must be either 'DeleteCluster',
+                        - message: the policy field value must be either 'DeleteCluster',
                             'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
                           rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
                             'DeleteNone']

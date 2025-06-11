@@ -395,8 +395,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 					logger.Info("jobStatus not valid for deletion", "jobStatus", rayJobInstance.Status.JobStatus)
 					return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-				} else {
-					break
 				}
 			}
 
