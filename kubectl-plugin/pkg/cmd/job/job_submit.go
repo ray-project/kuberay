@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"maps"
 	"math/big"
 	"net/http"
 	"os"
@@ -16,7 +17,9 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
@@ -231,6 +234,23 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		return fmt.Errorf("--ttl-seconds-after-finished must be greater than or equal to 0")
 	}
 
+	resourceFields := map[string]string{
+		"head-cpu":      options.headCPU,
+		"head-gpu":      options.headGPU,
+		"head-memory":   options.headMemory,
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+
+	for name, value := range resourceFields {
+		if value != "" || cmd.Flags().Changed(name) {
+			if err := util.ValidateResourceQuantity(value, name); err != nil {
+				return fmt.Errorf("%w", err)
+			}
+		}
+	}
+
 	// Take care of case where there is a filename input
 	if options.fileName != "" {
 		info, err := os.Stat(options.fileName)
@@ -271,6 +291,105 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 			options.runtimeEnvJson = string(runtimeJson)
 		}
 
+		if cmd.Flags().Changed("name") {
+			options.RayJob.Name = options.rayjobName
+		}
+
+		if cmd.Flags().Changed("ray-version") {
+			options.RayJob.Spec.RayClusterSpec.RayVersion = options.rayVersion
+		}
+		if cmd.Flags().Changed("image") {
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image = options.image
+		}
+
+		if cmd.Flags().Changed("head-cpu") {
+			q, _ := resource.ParseQuantity(options.headCPU)
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+			}
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
+			}
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits["cpu"] = q
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests["cpu"] = q
+		}
+
+		if cmd.Flags().Changed("head-memory") {
+			q, _ := resource.ParseQuantity(options.headMemory)
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+			}
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
+			}
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits["memory"] = q
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests["memory"] = q
+		}
+		if cmd.Flags().Changed("head-gpu") {
+			q, _ := resource.ParseQuantity(options.headGPU)
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+			}
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
+			}
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
+		}
+		if cmd.Flags().Changed("worker-replicas") {
+			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas = &options.workerReplicas
+			}
+		}
+		if cmd.Flags().Changed("worker-cpu") {
+			q, _ := resource.ParseQuantity(options.workerCPU)
+			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
+					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+				}
+				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests == nil {
+					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
+				}
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits["cpu"] = q
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests["cpu"] = q
+			}
+		}
+		if cmd.Flags().Changed("worker-memory") {
+			q, _ := resource.ParseQuantity(options.workerMemory)
+			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
+					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+				}
+				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests == nil {
+					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
+				}
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits["memory"] = q
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests["memory"] = q
+			}
+		}
+		if cmd.Flags().Changed("worker-gpu") {
+			q, _ := resource.ParseQuantity(options.workerGPU)
+			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
+					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
+				}
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
+			}
+		}
+		if cmd.Flags().Changed("head-node-selectors") {
+			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector == nil {
+				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector = make(map[string]string)
+			}
+			maps.Copy(options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector, options.headNodeSelectors)
+		}
+		if cmd.Flags().Changed("worker-node-selectors") {
+			if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector == nil {
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector = make(map[string]string)
+			}
+			maps.Copy(options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector, options.workerNodeSelectors)
+		}
+
 		if cmd.Flags().Changed("ttl-seconds-after-finished") {
 			options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
 			options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
@@ -288,23 +407,6 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 
 	if options.workingDir == "" {
 		return fmt.Errorf("working directory is required, use --working-dir or set with runtime env")
-	}
-
-	resourceFields := map[string]string{
-		"head-cpu":      options.headCPU,
-		"head-gpu":      options.headGPU,
-		"head-memory":   options.headMemory,
-		"worker-cpu":    options.workerCPU,
-		"worker-gpu":    options.workerGPU,
-		"worker-memory": options.workerMemory,
-	}
-
-	for name, value := range resourceFields {
-		if value != "" || cmd.Flags().Changed(name) {
-			if err := util.ValidateResourceQuantity(value, name); err != nil {
-				return fmt.Errorf("%w", err)
-			}
-		}
 	}
 
 	return nil
