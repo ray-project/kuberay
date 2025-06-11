@@ -459,7 +459,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 			Version: AutoscalerV2,
 		},
 		RayVersion:     ptr.To("1.2.3"),
-		Image:          ptr.To("rayproject/ray:1.2.3"),
+		Image:          ptr.To("rayproject/ray:2.46.0"),
 		ServiceAccount: ptr.To("my-service-account"),
 		Head: &Head{
 			CPU:              ptr.To("1"),
@@ -512,7 +512,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 					Containers: []corev1ac.ContainerApplyConfiguration{
 						{
 							Name:  ptr.To("ray-head"),
-							Image: ptr.To("rayproject/ray:1.2.3"),
+							Image: ptr.To("rayproject/ray:2.46.0"),
 							Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 								Requests: &corev1.ResourceList{
 									corev1.ResourceCPU:                          resource.MustParse("1"),
@@ -564,7 +564,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
-								Image: ptr.To("rayproject/ray:1.2.3"),
+								Image: ptr.To("rayproject/ray:2.46.0"),
 								Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 									Requests: &corev1.ResourceList{
 										corev1.ResourceCPU:    resource.MustParse("2"),
@@ -592,7 +592,7 @@ func TestGenerateRayClusterSpec(t *testing.T) {
 						Containers: []corev1ac.ContainerApplyConfiguration{
 							{
 								Name:  ptr.To("ray-worker"),
-								Image: ptr.To("rayproject/ray:1.2.3"),
+								Image: ptr.To("rayproject/ray:2.46.0"),
 								Resources: &corev1ac.ResourceRequirementsApplyConfiguration{
 									Requests: &corev1.ResourceList{
 										corev1.ResourceName(util.ResourceNvidiaGPU): resource.MustParse("1"),

@@ -141,6 +141,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "The reconciliation rate is calculated by measuring the change in value between consecutive scrape intervals and dividing by the duration of the interval. For example, if the rate is 0.066 and the scrape interval is 30 seconds, it indicates that 2 reconciliations occurred during that interval (2 ÷ 30 = 0.066)",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -189,7 +190,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "cps"
         },
         "overrides": []
       },
@@ -220,14 +222,14 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(controller_runtime_reconcile_total{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])",
+          "expr": "irate(controller_runtime_reconcile_total{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{controller}} - {{result}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Reconcile Rate",
+      "title": "Reconciliation Rate",
       "type": "timeseries"
     },
     {
@@ -342,8 +344,8 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull",
-            "max"
+            "max",
+            "mean"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -363,12 +365,12 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 2,
-          "legendFormat": "{{controller}} - 50%",
+          "legendFormat": "{{controller}} - P50",
           "refId": "A"
         },
         {
@@ -378,10 +380,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
           "intervalFactor": 2,
-          "legendFormat": "{{controller}} - 95%",
+          "legendFormat": "{{controller}} - P95",
           "range": true,
           "refId": "B"
         },
@@ -392,15 +394,15 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(controller_runtime_reconcile_time_seconds_sum{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (job,controller) / sum(rate(controller_runtime_reconcile_time_seconds_count{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[$__rate_interval])) by (job,controller)",
+          "expr": "histogram_quantile(0.99, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
           "intervalFactor": 2,
-          "legendFormat": "{{controller}} - mean",
+          "legendFormat": "{{controller}} - P99",
           "range": true,
           "refId": "C"
         }
       ],
-      "title": "Reconciling Latency Quantile",
+      "title": "Reconciliation Latency",
       "type": "timeseries"
     },
     {
@@ -454,7 +456,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 26
+            "y": 18
           },
           "id": 46,
           "options": {
@@ -493,7 +495,7 @@
               "refId": "A"
             }
           ],
-          "title": "Namespace Resource Statistics",
+          "title": "Count of Existing RayClusters in Namespaces",
           "transformations": [
             {
               "id": "organize",
@@ -537,109 +539,6 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "description": "Displays the average time it takes for RayClusters in the selected namespace(s) to transition their RayClusterProvisioned status from false (or unset) to true.",
-          "fieldConfig": {
-            "defaults": {
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "s"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 9,
-            "x": 0,
-            "y": 34
-          },
-          "id": 43,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.0.2",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "editorMode": "code",
-              "exemplar": false,
-              "expr": "avg(kuberay_cluster_provisioned_duration_seconds{namespace=~\"$namespace\"})",
-              "format": "time_series",
-              "hide": false,
-              "instant": false,
-              "interval": "",
-              "legendFormat": "Seconds",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Provisioned Duration (Avg)",
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "__name__": true,
-                  "container": true,
-                  "endpoint": true,
-                  "instance": true,
-                  "job": true,
-                  "namespace": true,
-                  "pod": true,
-                  "service": true
-                },
-                "indexByName": {
-                  "Time": 0,
-                  "Value #A": 11,
-                  "__name__": 1,
-                  "container": 2,
-                  "endpoint": 3,
-                  "exported_namespace": 7,
-                  "instance": 4,
-                  "job": 5,
-                  "name": 6,
-                  "namespace": 8,
-                  "pod": 9,
-                  "service": 10
-                },
-                "renameByName": {
-                  "Value": "Seconds",
-                  "Value #A": "Second"
-                }
-              }
-            }
-          ],
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
           "description": "Shows the time (in seconds) it took each RayCluster to become provisioned, grouped by name, namespace, and owner type.\n",
           "fieldConfig": {
             "defaults": {
@@ -648,6 +547,7 @@
                 "cellOptions": {
                   "type": "auto"
                 },
+                "filterable": true,
                 "inspect": false
               },
               "mappings": [],
@@ -716,21 +616,23 @@
             ]
           },
           "gridPos": {
-            "h": 10,
-            "w": 15,
-            "x": 9,
-            "y": 34
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 26
           },
           "id": 32,
           "options": {
             "cellHeight": "sm",
             "footer": {
               "countRows": false,
-              "fields": "",
-              "reducer": [
-                "sum"
+              "fields": [
+                "Value #A"
               ],
-              "show": false
+              "reducer": [
+                "mean"
+              ],
+              "show": true
             },
             "frameIndex": 0,
             "showHeader": true,
@@ -759,11 +661,12 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
+              "exemplar": false,
               "expr": "kuberay_cluster_provisioned_duration_seconds{namespace=~\"$namespace\"}",
               "format": "table",
               "hide": false,
-              "instant": false,
-              "range": true,
+              "instant": true,
+              "range": false,
               "refId": "A"
             }
           ],
@@ -892,7 +795,7 @@
             "h": 9,
             "w": 13,
             "x": 0,
-            "y": 44
+            "y": 34
           },
           "id": 55,
           "options": {
@@ -1052,7 +955,7 @@
             "h": 9,
             "w": 11,
             "x": 13,
-            "y": 44
+            "y": 34
           },
           "id": 45,
           "options": {
@@ -1183,7 +1086,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 27
+            "y": 44
           },
           "id": 61,
           "options": {
@@ -1222,7 +1125,7 @@
               "refId": "A"
             }
           ],
-          "title": "Namespace Resource Statistics",
+          "title": "Count of Existing RayClusters in Namespaces",
           "transformations": [
             {
               "id": "organize",
@@ -1299,7 +1202,7 @@
             "h": 9,
             "w": 13,
             "x": 0,
-            "y": 35
+            "y": 52
           },
           "id": 63,
           "options": {
@@ -1457,7 +1360,7 @@
             "h": 9,
             "w": 11,
             "x": 13,
-            "y": 35
+            "y": 52
           },
           "id": 64,
           "options": {
@@ -1571,8 +1474,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1588,7 +1490,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 19
+            "y": 62
           },
           "id": 58,
           "options": {
@@ -1627,7 +1529,7 @@
               "refId": "A"
             }
           ],
-          "title": "Namespace Resource Statistics",
+          "title": "Count of Existing RayJobs in Namespaces",
           "transformations": [
             {
               "id": "organize",
@@ -1671,111 +1573,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "description": "Displays the average time duration from RayJob CR initialization to reaching a terminal state in the selected namespace(s)",
-          "fieldConfig": {
-            "defaults": {
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "s"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 9,
-            "x": 0,
-            "y": 27
-          },
-          "id": 59,
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "10.0.2",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "editorMode": "code",
-              "exemplar": false,
-              "expr": "avg(kuberay_job_execution_duration_seconds{namespace=~\"$namespace\"})",
-              "format": "time_series",
-              "hide": false,
-              "instant": false,
-              "interval": "",
-              "legendFormat": "Seconds",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Execution Duration (Avg)",
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "__name__": true,
-                  "container": true,
-                  "endpoint": true,
-                  "instance": true,
-                  "job": true,
-                  "namespace": true,
-                  "pod": true,
-                  "service": true
-                },
-                "indexByName": {
-                  "Time": 0,
-                  "Value #A": 11,
-                  "__name__": 1,
-                  "container": 2,
-                  "endpoint": 3,
-                  "exported_namespace": 7,
-                  "instance": 4,
-                  "job": 5,
-                  "name": 6,
-                  "namespace": 8,
-                  "pod": 9,
-                  "service": 10
-                },
-                "renameByName": {
-                  "Value": "Seconds",
-                  "Value #A": "Second"
-                }
-              }
-            }
-          ],
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "description": "\n",
+          "description": "Execution duration of all RayJobs, including those that have been deleted.",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -1783,6 +1581,7 @@
                 "cellOptions": {
                   "type": "auto"
                 },
+                "filterable": true,
                 "inspect": false
               },
               "mappings": [],
@@ -1790,8 +1589,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1853,20 +1651,22 @@
           },
           "gridPos": {
             "h": 10,
-            "w": 15,
-            "x": 9,
-            "y": 27
+            "w": 24,
+            "x": 0,
+            "y": 70
           },
           "id": 60,
           "options": {
             "cellHeight": "sm",
             "footer": {
               "countRows": false,
-              "fields": "",
-              "reducer": [
-                "sum"
+              "fields": [
+                "Value"
               ],
-              "show": false
+              "reducer": [
+                "mean"
+              ],
+              "show": true
             },
             "frameIndex": 0,
             "showHeader": true,
@@ -1975,7 +1775,7 @@
             "h": 10,
             "w": 9,
             "x": 0,
-            "y": 37
+            "y": 80
           },
           "id": 67,
           "options": {
@@ -2078,8 +1878,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2143,7 +1942,7 @@
             "h": 10,
             "w": 15,
             "x": 9,
-            "y": 37
+            "y": 80
           },
           "id": 68,
           "options": {
@@ -2302,7 +2101,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "raycluster",
           "value": "raycluster"
         },
@@ -2329,8 +2128,8 @@
       {
         "current": {
           "selected": false,
-          "text": "kuberay-operator-7879df585-dggj7",
-          "value": "kuberay-operator-7879df585-dggj7"
+          "text": "kuberay-operator-6c6dd95c6b-vqfgg",
+          "value": "kuberay-operator-6c6dd95c6b-vqfgg"
         },
         "datasource": {
           "type": "prometheus",
@@ -2355,7 +2154,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},

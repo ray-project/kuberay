@@ -61,7 +61,7 @@ spec:
                 mountOptions: implicit-dirs,anonymous-access,uid=1000,gid=100,metadata-cache:ttl-secs:-1,metadata-cache:stat-cache-max-size-mb:-1,metadata-cache:type-cache-max-size-mb:-1
                 skipCSIBucketAccessCheck: 'true'
             name: gcs-fuse-csi-ephemeral
-    rayVersion: 2.9.3
+    rayVersion: 2.46.0
     workerGroupSpecs:
     - groupName: worker-group
       maxReplicas: 3

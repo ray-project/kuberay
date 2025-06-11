@@ -935,6 +935,13 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 			rayJobDeploymentGracePeriodTime = utils.DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
 		}
 
+		// EndTime isn't nil when JobStatus is in a terminal state under normal conditions.
+		// This check is a nil pointer dereference safeguard when older RayJob CRDs without the
+		// RayJobStatusInfo field are used with newer versions of KubeRay operator.
+		if rayJob.Status.RayJobStatusInfo.EndTime == nil {
+			return false
+		}
+
 		if time.Now().Before(rayJob.Status.RayJobStatusInfo.EndTime.Add(time.Duration(rayJobDeploymentGracePeriodTime) * time.Second)) {
 			return false
 		}

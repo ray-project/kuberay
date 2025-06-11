@@ -10,7 +10,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/services' \
   "clusterSpec": {
     "headGroupSpec": {
       "computeTemplate": "default-template",
-      "image": "rayproject/ray:2.6.3-py310",
+      "image": "rayproject/ray:2.46.0-py310",
       "serviceType": "NodePort",
       "rayStartParams": {
          "dashboard-host": "0.0.0.0",
@@ -22,7 +22,7 @@ curl -X POST 'localhost:8888/apis/v1/namespaces/default/services' \
       {
         "groupName": "small-wg",
         "computeTemplate": "default-template",
-        "image": "rayproject/ray:2.6.3-py310",
+        "image": "rayproject/ray:2.46.0-py310",
         "replicas": 1,
         "minReplicas": 0,
         "maxReplicas": 5,
