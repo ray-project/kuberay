@@ -23,20 +23,22 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 		{
 			name: "default worker group spec",
 			options: &CreateWorkerGroupOptions{
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					WorkerReplicas: 3,
+					WorkerCPU:      "2",
+					WorkerMemory:   "5Gi",
+					WorkerGPU:      "1",
+					WorkerNodeSelectors: map[string]string{
+						"worker-node-selector": "worker-node-selector-value",
+					},
+				},
 				groupName:         "example-group",
 				image:             "DEADBEEF",
-				workerReplicas:    3,
 				numOfHosts:        2,
 				workerMinReplicas: 1,
 				workerMaxReplicas: 5,
-				workerCPU:         "2",
-				workerMemory:      "5Gi",
-				workerGPU:         "1",
 				workerTPU:         "1",
 				rayStartParams:    map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"},
-				workerNodeSelectors: map[string]string{
-					"worker-node-selector": "worker-node-selector-value",
-				},
 			},
 			expected: rayv1.WorkerGroupSpec{
 				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "2"},
@@ -97,10 +99,12 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"namespace": "test-namespace",
 			},
 			expected: &CreateWorkerGroupOptions{
-				namespace:  "test-namespace",
-				groupName:  "example-group",
-				image:      "rayproject/ray:latest",
-				rayVersion: "latest",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					Namespace:  "test-namespace",
+					RayVersion: "latest",
+				},
+				groupName: "example-group",
+				image:     "rayproject/ray:latest",
 			},
 		},
 		{
@@ -124,10 +128,12 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"namespace": "",
 			},
 			expected: &CreateWorkerGroupOptions{
-				namespace:  "default",
-				groupName:  "example-group",
-				image:      "rayproject/ray:latest",
-				rayVersion: "latest",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					Namespace:  "default",
+					RayVersion: "latest",
+				},
+				groupName: "example-group",
+				image:     "rayproject/ray:latest",
 			},
 		},
 		{
@@ -138,10 +144,12 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"worker-ray-start-params": "dashboard-host=0.0.0.0,num-cpus=2",
 			},
 			expected: &CreateWorkerGroupOptions{
-				namespace:  "test-namespace",
-				groupName:  "example-group",
-				image:      "rayproject/ray:latest",
-				rayVersion: "latest",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					Namespace:  "test-namespace",
+					RayVersion: "latest",
+				},
+				groupName: "example-group",
+				image:     "rayproject/ray:latest",
 				rayStartParams: map[string]string{
 					"dashboard-host": "0.0.0.0",
 					"num-cpus":       "2",
@@ -156,10 +164,12 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"worker-ray-start-params": "",
 			},
 			expected: &CreateWorkerGroupOptions{
-				namespace:      "test-namespace",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					Namespace:  "test-namespace",
+					RayVersion: "latest",
+				},
 				groupName:      "example-group",
 				image:          "rayproject/ray:latest",
-				rayVersion:     "latest",
 				rayStartParams: map[string]string{},
 			},
 		},
@@ -170,10 +180,12 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"namespace": "test-namespace",
 			},
 			expected: &CreateWorkerGroupOptions{
-				namespace:      "test-namespace",
-				groupName:      "example-group",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					Namespace:  "test-namespace",
+					RayVersion: "latest",
+				},
 				image:          "rayproject/ray:latest",
-				rayVersion:     "latest",
+				groupName:      "example-group",
 				rayStartParams: map[string]string{},
 			},
 		},
@@ -187,7 +199,9 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			}
 
 			options := &CreateWorkerGroupOptions{
-				rayVersion: "latest",
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					RayVersion: "latest",
+				},
 			}
 
 			err := options.Complete(cmd, tt.args)
@@ -197,7 +211,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.expectedError)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.expected.namespace, options.namespace)
+				assert.Equal(t, tt.expected.Namespace, options.Namespace)
 				assert.Equal(t, tt.expected.groupName, options.groupName)
 				assert.Equal(t, tt.expected.image, options.image)
 			}
