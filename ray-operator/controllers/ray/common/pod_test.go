@@ -1934,3 +1934,401 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPodMarketTypeFromNodeSelector(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeSelector map[string]string
+		expectedType utils.PodMarketType
+	}{
+		{
+			name:         "GKE spot instance",
+			nodeSelector: map[string]string{utils.GKESpotLabel: "true"},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "EKS spot instance",
+			nodeSelector: map[string]string{utils.EKSCapacityTypeLabel: "SPOT"},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "on-demand instance (no selector provided)",
+			nodeSelector: nil,
+			expectedType: utils.OnDemandMarketType,
+		},
+		{
+			name:         "on-demand instance (non-spot selector provided)",
+			nodeSelector: map[string]string{"some-label": "value"},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualType := getPodMarketTypeFromNodeSelector(tt.nodeSelector)
+			if actualType != tt.expectedType {
+				t.Errorf("got market-type %v, but expected %v", actualType, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestGetPodMarketTypeFromNodeAffinity(t *testing.T) {
+	tests := []struct {
+		name         string
+		nodeAffinity *corev1.NodeAffinity
+		expectedType utils.PodMarketType
+	}{
+		{
+			name: "GKE spot instance from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.GKESpotLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"true"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name: "EKS spot instance from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.EKSCapacityTypeLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"SPOT"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "nil nodeAffinity",
+			nodeAffinity: nil,
+			expectedType: utils.OnDemandMarketType,
+		},
+		{
+			name: "nodeAffinity with other selectors provided",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "region",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"us-west4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualType := getPodMarketTypeFromNodeAffinity(tt.nodeAffinity)
+			if actualType != tt.expectedType {
+				t.Errorf("got market-type %v, but expected %v", actualType, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestGetPodMarketType(t *testing.T) {
+	tests := []struct {
+		name         string
+		pod          *corev1.Pod
+		expectedType utils.PodMarketType
+	}{
+		{
+			name: "GKE spot instance from nodeSelector",
+			pod: &corev1.Pod{
+				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						utils.GKESpotLabel: "true",
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name: "EKS spot from nodeAffinity when nodeSelector missing",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: "eks-spot"},
+				Spec: corev1.PodSpec{
+					NodeSelector: nil,
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      utils.EKSCapacityTypeLabel,
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"SPOT"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedType: utils.SpotMarketType,
+		},
+		{
+			name:         "No nodeSelectors or nodeAffinity provided",
+			pod:          &corev1.Pod{},
+			expectedType: utils.OnDemandMarketType,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			marketType := getPodMarketType(tt.pod)
+			if marketType != tt.expectedType {
+				t.Errorf("got market-type of %v, but expected %v", marketType, tt.expectedType)
+			}
+		})
+	}
+}
+
+func TestAddDefaultRayNodeLabels(t *testing.T) {
+	tests := []struct {
+		labels       map[string]string
+		nodeSelector map[string]string
+		nodeAffinity *corev1.NodeAffinity
+		expectedEnv  map[string]string
+		name         string
+	}{
+		{
+			name: "Availability zone vars set from region and zone topology labels",
+			labels: map[string]string{
+				utils.K8sTopologyRegionLabel: "us-west4",
+				utils.K8sTopologyZoneLabel:   "us-west4-a",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "us-west4",
+				utils.RayNodeZone:   "us-west4-a",
+			},
+		},
+		{
+			name: "Availability zone vars set from region and zone topology nodeSelectors",
+			nodeSelector: map[string]string{
+				utils.K8sTopologyRegionLabel: "us-central2",
+				utils.K8sTopologyZoneLabel:   "us-central2-b",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "us-central2",
+				utils.RayNodeZone:   "us-central2-b",
+			},
+		},
+		{
+			name: "Availability zone vars set from downward API",
+			expectedEnv: map[string]string{
+				utils.RayNodeRegion: "metadata.labels['topology.kubernetes.io/region']",
+				utils.RayNodeZone:   "metadata.labels['topology.kubernetes.io/zone']",
+			},
+		},
+		{
+			name: "Market type env var set from GKE Spot nodeSelector",
+			nodeSelector: map[string]string{
+				utils.GKESpotLabel:           "true",
+				utils.K8sTopologyRegionLabel: "me-central1",
+				utils.K8sTopologyZoneLabel:   "me-central1-a",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "me-central1",
+				utils.RayNodeZone:       "me-central1-a",
+			},
+		},
+		{
+			name: "Market type env var set from EKS Spot nodeSelector",
+			nodeSelector: map[string]string{
+				utils.EKSCapacityTypeLabel:   "SPOT",
+				utils.K8sTopologyRegionLabel: "us-central1",
+				utils.K8sTopologyZoneLabel:   "us-central1-c",
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "us-central1",
+				utils.RayNodeZone:       "us-central1-c",
+			},
+		},
+		{
+			name: "Market type env var set from nodeAffinity",
+			nodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      utils.EKSCapacityTypeLabel,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"SPOT"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedEnv: map[string]string{
+				utils.RayNodeMarketType: string(utils.SpotMarketType),
+				utils.RayNodeRegion:     "metadata.labels['topology.kubernetes.io/region']",
+				utils.RayNodeZone:       "metadata.labels['topology.kubernetes.io/zone']",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: tt.labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers:   []corev1.Container{{Name: "ray"}},
+					NodeSelector: tt.nodeSelector,
+				},
+			}
+			if tt.nodeAffinity != nil {
+				pod.Spec.Affinity = &corev1.Affinity{NodeAffinity: tt.nodeAffinity}
+			}
+			// validate default labels are set correctly from Pod spec as env vars
+			addDefaultRayNodeLabels(pod)
+			rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+			for key, expectedVar := range tt.expectedEnv {
+				foundVar := false
+				for _, env := range rayContainer.Env {
+					if env.Name == key {
+						if env.Value != "" {
+							if env.Value != expectedVar {
+								t.Errorf("%s: got value %q, but expected %q", key, env.Value, expectedVar)
+							}
+						} else if env.ValueFrom != nil && env.ValueFrom.FieldRef != nil {
+							if env.ValueFrom.FieldRef.FieldPath != expectedVar {
+								t.Errorf("%s: got FieldPath %q, but expected %q", key, env.ValueFrom.FieldRef.FieldPath, expectedVar)
+							}
+						} else {
+							t.Errorf("%s: environment var not set as expected", key)
+						}
+						foundVar = true
+						break
+					}
+				}
+				if !foundVar {
+					t.Errorf("%s: not found in container env", key)
+				}
+			}
+		})
+	}
+}
+
+func TestGetPodZoneEnvVar(t *testing.T) {
+	tests := []struct {
+		name         string
+		labels       map[string]string
+		nodeSelector map[string]string
+		expectedVar  string
+	}{
+		{
+			name:        "Retrieve topology zone from labels",
+			labels:      map[string]string{utils.K8sTopologyZoneLabel: "us-west4-a"},
+			expectedVar: "us-west4-a",
+		},
+		{
+			name:         "Retrieve topology zone from nodeSelector",
+			nodeSelector: map[string]string{utils.K8sTopologyZoneLabel: "us-central2-b"},
+			expectedVar:  "us-central2-b",
+		},
+		{
+			name:        "Zone set using downward API",
+			expectedVar: "metadata.labels['topology.kubernetes.io/zone']",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: tt.labels},
+				Spec:       corev1.PodSpec{NodeSelector: tt.nodeSelector},
+			}
+			// validate expected zone env var is parsed from Pod spec
+			result := getPodZoneEnvVar(pod)
+			if result.Value != "" {
+				if result.Value != tt.expectedVar {
+					t.Errorf("got env var %q, but expected %q", result.Value, tt.expectedVar)
+				}
+			} else if result.ValueFrom != nil {
+				if result.ValueFrom.FieldRef.FieldPath != tt.expectedVar {
+					t.Errorf("got FieldPath %q, but expected %q", result.ValueFrom.FieldRef.FieldPath, tt.expectedVar)
+				}
+			} else {
+				t.Errorf("getPodZoneEnvVar did not return expected env value")
+			}
+		})
+	}
+}
+
+func TestGetPodRegionEnvVar(t *testing.T) {
+	tests := []struct {
+		name         string
+		labels       map[string]string
+		nodeSelector map[string]string
+		expectedVar  string
+	}{
+		{
+			name:        "Retrieve topology region from labels",
+			labels:      map[string]string{utils.K8sTopologyRegionLabel: "us-central1"},
+			expectedVar: "us-central1",
+		},
+		{
+			name:         "Retrieve topology region from nodeSelector",
+			nodeSelector: map[string]string{utils.K8sTopologyRegionLabel: "us-central2"},
+			expectedVar:  "us-central2",
+		},
+		{
+			name:        "Region set using downward API",
+			expectedVar: "metadata.labels['topology.kubernetes.io/region']",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Labels: tt.labels},
+				Spec:       corev1.PodSpec{NodeSelector: tt.nodeSelector},
+			}
+			// validate expected region env var is parsed from Pod spec
+			result := getPodRegionEnvVar(pod)
+			if result.Value != "" {
+				if result.Value != tt.expectedVar {
+					t.Errorf("got env var %q, but expected %q", result.Value, tt.expectedVar)
+				}
+			} else if result.ValueFrom != nil {
+				if result.ValueFrom.FieldRef.FieldPath != tt.expectedVar {
+					t.Errorf("got FieldPath %q, but expected %q", result.ValueFrom.FieldRef.FieldPath, tt.expectedVar)
+				}
+			} else {
+				t.Errorf("getPodRegionEnvVar did not return expected env value")
+			}
+		})
+	}
+}
