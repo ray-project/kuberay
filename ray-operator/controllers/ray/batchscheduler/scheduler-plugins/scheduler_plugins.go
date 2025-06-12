@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -46,6 +47,7 @@ func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup
 		if workerGroup.Replicas == nil {
 			continue
 		}
+		// TODO(kevin85421): We should consider the case of `numOfHosts` is not 1.
 		replica += *workerGroup.Replicas
 	}
 
@@ -75,20 +77,19 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *
 		return nil
 	}
 	podGroup := &v1alpha1.PodGroup{}
-	err := k.cli.Get(ctx, ktypes.NamespacedName{Namespace: app.Namespace, Name: app.Name}, podGroup)
-	if err == nil {
-		return nil
+	if err := k.cli.Get(ctx, ktypes.NamespacedName{Namespace: app.Namespace, Name: app.Name}, podGroup); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		podGroup = createPodGroup(ctx, app)
+		if err := k.cli.Create(ctx, podGroup); err != nil {
+			if errors.IsAlreadyExists(err) {
+				return nil
+			}
+			return fmt.Errorf("failed to create PodGroup: %w", err)
+		}
 	}
-	if !errors.IsNotFound(err) {
-		return err
-	}
-	podGroup = createPodGroup(ctx, app)
-
-	err = k.cli.Create(ctx, podGroup)
-	if errors.IsAlreadyExists(err) {
-		return nil
-	}
-	return err
+	return nil
 }
 
 // AddMetadataToPod adds essential labels and annotations to the Ray pods
@@ -98,6 +99,8 @@ func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluste
 	if k.isGangSchedulingEnabled(app) {
 		pod.Labels[kubeSchedulerPodGroupLabelKey] = app.Name
 	}
+	// TODO(kevin85421): Currently, we only support "single scheduler" mode. If we want to support
+	// "second scheduler" mode, we need to add `schedulerName` to the pod spec.
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
@@ -106,8 +109,10 @@ func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
 }
 
 func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedulerinterface.BatchScheduler, error) {
+	// TODO(kevin85421): We should not initialize the informer cache here. We should reuse
+	// the reconciler's cache instead.
 	scheme := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(scheme)
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	ccache, err := cache.New(c, cache.Options{
 		Scheme: scheme,
 	})
@@ -115,12 +120,11 @@ func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedu
 		return nil, err
 	}
 	go func() {
-		err := ccache.Start(ctx)
-		if err != nil {
+		if err := ccache.Start(ctx); err != nil {
 			panic(err)
 		}
 	}()
-	if !ccache.WaitForCacheSync(ctx) {
+	if synced := ccache.WaitForCacheSync(ctx); !synced {
 		return nil, fmt.Errorf("failed to sync cache")
 	}
 	cli, err := client.New(c, client.Options{
@@ -138,8 +142,7 @@ func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedu
 }
 
 func (kf *KubeSchedulerFactory) AddToScheme(sche *runtime.Scheme) {
-	// No extra scheme needs to be registered
-	_ = v1alpha1.AddToScheme(sche)
+	utilruntime.Must(v1alpha1.AddToScheme(sche))
 }
 
 func (kf *KubeSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
