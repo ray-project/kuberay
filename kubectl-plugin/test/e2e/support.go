@@ -1,12 +1,14 @@
 package e2e
 
 import (
-	"encoding/json"
+	"context"
 	"math/rand"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -22,24 +24,25 @@ func randStringBytes(n int) string {
 	return string(b)
 }
 
-func createTestNamespace() string {
+func createTestNamespace(client Client) string {
+	ctx := context.Background()
 	GinkgoHelper()
 	suffix := randStringBytes(5)
 	ns := "test-ns-" + suffix
-	cmd := exec.Command("kubectl", "create", "namespace", ns)
-	err := cmd.Run()
+	nsObj, err := client.Core().CoreV1().Namespaces().Create(ctx, &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	Expect(nsObj.Name).To(Equal(ns))
 	nsWithPrefix := "namespace/" + ns
-	cmd = exec.Command("kubectl", "wait", "--timeout=20s", "--for", "jsonpath={.status.phase}=Active", nsWithPrefix)
+	cmd := exec.Command("kubectl", "wait", "--timeout=20s", "--for", "jsonpath={.status.phase}=Active", nsWithPrefix)
 	err = cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 	return ns
 }
 
-func deleteTestNamespace(ns string) {
+func deleteTestNamespace(ns string, client Client) {
+	ctx := context.Background()
 	GinkgoHelper()
-	cmd := exec.Command("kubectl", "delete", "namespace", ns)
-	err := cmd.Run()
+	err := client.Core().CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -61,18 +64,15 @@ func getAndCheckRayJob(
 	expectedJobID,
 	expectedJobStatus,
 	expectedJobDeploymentStatus string,
+	client Client,
 ) (rayjob rayv1.RayJob) {
+	ctx := context.Background()
 	GinkgoHelper()
-	cmd := exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
-	output, err := cmd.CombinedOutput()
-	Expect(err).ToNot(HaveOccurred())
-
-	var rayJob rayv1.RayJob
-	err = json.Unmarshal(output, &rayJob)
+	rayJob, err := client.Ray().RayV1().RayJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	Expect(rayJob.Status.JobId).To(Equal(expectedJobID))
 	Expect(string(rayJob.Status.JobStatus)).To(Equal(expectedJobStatus))
 	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal(expectedJobDeploymentStatus))
-	return rayJob
+	return *rayJob
 }

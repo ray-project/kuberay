@@ -18,15 +18,15 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	var testClient Client
 
 	BeforeEach(func() {
-		namespace = createTestNamespace()
-
 		var err error
 		testClient, err = newTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
+		namespace = createTestNamespace(testClient)
+
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
-			deleteTestNamespace(namespace)
+			deleteTestNamespace(namespace, testClient)
 			namespace = ""
 		})
 	})

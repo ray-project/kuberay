@@ -14,16 +14,16 @@ var _ = Describe("Calling ray plugin `get` command", func() {
 	var testClient Client
 
 	BeforeEach(func() {
-		namespace = createTestNamespace()
-		ctx = context.Background()
-
 		var err error
 		testClient, err = newTestClient()
 		Expect(err).NotTo(HaveOccurred())
 
+		namespace = createTestNamespace(testClient)
+		ctx = context.Background()
+
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
-			deleteTestNamespace(namespace)
+			deleteTestNamespace(namespace, testClient)
 			namespace = ""
 		})
 	})
