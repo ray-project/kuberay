@@ -1,23 +1,26 @@
 package e2e
 
 import (
-	"bytes"
-	"os/exec"
-	"strings"
+	"context"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/printers"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Calling ray plugin `get` command", func() {
 	var namespace string
+	var ctx context.Context
+	var testClient Client
 
 	BeforeEach(func() {
 		namespace = createTestNamespace()
+		ctx = context.Background()
+
+		var err error
+		testClient, err = newTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
 			deleteTestNamespace(namespace)
@@ -25,55 +28,18 @@ var _ = Describe("Calling ray plugin `get` command", func() {
 		})
 	})
 
-	It("succeed in getting ray cluster information", func() {
-		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", namespace)
-		output, err := cmd.CombinedOutput()
-
-		expectedOutputTablePrinter := printers.NewTablePrinter(printers.PrintOptions{})
-		expectedTestResultTable := &v1.Table{
-			ColumnDefinitions: []v1.TableColumnDefinition{
-				{Name: "Name", Type: "string"},
-				{Name: "Namespace", Type: "string"},
-				{Name: "Desired Workers", Type: "string"},
-				{Name: "Available Workers", Type: "string"},
-				{Name: "CPUs", Type: "string"},
-				{Name: "GPUs", Type: "string"},
-				{Name: "TPUs", Type: "string"},
-				{Name: "Memory", Type: "string"},
-				{Name: "Condition", Type: "string"},
-				{Name: "Status", Type: "string"},
-				{Name: "Age", Type: "string"},
-			},
-		}
-
-		expectedTestResultTable.Rows = append(expectedTestResultTable.Rows, v1.TableRow{
-			Cells: []interface{}{
-				"raycluster-kuberay",
-				namespace,
-				"1",
-				"1",
-				"2",
-				"0",
-				"0",
-				"3G",
-				rayv1.RayClusterProvisioned,
-				rayv1.Ready,
-			},
-		})
-
-		var resbuffer bytes.Buffer
-		bufferr := expectedOutputTablePrinter.PrintObj(expectedTestResultTable, &resbuffer)
-		Expect(bufferr).NotTo(HaveOccurred())
-
+	It("succeed in listing ray cluster information", func() {
+		rayClusters, err := testClient.Ray().RayV1().RayClusters(namespace).List(ctx, metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(strings.TrimSpace(string(output))).To(ContainSubstring(strings.TrimSpace(resbuffer.String())))
+
+		Expect(rayClusters.Items).To(HaveLen(1))
+
+		Expect(rayClusters.Items[0].Namespace).To(Equal(namespace))
+		Expect(rayClusters.Items[0].Name).To(Equal("raycluster-kuberay"))
 	})
 
-	It("should not succeed", func() {
-		cmd := exec.Command("kubectl", "ray", "get", "cluster", "--namespace", namespace, "fakeclustername", "anotherfakeclustername")
-		output, err := cmd.CombinedOutput()
-
+	It("fail on getting non-existing ray cluster", func() {
+		_, err := testClient.Ray().RayV1().RayClusters(namespace).Get(ctx, "fakeclustername", metav1.GetOptions{})
 		Expect(err).To(HaveOccurred())
-		Expect(output).ToNot(ContainElements("fakeclustername"))
 	})
 })
