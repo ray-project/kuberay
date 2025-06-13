@@ -1,6 +1,6 @@
-# KubeRay APIServer V2
+# KubeRay APIServer V2 (alpha)
 
-KubeRay APIServer V2 is the successor to the original [KubeRay APIServer](../apiserver/README.md).
+KubeRay APIServer V2 is the successor to the original [KubeRay APIServer V1](../apiserver/README.md).
 There are two ways to use KubeRay APIServer V2 as an HTTP proxy server to manage Ray resources:
 
 1. Use it as a Go module to build your own HTTP proxies with custom middleware functions.
@@ -16,6 +16,8 @@ Consider using KubeRay APIServer V2 if:
 
 - You want to manage Ray clusters in Kubernetes via HTTP/REST (e.g., from a UI, SDK, or CLI).
 - You want to create templates or default values to simplify configuration setup.
+
+For brevity, "KubeRay APIServer V2" will be referred to as "KubeRay APIServer" throughout this documentation.
 
 ## Installation
 

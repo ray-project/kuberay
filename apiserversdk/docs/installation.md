@@ -17,12 +17,15 @@ to install the latest stable KubeRay operator from the Helm repository.
 
 ## Step 3: Install APIServer with Helm
 
-The security proxy is an optional feature that is still experimental.
+* For v1.4.0, the following Helm chart will launch both KubeRay APIServer V1 and V2 simultaneously in the APIServer Pod.
+For v1.5.0, only KubeRay APIServer V2 will be launched, and V1 will be removed.
+
+* The security proxy is an optional feature that is still experimental.
 Therefore, the documentation is written without the security proxy.
 
 ### Without security proxy
 
-- Install a stable version via Helm repository
+* Install a stable version via Helm repository
 
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
@@ -31,7 +34,7 @@ helm repo update
 helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0 --set security=null
 ```
 
-- Install the nightly version
+* Install the nightly version
 
 ```sh
 # Step1: Clone KubeRay repository
@@ -45,7 +48,7 @@ helm install kuberay-apiserver . --set security=null
 
 ### With security proxy
 
-- Install a stable version via Helm repository
+* Install a stable version via Helm repository
 
 ```sh
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
@@ -54,7 +57,7 @@ helm repo update
 helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 ```
 
-- Install the nightly version
+* Install the nightly version
 
 ```sh
 # Step1: Clone KubeRay repository
