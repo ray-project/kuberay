@@ -1,21 +1,7 @@
 # RayService QuickStart
 
-RayService consists of a RayCluster and Ray Serve deployment graphs. It offers
-zero-downtime upgrades for RayCluster and high availability. This document focus on
-explaining how to manage and interact with RayService using the KubeRay APIServer. For
-detailed introduction and more advanced usage with Kubernetes, please refer to [this
-guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/rayservice-quick-start.html).
-
-> [!IMPORTANT]
-> If you encounter any problems while following this guide, please refer to the [Troubleshooting](../Troubleshooting.md)
-> page.
-
-## Preparation
-
-- Install [Helm](https://helm.sh/docs/intro/install/) (>= v3.4),
-[Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), and
-[Docker](https://docs.docker.com/engine/install/).
-- KubeRay v1.4.0 or higher and Ray 2.41.0.
+This document explains how to manage and interact with RayService using KubeRay APIServer.
+See [this guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/rayservice-quick-start.html) for more details.
 
 ## Step 1: Create a Kubernetes cluster
 
@@ -28,7 +14,7 @@ kind create cluster --image=kindest/node:v1.26.0
 
 ## Step 2: Install KubeRay operator and APIServer
 
-Follow the [Installation Guide](../Installation.md) to install the latest stable KubeRay
+Follow the [Installation Guide](installation.md) to install the latest stable KubeRay
 operator and APIServer (without the security proxy) from the Helm repository, and
 port-forward the HTTP endpoint to local port 31888.
 
@@ -88,7 +74,7 @@ curl -s http://localhost:31888/apis/ray.io/v1/namespaces/default/rayservices/ray
   | jq -r '.spec.rayClusterConfig.rayVersion'
 
 # Expected output
-# 2.41.0
+# 2.46.0
 ```
 
 Now, use the following for modifying the `rayVersion` for RayCluster managed by RayService.

@@ -1,23 +1,25 @@
-# KubeRay APIServer
+# KubeRay APIServer V2
 
-The KubeRay APIServer provides an HTTP proxy to the Kubernetes APIServer with the same
-interface. Users can directly use the Kubernetes OpenAPI Spec and KubeRay CRD to create, query,
-update, and delete Ray resources. It contains the following highlighted features:
+KubeRay APIServer V2 is the successor to the original [KubeRay APIServer](../apiserver/README.md).
+There are two ways to use KubeRay APIServer V2 as an HTTP proxy server to manage Ray resources:
 
-1. Compatibility with existing Kubernetes clients and API interfaces, allowing users to use
-   existing Kubernetes clients to interact with the proxy provided by the APIServer.
-2. Provides the APIServer as a Go library for users to build their proxies with custom HTTP middleware functions.
+1. Use it as a Go module to build your own HTTP proxies with custom middleware functions.
+2. Use the container image provided by the KubeRay community to run a proxy server.
 
-## When to use APIServer
+KubeRay APIServer V2 provides an HTTP proxy to the Kubernetes APIServer with the same
+interface defined in the Kubernetes OpenAPI Spec and KubeRay CRD.
+Therefore, it is compatible with existing Kubernetes clients and API interfaces.
 
-Consider using the APIServer if:
+## When to use KubeRay APIServer V2
+
+Consider using KubeRay APIServer V2 if:
 
 - You want to manage Ray clusters in Kubernetes via HTTP/REST (e.g., from a UI, SDK, or CLI).
 - You want to create templates or default values to simplify configuration setup.
 
 ## Installation
 
-Please follow the [Installation](./Installation.md) guide to install the APIServer, and
+Please follow the [installation guide](docs/installation.md) to install the APIServer, and
 port-forward the HTTP endpoint to local port 31888.
 
 ## Quick Start

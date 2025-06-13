@@ -17,6 +17,9 @@ to install the latest stable KubeRay operator from the Helm repository.
 
 ## Step 3: Install APIServer with Helm
 
+The security proxy is an optional feature that is still experimental.
+Therefore, the documentation is written without the security proxy.
+
 ### Without security proxy
 
 - Install a stable version via Helm repository
