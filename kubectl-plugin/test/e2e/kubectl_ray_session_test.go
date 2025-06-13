@@ -10,16 +10,23 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 	var namespace string
+	var testClient Client
 
 	BeforeEach(func() {
-		namespace = createTestNamespace()
+		var err error
+		testClient, err = newTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		namespace = createTestNamespace(testClient)
+
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
-			deleteTestNamespace(namespace)
+			deleteTestNamespace(namespace, testClient)
 			namespace = ""
 		})
 	})
@@ -90,22 +97,19 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		}, 3*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 
 		// Get the current head pod name
-		cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
-		output, err := cmd.CombinedOutput()
+		oldPod, err := testClient.Core().CoreV1().Pods(namespace).Get(ctx, "raycluster-kuberay-head", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		oldPodUID := string(output)
+		oldPodUID := string(oldPod.UID)
 		var newPodUID string
 
 		// Delete the pod
-		cmd = exec.Command("kubectl", "delete", "--namespace", namespace, "pod/raycluster-kuberay-head")
-		err = cmd.Run()
+		err = testClient.Core().CoreV1().Pods(namespace).Delete(ctx, "raycluster-kuberay-head", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the new pod to be created
 		Eventually(func() error {
-			cmd := exec.Command("kubectl", "get", "--namespace", namespace, "pod/raycluster-kuberay-head", "-o", "jsonpath={.metadata.uid}")
-			output, err := cmd.CombinedOutput()
-			newPodUID = string(output)
+			newPod, err := testClient.Core().CoreV1().Pods(namespace).Get(ctx, "raycluster-kuberay-head", metav1.GetOptions{})
+			newPodUID = string(newPod.UID)
 			if err != nil {
 				return err
 			}
@@ -116,7 +120,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the new pod to be ready
-		cmd = exec.Command("kubectl", "wait", "--namespace", namespace, "pod/raycluster-kuberay-head", "--for=condition=Ready", "--timeout=120s")
+		cmd := exec.Command("kubectl", "wait", "--namespace", namespace, "pod/raycluster-kuberay-head", "--for=condition=Ready", "--timeout=120s")
 		err = cmd.Run()
 		Expect(err).NotTo(HaveOccurred())
 
