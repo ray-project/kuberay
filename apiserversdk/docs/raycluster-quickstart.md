@@ -1,26 +1,12 @@
 # RayCluster QuickStart
 
-This document focuses on explaining how to manage and interact with RayCluster using the
-KubeRay APIServer. For a detailed introduction and more advanced usage with Kubernetes,
-please refer to [this
-guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html).
-
-> [!IMPORTANT]
-> If you encounter any problems while following this guide, please refer to the [Troubleshooting](../Troubleshooting.md)
-> page.
-
-## Preparation
-
-- Install [Helm](https://helm.sh/docs/intro/install/) (>= v3.4),
-[Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), and
-[Docker](https://docs.docker.com/engine/install/).
-- KubeRay v1.4.0 or higher and Ray 2.41.0.
-- Make sure your Kubernetes cluster has at least 4 CPU and 4 GB RAM.
+This document explains how to manage and interact with RayCluster using the KubeRay APIServer.
+See [this guide](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started/raycluster-quick-start.html) for more details.
 
 ## Step 1: Create a Kubernetes cluster
 
-This step creates a local Kubernetes cluster using [Kind](https://kind.sigs.k8s.io/). If you already have a Kubernetes
-cluster, you can skip this step.
+This step creates a local Kubernetes cluster using [Kind](https://kind.sigs.k8s.io/).
+If you already have a Kubernetes cluster, you can skip this step.
 
 ```sh
 kind create cluster --image=kindest/node:v1.26.0
@@ -28,7 +14,7 @@ kind create cluster --image=kindest/node:v1.26.0
 
 ## Step 2: Install KubeRay operator and APIServer
 
-Follow the [Installation Guide](../Installation.md) to install the latest stable KubeRay
+Follow the [Installation Guide](installation.md) to install the latest stable KubeRay
 operator and APIServer (without the security proxy) from the Helm repository, and
 port-forward the HTTP endpoint to local port 31888.
 
@@ -73,6 +59,11 @@ annotations you added in the output:
 ```sh
 curl -s http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters/raycluster-kuberay \
   | jq '.metadata.annotations'
+
+# [Expected Output]
+# {
+#   "example.com/purpose": "model-training"
+# }
 ```
 
 ## Step 5: Delete the RayCluster
