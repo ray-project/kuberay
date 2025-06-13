@@ -18,6 +18,9 @@ const (
 	KuberayTestRayImage = "KUBERAY_TEST_RAY_IMAGE"
 
 	KuberayTestUpgradeImage = "KUBERAY_TEST_UPGRADE_IMAGE"
+
+	// KuberayOperatorUpgradeImage is the KubeRay Operator upgrade image used for testing
+	KuberayOperatorUpgradeImage = "KUBERAY_OPERATOR_UPGRADE_IMAGE"
 )
 
 func GetRayVersion() string {
@@ -34,6 +37,12 @@ func GetRayImage() string {
 		fmt.Printf("Modified Ray Image to: %s for ARM chips\n", rayImage)
 	}
 	return rayImage
+}
+
+// GetKubeRayOperatorUpgradeImage - returns upgrade image from env var or empty default
+// (to prevent from unwanted upgrades in the e2e tests)
+func GetKubeRayOperatorUpgradeImage() string {
+	return lookupEnvOrDefault(KuberayOperatorUpgradeImage, "")
 }
 
 func GetKubeRayUpgradeVersion() string {

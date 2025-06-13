@@ -3,6 +3,7 @@ package e2eupgrade
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -15,6 +16,10 @@ import (
 	e2e "github.com/ray-project/kuberay/ray-operator/test/e2erayservice"
 	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
+)
+
+const (
+	nightlyUpgradeImageVersion = "nightly"
 )
 
 func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
@@ -30,8 +35,19 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-sample"
 
+	kuberayOperatorUpgradeImage := GetKubeRayOperatorUpgradeImage()
+
 	// Get the upgrade version from environment
 	upgradeVersion := GetKubeRayUpgradeVersion()
+
+	// if kuberayOperatorUpgradeImage env var is specified and contains 'nightly'
+	// then this test will upgrade to the latest image built from source and loaded
+	// into kind cluster from github actions
+	if strings.Contains(kuberayOperatorUpgradeImage, nightlyUpgradeImageVersion) {
+		upgradeVersion = nightlyUpgradeImageVersion
+	}
+
+	test.T().Logf("Detected upgrade version: %s", upgradeVersion)
 
 	// Create RayService custom resource
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(e2e.RayServiceSampleYamlApplyConfiguration())
@@ -76,15 +92,32 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
-	test.T().Logf("Upgrading the KubeRay operator to the latest release")
-	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
-	err = cmd.Run()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
-	cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
-	err = cmd.Run()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
+	if upgradeVersion == nightlyUpgradeImageVersion {
+		cmd := exec.Command("kubectl", "apply", "--server-side=true", "--force-conflicts=true", "-f", "../../../helm-chart/kuberay-operator/crds")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			test.T().Logf("Error upgrading KubeRay operator: %v\nCommand output:\n%s", err, string(output))
+			t.Fatal("Failed to upgrade KubeRay operator")
+		}
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+
+		t.Logf("Patching operator deployment to use %s", kuberayOperatorUpgradeImage)
+		if out, err := exec.Command("kubectl", "set", "image", "-n", "default", "deployment/kuberay-operator", //nolint:gosec // required for upgrade
+			fmt.Sprintf("kuberay-operator=%s", kuberayOperatorUpgradeImage),
+		).CombinedOutput(); err != nil {
+			t.Fatalf("kubectl set image failed: %v\nCommand output:\n%s", err, string(out))
+		}
+	} else {
+		cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+		cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+	}
 
 	// Validate RayService is able to serve requests during the upgrade
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
