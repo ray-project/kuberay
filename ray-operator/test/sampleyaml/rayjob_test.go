@@ -76,9 +76,11 @@ func TestRayJob(t *testing.T) {
 			// Check if all worker pods are ready
 			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutShort).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 
-			g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
-
-			g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+			// There is not deployment in `ray-job.interactive-mode.yaml`, so we skip the deployment status check for this yaml file.
+			if tt.name != "ray-job.interactive-mode.yaml" {
+				g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+				g.Eventually(RayJob(test, namespace.Name, rayJobFromYaml.Name), TestTimeoutMedium).Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+			}
 		})
 	}
 }
