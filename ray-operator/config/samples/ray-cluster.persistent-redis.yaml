@@ -124,13 +124,13 @@ kind: PersistentVolumeClaim
 metadata:
   name: redis-data
 spec:
+  # choose a storageClassName provided by your Kubernetes:
+  # storageClassName: standard-rwo
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
       storage: 8Gi
-      # choose a storageClassName provided by your Kubernetes:
-      #storageClassName: standard-rwo
 ---
 apiVersion: apps/v1
 kind: StatefulSet
