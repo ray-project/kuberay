@@ -26,6 +26,9 @@ func TestRayJob(t *testing.T) {
 		{
 			name: "ray-job.shutdown.yaml",
 		},
+		{
+			name: "ray-job.interactive-mode.yaml",
+		},
 	}
 
 	for _, tt := range tests {
