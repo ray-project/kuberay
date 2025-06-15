@@ -31,8 +31,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both CRDs and KubeRay operator v1.4.0-rc.1.
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.4.0-rc.1
+  # Install both CRDs and KubeRay operator v1.4.0-rc.2.
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.4.0-rc.2
 
   # Check the KubeRay operator Pod in `default` namespace
   kubectl get pods
@@ -60,10 +60,10 @@ helm version
 
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
-  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.4.0-rc.1&timeout=90s"
+  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.4.0-rc.2&timeout=90s"
 
   # Step 2: Install KubeRay operator only. (for developer)
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.4.0-rc.1 --skip-crds
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.4.0-rc.2 --skip-crds
   ```
 
 ## List the chart
@@ -73,7 +73,7 @@ To list the `my-release` deployment:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.4.0-rc.1
+# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.4.0-rc.2
 ```
 
 ## Uninstall the Chart
@@ -104,7 +104,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.4.0-rc.1
+    targetRevision: v1.4.0-rc.2
     path: helm-chart/kuberay-operator/crds
   destination:
     server: https://kubernetes.default.svc
@@ -124,7 +124,7 @@ metadata:
 spec:
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.4.0-rc.1
+    targetRevision: v1.4.0-rc.2
     path: helm-chart/kuberay-operator
     helm:
       skipCrds: true
