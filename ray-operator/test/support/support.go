@@ -7,6 +7,7 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -48,4 +49,25 @@ func init() {
 	gomega.SetDefaultConsistentlyPollingInterval(1 * time.Second)
 	// Disable object truncation on test results
 	format.MaxLength = 0
+}
+
+func IsPodRunningAndReady(pod *v1.Pod) bool {
+	if pod.Status.Phase != v1.PodRunning {
+		return false
+	}
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == v1.PodReady && condition.Status == v1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func AllPodsRunningAndReady(pods []v1.Pod) bool {
+	for _, pod := range pods {
+		if !IsPodRunningAndReady(&pod) {
+			return false
+		}
+	}
+	return true
 }
