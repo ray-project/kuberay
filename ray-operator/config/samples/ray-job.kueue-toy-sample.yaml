@@ -8,7 +8,14 @@ spec:
   # The alternative value is "HTTPMode", indicating that KubeRay will submit the Ray job by sending an HTTP request to the RayCluster.
   # submissionMode: "K8sJobMode"
   entrypoint: |
-    python -c "import time; import ray; ray.init(); [print(f\"iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}\") or time.sleep(1) for i in range(600)]"
+    python -c "
+    import time
+    import ray
+    ray.init()
+    for i in range(600):
+        print(f'iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}')
+        time.sleep(1)
+    "
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   shutdownAfterJobFinishes: true
 
