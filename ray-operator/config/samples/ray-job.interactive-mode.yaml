@@ -38,8 +38,6 @@ spec:
     - groupName: default-group
       rayStartParams: {}
       replicas: 1
-      minReplicas: 1
-      maxReplicas: 5
       template:
         spec:
           containers:
