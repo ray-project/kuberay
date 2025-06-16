@@ -47,7 +47,7 @@ func TestRayJob(t *testing.T) {
 	}
 }
 
-func TestRayJobMode(t *testing.T) {
+func TestRayJobInteractiveMode(t *testing.T) {
 	tests := []struct {
 		name string
 	}{
