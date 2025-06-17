@@ -157,7 +157,7 @@ type RayJobSpec struct {
 	ManagedBy *string `json:"managedBy,omitempty"`
 	// DeletionStrategy indicates what resources of the RayJob and how they are deleted upon job completion.
 	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
-	// This field requires the RayJobDeletionStrategy feature gate to be enabled.
+	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
 	// +optional
 	DeletionStrategy *DeletionStrategy `json:"deletionStrategy,omitempty"`
 	// Entrypoint represents the command to start execution.

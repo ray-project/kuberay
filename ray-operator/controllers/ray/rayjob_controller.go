@@ -385,17 +385,19 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Spec.DeletionStrategy != nil &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
 
+			if shutdownTime.After(nowTime) {
+				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
+				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
+				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
+			}
+
 			policy := rayv1.DeleteNone
 			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
 				policy = *rayJobInstance.Spec.DeletionStrategy.OnSuccess.Policy
 			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
 				policy = *rayJobInstance.Spec.DeletionStrategy.OnFailure.Policy
 			} else {
-				if shutdownTime.After(nowTime) {
-					delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
-					logger.Info("jobStatus not valid for deletion", "jobStatus", rayJobInstance.Status.JobStatus)
-					return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-				}
+				logger.Info("jobStatus not valid for deletion", "jobStatus", rayJobInstance.Status.JobStatus)
 			}
 
 			// no need to continue as the selected policy is DeleteNone
