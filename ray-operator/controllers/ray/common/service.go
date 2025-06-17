@@ -20,11 +20,11 @@ func getEnableRayHeadClusterIPService() bool {
 }
 
 // HeadServiceLabels returns the default labels for a cluster's head service.
-func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
+func HeadServiceLabels(ctx context.Context, cluster rayv1.RayCluster) map[string]string {
 	return map[string]string{
 		utils.RayClusterLabelKey:                cluster.Name,
 		utils.RayNodeTypeLabelKey:               string(rayv1.HeadNode),
-		utils.RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
+		utils.RayIDLabelKey:                     utils.CheckLabel(ctx, utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
@@ -39,7 +39,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		labels = make(map[string]string)
 	}
 
-	defaultLabels := HeadServiceLabels(cluster)
+	defaultLabels := HeadServiceLabels(ctx, cluster)
 
 	// selector consists of *only* the keys in defaultLabels, updated with the values in labels if they exist
 	selector := make(map[string]string)
@@ -161,7 +161,7 @@ func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayServ
 		utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
 		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
 		utils.RayNodeTypeLabelKey:             string(rayv1.HeadNode),
-		utils.RayIDLabelKey:                   utils.CheckLabel(utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
+		utils.RayIDLabelKey:                   utils.CheckLabel(ctx, utils.GenerateIdentifier(rayService.Name, rayv1.HeadNode)),
 	}
 
 	return service, nil
