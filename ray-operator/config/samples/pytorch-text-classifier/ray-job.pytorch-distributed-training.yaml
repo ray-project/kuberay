@@ -12,7 +12,7 @@ spec:
       - numpy
       - datasets
       - transformers>=4.19.1
-      - pytorch-lightning==1.6.5
+      - pytorch-lightning==1.8.5
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
     rayVersion: '2.46.0'
