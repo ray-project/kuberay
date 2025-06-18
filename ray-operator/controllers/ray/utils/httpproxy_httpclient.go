@@ -58,7 +58,7 @@ func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
 
