@@ -51,7 +51,7 @@ thus, `index.yaml` will not be updated automatically after the deletion.
 If you really need to do that, please read this section carefully before you do that.
 
 * Delete the [releases](https://github.com/ray-project/kuberay-helm/releases)
-* Remove the related tags using the the following command. If tags are not properly removed, you may run into the problem described in [ray-project/kuberay/#561](https://github.com/ray-project/kuberay/issues/561).
+* Remove the related tags using the following command. If tags are not properly removed, you may run into the problem described in [ray-project/kuberay/#561](https://github.com/ray-project/kuberay/issues/561).
 
     ```sh
     # git remote -v

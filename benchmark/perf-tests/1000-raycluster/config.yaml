@@ -43,7 +43,7 @@ steps:
       objectTemplatePath: raycluster.yaml
       templateFillMap:
         Replicas: 3
-        Image: "rayproject/ray:2.9.3"
+        Image: "rayproject/ray:2.46.0"
 - name: Wait for RayClusters ready
   measurements:
   - Identifier: WaitForRayCluster

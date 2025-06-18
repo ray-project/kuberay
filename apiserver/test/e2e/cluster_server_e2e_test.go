@@ -75,7 +75,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -135,7 +135,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -160,6 +160,30 @@ func TestCreateClusterEndpoint(t *testing.T) {
 							},
 						},
 						WorkerGroupSpec: []*api.WorkerGroupSpec{},
+					},
+				},
+				Namespace: tCtx.GetNamespaceName(),
+			},
+			ExpectedError: nil,
+		},
+		{
+			Name: "Create cluster with head service annotations",
+			Input: &api.CreateClusterRequest{
+				Cluster: &api.Cluster{
+					Name:      tCtx.GetNextName(),
+					Namespace: tCtx.GetNamespaceName(),
+					User:      "kuberay",
+					ClusterSpec: &api.ClusterSpec{
+						HeadGroupSpec: &api.HeadGroupSpec{
+							ComputeTemplate: tCtx.GetComputeTemplateName(),
+							Image:           tCtx.GetRayImage(),
+							RayStartParams: map[string]string{
+								"dashboard-host": "0.0.0.0",
+							},
+						},
+						HeadServiceAnnotations: map[string]string{
+							"foo": "bar",
+						},
 					},
 				},
 				Namespace: tCtx.GetNamespaceName(),
@@ -277,7 +301,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -305,7 +329,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -313,7 +337,6 @@ func TestCreateClusterEndpoint(t *testing.T) {
 							ComputeTemplate: tCtx.GetComputeTemplateName(),
 							Image:           tCtx.GetRayImage(),
 							ServiceType:     "NodePort",
-							RayStartParams:  map[string]string{},
 						},
 						WorkerGroupSpec: []*api.WorkerGroupSpec{},
 					},
@@ -330,7 +353,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -360,7 +383,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -394,7 +417,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -432,6 +455,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualCluster, "A cluster is expected")
+				require.True(t, clusterSpecEqual(tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec is not as expected. Expected: %v, Actual: %v", tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec)
 				waitForRunningCluster(t, tCtx, actualCluster.Name)
 				tCtx.DeleteRayCluster(t, actualCluster.Name)
 			} else {

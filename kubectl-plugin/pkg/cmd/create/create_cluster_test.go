@@ -54,8 +54,8 @@ func TestRayCreateClusterComplete(t *testing.T) {
 		"should set the image to the same version as the ray version when the image is the default and the ray version is not the default": {
 			args:          []string{"testRayClusterName"},
 			image:         defaultImageWithTag,
-			rayVersion:    "2.44.0",
-			expectedImage: fmt.Sprintf("%s:2.44.0", defaultImage),
+			rayVersion:    "2.46.0",
+			expectedImage: fmt.Sprintf("%s:2.46.0", defaultImage),
 		},
 	}
 
@@ -156,8 +156,8 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 		"should error when incompatible flags are used": {
 			args: []string{
 				"sample-cluster",
-				"--ray-version", "2.44.0",
-				"--image", "rayproject/ray:2.44.0",
+				"--ray-version", "2.46.0",
+				"--image", "rayproject/ray:2.46.0",
 				"--head-cpu", "1",
 				"--head-memory", "5Gi",
 				"--head-gpu", "1",
@@ -184,9 +184,7 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 			cmd := NewCreateClusterCommand(cmdFactory, testStreams)
 			cmd.SetArgs(tc.args)
 			// Parse the flags before checking for incompatible flags
-			if err := cmd.Flags().Parse(tc.args); err != nil {
-				t.Fatalf("failed to parse flags: %v", err)
-			}
+			require.NoError(t, cmd.Flags().Parse(tc.args), "failed to parse flags")
 			err := flagsIncompatibleWithConfigFilePresent(cmd)
 			if tc.expectError != "" {
 				require.EqualError(t, err, tc.expectError)
@@ -214,6 +212,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 		workerMemory: "1Gi",
 		workerGPU:    "1",
 		workerTPU:    "0",
+		autoscaler:   generation.AutoscalerV2,
 	}
 
 	t.Run("should error when the Ray cluster already exists", func(t *testing.T) {
@@ -250,8 +249,8 @@ func TestNewCreateClusterCommand(t *testing.T) {
 		"should succeed when all flags are provided": {
 			args: []string{
 				"sample-cluster",
-				"--ray-version", "2.44.0",
-				"--image", "rayproject/ray:2.44.0",
+				"--ray-version", "2.46.0",
+				"--image", "rayproject/ray:2.46.0",
 				"--head-cpu", "1",
 				"--head-memory", "5Gi",
 				"--head-gpu", "1",
@@ -268,6 +267,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 				"--worker-node-selectors", fmt.Sprintf("app=ray,env=dev,%s=tpu-v5,%s=2x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
 				"--labels", "app=ray,env=dev",
 				"--annotations", "ttl-hours=24,owner=chthulu",
+				"--autoscaler", "v2",
 				"--dry-run",
 				"--wait",
 				"--timeout", "10s",
@@ -284,7 +284,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 			args: []string{
 				"sample-cluster",
 				"--file", "config.yaml",
-				"--ray-version", "2.44.0",
+				"--ray-version", "2.46.0",
 				"--dry-run",
 			},
 			expectError: "the following flags are incompatible with --file: [ray-version]",

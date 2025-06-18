@@ -13,9 +13,9 @@ GO_TEST_FLAGS ?=
 # Ray docker images to use for end to end tests based upon the architecture
 # for arm64 environments (Apple silicon included) pull the architecture specific image
 ifeq (arm64, $(shell go env GOARCH))
-	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310-aarch64
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.46.0-py310-aarch64
 else
-	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.9.0-py310
+	E2E_API_SERVER_RAY_IMAGE ?= rayproject/ray:2.46.0-py310
 endif
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?= http://localhost:31888
@@ -57,7 +57,7 @@ help: ## Display this help.
 ##@ Deployment
 
 .PHONY: start-local-apiserver
-start-local-apiserver: operator-image cluster load-operator-image deploy-operator install run ## Build and start apiserver from scratch.
+start-local-apiserver: operator-image cluster load-operator-image deploy-operator install ## Build and start apiserver from scratch.
 
 .PHONY: clear-local-apiserver
 clear-local-apiserver: clean-cluster ## Clear local apiserver.
@@ -107,11 +107,16 @@ test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
 
 .PHONY: e2e-test
-e2e-test: ## Run end to end tests using a pre-exiting cluster.
+e2e-test: ## Run end to end tests using a pre-existing cluster.
 	go test ./test/e2e/... $(GO_TEST_FLAGS) -timeout 60m -race -coverprofile ray-kube-api-server-e2e-coverage.out -count=1 -parallel 4
 
-.PHONY: local-e2e-test ## Run end to end tests on newly created cluster.
-local-e2e-test: operator-image cluster load-operator-image deploy-operator install load-ray-test-image e2e-test clean-cluster ## Run end to end tests, create a fresh kind cluster will all components deployed.
+# 1. Clean up the cluster if it exists.
+# 2. Create a fresh kind cluster with api server and operator installed.
+# 3. Load the ray test image into the cluster.
+# 4. Run the end to end tests.
+# 5. Clean up the cluster.
+.PHONY: local-e2e-test
+local-e2e-test: clean-cluster start-local-apiserver load-ray-test-image e2e-test clean-cluster
 
 ##@ Testing Setup
 KIND_CONFIG ?= hack/kind-cluster-config.yaml
@@ -163,9 +168,9 @@ endif
 .PHONY: load-security-proxy-image
 load-security-proxy-image: ## Load the security proxy image to the kind cluster created with make cluster.
 ifneq ($(SECURITY_IMAGE_TAG), latest)
-	$(ENGINE) pull kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
+	$(ENGINE) pull quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 endif
-	$(KIND) load docker-image kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
+	$(KIND) load docker-image quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG) -n $(KIND_CLUSTER_NAME)
 
 .PHONY: load-ray-test-image
 load-ray-test-image: ## Load the ray test images.

@@ -14,8 +14,10 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/api/meta"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -29,7 +31,7 @@ var (
 	TestTimeoutLong          = 5 * time.Minute
 	TestPollingInterval      = 500 * time.Millisecond
 	ComputeTemplateCPUForE2E = uint32(1) // CPU core
-	CompTemplateMemGiBForE2E = uint32(1)
+	CompTemplateMemGiBForE2E = uint32(4)
 )
 
 // CreateHttpRequest instantiates a http request for the specified endpoint and host
@@ -163,4 +165,59 @@ func waitForServiceToDisappear(t *testing.T, tCtx *End2EndTestingContext, servic
 	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.MatchError("rayservices.ray.io \"" + serviceName + "\" not found"))
 
 	t.Logf("Service %s successfully deleted", serviceName)
+}
+
+func clusterSpecEqual(expected, actual *api.ClusterSpec) bool {
+	if expected == nil || actual == nil {
+		return expected == nil && actual == nil
+	}
+	// Since default environment variables are added in buildRayClusterSpec but omitted during CRD-to-API conversion,
+	// an empty variable may appear in the spec even if the user didn't set it.
+	if expected.GetHeadGroupSpec() == nil {
+		expected.HeadGroupSpec = &api.HeadGroupSpec{}
+	}
+	if expected.GetHeadGroupSpec().GetEnvironment() == nil {
+		expected.GetHeadGroupSpec().Environment = &api.EnvironmentVariables{}
+	}
+	for _, wg := range expected.GetWorkerGroupSpec() {
+		if wg.Environment == nil {
+			wg.Environment = &api.EnvironmentVariables{}
+		}
+	}
+	return proto.Equal(expected, actual)
+}
+
+func serviceSpecEqual(expected, actual *api.RayService) bool {
+	if !clusterSpecEqual(expected.GetClusterSpec(), actual.GetClusterSpec()) {
+		return false
+	}
+	expectedCopy := proto.Clone(expected).(*api.RayService)
+	actualCopy := proto.Clone(actual).(*api.RayService)
+	// Clear fields that are not relevant for equality check
+	expectedCopy.ClusterSpec, actualCopy.ClusterSpec = nil, nil
+	expectedCopy.RayServiceStatus, actualCopy.RayServiceStatus = nil, nil
+	expectedCopy.CreatedAt, actualCopy.CreatedAt = nil, nil
+	expectedCopy.DeleteAt, actualCopy.DeleteAt = nil, nil
+	return proto.Equal(expectedCopy, actualCopy)
+}
+
+func jobSpecEqual(expected, actual *api.RayJob) bool {
+	if !clusterSpecEqual(expected.GetClusterSpec(), actual.GetClusterSpec()) {
+		return false
+	}
+	expectedCopy := proto.Clone(expected).(*api.RayJob)
+	actualCopy := proto.Clone(actual).(*api.RayJob)
+	// Clear fields that are not relevant for equality check
+	expectedCopy.ClusterSpec, actualCopy.ClusterSpec = nil, nil
+	expectedCopy.CreatedAt, actualCopy.CreatedAt = nil, nil
+	expectedCopy.DeleteAt, actualCopy.DeleteAt = nil, nil
+	expectedCopy.JobStatus, actualCopy.JobStatus = "", ""
+	expectedCopy.JobDeploymentStatus, actualCopy.JobDeploymentStatus = "", ""
+	expectedCopy.Message, actualCopy.Message = "", ""
+	expectedCopy.StartTime, actualCopy.StartTime = nil, nil
+	expectedCopy.EndTime, actualCopy.EndTime = nil, nil
+	expectedCopy.RayClusterName, actualCopy.RayClusterName = "", ""
+	// Version will be ignored if cluster spec not provided
+	expectedCopy.Version, actualCopy.Version = "", ""
+	return proto.Equal(expectedCopy, actualCopy)
 }

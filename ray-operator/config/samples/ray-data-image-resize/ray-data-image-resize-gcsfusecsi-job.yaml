@@ -27,7 +27,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.41.0
+          - image: rayproject/ray:2.46.0
             name: ray-head
             ports:
             - containerPort: 6379
@@ -61,7 +61,7 @@ spec:
                 mountOptions: implicit-dirs,anonymous-access,uid=1000,gid=100,metadata-cache:ttl-secs:-1,metadata-cache:stat-cache-max-size-mb:-1,metadata-cache:type-cache-max-size-mb:-1
                 skipCSIBucketAccessCheck: 'true'
             name: gcs-fuse-csi-ephemeral
-    rayVersion: 2.9.3
+    rayVersion: 2.46.0
     workerGroupSpecs:
     - groupName: worker-group
       maxReplicas: 3
@@ -77,7 +77,7 @@ spec:
             gke-gcsfuse/volumes: 'true'
         spec:
           containers:
-          - image: rayproject/ray:2.41.0
+          - image: rayproject/ray:2.46.0
             name: ray-worker
             resources:
               requests:

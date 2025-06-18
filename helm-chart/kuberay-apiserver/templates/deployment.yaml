@@ -33,6 +33,16 @@ spec:
         {{- with .Values.image.pullPolicy }}
         imagePullPolicy: {{ . }}
         {{- end }}
+        args:
+          {{- $argList := list -}}
+          {{- $argList = append $argList (printf "--enable-api-server-v2=%t" .Values.enableAPIServerV2) -}}
+          {{- if .Values.cors }}
+            {{- with .Values.cors.allowOrigin }}
+              {{- $argList = append $argList (printf "--cors-allow-origin=%s" .) -}}
+            {{- end }}
+          {{- end }}
+          {{- (printf "\n") -}}
+          {{- $argList | toYaml | indent 10 }}
         ports:
           {{- toYaml .Values.containerPort | nindent 8 }}
         {{- with .Values.resources }}

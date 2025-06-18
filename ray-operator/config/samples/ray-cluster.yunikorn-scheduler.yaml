@@ -7,36 +7,36 @@ metadata:
     yunikorn.apache.org/app-id: test-yunikorn-0
     yunikorn.apache.org/queue: root.test
 spec:
-  rayVersion: "2.41.0"
+  rayVersion: "2.46.0"
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
-          - name: ray-head
-            image: rayproject/ray:2.41.0
-            resources:
-              limits:
-                cpu: "1"
-                memory: "2Gi"
-              requests:
-                cpu: "1"
-                memory: "2Gi"
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
   workerGroupSpecs:
-    - groupName: worker
-      rayStartParams: {}
-      replicas: 2
-      minReplicas: 2
-      maxReplicas: 2
-      template:
-        spec:
-          containers:
-            - name: ray-head
-              image: rayproject/ray:2.41.0
-              resources:
-                limits:
-                  cpu: "1"
-                  memory: "1Gi"
-                requests:
-                  cpu: "1"
-                  memory: "1Gi"
+  - groupName: worker
+    rayStartParams: {}
+    replicas: 2
+    minReplicas: 2
+    maxReplicas: 2
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"

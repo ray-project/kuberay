@@ -5,43 +5,43 @@ metadata:
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   rayClusterSpec:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         dashboard-host: '0.0.0.0'
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray-ml:2.41.0.deprecated-py39-gpu
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-              resources:
-                limits:
-                  nvidia.com/gpu: "4"
-                  cpu: "54"
-                  memory: "54Gi"
-                requests:
-                  nvidia.com/gpu: "4"
-                  cpu: "54"
-                  memory: "54Gi"
-              volumeMounts:
-                - mountPath: /home/ray/samples
-                  name: code-sample
+          - name: ray-head
+            image: rayproject/ray-ml:2.46.0.0e19ea-py39-gpu
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                nvidia.com/gpu: "4"
+                cpu: "54"
+                memory: "54Gi"
+              requests:
+                nvidia.com/gpu: "4"
+                cpu: "54"
+                memory: "54Gi"
+            volumeMounts:
+            - mountPath: /home/ray/samples
+              name: code-sample
           nodeSelector:
             cloud.google.com/gke-accelerator: nvidia-tesla-t4
           volumes:
-            - name: code-sample
-              configMap:
-                name: ray-job-code-sample
-                items:
-                  - key: sample_code.py
-                    path: sample_code.py
+          - name: code-sample
+            configMap:
+              name: ray-job-code-sample
+              items:
+              - key: sample_code.py
+                path: sample_code.py
 
 ######################Ray code #################################
 # This sample is from https://docs.ray.io/en/latest/data/examples/huggingface_vit_batch_prediction.html

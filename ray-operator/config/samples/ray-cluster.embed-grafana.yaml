@@ -13,7 +13,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -28,8 +28,8 @@ spec:
           - containerPort: 44227
             name: dash-metrics # dashboard
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
+          - mountPath: /tmp/ray
+            name: ray-logs
           resources:
             limits:
               cpu: "1"
@@ -38,15 +38,15 @@ spec:
               cpu: "1"
               memory: "2G"
           env:
-            - name: RAY_GRAFANA_IFRAME_HOST
-              value: http://127.0.0.1:3000
-            - name: RAY_GRAFANA_HOST
-              value: http://prometheus-grafana.prometheus-system.svc:80
-            - name: RAY_PROMETHEUS_HOST
-              value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+          - name: RAY_GRAFANA_IFRAME_HOST
+            value: http://127.0.0.1:3000
+          - name: RAY_GRAFANA_HOST
+            value: http://prometheus-grafana.prometheus-system.svc:80
+          - name: RAY_PROMETHEUS_HOST
+            value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
         volumes:
-          - name: ray-logs
-            emptyDir: {}
+        - name: ray-logs
+          emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -59,10 +59,10 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
+          - mountPath: /tmp/ray
+            name: ray-logs
           resources:
             limits:
               cpu: "1"
@@ -73,6 +73,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: ray-logs
-            emptyDir: {}
+        - name: ray-logs
+          emptyDir: {}
 ######################status#################################

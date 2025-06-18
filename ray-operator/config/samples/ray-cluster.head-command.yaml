@@ -5,7 +5,7 @@ kind: RayCluster
 metadata:
   name: raycluster-head-command
 spec:
-  rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
@@ -17,7 +17,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: 1
@@ -43,18 +43,18 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command: ["/bin/sh","-c","/home/ray/samples/ray_cluster_resources.sh"]
+                command: ["/bin/sh", "-c", "/home/ray/samples/ray_cluster_resources.sh"]
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: ray-example-configmap
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: ray_cluster_resources.sh
-                  path: ray_cluster_resources.sh
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: ray_cluster_resources.sh
+              path: ray_cluster_resources.sh
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -20,6 +20,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
+		return &rayv1.DeletionPolicyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
+		return &rayv1.DeletionStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
 		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):
@@ -38,6 +42,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayJobSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayJobStatus"):
 		return &rayv1.RayJobStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayJobStatusInfo"):
+		return &rayv1.RayJobStatusInfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayService"):
 		return &rayv1.RayServiceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayServiceSpec"):

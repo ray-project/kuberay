@@ -58,12 +58,36 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              deletionPolicy:
-                type: string
-                x-kubernetes-validations:
-                - message: the deletionPolicy field value must be either 'DeleteCluster',
-                    'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
-                  rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']
+              deletionStrategy:
+                properties:
+                  onFailure:
+                    properties:
+                      policy:
+                        type: string
+                        x-kubernetes-validations:
+                        - message: the policy field value must be either 'DeleteCluster',
+                            'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
+                          rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
+                            'DeleteNone']
+                    required:
+                    - policy
+                    type: object
+                  onSuccess:
+                    properties:
+                      policy:
+                        type: string
+                        x-kubernetes-validations:
+                        - message: the policy field value must be either 'DeleteCluster',
+                            'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
+                          rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
+                            'DeleteNone']
+                    required:
+                    - policy
+                    type: object
+                required:
+                - onFailure
+                - onSuccess
+                type: object
               entrypoint:
                 type: string
               entrypointNumCpus:
@@ -298,6 +322,11 @@ spec:
                         - Default
                         - Aggressive
                         - Conservative
+                        type: string
+                      version:
+                        enum:
+                        - v1
+                        - v2
                         type: string
                       volumeMounts:
                         items:
@@ -4327,7 +4356,6 @@ spec:
                             type: object
                         type: object
                     required:
-                    - rayStartParams
                     - template
                     type: object
                   headServiceAnnotations:
@@ -8055,7 +8083,6 @@ spec:
                       - groupName
                       - maxReplicas
                       - minReplicas
-                      - rayStartParams
                       - template
                       type: object
                     type: array
@@ -11885,6 +11912,15 @@ spec:
                       format: date-time
                       type: string
                     type: object
+                type: object
+              rayJobInfo:
+                properties:
+                  endTime:
+                    format: date-time
+                    type: string
+                  startTime:
+                    format: date-time
+                    type: string
                 type: object
               reason:
                 type: string

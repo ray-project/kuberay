@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-complete
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   # Ray head pod configuration
   headGroupSpec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
@@ -27,7 +27,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -36,8 +36,8 @@ spec:
           - containerPort: 10001
             name: client
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
+          - mountPath: /tmp/ray
+            name: ray-logs
           # The resource requests and limits in this config are too small for production!
           # For an example with more realistic resource configuration, see
           # ray-cluster.autoscaler.large.yaml.
@@ -56,8 +56,8 @@ spec:
               cpu: "500m"
               memory: "2G"
         volumes:
-          - name: ray-logs
-            emptyDir: {}
+        - name: ray-logs
+          emptyDir: {}
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -84,12 +84,12 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
+          - mountPath: /tmp/ray
+            name: ray-logs
           # The resource requests and limits in this config are too small for production!
           # For an example with more realistic resource configuration, see
           # ray-cluster.autoscaler.large.yaml.
@@ -115,6 +115,6 @@ spec:
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:
-          - name: ray-logs
-            emptyDir: {}
+        - name: ray-logs
+          emptyDir: {}
 ######################status#################################

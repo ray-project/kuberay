@@ -119,7 +119,8 @@ const (
 	// The value of RAY_CLOUD_INSTANCE_ID is the Pod name for Autoscaler V2 alpha. This may change in the future.
 	RAY_CLOUD_INSTANCE_ID = "RAY_CLOUD_INSTANCE_ID"
 	// The value of RAY_NODE_TYPE_NAME is the name of the node group (i.e., the value of the "ray.io/group" label).
-	RAY_NODE_TYPE_NAME = "RAY_NODE_TYPE_NAME"
+	RAY_NODE_TYPE_NAME       = "RAY_NODE_TYPE_NAME"
+	RAY_ENABLE_AUTOSCALER_V2 = "RAY_enable_autoscaler_v2"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
@@ -146,6 +147,22 @@ const (
 
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
+
+	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within
+	// `RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds after `JobStatus`
+	// reaches a terminal state, KubeRay will update `JobDeploymentStatus` to either
+	// `Complete` or `Failed` directly.
+
+	// If this occurs, it is likely due to a system-level issue (e.g., a Ray bug) that prevents the
+	// `ray job submit` process in the Kubernetes Job submitter from exiting.
+	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
+	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
+
+	// This environment variable for the KubeRay operator determines whether to enable
+	// a login shell by passing the -l option to the container command /bin/bash.
+	// The -l flag was added by default before KubeRay v1.4.0, but it is no longer added
+	// by default starting with v1.4.0.
+	ENABLE_LOGIN_SHELL = "ENABLE_LOGIN_SHELL"
 
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"

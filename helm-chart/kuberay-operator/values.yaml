@@ -50,7 +50,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", and "yunikorn".
+#    "default", "volcano", "yunikorn", and "scheduler-plugins".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
@@ -66,6 +66,10 @@ logging:
 #  3. Use yunikorn
 #       batchScheduler:
 #         name: yunikorn
+#
+#  4. Use PodGroup
+#       batchScheduler:
+#         name: scheduler-plugins
 #
 batchScheduler:
   # Deprecated. This option will be removed in the future.
@@ -85,6 +89,18 @@ featureGates:
 metrics:
   # -- Whether KubeRay operator should emit control plane metrics.
   enabled: true
+  serviceMonitor:
+    # -- Enable a prometheus ServiceMonitor
+    enabled: false
+    # -- Prometheus ServiceMonitor interval
+    interval: 30s
+    # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
+    honorLabels: false
+    # -- Prometheus ServiceMonitor selector
+    selector: {}
+      #  release: prometheus
+    # -- Prometheus ServiceMonitor namespace
+    namespace: ""  # "monitoring"
 
 # -- Path to the operator binary
 operatorCommand: /manager

@@ -146,6 +146,7 @@ func PopulateRayClusterSpec(spec rayv1api.RayClusterSpec) *api.ClusterSpec {
 		clusterSpec.EnableInTreeAutoscaling = true
 		clusterSpec.AutoscalerOptions = convertAutoscalingOptions(spec.AutoscalerOptions)
 	}
+	clusterSpec.HeadServiceAnnotations = spec.HeadServiceAnnotations
 	return clusterSpec
 }
 
@@ -458,10 +459,15 @@ func FromCrdToAPIJob(job *rayv1api.RayJob) (pbJob *api.RayJob) {
 		}
 	}()
 
+	var version string
+	if job.Spec.RayClusterSpec != nil {
+		version = job.Spec.RayClusterSpec.RayVersion
+	}
 	pbJob = &api.RayJob{
 		Name:                     job.Name,
 		Namespace:                job.Namespace,
 		User:                     job.Labels[util.RayClusterUserLabelKey],
+		Version:                  version,
 		Entrypoint:               job.Spec.Entrypoint,
 		Metadata:                 job.Spec.Metadata,
 		RuntimeEnv:               job.Spec.RuntimeEnvYAML,
@@ -526,7 +532,7 @@ func FromCrdToAPIServices(
 	services []*rayv1api.RayService,
 	serviceEventsMap map[string][]corev1.Event,
 ) []*api.RayService {
-	apiServices := make([]*api.RayService, 0)
+	apiServices := make([]*api.RayService, 0, len(services))
 	for _, service := range services {
 		apiServices = append(apiServices, FromCrdToAPIService(service, serviceEventsMap[service.Name]))
 	}
@@ -549,6 +555,7 @@ func FromCrdToAPIService(service *rayv1api.RayService, events []corev1.Event) *a
 		Name:           service.Name,
 		Namespace:      service.Namespace,
 		User:           service.Labels[util.RayClusterUserLabelKey],
+		Version:        service.Spec.RayClusterSpec.RayVersion,
 		ServeConfig_V2: service.Spec.ServeConfigV2,
 		ClusterSpec:    PopulateRayClusterSpec(service.Spec.RayClusterSpec),
 		ServiceUnhealthySecondThreshold: PoplulateUnhealthySecondThreshold(
@@ -592,7 +599,7 @@ func PoplulateRayServiceStatus(
 func PopulateServeApplicationStatus(
 	serveApplicationStatuses map[string]rayv1api.AppStatus,
 ) []*api.ServeApplicationStatus {
-	appStatuses := make([]*api.ServeApplicationStatus, 0)
+	appStatuses := make([]*api.ServeApplicationStatus, 0, len(serveApplicationStatuses))
 	for appName, appStatus := range serveApplicationStatuses {
 		ds := &api.ServeApplicationStatus{
 			Name:                  appName,
@@ -608,7 +615,7 @@ func PopulateServeApplicationStatus(
 func PopulateServeDeploymentStatus(
 	serveDeploymentStatuses map[string]rayv1api.ServeDeploymentStatus,
 ) []*api.ServeDeploymentStatus {
-	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0)
+	deploymentStatuses := make([]*api.ServeDeploymentStatus, 0, len(serveDeploymentStatuses))
 	for deploymentName, deploymentStatus := range serveDeploymentStatuses {
 		ds := &api.ServeDeploymentStatus{
 			DeploymentName: deploymentName,
@@ -621,7 +628,7 @@ func PopulateServeDeploymentStatus(
 }
 
 func PopulateRayServiceEvent(serviceName string, events []corev1.Event) []*api.RayServiceEvent {
-	serviceEvents := make([]*api.RayServiceEvent, 0)
+	serviceEvents := make([]*api.RayServiceEvent, 0, len(events))
 	for _, event := range events {
 		serviceEvent := &api.RayServiceEvent{
 			Id:             event.Name,
