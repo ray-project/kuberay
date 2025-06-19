@@ -475,3 +475,16 @@ func TestRaySubmitCmd(t *testing.T) {
 
 	assert.Equal(t, expectedCmd, actualCmd)
 }
+
+func TestRayJobSubmit_FlagsHaveZeroDefaults(t *testing.T) {
+	streams, _, _, _ := genericclioptions.NewTestIOStreams()
+	factory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	opts := NewJobSubmitOptions(factory, streams)
+
+	cmd := NewJobSubmitCommand(factory, streams)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
+	assert.Equal(t, float32(0), opts.entryPointCPU, "default entrypoint-num-cpus should be 0")
+	assert.Equal(t, float32(0), opts.entryPointGPU, "default entrypoint-num-gpus should be 0")
+	assert.Equal(t, 0, opts.entryPointMemory, "default entrypoint-memory should be 0")
+}

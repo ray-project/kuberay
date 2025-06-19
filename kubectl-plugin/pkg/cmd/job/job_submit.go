@@ -159,9 +159,9 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringVar(&options.metadataJson, "metadata-json", options.metadataJson, "JSON-serialized dictionary of metadata to attach to the job.")
 	cmd.Flags().StringVar(&options.logStyle, "log-style", options.logStyle, "Specific to 'ray job submit'. Options are 'auto | record | pretty'")
 	cmd.Flags().StringVar(&options.logColor, "log-color", options.logColor, "Specific to 'ray job submit'. Options are 'auto | false | true'")
-	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", options.entryPointCPU, "Number of CPUs reserved for the for the entrypoint command")
-	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", options.entryPointGPU, "Number of GPUs reserved for the for the entrypoint command")
-	cmd.Flags().IntVar(&options.entryPointMemory, "entrypoint-memory", options.entryPointMemory, "Amount of memory reserved for the entrypoint command")
+	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", 0, "Number of CPUs reserved for the entrypoint command")
+	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", 0, "Number of GPUs reserved for the entrypoint command")
+	cmd.Flags().IntVar(&options.entryPointMemory, "entrypoint-memory", 0, "Amount of memory reserved for the entrypoint command")
 	cmd.Flags().BoolVar(&options.noWait, "no-wait", options.noWait, "If present, will not stream logs and wait for job to finish")
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
