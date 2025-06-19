@@ -484,7 +484,7 @@ func TestRayJobSubmit_FlagsHaveZeroDefaults(t *testing.T) {
 	cmd := NewJobSubmitCommand(factory, streams)
 	require.NoError(t, cmd.ParseFlags([]string{}))
 
-	assert.Equal(t, float32(0), opts.entryPointCPU, "default entrypoint-num-cpus should be 0")
-	assert.Equal(t, float32(0), opts.entryPointGPU, "default entrypoint-num-gpus should be 0")
+	assert.InDelta(t, float32(0), opts.entryPointCPU, 1e-6, "default entrypoint-num-cpus should be 0")
+	assert.InDelta(t, float32(0), opts.entryPointGPU, 1e-6, "default entrypoint-num-gpus should be 0")
 	assert.Equal(t, 0, opts.entryPointMemory, "default entrypoint-memory should be 0")
 }
