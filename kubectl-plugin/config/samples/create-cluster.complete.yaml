@@ -6,8 +6,8 @@ labels:
 annotations:
   dead: beef
 
-ray-version: 2.44.0
-image: rayproject/ray:2.44.0
+ray-version: 2.46.0
+image: rayproject/ray:2.46.0
 
 head:
   cpu: 3
