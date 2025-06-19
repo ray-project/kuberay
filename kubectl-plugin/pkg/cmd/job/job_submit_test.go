@@ -476,7 +476,7 @@ func TestRaySubmitCmd(t *testing.T) {
 	assert.Equal(t, expectedCmd, actualCmd)
 }
 
-func TestRayJobSubmit_FlagsHaveZeroDefaults(t *testing.T) {
+func TestRayJobSubmit_FlagsHaveDefaults(t *testing.T) {
 	streams, _, _, _ := genericclioptions.NewTestIOStreams()
 	factory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 	opts := NewJobSubmitOptions(factory, streams)
