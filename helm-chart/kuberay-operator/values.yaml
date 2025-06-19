@@ -95,7 +95,7 @@ metrics:
     # -- Prometheus ServiceMonitor interval
     interval: 30s
     # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
-    honorLabels: false
+    honorLabels: true
     # -- Prometheus ServiceMonitor selector
     selector: {}
       #  release: prometheus
