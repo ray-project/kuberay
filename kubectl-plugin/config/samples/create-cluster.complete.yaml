@@ -8,6 +8,7 @@ annotations:
 
 ray-version: 2.46.0
 image: rayproject/ray:2.46.0
+service-account: my-service-account@my-project.iam.gserviceaccount.com
 
 head:
   cpu: 3
@@ -39,6 +40,9 @@ worker-groups:
     ephemeral-storage: 13Gi
     ray-start-params:
       metrics-export-port: 8081
+
+autoscaler:
+  version: v2
 
 gke:
   # Cloud Storage FUSE options
