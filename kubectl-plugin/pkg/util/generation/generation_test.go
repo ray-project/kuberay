@@ -875,8 +875,11 @@ func TestParseConfigFile(t *testing.T) {
 				},
 				WorkerGroups: []WorkerGroup{
 					{
+						Name:     ptr.To("default-group"),
 						Replicas: int32(1),
+						CPU:      ptr.To("2"),
 						GPU:      ptr.To("1"),
+						Memory:   ptr.To("4Gi"),
 					},
 				},
 			},
@@ -1107,4 +1110,252 @@ func TestGetGCSFuseVolumeAttributes(t *testing.T) {
 
 	result := getGCSFuseVolumeAttributes(config)
 	assert.Equal(t, expected, result)
+}
+
+func TestMergeWithDefaults(t *testing.T) {
+	defaultRayVersion := util.RayVersion
+	defaultImage := fmt.Sprintf("rayproject/ray:%s", util.RayVersion)
+
+	t.Run("Empty RayClusterConfig and return default RayClusterConfig", func(t *testing.T) {
+		result := MergeWithDefaults(&RayClusterConfig{})
+		expected := newRayClusterConfigWithDefaults()
+		assert.Equal(t, expected, result)
+	})
+
+	t.Run("Override namespace, name, labels, annotations", func(t *testing.T) {
+		inputNamespace := ptr.To("test-namespace")
+		inputName := ptr.To("test-name")
+		inputLabels := map[string]string{"key1": "value1", "key2": "value2"}
+		inputAnnotations := map[string]string{"annotation1": "value1", "annotation2": "value2"}
+
+		override := &RayClusterConfig{
+			Namespace:   inputNamespace,
+			Name:        inputName,
+			Labels:      inputLabels,
+			Annotations: inputAnnotations,
+		}
+		result := MergeWithDefaults(override)
+		assert.Equal(t, inputNamespace, result.Namespace)
+		assert.Equal(t, inputName, result.Name)
+		assert.Equal(t, inputLabels, result.Labels)
+		assert.Equal(t, inputAnnotations, result.Annotations)
+	})
+
+	t.Run("Override RayVersion, Image, ServiceAccount", func(t *testing.T) {
+		inputRayVersion := ptr.To("4.16.0")
+		inputImage := ptr.To("custom/image:tag")
+		inputServiceAccount := ptr.To("svcacct")
+
+		override := &RayClusterConfig{
+			RayVersion:     inputRayVersion,
+			Image:          inputImage,
+			ServiceAccount: inputServiceAccount,
+		}
+		result := MergeWithDefaults(override)
+		assert.Equal(t, inputRayVersion, result.RayVersion)
+		assert.Equal(t, inputImage, result.Image)
+		assert.Equal(t, inputServiceAccount, result.ServiceAccount)
+	})
+
+	t.Run("Override Head fields", func(t *testing.T) {
+		headCPU := ptr.To("4")
+		headGPU := ptr.To("2")
+		headMemory := ptr.To("8Gi")
+		headEphemeralStorage := ptr.To("20Gi")
+		headRayStartParams := map[string]string{"foo": "bar"}
+		headNodeSelectors := map[string]string{"disktype": "ssd"}
+
+		override := &RayClusterConfig{
+			Head: &Head{
+				CPU:              headCPU,
+				GPU:              headGPU,
+				Memory:           headMemory,
+				EphemeralStorage: headEphemeralStorage,
+				RayStartParams:   headRayStartParams,
+				NodeSelectors:    headNodeSelectors,
+			},
+		}
+		result := MergeWithDefaults(override)
+		assert.Equal(t, headCPU, result.Head.CPU)
+		assert.Equal(t, headGPU, result.Head.GPU)
+		assert.Equal(t, headMemory, result.Head.Memory)
+		assert.Equal(t, headEphemeralStorage, result.Head.EphemeralStorage)
+		assert.Equal(t, headRayStartParams, result.Head.RayStartParams)
+		assert.Equal(t, headNodeSelectors, result.Head.NodeSelectors)
+	})
+
+	t.Run("Override only some fields in Head, others remain default", func(t *testing.T) {
+		headCPU := ptr.To("8")
+
+		override := &RayClusterConfig{
+			Head: &Head{
+				CPU: headCPU,
+			},
+		}
+		result := MergeWithDefaults(override)
+		assert.Equal(t, headCPU, result.Head.CPU)
+		assert.Equal(t, ptr.To("4Gi"), result.Head.Memory)
+		assert.Equal(t, defaultRayVersion, *result.RayVersion)
+		assert.Equal(t, defaultImage, *result.Image)
+	})
+
+	t.Run("Override GKE.GCSFuse fields", func(t *testing.T) {
+		gcsFuseMountOption := ptr.To("opt1")
+		gcsFuseDisableMetrics := ptr.To(true)
+		gcsFuseMetadataPrefetchOnMount := ptr.To(true)
+		gcsFuseSkipCSIBucketAccessCheck := ptr.To(true)
+		gcsFuseBucketName := "bucket"
+		gcsFuseMountPath := "/mnt/path"
+		gcsFuseCPU := ptr.To("1")
+		gcsFuseMemory := ptr.To("2Gi")
+		gcsFuseEphemeralStorage := ptr.To("3Gi")
+		gcsFuseResources := &GCSFuseResources{
+			CPU:              gcsFuseCPU,
+			Memory:           gcsFuseMemory,
+			EphemeralStorage: gcsFuseEphemeralStorage,
+		}
+
+		override := &RayClusterConfig{
+			GKE: &GKE{
+				GCSFuse: &GCSFuse{
+					MountOptions:                   gcsFuseMountOption,
+					DisableMetrics:                 gcsFuseDisableMetrics,
+					GCSFuseMetadataPrefetchOnMount: gcsFuseMetadataPrefetchOnMount,
+					SkipCSIBucketAccessCheck:       gcsFuseSkipCSIBucketAccessCheck,
+					BucketName:                     gcsFuseBucketName,
+					MountPath:                      gcsFuseMountPath,
+					Resources: &GCSFuseResources{
+						CPU:              gcsFuseCPU,
+						Memory:           gcsFuseMemory,
+						EphemeralStorage: gcsFuseEphemeralStorage,
+					},
+				},
+			},
+		}
+		result := MergeWithDefaults(override)
+		assert.NotNil(t, result.GKE)
+		assert.NotNil(t, result.GKE.GCSFuse)
+		assert.Equal(t, gcsFuseMountOption, result.GKE.GCSFuse.MountOptions)
+		assert.Equal(t, gcsFuseDisableMetrics, result.GKE.GCSFuse.DisableMetrics)
+		assert.Equal(t, gcsFuseMetadataPrefetchOnMount, result.GKE.GCSFuse.GCSFuseMetadataPrefetchOnMount)
+		assert.Equal(t, gcsFuseSkipCSIBucketAccessCheck, result.GKE.GCSFuse.SkipCSIBucketAccessCheck)
+		assert.Equal(t, gcsFuseBucketName, result.GKE.GCSFuse.BucketName)
+		assert.Equal(t, gcsFuseMountPath, result.GKE.GCSFuse.MountPath)
+		assert.Equal(t, gcsFuseResources, result.GKE.GCSFuse.Resources)
+		assert.Equal(t, gcsFuseCPU, result.GKE.GCSFuse.Resources.CPU)
+		assert.Equal(t, gcsFuseMemory, result.GKE.GCSFuse.Resources.Memory)
+		assert.Equal(t, gcsFuseEphemeralStorage, result.GKE.GCSFuse.Resources.EphemeralStorage)
+	})
+
+	t.Run("Override Autoscaler", func(t *testing.T) {
+		override := &RayClusterConfig{
+			Autoscaler: &Autoscaler{Version: AutoscalerV2},
+		}
+		result := MergeWithDefaults(override)
+		assert.NotNil(t, result.Autoscaler)
+		assert.Equal(t, AutoscalerV2, result.Autoscaler.Version)
+	})
+
+	t.Run("Override WorkerGroups fields", func(t *testing.T) {
+		wgName1 := ptr.To("wg1")
+		wgCPU := ptr.To("5")
+		wgGPU := ptr.To("1")
+		wgTPU := ptr.To("2")
+		wgNumOfHosts := ptr.To(int32(3))
+		wgMemory := ptr.To("16Gi")
+		wgEphemeralStorage := ptr.To("30Gi")
+		wgRayStartParams := map[string]string{"param": "val"}
+		wgNodeSelectors := map[string]string{"zone": "us-central1-a"}
+		wgReplicas := int32(7)
+
+		override := &RayClusterConfig{
+			WorkerGroups: []WorkerGroup{
+				{
+					Name:             wgName1,
+					CPU:              wgCPU,
+					GPU:              wgGPU,
+					TPU:              wgTPU,
+					NumOfHosts:       wgNumOfHosts,
+					Memory:           wgMemory,
+					EphemeralStorage: wgEphemeralStorage,
+					RayStartParams:   wgRayStartParams,
+					NodeSelectors:    wgNodeSelectors,
+					Replicas:         wgReplicas,
+				},
+			},
+		}
+		result := MergeWithDefaults(override)
+		require.Len(t, result.WorkerGroups, 1)
+		wg := result.WorkerGroups[0]
+		assert.Equal(t, wgName1, wg.Name)
+		assert.Equal(t, wgCPU, wg.CPU)
+		assert.Equal(t, wgGPU, wg.GPU)
+		assert.Equal(t, wgTPU, wg.TPU)
+		assert.Equal(t, wgNumOfHosts, wg.NumOfHosts)
+		assert.Equal(t, wgMemory, wg.Memory)
+		assert.Equal(t, wgEphemeralStorage, wg.EphemeralStorage)
+		assert.Equal(t, wgRayStartParams, wg.RayStartParams)
+		assert.Equal(t, wgNodeSelectors, wg.NodeSelectors)
+		assert.Equal(t, wgReplicas, wg.Replicas)
+	})
+
+	t.Run("Override WorkerGroups with more groups than defaults", func(t *testing.T) {
+		wg1Name := ptr.To("wg1")
+		wg2Name := ptr.To("wg2")
+		wg1Replicas := int32(2)
+		wg2Replicas := int32(3)
+
+		override := &RayClusterConfig{
+			WorkerGroups: []WorkerGroup{
+				{Name: wg1Name, Replicas: wg1Replicas},
+				{Name: wg2Name, Replicas: wg2Replicas},
+			},
+		}
+		result := MergeWithDefaults(override)
+		require.Len(t, result.WorkerGroups, 2)
+		assert.Equal(t, wg1Name, result.WorkerGroups[0].Name)
+		assert.Equal(t, wg1Replicas, result.WorkerGroups[0].Replicas)
+		assert.Equal(t, wg2Name, result.WorkerGroups[1].Name)
+		assert.Equal(t, wg2Replicas, result.WorkerGroups[1].Replicas)
+	})
+
+	t.Run("Override WorkerGroups with zero replicas keeps default", func(t *testing.T) {
+		wg1Name := ptr.To("wg1")
+
+		override := &RayClusterConfig{
+			WorkerGroups: []WorkerGroup{
+				{Name: wg1Name, Replicas: 0},
+			},
+		}
+		result := MergeWithDefaults(override)
+		require.Len(t, result.WorkerGroups, 1)
+		assert.Equal(t, wg1Name, result.WorkerGroups[0].Name)
+		assert.Equal(t, int32(1), result.WorkerGroups[0].Replicas)
+	})
+
+	t.Run("Override WorkerGroups with empty name keeps default name", func(t *testing.T) {
+		override := &RayClusterConfig{
+			WorkerGroups: []WorkerGroup{
+				{Name: nil, Replicas: 2},
+			},
+		}
+		result := MergeWithDefaults(override)
+		require.Len(t, result.WorkerGroups, 1)
+		assert.Equal(t, result.WorkerGroups[0].Name, ptr.To("default-group"))
+		assert.Equal(t, int32(2), result.WorkerGroups[0].Replicas)
+	})
+
+	t.Run("Override only WorkerGroups CPU", func(t *testing.T) {
+		override := &RayClusterConfig{
+			WorkerGroups: []WorkerGroup{
+				{CPU: ptr.To("1")},
+			},
+		}
+		result := MergeWithDefaults(override)
+		require.Len(t, result.WorkerGroups, 1)
+		assert.Equal(t, result.WorkerGroups[0].Name, ptr.To("default-group"))
+		assert.Equal(t, int32(1), result.WorkerGroups[0].Replicas)
+		assert.Equal(t, ptr.To("1"), result.WorkerGroups[0].CPU)
+		assert.Equal(t, ptr.To("4Gi"), result.WorkerGroups[0].Memory)
+	})
 }

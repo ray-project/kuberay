@@ -444,12 +444,148 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	config := newRayClusterConfigWithDefaults()
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var overrideConfig RayClusterConfig
+	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
-
+	config := MergeWithDefaults(&overrideConfig)
 	return config, nil
+}
+
+func MergeWithDefaults(overrideConfig *RayClusterConfig) *RayClusterConfig {
+	config := newRayClusterConfigWithDefaults()
+
+	if overrideConfig.Namespace != nil {
+		config.Namespace = overrideConfig.Namespace
+	}
+	if overrideConfig.Name != nil {
+		config.Name = overrideConfig.Name
+	}
+	if overrideConfig.Labels != nil {
+		if config.Labels == nil {
+			config.Labels = make(map[string]string)
+		}
+		maps.Copy(config.Labels, overrideConfig.Labels)
+	}
+	if overrideConfig.Annotations != nil {
+		if config.Annotations == nil {
+			config.Annotations = make(map[string]string)
+		}
+		maps.Copy(config.Annotations, overrideConfig.Annotations)
+	}
+	if overrideConfig.RayVersion != nil {
+		config.RayVersion = overrideConfig.RayVersion
+	}
+	if overrideConfig.Image != nil {
+		config.Image = overrideConfig.Image
+	}
+	if overrideConfig.ServiceAccount != nil {
+		config.ServiceAccount = overrideConfig.ServiceAccount
+	}
+	if overrideConfig.Head != nil {
+		if overrideConfig.Head.CPU != nil {
+			config.Head.CPU = overrideConfig.Head.CPU
+		}
+		if overrideConfig.Head.GPU != nil {
+			config.Head.GPU = overrideConfig.Head.GPU
+		}
+		if overrideConfig.Head.Memory != nil {
+			config.Head.Memory = overrideConfig.Head.Memory
+		}
+		if overrideConfig.Head.EphemeralStorage != nil {
+			config.Head.EphemeralStorage = overrideConfig.Head.EphemeralStorage
+		}
+		if overrideConfig.Head.RayStartParams != nil {
+			if config.Head.RayStartParams == nil {
+				config.Head.RayStartParams = make(map[string]string)
+			}
+			maps.Copy(config.Head.RayStartParams, overrideConfig.Head.RayStartParams)
+		}
+		if overrideConfig.Head.NodeSelectors != nil {
+			if config.Head.NodeSelectors == nil {
+				config.Head.NodeSelectors = make(map[string]string)
+			}
+			maps.Copy(config.Head.NodeSelectors, overrideConfig.Head.NodeSelectors)
+		}
+	}
+	if overrideConfig.GKE != nil {
+		if config.GKE == nil {
+			config.GKE = &GKE{}
+		}
+		if overrideConfig.GKE.GCSFuse != nil {
+			if config.GKE.GCSFuse == nil {
+				config.GKE.GCSFuse = &GCSFuse{}
+			}
+			config.GKE.GCSFuse.MountOptions = overrideConfig.GKE.GCSFuse.MountOptions
+			config.GKE.GCSFuse.DisableMetrics = overrideConfig.GKE.GCSFuse.DisableMetrics
+			config.GKE.GCSFuse.GCSFuseMetadataPrefetchOnMount = overrideConfig.GKE.GCSFuse.GCSFuseMetadataPrefetchOnMount
+			config.GKE.GCSFuse.SkipCSIBucketAccessCheck = overrideConfig.GKE.GCSFuse.SkipCSIBucketAccessCheck
+			if overrideConfig.GKE.GCSFuse.Resources != nil {
+				if config.GKE.GCSFuse.Resources == nil {
+					config.GKE.GCSFuse.Resources = &GCSFuseResources{}
+				}
+				config.GKE.GCSFuse.Resources.CPU = overrideConfig.GKE.GCSFuse.Resources.CPU
+				config.GKE.GCSFuse.Resources.Memory = overrideConfig.GKE.GCSFuse.Resources.Memory
+				config.GKE.GCSFuse.Resources.EphemeralStorage = overrideConfig.GKE.GCSFuse.Resources.EphemeralStorage
+			}
+			config.GKE.GCSFuse.BucketName = overrideConfig.GKE.GCSFuse.BucketName
+			config.GKE.GCSFuse.MountPath = overrideConfig.GKE.GCSFuse.MountPath
+		}
+	}
+	if overrideConfig.Autoscaler != nil {
+		if config.Autoscaler == nil {
+			config.Autoscaler = &Autoscaler{}
+		}
+		config.Autoscaler.Version = overrideConfig.Autoscaler.Version
+	}
+	if overrideConfig.WorkerGroups != nil {
+		for len(config.WorkerGroups) < len(overrideConfig.WorkerGroups) {
+			config.WorkerGroups = append(config.WorkerGroups, WorkerGroup{
+				Replicas: util.DefaultWorkerReplicas,
+				CPU:      ptr.To(util.DefaultWorkerCPU),
+				Memory:   ptr.To(util.DefaultWorkerMemory),
+			})
+		}
+		for i, workerGroup := range overrideConfig.WorkerGroups {
+			if workerGroup.Name != nil && *workerGroup.Name != "" {
+				config.WorkerGroups[i].Name = workerGroup.Name
+			}
+			if workerGroup.CPU != nil {
+				config.WorkerGroups[i].CPU = workerGroup.CPU
+			}
+			if workerGroup.GPU != nil {
+				config.WorkerGroups[i].GPU = workerGroup.GPU
+			}
+			if workerGroup.TPU != nil {
+				config.WorkerGroups[i].TPU = workerGroup.TPU
+			}
+			if workerGroup.NumOfHosts != nil {
+				config.WorkerGroups[i].NumOfHosts = workerGroup.NumOfHosts
+			}
+			if workerGroup.Memory != nil {
+				config.WorkerGroups[i].Memory = workerGroup.Memory
+			}
+			if workerGroup.EphemeralStorage != nil {
+				config.WorkerGroups[i].EphemeralStorage = workerGroup.EphemeralStorage
+			}
+			if workerGroup.RayStartParams != nil {
+				if config.WorkerGroups[i].RayStartParams == nil {
+					config.WorkerGroups[i].RayStartParams = make(map[string]string)
+				}
+				maps.Copy(config.WorkerGroups[i].RayStartParams, workerGroup.RayStartParams)
+			}
+			if workerGroup.NodeSelectors != nil {
+				if config.WorkerGroups[i].NodeSelectors == nil {
+					config.WorkerGroups[i].NodeSelectors = make(map[string]string)
+				}
+				maps.Copy(config.WorkerGroups[i].NodeSelectors, workerGroup.NodeSelectors)
+			}
+			if workerGroup.Replicas > 0 {
+				config.WorkerGroups[i].Replicas = workerGroup.Replicas
+			}
+		}
+	}
+	return config
 }
 
 // ValidateConfig validates the RayClusterConfig object
