@@ -238,7 +238,7 @@ func TestGetRayClusters(t *testing.T) {
 		expectedOutput      string
 		cluster             string
 		expectedRayClusters []runtime.Object
-		injectedRayClusters []runtime.Object
+		allFakeRayClusters  []runtime.Object
 		allNamespaces       bool
 	}{
 		{
@@ -268,39 +268,39 @@ func TestGetRayClusters(t *testing.T) {
 		{
 			name:                "should not error if no cluster name is provided, searching all namespaces, and clusters are found",
 			namespace:           nil,
-			injectedRayClusters: []runtime.Object{rayCluster},
+			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:                "should not error if a cluster name is provided, searching all namespaces, and clusters are found",
 			cluster:             "my-cluster",
 			namespace:           nil,
-			injectedRayClusters: []runtime.Object{rayCluster},
+			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:                "should not error if no cluster name is provided, searching one namespace, and clusters are found",
 			namespace:           &namespace,
-			injectedRayClusters: []runtime.Object{rayCluster},
+			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:                "should not error if a cluster name is provided, searching one namespace, and clusters are found",
 			cluster:             "my-cluster",
 			namespace:           &namespace,
-			injectedRayClusters: []runtime.Object{rayCluster},
+			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
 		},
 		{
 			name:                "should not error if no cluster name is provided, searching default namespace, and clusters are found",
 			namespace:           &defaultNamespace,
-			injectedRayClusters: []runtime.Object{rayCluster, rayClusterInDefault},
+			allFakeRayClusters:  []runtime.Object{rayCluster, rayClusterInDefault},
 			expectedRayClusters: []runtime.Object{rayClusterInDefault},
 		},
 		{
 			name:                "should not error if no cluster name is provided, searching all namespace, and clusters are found",
 			allNamespaces:       true,
-			injectedRayClusters: []runtime.Object{rayCluster, rayClusterInDefault},
+			allFakeRayClusters:  []runtime.Object{rayCluster, rayClusterInDefault},
 			expectedRayClusters: []runtime.Object{rayCluster, rayClusterInDefault},
 		},
 	}
@@ -318,7 +318,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(tc.injectedRayClusters...)
+			rayClient := rayClientFake.NewSimpleClientset(tc.allFakeRayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			rayClusters, err := getRayClusters(context.Background(), &fakeClusterGetOptions, k8sClients)
