@@ -1117,7 +1117,9 @@ func TestMergeWithDefaults(t *testing.T) {
 	defaultImage := fmt.Sprintf("rayproject/ray:%s", util.RayVersion)
 
 	t.Run("Empty RayClusterConfig and return default RayClusterConfig", func(t *testing.T) {
-		result := MergeWithDefaults(&RayClusterConfig{})
+		result, err := MergeWithDefaultConfig(&RayClusterConfig{})
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		expected := newRayClusterConfigWithDefaults()
 		assert.Equal(t, expected, result)
 	})
@@ -1134,7 +1136,9 @@ func TestMergeWithDefaults(t *testing.T) {
 			Labels:      inputLabels,
 			Annotations: inputAnnotations,
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.Equal(t, inputNamespace, result.Namespace)
 		assert.Equal(t, inputName, result.Name)
 		assert.Equal(t, inputLabels, result.Labels)
@@ -1151,7 +1155,9 @@ func TestMergeWithDefaults(t *testing.T) {
 			Image:          inputImage,
 			ServiceAccount: inputServiceAccount,
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.Equal(t, inputRayVersion, result.RayVersion)
 		assert.Equal(t, inputImage, result.Image)
 		assert.Equal(t, inputServiceAccount, result.ServiceAccount)
@@ -1175,7 +1181,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				NodeSelectors:    headNodeSelectors,
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.Equal(t, headCPU, result.Head.CPU)
 		assert.Equal(t, headGPU, result.Head.GPU)
 		assert.Equal(t, headMemory, result.Head.Memory)
@@ -1192,7 +1200,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				CPU: headCPU,
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.Equal(t, headCPU, result.Head.CPU)
 		assert.Equal(t, ptr.To("4Gi"), result.Head.Memory)
 		assert.Equal(t, defaultRayVersion, *result.RayVersion)
@@ -1232,7 +1242,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.NotNil(t, result.GKE)
 		assert.NotNil(t, result.GKE.GCSFuse)
 		assert.Equal(t, gcsFuseMountOption, result.GKE.GCSFuse.MountOptions)
@@ -1251,7 +1263,9 @@ func TestMergeWithDefaults(t *testing.T) {
 		override := &RayClusterConfig{
 			Autoscaler: &Autoscaler{Version: AutoscalerV2},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		assert.NotNil(t, result.Autoscaler)
 		assert.Equal(t, AutoscalerV2, result.Autoscaler.Version)
 	})
@@ -1284,7 +1298,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		require.Len(t, result.WorkerGroups, 1)
 		wg := result.WorkerGroups[0]
 		assert.Equal(t, wgName1, wg.Name)
@@ -1311,7 +1327,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				{Name: wg2Name, Replicas: wg2Replicas},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		require.Len(t, result.WorkerGroups, 2)
 		assert.Equal(t, wg1Name, result.WorkerGroups[0].Name)
 		assert.Equal(t, wg1Replicas, result.WorkerGroups[0].Replicas)
@@ -1327,7 +1345,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				{Name: wg1Name, Replicas: 0},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		require.Len(t, result.WorkerGroups, 1)
 		assert.Equal(t, wg1Name, result.WorkerGroups[0].Name)
 		assert.Equal(t, int32(1), result.WorkerGroups[0].Replicas)
@@ -1339,7 +1359,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				{Name: nil, Replicas: 2},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		require.Len(t, result.WorkerGroups, 1)
 		assert.Equal(t, result.WorkerGroups[0].Name, ptr.To("default-group"))
 		assert.Equal(t, int32(2), result.WorkerGroups[0].Replicas)
@@ -1351,7 +1373,9 @@ func TestMergeWithDefaults(t *testing.T) {
 				{CPU: ptr.To("1")},
 			},
 		}
-		result := MergeWithDefaults(override)
+		result, err := MergeWithDefaultConfig(override)
+		require.NoError(t, err)
+		assert.NotNil(t, result)
 		require.Len(t, result.WorkerGroups, 1)
 		assert.Equal(t, result.WorkerGroups[0].Name, ptr.To("default-group"))
 		assert.Equal(t, int32(1), result.WorkerGroups[0].Replicas)
