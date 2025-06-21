@@ -66,8 +66,9 @@ spec:
     - groupName: worker-group
       maxReplicas: 3
       minReplicas: 1
-      rayStartParams: {}
       replicas: 3
+      # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+      # rayStartParams: {}
       template:
         metadata:
           annotations:

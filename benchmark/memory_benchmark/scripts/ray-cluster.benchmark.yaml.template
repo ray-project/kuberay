@@ -32,7 +32,6 @@ spec:
     minReplicas: 0
     maxReplicas: 200
     groupName: small-group
-    rayStartParams: {}
     template:
       spec:
         containers:
