@@ -62,7 +62,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	}
 
 	// init the batch scheduler manager
-	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig())
+	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig(), mgr.GetClient())
 	if err != nil {
 		// fail fast if the scheduler plugin fails to init
 		// prevent running the controller in an undefined state
