@@ -9,10 +9,6 @@ import (
 const tpuDocURL = "https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability"
 
 func ValidateResourceQuantity(value string, name string) error {
-	if value == "" {
-		return nil
-	}
-
 	q, err := resource.ParseQuantity(value)
 	if err != nil {
 		return fmt.Errorf("%s is not a valid resource quantity: %w", name, err)
