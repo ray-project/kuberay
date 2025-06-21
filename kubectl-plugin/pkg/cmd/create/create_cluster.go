@@ -123,7 +123,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", util.DefaultHeadMemory, "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", util.DefaultHeadGPU, "number of GPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", util.DefaultHeadEphemeralStorage, "amount of ephemeral storage in the Ray head")
-	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
+	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", nil, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", util.DefaultWorkerReplicas, "desired worker group replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", util.DefaultWorkerCPU, "number of CPUs in each worker group replica")
@@ -137,7 +137,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 			util.NodeSelectorGKETPUTopology,
 		),
 	)
-	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
+	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", nil, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", util.DefaultNumOfHosts, "number of hosts in default worker group per replica")
 	cmd.Flags().Var(&options.autoscaler, "autoscaler", fmt.Sprintf("autoscaler to use, supports: %q, %q", generation.AutoscalerV1, generation.AutoscalerV2))
