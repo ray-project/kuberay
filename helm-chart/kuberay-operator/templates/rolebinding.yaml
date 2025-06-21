@@ -5,12 +5,12 @@ metadata:
   name: {{ include "kuberay-operator.clusterRoleBinding.name" . }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
-subjects:
-- kind: ServiceAccount
-  name: {{ include "kuberay-operator.serviceAccount.name" . }}
-  namespace: {{ .Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: {{ include "kuberay-operator.clusterRole.name" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kuberay-operator.serviceAccount.name" . }}
+  namespace: {{ .Release.Namespace }}
 {{- end }}
