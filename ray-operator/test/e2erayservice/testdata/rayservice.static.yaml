@@ -22,7 +22,6 @@ spec:
   rayClusterConfig:
     rayVersion: '2.46.0'
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
