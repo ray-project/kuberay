@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,6 +35,7 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	nextScheduleDelta               = 100 * time.Millisecond
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -429,9 +431,32 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
+		if rayJobInstance.Spec.Schedule != "" {
+			// If the rayjob has cron scheduling then we should change status to schedule for the next job
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+		} else {
+			// If the RayJob is completed without scheduling, we should not requeue it.
+			return ctrl.Result{}, nil
+		}
+	case rayv1.JobDeploymentStatusScheduled:
+		cron_schedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
+		if err != nil {
+			// this is likely a user error in defining the spec value
+			// we should log the error and not reconcile this cronjob until an update to spec
+			logger.Error(err, "The cron schedule provided is unparseable")
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
+			return ctrl.Result{}, nil
+		}
 
-		// If the RayJob is completed, we should not requeue it.
-		return ctrl.Result{}, nil
+		t := utils.NextScheduleTimeDuration(rayJobInstance, time.Now(), cron_schedule)
+		if *t <= nextScheduleDelta {
+			logger.Info("Next schedule (%v) is WITHIN the %v delta. Initiating schedule!\n", *t, nextScheduleDelta)
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+
+		} else {
+			logger.Info("Next schedule (%v) is BEYOND the %v delta. Will wait.\n", *t, nextScheduleDelta)
+			return ctrl.Result{RequeueAfter: *t}, err
+		}
 	default:
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil

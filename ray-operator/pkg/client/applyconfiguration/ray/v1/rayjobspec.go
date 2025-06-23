@@ -29,6 +29,7 @@ type RayJobSpecApplyConfiguration struct {
 	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
 	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
 	Suspend                  *bool                                     `json:"suspend,omitempty"`
+	Schedule                 *string                                   `json:"schedule,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs a declarative configuration of the RayJobSpec type for use with
@@ -198,5 +199,13 @@ func (b *RayJobSpecApplyConfiguration) WithShutdownAfterJobFinishes(value bool) 
 // If called multiple times, the Suspend field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithSuspend(value bool) *RayJobSpecApplyConfiguration {
 	b.Suspend = &value
+	return b
+}
+
+// WithSchedule sets the Schedule field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Schedule field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSchedule(value string) *RayJobSpecApplyConfiguration {
+	b.Schedule = &value
 	return b
 }

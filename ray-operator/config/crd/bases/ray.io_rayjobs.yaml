@@ -8067,6 +8067,8 @@ spec:
                 type: object
               runtimeEnvYAML:
                 type: string
+              schedule:
+                type: string
               shutdownAfterJobFinishes:
                 type: boolean
               submissionMode:
@@ -11769,6 +11771,9 @@ spec:
               jobId:
                 type: string
               jobStatus:
+                type: string
+              lastScheduleTime:
+                format: date-time
                 type: string
               message:
                 type: string
