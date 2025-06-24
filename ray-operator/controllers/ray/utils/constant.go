@@ -224,6 +224,21 @@ const (
 	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
 	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
 	MaxRayJobNameLength = MaxRayClusterNameLength - 6
+
+	RayNodeMarketType      = "RAY_NODE_MARKET_TYPE"
+	RayNodeZone            = "RAY_NODE_ZONE"
+	RayNodeRegion          = "RAY_NODE_REGION"
+	GKESpotLabel           = "cloud.google.com/gke-spot"
+	EKSCapacityTypeLabel   = "eks.amazonaws.com/capacityType"
+	K8sTopologyRegionLabel = "topology.kubernetes.io/region"
+	K8sTopologyZoneLabel   = "topology.kubernetes.io/zone"
+)
+
+type PodMarketType string
+
+const (
+	SpotMarketType     PodMarketType = "spot"
+	OnDemandMarketType PodMarketType = "on-demand"
 )
 
 type ServiceType string
