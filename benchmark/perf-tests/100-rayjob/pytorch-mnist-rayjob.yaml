@@ -15,7 +15,6 @@ spec:
   rayClusterSpec:
     rayVersion: '2.46.0'
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
@@ -39,7 +38,6 @@ spec:
         minReplicas: 1
         maxReplicas: 5
         groupName: worker-group
-        rayStartParams: {}
         template:
           spec:
             containers:
