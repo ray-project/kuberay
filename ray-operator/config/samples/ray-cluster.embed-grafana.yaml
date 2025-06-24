@@ -8,8 +8,6 @@ spec:
     rayStartParams: {}
     # pod template
     template:
-      metadata:
-        labels: {}
       spec:
         containers:
         - name: ray-head

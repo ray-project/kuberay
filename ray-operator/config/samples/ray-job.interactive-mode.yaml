@@ -36,8 +36,8 @@ spec:
     rayVersion: 2.46.0
     workerGroupSpecs:
     - groupName: default-group
-      rayStartParams: {}
       replicas: 1
+      rayStartParams: {}
       template:
         spec:
           containers:
