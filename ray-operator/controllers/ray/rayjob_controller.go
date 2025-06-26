@@ -35,7 +35,7 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
-	nextScheduleDelta               = 100 * time.Millisecond
+	ScheduleDelta                   = 1000 * time.Millisecond
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -321,7 +321,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if jobInfo.EndTime != 0 {
 			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
 		}
-	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
+	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying, rayv1.JobDeploymentStatusScheduling:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -355,10 +355,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
+		switch rayJobInstance.Status.JobDeploymentStatus {
+		case rayv1.JobDeploymentStatusSuspending:
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
-		}
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
+		case rayv1.JobDeploymentStatusScheduling:
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+		case rayv1.JobDeploymentStatusRetrying:
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 		}
 	case rayv1.JobDeploymentStatusSuspended:
@@ -433,30 +435,47 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		if rayJobInstance.Spec.Schedule != "" {
 			// If the rayjob has cron scheduling then we should change status to schedule for the next job
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+			logger.Info("RayJob is scheduled again")
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
 		} else {
 			// If the RayJob is completed without scheduling, we should not requeue it.
+			logger.Info("RayJob is not scheduled")
 			return ctrl.Result{}, nil
 		}
 	case rayv1.JobDeploymentStatusScheduled:
+		if rayJobInstance.Status.JobStatus == rayv1.JobStatusScheduled {
+			logger.Info("We are have reached the new time for a job after reconciling")
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+			break
+		}
+
+		logger.Info("We are Scheduling for the next RayJob")
 		cron_schedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
 		if err != nil {
 			// this is likely a user error in defining the spec value
 			// we should log the error and not reconcile this cronjob until an update to spec
 			logger.Error(err, "The cron schedule provided is unparseable")
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
+		logger.Info("Successfully parsed cron schedule", "CronSchedule", cron_schedule)
 
-		t := utils.NextScheduleTimeDuration(rayJobInstance, time.Now(), cron_schedule)
-		if *t <= nextScheduleDelta {
-			logger.Info("Next schedule (%v) is WITHIN the %v delta. Initiating schedule!\n", *t, nextScheduleDelta)
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+		t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, time.Now(), cron_schedule)
+		t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, time.Now(), cron_schedule)
 
+		logger.Info("Got the time until we run the next RayJob", "NextScheduleTimeDuration", t1.Abs())
+		if *t1 < ScheduleDelta || t2 < ScheduleDelta {
+			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
 		} else {
-			logger.Info("Next schedule (%v) is BEYOND the %v delta. Will wait.\n", *t, nextScheduleDelta)
-			return ctrl.Result{RequeueAfter: *t}, err
+			logger.Info("We wait for until the next and reconcile", "Time till next job", t1, "Current Time", time.Now())
+
+			rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
+
+			return ctrl.Result{RequeueAfter: *t1}, nil
 		}
+
 	default:
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -470,6 +489,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
+
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 

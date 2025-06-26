@@ -21,6 +21,7 @@ const (
 	JobStatusStopped   JobStatus = "STOPPED"
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
+	JobStatusScheduled JobStatus = "SCHEDULED"
 )
 
 var AllJobStatuses = []JobStatus{
@@ -54,6 +55,7 @@ const (
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
+	JobDeploymentStatusScheduling   JobDeploymentStatus = "Scheduling"
 	JobDeploymentStatusScheduled    JobDeploymentStatus = "Scheduled"
 )
 
@@ -245,7 +247,7 @@ type RayJobStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Information when was the last time the job was successfully scheduled.
+	// The last time the job was successfully scheduled.
 	// +optional
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty" protobuf:"bytes,4,opt,name=lastScheduleTime"`
 }
