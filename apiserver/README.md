@@ -1,5 +1,9 @@
 <!-- markdownlint-disable MD013 -->
-# KubeRay APIServer
+# KubeRay APIServer V1 (deprecated)
+
+> [!WARNING]
+> KubeRay APIServer V1 is deprecated and will be removed in the future.
+> Please use [KubeRay APIServer V2](../apiserversdk/README.md) instead.
 
 The KubeRay APIServer offers gRPC and HTTP APIs to manage KubeRay resources.
 

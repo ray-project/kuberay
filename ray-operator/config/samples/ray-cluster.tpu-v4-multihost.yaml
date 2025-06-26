@@ -47,12 +47,12 @@ spec:
           - containerPort: 8081
             name: mxla
   workerGroupSpecs:
-  - rayStartParams: {}
-    replicas: 1
+  - replicas: 1
     minReplicas: 1
     maxReplicas: 1
     numOfHosts: 2
     groupName: tpu-group
+    rayStartParams: {}
     template:
       spec:
         containers:

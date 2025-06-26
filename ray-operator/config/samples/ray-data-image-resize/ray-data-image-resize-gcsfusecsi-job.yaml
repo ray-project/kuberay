@@ -66,8 +66,8 @@ spec:
     - groupName: worker-group
       maxReplicas: 3
       minReplicas: 1
-      rayStartParams: {}
       replicas: 3
+      rayStartParams: {}
       template:
         metadata:
           annotations:
