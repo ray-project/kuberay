@@ -21,6 +21,7 @@ const (
 	JobStatusStopped   JobStatus = "STOPPED"
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
+	JobStatusScheduled JobStatus = "SCHEDULED"
 )
 
 var AllJobStatuses = []JobStatus{
@@ -54,6 +55,8 @@ const (
 	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
+	JobDeploymentStatusScheduling   JobDeploymentStatus = "Scheduling"
+	JobDeploymentStatusScheduled    JobDeploymentStatus = "Scheduled"
 )
 
 // IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
@@ -202,6 +205,9 @@ type RayJobSpec struct {
 	// In case of transition to false a new RayCluster will be created.
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
+	// Schedule specifies a cron like string for cron scheduling
+	// +optional
+	Schedule string `json:"schedule,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
@@ -249,6 +255,10 @@ type RayJobStatus struct {
 	// RayJob's generation, which is updated on mutation by the API Server.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// The last time the job was successfully scheduled.
+	// +optional
+	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty" protobuf:"bytes,4,opt,name=lastScheduleTime"`
 }
 
 // +kubebuilder:object:root=true
