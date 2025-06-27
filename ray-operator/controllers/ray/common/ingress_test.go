@@ -20,6 +20,8 @@ var instanceWithIngressEnabled = &rayv1.RayCluster{
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
+			"annotation0":             "value",
+			"annotation1":             "value",
 		},
 	},
 	Spec: rayv1.RayClusterSpec{
@@ -85,7 +87,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	require.NoError(t, err)
 
 	// annotations count
-	assert.Len(t, ingress.Annotations, 0)
+	assert.Len(t, ingress.Annotations, 2)
 
 	// check ingress.class annotation
 	assert.Equal(t, instanceWithIngressEnabled.Name, ingress.Labels[utils.RayClusterLabelKey])
@@ -128,23 +130,28 @@ func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
 		},
 	}
 	ingressClass := "different-ingress-class"
-	annotations := map[string]string{"arbitrary-annotation": "value", "another-annotation": "value2", IngressClassAnnotationKey: ingressClass}
+	annotations := map[string]string{"annotation0": "value2", "annotation1": "value2", IngressClassAnnotationKey: ingressClass}
 	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass, host, tls, annotations)
 	require.NoError(t, err)
 
-	delete(annotations, IngressClassAnnotationKey)
-	assert.Equal(t, ingress.Annotations, annotations)
 	assert.Equal(t, *ingress.Spec.IngressClassName, ingressClass)
+	assert.Equal(t, ingress.Annotations, map[string]string{
+		"annotation0": "value2", "annotation1": "value2",
+	})
 	assert.Equal(t, ingress.Spec.Rules[0].Host, "ray-host")
 	assert.Equal(t, ingress.Spec.TLS, tls)
 }
 
 func TestBuildIngressForHeadServiceClusterSpecificAnnotationsTakePrecedence(t *testing.T) {
-	annotations := map[string]string{"arbitrary-annotation": "value", "another-annotation": "value2", IngressClassAnnotationKey: "different-ingress-class"}
+	annotations := map[string]string{"annotation0": "value2", "annotation2": "value2", IngressClassAnnotationKey: "different-ingress-class"}
 	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, annotations)
 	require.NoError(t, err)
 
 	delete(annotations, IngressClassAnnotationKey)
-	assert.Equal(t, ingress.Annotations, annotations)
+	assert.Equal(t, ingress.Annotations, map[string]string{
+		"annotation0": "value",
+		"annotation1": "value",
+		"annotation2": "value2",
+	})
 	assert.Equal(t, instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey], *ingress.Spec.IngressClassName)
 }
