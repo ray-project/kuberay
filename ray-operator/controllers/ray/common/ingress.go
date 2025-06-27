@@ -32,10 +32,16 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster, h
 	excludeSet := map[string]struct{}{
 		IngressClassAnnotationKey: {},
 	}
-	annotation := defaultAnnotations
+	annotations := map[string]string{}
+	for key, value := range defaultAnnotations {
+		if _, ok := excludeSet[key]; !ok {
+			annotations[key] = value
+		}
+	}
+	// cluster.Annotations takes precedence, so we add these after defaultAnnotations.
 	for key, value := range cluster.Annotations {
 		if _, ok := excludeSet[key]; !ok {
-			annotation[key] = value
+			annotations[key] = value
 		}
 	}
 
@@ -70,7 +76,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster, h
 			Name:        utils.GenerateIngressName(cluster.Name),
 			Namespace:   cluster.Namespace,
 			Labels:      labels,
-			Annotations: annotation,
+			Annotations: annotations,
 		},
 		Spec: networkingv1.IngressSpec{
 			TLS: ingressTLS,
@@ -87,8 +93,13 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster, h
 		},
 	}
 
-	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.
-	if ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]; !ok {
+	// First try to get ingress class name from rayCluster annotations.
+	ingressClassName, ok := cluster.Annotations[IngressClassAnnotationKey]
+	if !ok {
+		ingressClassName, ok = defaultAnnotations[IngressClassAnnotationKey]
+	}
+
+	if !ok {
 		log.Info("Ingress class annotation is not set for the cluster.", "clusterNamespace", cluster.Namespace, "clusterName", cluster.Name)
 	} else {
 		// TODO: in AWS EKS, set up IngressClassName will cause an error due to conflict with annotation.
