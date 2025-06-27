@@ -5,137 +5,114 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
-    {{- with .Values.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "kuberay-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "kuberay-operator.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: {{ include "kuberay-operator.component" . }}
-        {{- with .Values.labels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
+        {{- include "kuberay-operator.labels" . | nindent 8 }}
       {{- with .Values.annotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-    {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ include "kuberay-operator.image" . }}
+        {{- with .Values.image.pullPolicy }}
+        imagePullPolicy: {{ . }}
+        {{- end }}
+        command:
+        - {{ .Values.operatorCommand }}
+        args:
+        {{- $featureGates := list }}
+        {{- range $featureGate := .Values.featureGates }}
+        {{- $featureGates = append $featureGates (printf "%s=%t" $featureGate.name $featureGate.enabled) }}
+        {{- end }}
+        {{- with $featureGates }}
+        - --feature-gates={{ . | join "," }}
+        {{- end }}
+        {{- if .Values.batchScheduler.enabled }}
+        - --enable-batch-scheduler
+        {{- end }}
+        {{- with .Values.batchScheduler.name }}
+        - --batch-scheduler={{ . }}
+        {{- end }}
+        {{- $namespaces := list }}
+        {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) }}
+        {{- $namespaces = append $namespaces .Release.Namespace }}
+        {{- else if .Values.watchNamespace }}
+        {{- $namespaces = concat $namespaces .Values.watchNamespace }}
+        {{- end }}
+        {{- with $namespaces }}
+        - --watch-namespace={{ . | join "," }}
+        {{- end }}
+        {{- if and .Values.logging.baseDir .Values.logging.fileName }}
+        - --log-file-path={{ printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName }}
+        {{- end }}
+        {{- with .Values.logging.stdoutEncoder }}
+        - --log-stdout-encoder={{ . }}
+        {{- end }}
+        {{- with .Values.logging.fileEncoder }}
+        - --log-file-encoder={{ . }}
+        {{- end }}
+        - --use-kubernetes-proxy={{ .Values.useKubernetesProxy }}
+        - --enable-leader-election={{ .Values.leaderElectionEnabled }}
+        - --enable-metrics={{ .Values.metrics.enabled }}
+        {{- with .Values.env }}
+        env:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
-      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
+        {{- end }}
+        {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+        volumeMounts:
+        - name: kuberay-logs
+          mountPath: "{{ .Values.logging.baseDir }}"
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: http
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
       volumes:
-        - name: kuberay-logs
-          {{- if .Values.logging.sizeLimit }}
-          emptyDir:
-            sizeLimit: {{ .Values.logging.sizeLimit }}
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
+      - name: kuberay-logs
+        {{- if .Values.logging.sizeLimit }}
+        emptyDir:
+          sizeLimit: {{ .Values.logging.sizeLimit }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
       {{- end }}
-      {{- with .Values.podSecurityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      containers:
-        - name: {{ .Chart.Name }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          {{- with .Values.image.pullPolicy }}
-          imagePullPolicy: {{ . }}
-          {{- end }}
-          {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
-          volumeMounts:
-            - name: kuberay-logs
-              mountPath: "{{ .Values.logging.baseDir }}"
-          {{- end }}
-          command:
-            - {{ .Values.operatorCommand }}
-          args:
-            {{- $argList := list -}}
-            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
-            {{- if .Values.batchScheduler -}}
-            {{- if .Values.batchScheduler.enabled -}}
-            {{- $argList = append $argList "--enable-batch-scheduler" -}}
-            {{- end -}}
-            {{- if .Values.batchScheduler.name -}}
-            {{- $argList = append $argList (printf "--batch-scheduler=%s" .Values.batchScheduler.name) -}}
-            {{- end -}}
-            {{- end -}}
-            {{- $watchNamespace := "" -}}
-            {{- if and .Values.singleNamespaceInstall (not .Values.watchNamespace) -}}
-            {{- $watchNamespace = .Release.Namespace -}}
-            {{- else if .Values.watchNamespace -}}
-            {{- $watchNamespace = join "," .Values.watchNamespace -}}
-            {{- end -}}
-            {{- if $watchNamespace -}}
-            {{- $argList = append $argList "--watch-namespace" -}}
-            {{- $argList = append $argList $watchNamespace -}}
-            {{- end -}}
-            {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) -}}
-            {{- $argList = append $argList "--log-file-path" -}}
-            {{- $argList = append $argList (printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName) -}}
-            {{- end -}}
-            {{- if .Values.logging.stdoutEncoder -}}
-            {{- $argList = append $argList "--log-stdout-encoder" -}}
-            {{- $argList = append $argList .Values.logging.stdoutEncoder -}}
-            {{- end -}}
-            {{- if .Values.logging.fileEncoder -}}
-            {{- $argList = append $argList "--log-file-encoder" -}}
-            {{- $argList = append $argList .Values.logging.fileEncoder -}}
-            {{- end -}}
-            {{- if hasKey .Values "useKubernetesProxy" -}}
-            {{- $argList = append $argList (printf "--use-kubernetes-proxy=%t" .Values.useKubernetesProxy) -}}
-            {{- end -}}
-            {{- if hasKey .Values "leaderElectionEnabled" -}}
-            {{- $argList = append $argList (printf "--enable-leader-election=%t" .Values.leaderElectionEnabled) -}}
-            {{- end -}}
-            {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
-            {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
-            {{- end -}}
-            {{- (printf "\n") -}}
-            {{- $argList | toYaml | indent 12 }}
-          ports:
-            - name: http
-              containerPort: 8080
-              protocol: TCP
-          {{- with .Values.env }}
-          env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /metrics
-              port: http
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
-          readinessProbe:
-            httpGet:
-              path: /metrics
-              port: http
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-          {{- with .Values.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -146,5 +123,10 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
