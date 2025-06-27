@@ -84,6 +84,9 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, map[string]string{})
 	require.NoError(t, err)
 
+	// annotations count
+	assert.Len(t, ingress.Annotations, 0)
+
 	// check ingress.class annotation
 	assert.Equal(t, instanceWithIngressEnabled.Name, ingress.Labels[utils.RayClusterLabelKey])
 
@@ -108,4 +111,40 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	for _, path := range paths {
 		assert.Equal(t, headSvcName, path.Backend.Service.Name)
 	}
+
+	// check host
+	assert.Equal(t, ingress.Spec.Rules[0].Host, "")
+
+	// tls count
+	assert.Len(t, ingress.Spec.TLS, 0)
+}
+
+func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
+	host := "ray-host"
+	tls := []networkingv1.IngressTLS{
+		{
+			Hosts:      []string{"ray-host"},
+			SecretName: "ray-tls-secret",
+		},
+	}
+	ingressClass := "different-ingress-class"
+	annotations := map[string]string{"arbitrary-annotation": "value", "another-annotation": "value2", IngressClassAnnotationKey: ingressClass}
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass, host, tls, annotations)
+	require.NoError(t, err)
+
+	delete(annotations, IngressClassAnnotationKey)
+	assert.Equal(t, ingress.Annotations, annotations)
+	assert.Equal(t, *ingress.Spec.IngressClassName, ingressClass)
+	assert.Equal(t, ingress.Spec.Rules[0].Host, "ray-host")
+	assert.Equal(t, ingress.Spec.TLS, tls)
+}
+
+func TestBuildIngressForHeadServiceClusterSpecificAnnotationsTakePrecedence(t *testing.T) {
+	annotations := map[string]string{"arbitrary-annotation": "value", "another-annotation": "value2", IngressClassAnnotationKey: "different-ingress-class"}
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, annotations)
+	require.NoError(t, err)
+
+	delete(annotations, IngressClassAnnotationKey)
+	assert.Equal(t, ingress.Annotations, annotations)
+	assert.Equal(t, instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey], *ingress.Spec.IngressClassName)
 }
