@@ -88,6 +88,9 @@ type RayClusterReconcilerOptions struct {
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
 	IsOpenShift              bool
+	IngressHost              string
+	IngressTLS               []networkingv1.IngressTLS
+	IngressAnnotations       map[string]string
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -474,7 +477,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	if len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+		ingress, err := common.BuildIngressForHeadService(ctx, *instance, r.options.IngressHost, r.options.IngressTLS, r.options.IngressAnnotations)
 		if err != nil {
 			return err
 		}

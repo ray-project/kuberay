@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -86,6 +87,10 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	IngressHost        string                    `json:"ingressHost,omitempty"`
+	IngressTLS         []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
+	IngressAnnotations map[string]string         `json:"ingressAnnotations,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
