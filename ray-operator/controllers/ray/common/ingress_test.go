@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -74,13 +75,13 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1.RayCluster{
 
 // only throw warning message and rely on Kubernetes to assign default ingress class
 func TestBuildIngressForHeadServiceWithoutIngressClass(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass, "", []networkingv1.IngressTLS{}, map[string]string{})
 	assert.NotNil(t, ingress)
 	require.NoError(t, err)
 }
 
 func TestBuildIngressForHeadService(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, map[string]string{})
 	require.NoError(t, err)
 
 	// check ingress.class annotation
