@@ -15,7 +15,7 @@ const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
 // This is used to expose dashboard for external traffic.
-func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (*networkingv1.Ingress, error) {
+func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster, ingressTLS []networkingv1.IngressTLS, host string, defaultAnnotations map[string]string) (*networkingv1.Ingress, error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	labels := map[string]string{
@@ -32,7 +32,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	excludeSet := map[string]struct{}{
 		IngressClassAnnotationKey: {},
 	}
-	annotation := map[string]string{}
+	annotation := defaultAnnotations
 	for key, value := range cluster.Annotations {
 		if _, ok := excludeSet[key]; !ok {
 			annotation[key] = value
@@ -73,8 +73,10 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 			Annotations: annotation,
 		},
 		Spec: networkingv1.IngressSpec{
+			TLS: ingressTLS,
 			Rules: []networkingv1.IngressRule{
 				{
+					Host: host,
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
 							Paths: paths,
