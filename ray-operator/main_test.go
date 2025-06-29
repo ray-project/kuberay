@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -100,6 +101,42 @@ workerSidecarContainers:
 				},
 				QPS:   ptr.To(configapi.DefaultQPS),
 				Burst: ptr.To(configapi.DefaultBurst),
+			},
+			expectErr: false,
+		},
+		{
+			name: "config with ingress options",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+ingressHost: ray.example.com
+ingressTLS:
+- hosts:
+  - ray.example.com
+  secretName: ray-tls-secret
+ingressAnnotations:
+  annotation0: value0
+  annotation1: value1
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: ptr.To(true),
+				ReconcileConcurrency: 1,
+				IngressHost:          "ray.example.com",
+				IngressTLS: []networkingv1.IngressTLS{
+					{
+						Hosts:      []string{"ray.example.com"},
+						SecretName: "ray-tls-secret",
+					},
+				},
+				IngressAnnotations: map[string]string{
+					"annotation0": "value0",
+					"annotation1": "value1",
+				},
 			},
 			expectErr: false,
 		},
