@@ -122,10 +122,10 @@ func TestBuildIngressForHeadService(t *testing.T) {
 }
 
 func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
-	host := "ray-host"
+	host := "ray.example.com"
 	tls := []networkingv1.IngressTLS{
 		{
-			Hosts:      []string{"ray-host"},
+			Hosts:      []string{host},
 			SecretName: "ray-tls-secret",
 		},
 	}
@@ -138,7 +138,7 @@ func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
 	assert.Equal(t, ingress.Annotations, map[string]string{
 		"annotation0": "value2", "annotation1": "value2",
 	})
-	assert.Equal(t, ingress.Spec.Rules[0].Host, "ray-host")
+	assert.Equal(t, ingress.Spec.Rules[0].Host, host)
 	assert.Equal(t, ingress.Spec.TLS, tls)
 }
 
@@ -149,7 +149,7 @@ func TestBuildIngressForHeadServiceClusterSpecificAnnotationsTakePrecedence(t *t
 
 	delete(annotations, IngressClassAnnotationKey)
 	assert.Equal(t, ingress.Annotations, map[string]string{
-		"annotation0": "value",
+		"annotation0": "value", // Overridden by cluster annotation
 		"annotation1": "value",
 		"annotation2": "value2",
 	})
