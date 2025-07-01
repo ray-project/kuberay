@@ -89,7 +89,6 @@ spec:
                 memory: "500Gi"
                 nvidia.com/gpu: "8"
           tolerations:
-            - key: "nvidia.com/gpu"
-              operator: "Exists"
-              effect: "NoSchedule"
-              
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
