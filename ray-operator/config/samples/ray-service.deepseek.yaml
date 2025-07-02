@@ -40,6 +40,7 @@ spec:
           containers:
           - name: ray-head
             # TODO(seiji): change to Ray 2.48 when it's released
+            # because https://github.com/ray-project/ray/pull/53815 is needed for DeepSeek
             image: rayproject/ray-llm:nightly-py311-cu128
             resources:
               limits:
@@ -74,6 +75,7 @@ spec:
           containers:
           - name: ray-worker
             # TODO(seiji): change to Ray 2.48 when it's released
+            # because https://github.com/ray-project/ray/pull/53815 is needed for DeepSeek
             image: rayproject/ray-llm:nightly-py311-cu128
             env:
             - name: HUGGING_FACE_HUB_TOKEN
