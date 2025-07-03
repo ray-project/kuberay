@@ -3,7 +3,7 @@
 exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
 
 default_language_version:
-  golang: 1.24.2
+  golang: 1.24.0
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
