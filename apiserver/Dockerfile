@@ -1,5 +1,5 @@
 # Build the backend service
-FROM golang:1.24.2-bullseye AS builder
+FROM golang:1.24.0-bullseye AS builder
 
 WORKDIR /workspace
 

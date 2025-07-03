@@ -24,9 +24,9 @@ For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to c
 Currently, KubeRay uses go v1.24 for development.
 
 ```bash
-go install golang.org/dl/go1.24.2@latest
-go1.24.2 download
-export GOROOT=$(go1.24.2 env GOROOT)
+go install golang.org/dl/go1.24.0@latest
+go1.24.0 download
+export GOROOT=$(go1.24.0 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
