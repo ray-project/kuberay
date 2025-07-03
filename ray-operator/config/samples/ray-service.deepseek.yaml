@@ -58,12 +58,6 @@ spec:
               name: client
             - containerPort: 8000
               name: serve
-            env:
-            - name: HUGGING_FACE_HUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hf-secret
-                  key: hf_api_token
     workerGroupSpecs:
     - replicas: 2
       minReplicas: 2
@@ -77,12 +71,6 @@ spec:
             # TODO(seiji): change to Ray 2.48 when it's released
             # because https://github.com/ray-project/ray/pull/53815 is needed for DeepSeek
             image: rayproject/ray-llm:nightly-py311-cu128
-            env:
-            - name: HUGGING_FACE_HUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: hf-secret
-                  key: hf_api_token
             resources:
               limits:
                 cpu: "24"
