@@ -12,11 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	//+kubebuilder:scaffold:imports
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -97,6 +93,10 @@ var _ = BeforeSuite(func() {
 
 	err = SetupRayClusterWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
+	err = SetupRayJobWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+	err = SetupRayServiceWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:webhook
 
@@ -121,85 +121,6 @@ var _ = BeforeSuite(func() {
 		conn.Close()
 		return nil
 	}).Should(Succeed())
-})
-
-var _ = Describe("RayCluster validating webhook", func() {
-	Context("when name is invalid", func() {
-		It("should return error", func() {
-			rayCluster := rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      "invalid.name",
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{},
-							},
-						},
-					},
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
-				},
-			}
-
-			err := k8sClient.Create(context.TODO(), &rayCluster)
-			Expect(err).To(HaveOccurred())
-
-			Expect(err.Error()).To(ContainSubstring("RayCluster.ray.io \"invalid.name\" is invalid: metadata.name:"))
-		})
-	})
-
-	Context("when groupNames are not unique", func() {
-		var name, namespace string
-		var rayCluster rayv1.RayCluster
-
-		BeforeEach(func() {
-			namespace = "default"
-			name = fmt.Sprintf("test-raycluster-%d", rand.IntnRange(1000, 9000))
-		})
-
-		It("should return error", func() {
-			rayCluster = rayv1.RayCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
-				Spec: rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{},
-							},
-						},
-					},
-					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-						{
-							GroupName: "group1",
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{},
-								},
-							},
-						},
-						{
-							GroupName: "group1",
-							Template: corev1.PodTemplateSpec{
-								Spec: corev1.PodSpec{
-									Containers: []corev1.Container{},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			err := k8sClient.Create(context.TODO(), &rayCluster)
-			Expect(err).To(HaveOccurred())
-
-			Expect(err.Error()).To(ContainSubstring("worker group names must be unique"))
-		})
-	})
 })
 
 var _ = AfterSuite(func() {
