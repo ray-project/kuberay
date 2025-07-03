@@ -45,10 +45,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "64Gi"
+                memory: "32Gi"
               requests:
                 cpu: "2"
-                memory: "64Gi"
+                memory: "32Gi"
             ports:
             - containerPort: 6379
               name: gcs-server
