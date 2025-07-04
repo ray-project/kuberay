@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dario.cat/mergo"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -444,11 +445,67 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	config := newRayClusterConfigWithDefaults()
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var overrideConfig RayClusterConfig
+	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
+	config, err := MergeWithDefaultConfig(&overrideConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge config with defaults: %w", err)
+	}
+	return config, nil
+}
 
+func MergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
+	config := newRayClusterConfigWithDefaults()
+
+	// The defaults are not set in the default raycluster config,
+	// so we directly copy the values from overrideConfig
+	config.Namespace = overrideConfig.Namespace
+	config.Name = overrideConfig.Name
+	config.ServiceAccount = overrideConfig.ServiceAccount
+	config.GKE = overrideConfig.GKE
+	config.Autoscaler = overrideConfig.Autoscaler
+
+	if overrideConfig.RayVersion != nil {
+		config.RayVersion = overrideConfig.RayVersion
+	}
+
+	if overrideConfig.Labels != nil {
+		config.Labels = make(map[string]string)
+		maps.Copy(config.Labels, overrideConfig.Labels)
+	}
+	if overrideConfig.Annotations != nil {
+		config.Annotations = make(map[string]string)
+		maps.Copy(config.Annotations, overrideConfig.Annotations)
+	}
+
+	if overrideConfig.Image != nil {
+		config.Image = overrideConfig.Image
+	}
+
+	if overrideConfig.Head != nil {
+		err := mergo.Merge(config.Head, overrideConfig.Head, mergo.WithOverride)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge head config: %w", err)
+		}
+	}
+
+	if overrideConfig.WorkerGroups != nil {
+		for len(config.WorkerGroups) < len(overrideConfig.WorkerGroups) {
+			config.WorkerGroups = append(config.WorkerGroups, WorkerGroup{
+				Replicas: util.DefaultWorkerReplicas,
+				CPU:      ptr.To(util.DefaultWorkerCPU),
+				Memory:   ptr.To(util.DefaultWorkerMemory),
+			})
+		}
+		for i, workerGroup := range overrideConfig.WorkerGroups {
+			err := mergo.Merge(&config.WorkerGroups[i], workerGroup, mergo.WithOverride)
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge worker group %d: %w", i, err)
+			}
+		}
+	}
 	return config, nil
 }
 
