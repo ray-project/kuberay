@@ -40,16 +40,8 @@ func (k *KubeScheduler) Name() string {
 	return GetPluginName()
 }
 
-func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
-	// we set replica as 1 for the head pod
-	replica := int32(1)
-	for _, workerGroup := range app.Spec.WorkerGroupSpecs {
-		if workerGroup.Replicas == nil {
-			continue
-		}
-		// TODO(kevin85421): We should consider the case of `numOfHosts` is not 1.
-		replica += *workerGroup.Replicas
-	}
+func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
+	// TODO(troychiu): Consider the case when autoscaling is enabled.
 
 	podGroup := &v1alpha1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -65,7 +57,7 @@ func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup
 			},
 		},
 		Spec: v1alpha1.PodGroupSpec{
-			MinMember:    replica,
+			MinMember:    utils.CalculateDesiredReplicas(ctx, app) + 1, // +1 for the head pod
 			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
