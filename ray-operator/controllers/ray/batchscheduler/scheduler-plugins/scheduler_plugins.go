@@ -12,7 +12,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 
@@ -108,32 +107,8 @@ func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
 	return exist
 }
 
-func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedulerinterface.BatchScheduler, error) {
-	// TODO(kevin85421): We should not initialize the informer cache here. We should reuse
-	// the reconciler's cache instead.
-	scheme := runtime.NewScheme()
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
-	ccache, err := cache.New(c, cache.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		if err := ccache.Start(ctx); err != nil {
-			panic(err)
-		}
-	}()
-	if synced := ccache.WaitForCacheSync(ctx); !synced {
-		return nil, fmt.Errorf("failed to sync cache")
-	}
-	cli, err := client.New(c, client.Options{
-		Scheme: scheme,
-		Cache: &client.CacheOptions{
-			Reader: ccache,
-		},
-	})
-	if err != nil {
+func (kf *KubeSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
+	if err := v1alpha1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, err
 	}
 	return &KubeScheduler{
