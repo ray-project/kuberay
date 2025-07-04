@@ -216,7 +216,7 @@ class Director:
             return cluster
         return None
 
-    def build_small_cluster(self, name: str, k8s_namespace: str = "default", labels: str = None) -> dict:
+    def build_small_cluster(self, name: str, k8s_namespace: str = "default", labels: dict = None) -> dict:
         """Builds a small cluster with the given name and k8s_namespace parameters with 1 workergroup,
         the workgroup has 1 replica with 2 cpu and 2G memory limits
 
