@@ -8,7 +8,7 @@ name: kuberay-apiserver
 
 image:
   repository: quay.io/kuberay/apiserver
-  tag: v1.4.0
+  tag: v1.4.1
   pullPolicy: IfNotPresent
 
 # Uncomment allowOrigin to enable CORS
