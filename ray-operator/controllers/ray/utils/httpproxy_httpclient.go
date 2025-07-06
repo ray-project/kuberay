@@ -62,9 +62,12 @@ func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
 		resp.Body.Close()
 	}()
 
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, error reading body: %w", resp.StatusCode, resp.Status, err)
+		}
+		err = fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
 		return err
 	}
 
