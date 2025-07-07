@@ -116,12 +116,14 @@ Refer to a previous version bump PR for guidance, like [PR #3071](https://github
     ```bash
     # Create a tag
     git tag v1.4.0
+    git tag ray-operator/v1.4.0 # we need this tag for `go get github.com/ray-project/kuberay/ray-operator` to work.
     ```
 
 4. Push the tag to the `upstream` repository:
 
     ```bash
     git push upstream v1.4.0
+    git push upstream ray-operator/v1.4.0
     ```
 
 ---
