@@ -68,7 +68,7 @@ func (options *GetClusterOptions) Complete(args []string, cmd *cobra.Command) er
 	}
 	options.namespace = namespace
 	if options.namespace == "" {
-		options.allNamespaces = true
+		options.namespace = "default"
 	}
 
 	if len(args) >= 1 {

@@ -9,8 +9,8 @@ spec:
   rayVersion: '2.46.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
     rayStartParams: {}
-    #pod template
     template:
       spec:
         containers:
@@ -37,8 +37,8 @@ spec:
     maxReplicas: 5
     # logical group name, for this called small-group, also can be functional
     groupName: workergroup
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
     rayStartParams: {}
-    #pod template
     template:
       spec:
         containers:

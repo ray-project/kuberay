@@ -24,10 +24,10 @@ spec:
               memory: "2Gi"
   workerGroupSpecs:
   - groupName: worker
-    rayStartParams: {}
     replicas: 2
     minReplicas: 2
     maxReplicas: 2
+    rayStartParams: {}
     template:
       spec:
         containers:

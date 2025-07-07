@@ -20,9 +20,6 @@ spec:
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams: {}
       #pod template
       template:
@@ -44,9 +41,6 @@ spec:
       maxReplicas: 5
       # logical group name, for this called small-group, also can be functional
       groupName: worker
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams: {}
       #pod template
       template:
