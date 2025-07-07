@@ -20,6 +20,8 @@ type ScaleClusterOptions struct {
 	cmdFactory  cmdutil.Factory
 	ioStreams   *genericclioptions.IOStreams
 	replicas    *int32
+	minReplicas *int32
+	maxReplicas *int32
 	namespace   string
 	workerGroup string
 	cluster     string
@@ -72,6 +74,8 @@ func NewScaleClusterCommand(cmdFactory cmdutil.Factory, streams genericclioption
 	cmd.Flags().StringVarP(&options.workerGroup, "worker-group", "w", "", "worker group")
 	cobra.CheckErr(cmd.MarkFlagRequired("worker-group"))
 	cmd.Flags().Int32VarP(options.replicas, "replicas", "r", -1, "Desired number of replicas in worker group")
+	cmd.Flags().Int32VarP(options.minReplicas, "min-replicas", "", -1, "Minimum number of replicas for worker group (optional)")
+	cmd.Flags().Int32VarP(options.maxReplicas, "max-replicas", "", -1, "Maximum number of replicas for worker group (optional)")
 	return cmd
 }
 
@@ -95,8 +99,44 @@ func (options *ScaleClusterOptions) Validate() error {
 		return fmt.Errorf("must specify -w/--worker-group")
 	}
 
-	if options.replicas == nil || *options.replicas < 0 {
+	minSet := options.minReplicas != nil && *options.minReplicas > -1
+	maxSet := options.maxReplicas != nil && *options.maxReplicas > -1
+	desiredSet := options.replicas != nil && *options.replicas > -1
+
+	// at least one of --replicas, --min-replicas, or --max-replicas flags must be set
+	if !minSet && !maxSet && !desiredSet {
+		return fmt.Errorf("must specify at least one non negative --replicas, --min-replicas, or --max-replicas")
+	}
+
+	if desiredSet && *options.replicas < 0 {
 		return fmt.Errorf("must specify -r/--replicas with a non-negative integer")
+	}
+
+	if minSet {
+		if *options.minReplicas < 0 {
+			return fmt.Errorf("minimum replicas (--min-replicas) must be a non-negative integer")
+		}
+	}
+	if maxSet {
+		if *options.maxReplicas < 0 {
+			return fmt.Errorf("maximum replicas (--max-replicas) must be a non-negative integer")
+		}
+	}
+
+	if minSet && maxSet {
+		if *options.minReplicas > *options.maxReplicas {
+			return fmt.Errorf("minimum replicas (%d) cannot be greater than maximum replicas (%d)", *options.minReplicas, *options.maxReplicas)
+		}
+	}
+
+	// If desired is set, ensure it respects min/max if they are also set
+	if desiredSet {
+		if minSet && *options.replicas < *options.minReplicas {
+			return fmt.Errorf("desired replicas (%d) cannot be less than minimum replicas (%d)", *options.replicas, *options.minReplicas)
+		}
+		if maxSet && *options.replicas > *options.maxReplicas {
+			return fmt.Errorf("desired replicas (%d) cannot be greater than maximum replicas (%d)", *options.replicas, *options.maxReplicas)
+		}
 	}
 
 	return nil
@@ -105,7 +145,7 @@ func (options *ScaleClusterOptions) Validate() error {
 func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Client, writer io.Writer) error {
 	cluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, options.namespace, err)
+		return fmt.Errorf("failed to get Ray cluster %s in namespace %s: %w", options.cluster, options.namespace, err)
 	}
 
 	// find the index of the worker group
@@ -115,24 +155,80 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		workerGroups = append(workerGroups, workerGroup.GroupName)
 		if workerGroup.GroupName == options.workerGroup {
 			workerGroupIndex = i
+			break
 		}
 	}
 	if workerGroupIndex == -1 {
 		return fmt.Errorf("worker group %s not found in Ray cluster %s in namespace %s. Available worker groups: %s", options.workerGroup, options.cluster, options.namespace, strings.Join(workerGroups, ", "))
 	}
 
-	previousReplicas := *cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas
-	if previousReplicas == *options.replicas {
-		fmt.Fprintf(writer, "worker group %s in Ray cluster %s in namespace %s already has %d replicas. Skipping\n", options.workerGroup, options.cluster, options.namespace, previousReplicas)
+	targetWorkerGroupSpec := &cluster.Spec.WorkerGroupSpecs[workerGroupIndex]
+	var changes []string
+
+	// sets initial nil states for consistency check
+	initialMinReplicasNil := targetWorkerGroupSpec.MinReplicas == nil
+	initialMaxReplicasNil := targetWorkerGroupSpec.MaxReplicas == nil
+
+	isMinOptionProvided := options.minReplicas != nil && *options.minReplicas >= 0
+	isMaxOptionProvided := options.maxReplicas != nil && *options.maxReplicas >= 0
+
+	// validate that if one of minReplicas or maxReplicas is being set from a nil state,
+	// prevents inconsistent states like (min=2, max=nil) when max was also nil initially.
+	if (initialMinReplicasNil && isMinOptionProvided && initialMaxReplicasNil && !isMaxOptionProvided) ||
+		(initialMaxReplicasNil && isMaxOptionProvided && initialMinReplicasNil && !isMinOptionProvided) {
+		return fmt.Errorf("cannot set only one of minReplicas or maxReplicas when both are currently unset (nil) in worker group %s. Please specify both or neither for a valid range", options.workerGroup)
+	}
+
+	// handle replicas update
+	if options.replicas != nil && *options.replicas >= 0 {
+		previousReplicas := int32(0)
+		if targetWorkerGroupSpec.Replicas != nil {
+			previousReplicas = *targetWorkerGroupSpec.Replicas
+		}
+
+		if previousReplicas != *options.replicas {
+			targetWorkerGroupSpec.Replicas = options.replicas
+			changes = append(changes, fmt.Sprintf("replicas from %d to %d", previousReplicas, *options.replicas))
+		}
+	}
+
+	// handle minReplicas update
+	if options.minReplicas != nil && *options.minReplicas >= 0 {
+		previousMinReplicas := int32(0)
+		if targetWorkerGroupSpec.MinReplicas != nil {
+			previousMinReplicas = *targetWorkerGroupSpec.MinReplicas
+		}
+
+		if previousMinReplicas != *options.minReplicas {
+			targetWorkerGroupSpec.MinReplicas = options.minReplicas
+			changes = append(changes, fmt.Sprintf("minReplicas from %d to %d", previousMinReplicas, *options.minReplicas))
+		}
+	}
+
+	// handle maxReplicas update
+	if options.maxReplicas != nil && *options.maxReplicas >= 0 {
+		previousMaxReplicas := int32(0)
+		if targetWorkerGroupSpec.MaxReplicas != nil {
+			previousMaxReplicas = *targetWorkerGroupSpec.MaxReplicas
+		}
+
+		if previousMaxReplicas != *options.maxReplicas {
+			targetWorkerGroupSpec.MaxReplicas = options.maxReplicas
+			changes = append(changes, fmt.Sprintf("maxReplicas from %d to %d", previousMaxReplicas, *options.maxReplicas))
+		}
+	}
+
+	if len(changes) == 0 {
+		fmt.Fprintf(writer, "No changes needed for worker group %s in Ray cluster %s in namespace %s. All specified values already match.", options.workerGroup, options.cluster, options.namespace)
 		return nil
 	}
 
-	cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas = options.replicas
 	_, err = k8sClient.RayClient().RayV1().RayClusters(options.namespace).Update(ctx, cluster, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to scale worker group %s in Ray cluster %s in namespace %s: %w", options.workerGroup, options.cluster, options.namespace, err)
+		return fmt.Errorf("failed to update Ray cluster %s in namespace %s: %w", options.cluster, options.namespace, err)
 	}
 
-	fmt.Fprintf(writer, "Scaled worker group %s in Ray cluster %s in namespace %s from %d to %d replicas\n", options.workerGroup, options.cluster, options.namespace, previousReplicas, *options.replicas)
+	fmt.Fprintf(writer, "Updated worker group %s in Ray cluster %s in namespace %s: %s",
+		options.workerGroup, options.cluster, options.namespace, strings.Join(changes, ", "))
 	return nil
 }
