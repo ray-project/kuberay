@@ -35,7 +35,7 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
-	ScheduleDelta                   = 1000 * time.Millisecond
+	ScheduleDelta                   = 100 * time.Millisecond
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -90,6 +90,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Get RayJob instance
 	var err error
 	rayJobInstance := &rayv1.RayJob{}
+
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
@@ -453,47 +454,39 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
-		if rayJobInstance.Spec.Schedule != "" {
+		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusFailed {
 			// If the rayjob has cron scheduling then we should change status to schedule for the next job
 			logger.Info("RayJob is scheduled again")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
 		} else {
-			// If the RayJob is completed without scheduling, we should not requeue it.
+			// NOTE: we do not requeue if the job fails, this could change
+			// If the RayJob is completed without scheduling or has failed, we should not requeue it.
 			logger.Info("RayJob is not scheduled")
 			return ctrl.Result{}, nil
 		}
 	case rayv1.JobDeploymentStatusScheduled:
 		if rayJobInstance.Status.JobStatus == rayv1.JobStatusScheduled {
-			logger.Info("We are have reached the new time for a job after reconciling")
+			logger.Info("We have reached the new time for a job after reconciling")
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 			break
 		}
-
-		logger.Info("We are Scheduling for the next RayJob")
-		cron_schedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
+		// We get the time from the current time to the previous and next cron schedule times
+		// We pass in time.Now() as a parameter so easier unit testing and consistency
+		t1, t2, err := r.getPreviousAndNextScheduleDistance(ctx, time.Now(), rayJobInstance)
 		if err != nil {
-			// this is likely a user error in defining the spec value
-			// we should log the error and not reconcile this cronjob until an update to spec
-			logger.Error(err, "The cron schedule provided is unparseable")
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
+			logger.Error(err, "Could not get the previous and next distances for a cron schedule")
 			return ctrl.Result{}, err
 		}
-		logger.Info("Successfully parsed cron schedule", "CronSchedule", cron_schedule)
-
-		t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, time.Now(), cron_schedule)
-		t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, time.Now(), cron_schedule)
-
-		logger.Info("Got the time until we run the next RayJob", "NextScheduleTimeDuration", t1.Abs())
-		if *t1 < ScheduleDelta || t2 < ScheduleDelta {
+		// Checking if we are currently close enough to either the previous or next cron schedule times
+		if t1 < ScheduleDelta || t2 < ScheduleDelta {
 			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
 		} else {
-			logger.Info("We wait for until the next and reconcile", "Time till next job", t1, "Current Time", time.Now())
-
+			logger.Info("We wait for until the next and reconcile", "Time till next job", t1, "Current Time", time.Now(), "LastScheduleTimeDuration", t2)
 			rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
 
-			return ctrl.Result{RequeueAfter: *t1}, nil
+			return ctrl.Result{RequeueAfter: t1}, nil
 		}
 
 	default:
@@ -847,7 +840,14 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	// if the rayjob is sheduled according to a cron string set the status to scheduling instead of initializing to begin with
+	// if know if this is the first job and not just another scheduled one we check the jobs count
+	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
+		logger.Info("Initial schedule")
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
+	} else {
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	}
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
 	return nil
 }
@@ -937,6 +937,26 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	}
 
 	return rayCluster, nil
+}
+
+func (r *RayJobReconciler) getPreviousAndNextScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("We are Scheduling for the next RayJob")
+	cronSchedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
+	if err != nil {
+		// this is likely a user error in defining the spec value
+		// we should log the error and not reconcile this cronjob until an update to spec
+		logger.Error(err, "The cron schedule provided is unparseable")
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
+		return 0, 0, err
+	}
+	logger.Info("Successfully parsed cron schedule", "CronSchedule", cronSchedule)
+
+	t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
+	t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
+
+	logger.Info("Got the time until we run the next RayJob", "NextScheduleTimeDuration", t1.Abs())
+	return t1, t2, nil
 }
 
 func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {

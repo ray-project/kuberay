@@ -18,10 +18,9 @@ const (
 	noneMissed missedSchedulesType = iota
 	fewMissed
 	manyMissed
-	nextScheduleDelta = 100 * time.Millisecond
 )
 
-func mostRecentScheduleTime(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule, includeStartingDeadlineSeconds bool) (time.Time, *time.Time, missedSchedulesType, error) {
+func mostRecentScheduleTime(rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, missedSchedulesType, error) {
 	earliestTime := rj.ObjectMeta.CreationTimestamp.Time
 	missedSchedules := noneMissed
 	if rj.Status.LastScheduleTime != nil {
@@ -108,14 +107,11 @@ func FormatSchedule(rj *rayv1.RayJob, recorder record.EventRecorder) string {
 	return rj.Spec.Schedule
 }
 
-// nextScheduleTimeDuration returns the time duration to requeue based on
-// the schedule and last schedule time. It adds a 100ms padding to the next requeue to account
-// for Network Time Protocol(NTP) time skews. If the time drifts the adjustment, which in most
-// realistic cases should be around 100s, the job will still be executed without missing
-// the schedule.
-func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) *time.Duration {
+// nextScheduleTimeDuration returns the time duration to requeue a cron schedule based on
+// the schedule and last schedule time.
+func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
 
-	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(logger, rj, now, schedule, false)
+	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
 		// we still have to requeue at some point, so aim for the next scheduling slot from now
 		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point, so aim for the next scheduling slot from now", "Error", err)
@@ -131,28 +127,27 @@ func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Tim
 		}
 	}
 	logger.Info("Successfully calculated earliestTime and mostRecentTime", "mostRecentTime", mostRecentTime, "earliestTime", earliestTime, "Next time to aim for", schedule.Next(*mostRecentTime))
-	t := schedule.Next(*mostRecentTime).Add(nextScheduleDelta).Sub(now)
-	return &t
+	t := schedule.Next(*mostRecentTime).Sub(now)
+	return t
 }
 
+// The LastScheduleTimeDuration function returns the last previous cron time.
+// It calculates the most recent time a schedule should have executed based
+// on the RayJob's creation time (or its last scheduled status) and the current time 'now'.
 func LastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
-	// The mostRecentScheduleTime function is the core logic that calculates the most
-	// recent time a schedule should have executed based on the RayJob's creation time
-	// (or its last scheduled status) and the current time 'now'.
-	// The second return value, 'mostRecentTime', is precisely the "last previous cron time"
-	// that we want to find. We can ignore the other return values for this function's purpose.
-	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(logger, rj, now, schedule, false)
+
+	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
-		// we still have to requeue at some point, so aim for the next scheduling slot from now
+		// We still have to requeue at some point, so aim for the next scheduling slot from now
 		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point", "Error", err)
 		mostRecentTime = &now
 	} else if mostRecentTime == nil {
 		logger.Info("mostRecentTime doesnt exist", "mostRecentTime", mostRecentTime, "earliestTime", earliestTime)
 		if missedSchedules == noneMissed {
-			// no missed schedules since earliestTime
+			// No missed schedules since earliestTime
 			mostRecentTime = &earliestTime
 		} else {
-			// if there are missed schedules since earliestTime, always use now
+			// If there are missed schedules since earliestTime, always use now
 			mostRecentTime = &now
 		}
 	}

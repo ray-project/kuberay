@@ -624,3 +624,98 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
+	// Test 1, the cron string is not valid
+	// Test 2, we are not within the the buffer period of a cron tick to run a ray job
+	// Test 3, we are within the buffer period of a cron tick to run a ray job
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme) // For events
+
+	testCases := []struct {
+		name              string
+		schedule          string
+		initialLastTime   *metav1.Time
+		currentTime       time.Time
+		expectedErr       bool
+		expectedNextDelta time.Duration
+		expectedPrevDelta time.Duration
+		isWithinBuffer    bool
+	}{
+		{
+			name:        "Test 1: Invalid cron string",
+			schedule:    "INVLAID * CRON * STRING * WOW",
+			currentTime: time.Now(),
+			expectedErr: true,
+		},
+		{
+			name:        "Test 2: Not within the buffer period - future schedule",
+			schedule:    "0 0 * * *",                                          // Every day at midnight
+			currentTime: time.Date(2025, time.July, 1, 10, 0, 0, 0, time.UTC), // 2025-07-01 10:00 AM
+			// Next schedule tick is 2025-07-02 00:00:00 (in 14 hours)
+			// Last schedule tick is 2025-07-01 00:00:00 (10 hours ago)
+			expectedNextDelta: 14 * time.Hour,
+			expectedPrevDelta: 10 * time.Hour,
+			expectedErr:       false,
+			isWithinBuffer:    false,
+		},
+		{
+			name:        "Test 3: Within the buffer period - next schedule",
+			schedule:    "*/10 * * * *",                                        // Every 10 minutes
+			currentTime: time.Date(2025, time.July, 1, 10, 10, 0, 0, time.UTC), // 2025-07-01 10:10:00
+			// Next schedule tick is 2025-07-01 10:10:00 (in 10 minutes)
+			// Last schedule tick is 2025-07-01 10:00:00 (10 minutes ago)
+			expectedNextDelta: 10 * time.Minute,
+			expectedPrevDelta: 0 * time.Minute,
+			expectedErr:       false,
+			isWithinBuffer:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rayjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					Schedule: tc.schedule,
+				},
+			}
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).Build()
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+
+			// Call getPreviousAndNextScheduleDistance to get the next and pervious schedule ticks
+			nextDuration, prevDuration, err := reconciler.getPreviousAndNextScheduleDistance(context.Background(), tc.currentTime, rayJob)
+
+			if tc.expectedErr {
+				require.Error(t, err)
+				assert.Contains(t, <-recorder.Events, "UnparseableSchedule")
+			} else {
+				require.NoError(t, err)
+
+				// Asserting that
+				assert.InDelta(t, tc.expectedNextDelta.Seconds(), nextDuration.Seconds(), 1.0, "NextScheduleTimeDuration mismatch")
+				assert.InDelta(t, tc.expectedPrevDelta.Seconds(), prevDuration.Seconds(), 1.0, "LastScheduleTimeDuration mismatch")
+
+				// Testing the ScheduleDelta logic and how it's called in reconcile
+				// Define ScheduleDelta within the test scope or as a global constant for testing
+				const ScheduleDelta = 100 * time.Millisecond
+
+				isCurrentlyWithinBuffer := (nextDuration < ScheduleDelta) || (prevDuration < ScheduleDelta)
+				assert.Equal(t, tc.isWithinBuffer, isCurrentlyWithinBuffer, "isWithinBuffer check mismatch")
+			}
+		})
+	}
+
+}
