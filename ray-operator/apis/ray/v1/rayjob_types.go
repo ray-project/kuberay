@@ -258,7 +258,7 @@ type RayJobStatus struct {
 
 	// The last time the job was successfully scheduled.
 	// +optional
-	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty" protobuf:"bytes,4,opt,name=lastScheduleTime"`
+	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true
