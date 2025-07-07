@@ -96,3 +96,23 @@ func TestCreatePodGroup(t *testing.T) {
 	// 1 head and 2 workers
 	a.Equal(int32(3), podGroup.Spec.MinMember)
 }
+
+func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
+	a := assert.New(t)
+
+	cluster := createTestRayCluster(2) // 2 hosts
+
+	podGroup := createPodGroup(context.TODO(), &cluster)
+
+	// 256m * 5 (requests, not limits)
+	a.Equal("1280m", podGroup.Spec.MinResources.Cpu().String())
+
+	// 256Mi * 5 (requests, not limits)
+	a.Equal("1280Mi", podGroup.Spec.MinResources.Memory().String())
+
+	// 4 GPUs total
+	a.Equal("4", podGroup.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+
+	// 1 head and 4 workers
+	a.Equal(int32(5), podGroup.Spec.MinMember)
+}
