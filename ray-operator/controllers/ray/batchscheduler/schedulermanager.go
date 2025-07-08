@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -25,14 +26,14 @@ type SchedulerManager struct {
 }
 
 // NewSchedulerManager maintains a specific scheduler plugin based on config
-func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration, config *rest.Config) (*SchedulerManager, error) {
+func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration, config *rest.Config, cli client.Client) (*SchedulerManager, error) {
 	// init the scheduler factory from config
 	factory, err := getSchedulerFactory(rayConfigs)
 	if err != nil {
 		return nil, err
 	}
 
-	scheduler, err := factory.New(ctx, config)
+	scheduler, err := factory.New(ctx, config, cli)
 	if err != nil {
 		return nil, err
 	}
