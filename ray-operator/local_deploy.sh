@@ -11,32 +11,26 @@ set -euxo pipefail
 # --- Configuration Variables ---
 # IMPORTANT: Customize these variables for your environment and project.
 # Use your Docker registry and a unique image name.
-# For Kind, if not pushing to a remote registry, you can use "kind-registry" or similar.
-IMAGE_REPO="yourregistry" # e.g., "gcr.io/my-gcp-project" or "docker.io/myusername"
+IMAGE_REPO="yourregistry"
 IMAGE_NAME="kuberay-operator"
 # Set your desired image tag. A unique tag like a timestamp is recommended during development.
-IMAGE_TAG="nightly" # Example: "my-custom-build-20250625-1030" or "nightly"
+IMAGE_TAG="nightly" 
 
-KIND_CLUSTER_NAME="kind" # Your Kind cluster name
-OPERATOR_NAMESPACE="default" # Or "kuberay-system", "kuberay-operator", etc.
-HELM_RELEASE_NAME="kuberay-operator" # The Helm release name you use
-
+KIND_CLUSTER_NAME="kind" 
+OPERATOR_NAMESPACE="default"
+HELM_RELEASE_NAME="kuberay-operator"
 HELM_CHART_PATH="../helm-chart/kuberay-operator" # Path to your Helm chart
 
-# --- Script Logic ---
+
 
 echo "--- Checking for Kind Cluster ---"
 # Check if the Kind cluster already exists
 if ! kind get clusters | grep -q "${KIND_CLUSTER_NAME}"; then
   echo "Kind cluster '${KIND_CLUSTER_NAME}' not found. Creating it..."
-  # You can customize your Kind cluster creation command here if needed.
   kind create cluster --name "${KIND_CLUSTER_NAME}" --image=kindest/node:v1.24.0
 else
   echo "Kind cluster '${KIND_CLUSTER_NAME}' already exists. Skipping creation."
 fi
-
-# Step 2: Modify KubeRay source code (Manual Step)
-# For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
 
 echo "--- Building Docker Image ---"
 FULL_IMAGE_NAME="${IMAGE_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"

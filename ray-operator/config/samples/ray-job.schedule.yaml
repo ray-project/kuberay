@@ -11,9 +11,12 @@ spec:
   # The alternative value is "HTTPMode", indicating that KubeRay will submit the Ray job by sending an HTTP request to the RayCluster.
   # submissionMode: "K8sJobMode"
   entrypoint: python /home/ray/samples/sample_code.py
+  
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
-  # shutdownAfterJobFinishes: false
+  # NOTE that the expected behavor with schedule is that the cluster will be deleted and recreated at each schedule if set to true, and it will keep using the same cluster otherwise
+  shutdownAfterJobFinishes: true
 
+  # NOTE that if schedule is set will never end the rayjob since the expected behavior is to run at a schedule
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
 

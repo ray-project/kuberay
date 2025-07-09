@@ -331,9 +331,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
-		isClusterDeleted, err := r.deleteClusterResources(ctx, rayJobInstance)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+
+		// We set isClusterDeleted to true as default, i.e. we dont need to delete the cluster
+		isClusterDeleted := true
+		deleteCluster := rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusScheduling || rayJobInstance.Spec.ShutdownAfterJobFinishes
+		if deleteCluster {
+			isClusterDeleted, err = r.deleteClusterResources(ctx, rayJobInstance)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+
 		}
 		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
 		if err != nil {
@@ -345,14 +352,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Reset the RayCluster and Ray job related status.
-		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
-		rayJobInstance.Status.RayClusterName = ""
+		// Reset the RayCluster and Ray job related status. Done this way to be atomic.
+		if deleteCluster {
+			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
+			rayJobInstance.Status.RayClusterName = ""
+
+		}
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
@@ -455,11 +466,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusFailed {
-			// If the rayjob has cron scheduling then we should change status to schedule for the next job
 			logger.Info("RayJob is scheduled again")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
 		} else {
-			// NOTE: we do not requeue if the job fails, this could change
+			// NOTE: we do not requeue if the job fails even if scheduled, this could change
 			// If the RayJob is completed without scheduling or has failed, we should not requeue it.
 			logger.Info("RayJob is not scheduled")
 			return ctrl.Result{}, nil
@@ -478,8 +488,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Error(err, "Could not get the previous and next distances for a cron schedule")
 			return ctrl.Result{}, err
 		}
-		// Checking if we are currently close enough to either the previous or next cron schedule times
-		if t1 < ScheduleDelta || t2 < ScheduleDelta {
+		// Checking if we are currently within a buffer to the previous cron schedule time
+		if t2 <= ScheduleDelta {
 			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
 		} else {
@@ -844,7 +854,8 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	// if know if this is the first job and not just another scheduled one we check the jobs count
 	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
 		logger.Info("Initial schedule")
-		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
+		//NOTE
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
 	} else {
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
 	}
