@@ -352,14 +352,18 @@ var _ = Context("RayService env tests", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: headSvcName, Namespace: namespace}, svc),
 				time.Second*3, time.Millisecond*500).Should(Succeed(), "Head service: %v", svc)
-			// TODO: Verify the head service by checking labels and annotations.
+			// Verify the head service by checking labels and annotations.
+			Expect(svc.Labels).Should(HaveKeyWithValue(utils.RayClusterLabelKey, rayService.Name))
+			Expect(svc.Annotations).Should(Equal(rayService.Annotations))
 
 			By("Should create a new serve service resource")
 			svc = &corev1.Service{}
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: utils.GenerateServeServiceName(rayService.Name), Namespace: namespace}, svc),
 				time.Second*3, time.Millisecond*500).Should(Succeed(), "Serve service: %v", svc)
-			// TODO: Verify the serve service by checking labels and annotations.
+			// Verify the serve service by checking labels and annotations.
+			Expect(svc.Labels).Should(HaveKeyWithValue(utils.RayClusterLabelKey, rayService.Name))
+			Expect(svc.Annotations).Should(Equal(rayService.Annotations))
 
 			By("The RayServiceReady condition should be true when the number of endpoints is greater than 0")
 			endpoints = endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
