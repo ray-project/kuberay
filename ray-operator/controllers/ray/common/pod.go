@@ -172,7 +172,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	podTemplate.Labels = labelPod(ctx, rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -184,7 +184,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		headSpec.RayStartParams["no-monitor"] = "true"
 		// set custom service account with proper roles bound.
 		// utils.CheckName clips the name to match the behavior of reconcileAutoscalerServiceAccount
-		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
+		podTemplate.Spec.ServiceAccountName = utils.CheckName(ctx, utils.GetHeadGroupServiceAccountName(&instance))
 		// Use the same image as Ray head container by default.
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
@@ -311,7 +311,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
 	}
-	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
+	podTemplate.Labels = labelPod(ctx, rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -599,13 +599,13 @@ func getAutoscalerContainerIndex(pod corev1.Pod) (autoscalerContainerIndex int) 
 
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
-func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, overrideLabels map[string]string) map[string]string {
+func labelPod(ctx context.Context, rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, overrideLabels map[string]string) map[string]string {
 	labels := map[string]string{
 		utils.RayNodeLabelKey:                   "yes",
 		utils.RayClusterLabelKey:                rayClusterName,
 		utils.RayNodeTypeLabelKey:               string(rayNodeType),
 		utils.RayNodeGroupLabelKey:              groupName,
-		utils.RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(rayClusterName, rayNodeType)),
+		utils.RayIDLabelKey:                     utils.CheckLabel(ctx, utils.GenerateIdentifier(rayClusterName, rayNodeType)),
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}

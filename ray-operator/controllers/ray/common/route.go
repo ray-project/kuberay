@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	routev1 "github.com/openshift/api/route/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -11,10 +12,10 @@ import (
 
 // BuildRouteForHeadService Builds the Route (OpenShift) for head service dashboard.
 // This is used to expose dashboard and remote submit service apis or external traffic.
-func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) {
+func BuildRouteForHeadService(ctx context.Context, cluster rayv1.RayCluster) (*routev1.Route, error) {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                cluster.Name,
-		utils.RayIDLabelKey:                     utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
+		utils.RayIDLabelKey:                     utils.CheckLabel(ctx, utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
