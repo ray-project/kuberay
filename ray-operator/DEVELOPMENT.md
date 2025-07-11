@@ -97,6 +97,8 @@ kubectl logs deployments/kuberay-operator
 * The command `make docker-build` (Step 3) will also run `make build` (Go project compilation).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
+You can also run the `local_deploy.sh` bash script which runs the steps shown above.
+
 ### Run the operator outside the cluster
 
 This step requires you to switch your working directory to the kuberay project root. If
