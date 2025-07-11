@@ -850,11 +850,10 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-	// if the rayjob is sheduled according to a cron string set the status to scheduling instead of initializing to begin with
-	// if know if this is the first job and not just another scheduled one we check the jobs count
+	// if the rayjob is scheduled according to a cron string set the status to scheduling instead of initializing to begin with
+	// we check the job count to know if its the first job
 	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
 		logger.Info("Initial schedule")
-		//NOTE
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
 	} else {
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing

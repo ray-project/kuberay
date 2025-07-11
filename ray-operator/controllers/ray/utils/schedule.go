@@ -1,3 +1,11 @@
+/*
+Portions of this file are derived from the CronJob reasource in the Kubernetes project,
+Kubernetes project: https://github.com/kubernetes/kubernetes
+Licensed under the Apache License, Version 2.0.
+For more information on Kubernetes CronJob, refer to:
+https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/
+*/
+
 package utils
 
 import (
