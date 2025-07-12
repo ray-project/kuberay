@@ -449,14 +449,14 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
-	config, err := MergeWithDefaultConfig(&overrideConfig)
+	config, err := mergeWithDefaultConfig(&overrideConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge config with defaults: %w", err)
 	}
 	return config, nil
 }
 
-func MergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
+func mergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
 	config := newRayClusterConfigWithDefaults()
 
 	// The defaults are not set in the default raycluster config,
