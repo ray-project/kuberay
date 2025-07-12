@@ -989,7 +989,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	return nil, err
 }
 
-// Reconciles the Serve applications on the RayCluster. Returns (isReady, error).
+// Reconciles the Serve applications on the RayCluster. Returns (isReady, serveApplicationStatus, error).
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (bool, map[string]rayv1.AppStatus, error) {
 	logger := ctrl.LoggerFrom(ctx)
