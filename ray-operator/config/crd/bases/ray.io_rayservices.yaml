@@ -8019,6 +8019,9 @@ spec:
                 required:
                 - headGroupSpec
                 type: object
+              rayClusterDeletionDelaySeconds:
+                format: int64
+                type: integer
               serveConfigV2:
                 type: string
               serveService:

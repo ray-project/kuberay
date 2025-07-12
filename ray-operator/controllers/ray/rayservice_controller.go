@@ -556,12 +556,25 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 		return err
 	}
 
+	// Determine the ray cluster deletion delay seconds
+	deletionDelay := RayClusterDeletionDelayDuration
+	if rayServiceInstance.Spec.RayClusterDeletionDelaySeconds != nil {
+		if *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds <= 0 {
+			logger.Info(
+				"RayClusterDeletionDelaySeconds is set to a non-positive value; using default deletion delay.",
+				"RayClusterDeletionDelaySeconds", *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds,
+				"deletionDelay", RayClusterDeletionDelayDuration.Seconds(),
+			)
+		} else {
+			deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
+		}
+	}
 	// Clean up RayCluster instances. Each instance is deleted 60 seconds
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
 			if !exists {
-				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
+				deletionTimestamp := metav1.Now().Add(deletionDelay)
 				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
 				logger.Info(
 					"Scheduled dangling RayCluster for deletion",
