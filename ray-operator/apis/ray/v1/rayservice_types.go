@@ -75,12 +75,12 @@ type RayServiceSpec struct {
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
 	// +optional
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
-	// +optional
-	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
 	// +optional
 	ServeService *corev1.Service `json:"serveService,omitempty"`
+	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
+	// +optional
+	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	// +optional
