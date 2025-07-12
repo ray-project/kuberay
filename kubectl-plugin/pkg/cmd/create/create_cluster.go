@@ -205,11 +205,10 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 		}
 
 		for name, value := range resourceFields {
-			if (name == "head-ephemeral-storage" || name == "worker-ephemeral-storage") && value == "" {
-				continue
-			}
-			if err := util.ValidateResourceQuantity(value, name); err != nil {
-				return fmt.Errorf("%w", err)
+			if value != "" || cmd.Flags().Changed(name) {
+				if err := util.ValidateResourceQuantity(value, name); err != nil {
+					return fmt.Errorf("%w", err)
+				}
 			}
 		}
 	}

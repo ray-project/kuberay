@@ -300,8 +300,10 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 	}
 
 	for name, value := range resourceFields {
-		if err := util.ValidateResourceQuantity(value, name); err != nil {
-			return fmt.Errorf("%w", err)
+		if value != "" || cmd.Flags().Changed(name) {
+			if err := util.ValidateResourceQuantity(value, name); err != nil {
+				return fmt.Errorf("%w", err)
+			}
 		}
 	}
 
