@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,6 +35,7 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	ScheduleDelta                   = 100 * time.Millisecond
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -88,6 +90,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Get RayJob instance
 	var err error
 	rayJobInstance := &rayv1.RayJob{}
+
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
@@ -319,7 +322,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if jobInfo.EndTime != 0 {
 			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
 		}
-	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
+	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying, rayv1.JobDeploymentStatusScheduling:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -328,9 +331,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
-		isClusterDeleted, err := r.deleteClusterResources(ctx, rayJobInstance)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+
+		// We set isClusterDeleted to true as default, i.e. we dont need to delete the cluster
+		isClusterDeleted := true
+		deleteCluster := rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusScheduling || rayJobInstance.Spec.ShutdownAfterJobFinishes
+		if deleteCluster {
+			isClusterDeleted, err = r.deleteClusterResources(ctx, rayJobInstance)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+
 		}
 		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
 		if err != nil {
@@ -342,21 +352,27 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Reset the RayCluster and Ray job related status.
-		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
-		rayJobInstance.Status.RayClusterName = ""
+		// Reset the RayCluster and Ray job related status. Done this way to be atomic.
+		if deleteCluster {
+			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
+			rayJobInstance.Status.RayClusterName = ""
+
+		}
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
+		switch rayJobInstance.Status.JobDeploymentStatus {
+		case rayv1.JobDeploymentStatusSuspending:
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
-		}
-		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
+		case rayv1.JobDeploymentStatusScheduling:
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+		case rayv1.JobDeploymentStatusRetrying:
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 		}
 	case rayv1.JobDeploymentStatusSuspended:
@@ -449,9 +465,40 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
+		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusFailed {
+			logger.Info("RayJob is scheduled again")
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
+		} else {
+			// NOTE: we do not requeue if the job fails even if scheduled, this could change
+			// If the RayJob is completed without scheduling or has failed, we should not requeue it.
+			logger.Info("RayJob is not scheduled")
+			return ctrl.Result{}, nil
+		}
+	case rayv1.JobDeploymentStatusScheduled:
+		if rayJobInstance.Status.JobStatus == rayv1.JobStatusScheduled {
+			logger.Info("We have reached the new time for a job after reconciling")
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+			break
+		}
+		// We get the time from the current time to the previous and next cron schedule times
+		// We pass in time.Now() as a parameter so easier unit testing and consistency
+		t1, t2, err := r.getPreviousAndNextScheduleDistance(ctx, time.Now(), rayJobInstance)
+		if err != nil {
+			logger.Error(err, "Could not get the previous and next distances for a cron schedule")
+			return ctrl.Result{}, err
+		}
+		// Checking if we are currently within a buffer to the previous cron schedule time
+		if t2 <= ScheduleDelta {
+			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
+		} else {
+			logger.Info("We wait for until the next and reconcile", "Time till next job", t1, "Current Time", time.Now(), "LastScheduleTimeDuration", t2)
+			rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
 
-		// If the RayJob is completed, we should not requeue it.
-		return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: t1}, nil
+		}
+
 	default:
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -465,6 +512,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
+
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
@@ -802,7 +850,14 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	// if the rayjob is scheduled according to a cron string set the status to scheduling instead of initializing to begin with
+	// we check the job count to know if its the first job
+	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
+		logger.Info("Initial schedule")
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+	} else {
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
+	}
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
 	return nil
 }
@@ -892,6 +947,26 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	}
 
 	return rayCluster, nil
+}
+
+func (r *RayJobReconciler) getPreviousAndNextScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("We are Scheduling for the next RayJob")
+	cronSchedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
+	if err != nil {
+		// this is likely a user error in defining the spec value
+		// we should log the error and not reconcile this cronjob until an update to spec
+		logger.Error(err, "The cron schedule provided is unparseable")
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
+		return 0, 0, err
+	}
+	logger.Info("Successfully parsed cron schedule", "CronSchedule", cronSchedule)
+
+	t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
+	t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
+
+	logger.Info("Got the time until we run the next RayJob", "NextScheduleTimeDuration", t1.Abs())
+	return t1, t2, nil
 }
 
 func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
