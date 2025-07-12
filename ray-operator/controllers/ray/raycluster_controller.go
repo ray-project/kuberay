@@ -362,62 +362,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
 }
 
-// Checks whether the old and new RayClusterStatus are inconsistent by comparing different fields. If the only
-// differences between the old and new status are the `LastUpdateTime` and `ObservedGeneration` fields, the
-// status update will not be triggered.
-//
-// TODO (kevin85421): The field `ObservedGeneration` is not being well-maintained at the moment. In the future,
-// this field should be used to determine whether to update this CR or not.
-func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context, oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
-	logger := ctrl.LoggerFrom(ctx)
-
-	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldState", oldStatus.State,
-			"newState", newStatus.State,
-			"oldReason", oldStatus.Reason,
-			"newReason", newStatus.Reason,
-		)
-		return true
-	}
-	if oldStatus.ReadyWorkerReplicas != newStatus.ReadyWorkerReplicas ||
-		oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas ||
-		oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
-		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas ||
-		oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldReadyWorkerReplicas", oldStatus.ReadyWorkerReplicas,
-			"newReadyWorkerReplicas", newStatus.ReadyWorkerReplicas,
-			"oldAvailableWorkerReplicas", oldStatus.AvailableWorkerReplicas,
-			"newAvailableWorkerReplicas", newStatus.AvailableWorkerReplicas,
-			"oldDesiredWorkerReplicas", oldStatus.DesiredWorkerReplicas,
-			"newDesiredWorkerReplicas", newStatus.DesiredWorkerReplicas,
-			"oldMinWorkerReplicas", oldStatus.MinWorkerReplicas,
-			"newMinWorkerReplicas", newStatus.MinWorkerReplicas,
-			"oldMaxWorkerReplicas", oldStatus.MaxWorkerReplicas,
-			"newMaxWorkerReplicas", newStatus.MaxWorkerReplicas,
-		)
-		return true
-	}
-	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldEndpoints", oldStatus.Endpoints,
-			"newEndpoints", newStatus.Endpoints,
-			"oldHead", oldStatus.Head,
-			"newHead", newStatus.Head,
-		)
-		return true
-	}
-	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayClusterStatus", "old conditions", oldStatus.Conditions, "new conditions", newStatus.Conditions)
-		return true
-	}
-	return false
-}
-
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Ingress")
@@ -1599,7 +1543,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 // We rely on the returning bool to requeue the reconciliation for atomic operations, such as suspending a RayCluster.
 func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	inconsistent := r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status)
+	inconsistent := utils.InconsistentRayClusterStatus(originalRayClusterInstance.Status, newInstance.Status)
 	if !inconsistent {
 		return inconsistent, nil
 	}
