@@ -116,3 +116,54 @@ func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
 	// 1 head and 4 workers
 	a.Equal(int32(5), podGroup.Spec.MinMember)
 }
+
+func TestAddMetadataToPod(t *testing.T) {
+	tests := []struct {
+		name             string
+		enableGang       bool
+		podHasLabels     bool
+		expectedPodGroup bool
+	}{
+		{"GangEnabled_WithLabels", true, true, true},
+		{"GangDisabled_WithLabels", false, true, false},
+		{"GangDisabled_WithoutLabels", false, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := assert.New(t)
+			cluster := createTestRayCluster(1)
+			if cluster.Labels == nil {
+				cluster.Labels = make(map[string]string)
+			}
+			if tt.enableGang {
+				cluster.Labels["ray.io/gang-scheduling-enabled"] = "true"
+			} else {
+				delete(cluster.Labels, "ray.io/gang-scheduling-enabled")
+			}
+
+			var pod *corev1.Pod
+			if tt.podHasLabels {
+				pod = &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{},
+					},
+				}
+			} else {
+				pod = &corev1.Pod{}
+			}
+
+			scheduler := &KubeScheduler{}
+			scheduler.AddMetadataToPod(context.TODO(), &cluster, "worker", pod)
+
+			if tt.expectedPodGroup {
+				a.Equal(cluster.Name, pod.Labels[kubeSchedulerPodGroupLabelKey])
+			} else {
+				_, exists := pod.Labels[kubeSchedulerPodGroupLabelKey]
+				a.False(exists)
+			}
+
+			a.Equal(scheduler.Name(), pod.Spec.SchedulerName)
+		})
+	}
+}

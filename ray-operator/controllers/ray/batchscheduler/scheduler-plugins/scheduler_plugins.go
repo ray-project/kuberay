@@ -90,8 +90,7 @@ func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluste
 	if k.isGangSchedulingEnabled(app) {
 		pod.Labels[kubeSchedulerPodGroupLabelKey] = app.Name
 	}
-	// TODO(kevin85421): Currently, we only support "single scheduler" mode. If we want to support
-	// "second scheduler" mode, we need to add `schedulerName` to the pod spec.
+	pod.Spec.SchedulerName = k.Name()
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
