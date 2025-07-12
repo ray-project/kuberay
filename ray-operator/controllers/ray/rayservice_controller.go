@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -201,7 +200,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Final status update for any CR modification.
-	if inconsistentRayServiceStatuses(ctx, originalRayServiceInstance.Status, rayServiceInstance.Status) {
+	if utils.InconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
@@ -342,90 +341,6 @@ func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayS
 		ObservedGeneration: rayServiceInstance.Status.ObservedGeneration,
 	}
 	meta.SetStatusCondition(&rayServiceInstance.Status.Conditions, condition)
-}
-
-// Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
-func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.RayClusterName != newStatus.RayClusterName {
-		logger.Info("inconsistentRayServiceStatus RayService RayClusterName", "oldRayClusterName", oldStatus.RayClusterName, "newRayClusterName", newStatus.RayClusterName)
-		return true
-	}
-
-	if len(oldStatus.Applications) != len(newStatus.Applications) {
-		return true
-	}
-
-	var ok bool
-	for appName, newAppStatus := range newStatus.Applications {
-		var oldAppStatus rayv1.AppStatus
-		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
-			logger.Info("inconsistentRayServiceStatus RayService new application found", "appName", appName)
-			return true
-		}
-
-		if oldAppStatus.Status != newAppStatus.Status {
-			logger.Info("inconsistentRayServiceStatus RayService application status changed", "appName", appName, "oldStatus", oldAppStatus.Status, "newStatus", newAppStatus.Status)
-			return true
-		} else if oldAppStatus.Message != newAppStatus.Message {
-			logger.Info("inconsistentRayServiceStatus RayService application status message changed", "appName", appName, "oldStatus", oldAppStatus.Message, "newStatus", newAppStatus.Message)
-			return true
-		}
-
-		if len(oldAppStatus.Deployments) != len(newAppStatus.Deployments) {
-			return true
-		}
-
-		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
-			var oldDeploymentStatus rayv1.ServeDeploymentStatus
-			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
-				logger.Info("inconsistentRayServiceStatus RayService new deployment found in application", "deploymentName", deploymentName, "appName", appName)
-				return true
-			}
-
-			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
-				logger.Info("inconsistentRayServiceStatus RayService DeploymentStatus changed", "oldDeploymentStatus", oldDeploymentStatus.Status, "newDeploymentStatus", newDeploymentStatus.Status)
-				return true
-			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
-				logger.Info("inconsistentRayServiceStatus RayService deployment status message changed", "oldDeploymentStatus", oldDeploymentStatus.Message, "newDeploymentStatus", newDeploymentStatus.Message)
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// Determine whether to update the status of the RayService instance.
-func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
-		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
-		return true
-	}
-
-	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
-		logger.Info("inconsistentRayServiceStatus RayService NumServeEndpoints changed", "oldNumServeEndpoints", oldStatus.NumServeEndpoints, "newNumServeEndpoints", newStatus.NumServeEndpoints)
-		return true
-	}
-
-	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayServiceStatus RayService Conditions changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService ActiveServiceStatus changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService PendingServiceStatus changed")
-		return true
-	}
-
-	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.
