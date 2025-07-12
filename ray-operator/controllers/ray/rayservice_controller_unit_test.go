@@ -7,7 +7,9 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -1275,6 +1277,93 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
 			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
 			assert.Equal(t, tt.expected, isEnabled)
+		})
+	}
+}
+
+func TestRayClusterDeletionDelaySeconds(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	ctx := context.TODO()
+	namespace := "test-namespace"
+	rayClusterName := "test-cluster"
+	rayServiceName := "test-rayservice"
+
+	// Helper to create a RayService with optional RayClusterDeletionDelaySeconds
+	createRayService := func(delaySeconds *int64) *rayv1.RayService {
+		return &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      rayServiceName,
+				Namespace: namespace,
+			},
+			Spec: rayv1.RayServiceSpec{
+				RayClusterDeletionDelaySeconds: delaySeconds,
+			},
+		}
+	}
+
+	rayCluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rayClusterName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRNameLabelKey: rayServiceName,
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+			},
+		},
+	}
+
+	tests := []struct {
+		delaySeconds     *int64
+		name             string
+		expectedDuration time.Duration
+	}{
+		{
+			name:             "Use default delay when not set",
+			delaySeconds:     nil,
+			expectedDuration: RayClusterDeletionDelayDuration,
+		},
+		{
+			name:             "Use default delay when set to zero",
+			delaySeconds:     ptr.To[int64](0),
+			expectedDuration: RayClusterDeletionDelayDuration,
+		},
+		{
+			name:             "Use default delay when set to negative",
+			delaySeconds:     ptr.To[int64](-10),
+			expectedDuration: RayClusterDeletionDelayDuration,
+		},
+		{
+			name:             "Use custom delay when set to positive",
+			delaySeconds:     ptr.To[int64](5),
+			expectedDuration: 5 * time.Second,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rayService := createRayService(tc.delaySeconds)
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			runtimeObjects := []runtime.Object{rayService, &rayCluster}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			r := RayServiceReconciler{
+				Client:                       fakeClient,
+				Scheme:                       newScheme,
+				Recorder:                     record.NewFakeRecorder(1),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
+			}
+
+			now := time.Now()
+			err := r.cleanUpRayClusterInstance(ctx, rayService)
+			require.NoError(t, err)
+
+			// Check that the deletion timestamp is set and equals to the expected value
+			ts, exists := r.RayClusterDeletionTimestamps.Get(rayClusterName)
+			assert.True(t, exists, "Deletion timestamp should be set for the cluster")
+			expectedTs := now.Add(tc.expectedDuration)
+			assert.Equal(t, expectedTs.Unix(), ts.Unix(), "Deletion timestamp should match expected duration")
 		})
 	}
 }
