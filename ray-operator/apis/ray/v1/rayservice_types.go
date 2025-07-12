@@ -65,18 +65,21 @@ type RayServiceUpgradeStrategy struct {
 
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
+	// RayClusterDeletionDelaySeconds configures the delay (in seconds) before deleting old RayClusters.
+	// +optional
+	RayClusterDeletionDelaySeconds *int64 `json:"rayClusterDeletionDelaySeconds,omitempty"`
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
 	// +optional
 	ServiceUnhealthySecondThreshold *int32 `json:"serviceUnhealthySecondThreshold,omitempty"`
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
 	// +optional
 	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
-	// +optional
-	ServeService *corev1.Service `json:"serveService,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	// +optional
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
+	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
+	// +optional
+	ServeService *corev1.Service `json:"serveService,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	// +optional
