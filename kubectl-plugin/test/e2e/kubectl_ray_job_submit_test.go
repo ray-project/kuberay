@@ -21,12 +21,17 @@ const (
 
 var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 	var namespace string
+	var testClient Client
 
 	BeforeEach(func() {
-		namespace = createTestNamespace()
+		var err error
+		testClient, err = newTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		namespace = createTestNamespace(testClient)
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
-			deleteTestNamespace(namespace)
+			deleteTestNamespace(namespace, testClient)
 			namespace = ""
 		})
 	})
@@ -47,7 +52,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 	})
 
 	It("succeed in submitting RayJob with runtime environment set with working dir", func() {
@@ -68,7 +73,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		cmdOutputJobID := extractRayJobID(string(output))
 
 		// Use kubectl to check status of the rayjob
-		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 	})
 
 	It("succeed in submitting RayJob with headNodeSelectors and workerNodeSelectors", func() {
@@ -94,7 +99,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 		// Retrieve Job Head Node Selectors
 		Expect(rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector["kubernetes.io/os"]).To(Equal("linux"))
 		// Retrieve Job Worker Node Selectors
@@ -122,7 +127,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 		Expect(rayJob.Spec.TTLSecondsAfterFinished).To(Equal(int32(0)))
 		Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 	})
@@ -147,7 +152,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 		Expect(rayJob.Spec.TTLSecondsAfterFinished).To(Equal(int32(0)))
 		Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeFalse())
 	})
@@ -168,7 +173,7 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
 
-		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
+		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete", testClient)
 		Expect(rayJob.Spec.TTLSecondsAfterFinished).To(Equal(int32(10)))
 		Expect(rayJob.Spec.ShutdownAfterJobFinishes).To(BeTrue())
 	})

@@ -19,10 +19,14 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = createTestNamespace()
+		var err error
+		testClient, err := newTestClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		namespace = createTestNamespace(testClient)
 		deployTestRayCluster(namespace)
 		DeferCleanup(func() {
-			deleteTestNamespace(namespace)
+			deleteTestNamespace(namespace, testClient)
 			namespace = ""
 		})
 	})
