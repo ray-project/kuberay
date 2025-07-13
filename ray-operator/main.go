@@ -94,7 +94,7 @@ func main() {
 	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
 		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy. Please use --batch-scheduler instead.")
 	flag.StringVar(&batchScheduler, "batch-scheduler", "",
-		"Batch scheduler name, supported values are volcano and yunikorn.")
+		"Batch scheduler name, supported values are volcano, yunikorn, kai-scheduler.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")

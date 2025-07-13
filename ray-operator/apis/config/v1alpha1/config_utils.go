@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
 	schedulerplugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
@@ -23,7 +24,7 @@ func ValidateBatchSchedulerConfig(logger logr.Logger, config Configuration) erro
 
 	if len(config.BatchScheduler) > 0 {
 		// if a customized scheduler is configured, check it is supported
-		if config.BatchScheduler == volcano.GetPluginName() || config.BatchScheduler == yunikorn.GetPluginName() || config.BatchScheduler == schedulerplugins.GetPluginName() {
+		if config.BatchScheduler == volcano.GetPluginName() || config.BatchScheduler == yunikorn.GetPluginName() || config.BatchScheduler == schedulerplugins.GetPluginName() || config.BatchScheduler == kaischeduler.GetPluginName() {
 			logger.Info("Feature flag batch-scheduler is enabled",
 				"scheduler name", config.BatchScheduler)
 		} else {

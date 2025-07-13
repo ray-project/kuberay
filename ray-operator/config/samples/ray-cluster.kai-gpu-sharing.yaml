@@ -1,0 +1,75 @@
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: default
+spec:
+  resources:
+    cpu:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+    gpu:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+    memory:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+---
+apiVersion: scheduling.run.ai/v2
+kind: Queue
+metadata:
+  name: test
+spec:
+  parentQueue: default
+  resources:
+    cpu:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+    gpu:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+    memory:
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
+---
+
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: rc-half-gpu
+  labels:
+    kai.scheduler/queue: test
+spec:
+  headGroupSpec:
+    template:
+      spec:
+        containers:
+        - name: head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+  
+  # ---- Two workers share one GPU (0.5 each) ----
+  workerGroupSpecs:
+  - groupName: shared-gpu
+    replicas: 2
+    minReplicas: 2
+    template:
+      metadata:
+        annotations:
+          gpu-fraction: "0.5"
+      spec:
+        containers:
+        - name: worker
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
