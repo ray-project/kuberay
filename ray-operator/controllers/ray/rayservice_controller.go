@@ -566,6 +566,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 				"deletionDelay", RayClusterDeletionDelayDuration.Seconds(),
 			)
 		} else {
+			logger.Info("RayClusterDeletionDelaySeconds is set correctly and will be used.", "RayClusterDeletionDelaySeconds", *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds)
 			deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
 		}
 	}
