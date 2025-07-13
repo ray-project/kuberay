@@ -1282,10 +1282,6 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 }
 
 func TestRayClusterDeletionDelaySeconds(t *testing.T) {
-	newScheme := runtime.NewScheme()
-	_ = rayv1.AddToScheme(newScheme)
-
-	ctx := context.TODO()
 	namespace := "test-namespace"
 	rayClusterName := "test-cluster"
 	rayServiceName := "test-rayservice"
@@ -1343,6 +1339,10 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			ctx := context.TODO()
+
 			rayService := createRayService(tc.delaySeconds)
 
 			// Initialize a fake client with newScheme and runtimeObjects.
