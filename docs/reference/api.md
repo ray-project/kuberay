@@ -294,6 +294,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `rayClusterDeletionDelaySeconds` _integer_ | RayClusterDeletionDelaySeconds specifies the delay in seconds before deleting old RayClusters.<br />Only values >= 0 are allowed. If not specified or set to a negative value, a default of 60 seconds is used. |  | Minimum: 0 <br /> |
 | `serviceUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `deploymentUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `serveService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics. |  |  |
@@ -301,7 +302,6 @@ _Appears in:_
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
-| `rayClusterDeletionDelaySeconds` _integer_ | RayClusterDeletionDelaySeconds configures the delay (in seconds) before deleting old RayClusters. |  |  |
 
 
 
