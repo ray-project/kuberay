@@ -1363,7 +1363,7 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 			ts, exists := r.RayClusterDeletionTimestamps.Get(rayClusterName)
 			assert.True(t, exists, "Deletion timestamp should be set for the cluster")
 			expectedTs := now.Add(tc.expectedDuration)
-			assert.Equal(t, expectedTs.Unix(), ts.Unix(), "Deletion timestamp should match expected duration")
+			assert.Equal(t, expectedTs.Unix(), ts.Unix(), "Deletion timestamp should match expected timestamp")
 		})
 	}
 }
