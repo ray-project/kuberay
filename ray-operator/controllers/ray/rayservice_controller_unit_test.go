@@ -1291,7 +1291,7 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 	rayServiceName := "test-rayservice"
 
 	// Helper to create a RayService with optional RayClusterDeletionDelaySeconds
-	createRayService := func(delaySeconds *int64) *rayv1.RayService {
+	createRayService := func(delaySeconds *int32) *rayv1.RayService {
 		return &rayv1.RayService{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      rayServiceName,
@@ -1315,7 +1315,7 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 	}
 
 	tests := []struct {
-		delaySeconds     *int64
+		delaySeconds     *int32
 		name             string
 		expectedDuration time.Duration
 	}{
@@ -1326,17 +1326,17 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 		},
 		{
 			name:             "Use default delay when set to zero",
-			delaySeconds:     ptr.To[int64](0),
+			delaySeconds:     ptr.To[int32](0),
 			expectedDuration: RayClusterDeletionDelayDuration,
 		},
 		{
 			name:             "Use default delay when set to negative",
-			delaySeconds:     ptr.To[int64](-10),
+			delaySeconds:     ptr.To[int32](-10),
 			expectedDuration: RayClusterDeletionDelayDuration,
 		},
 		{
 			name:             "Use custom delay when set to positive",
-			delaySeconds:     ptr.To[int64](5),
+			delaySeconds:     ptr.To[int32](5),
 			expectedDuration: 5 * time.Second,
 		},
 	}
