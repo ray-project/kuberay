@@ -563,11 +563,14 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 			logger.Info(
 				"RayClusterDeletionDelaySeconds is set to a negative value; using default deletion delay.",
 				"RayClusterDeletionDelaySeconds", *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds,
-				"deletionDelay", RayClusterDeletionDelayDuration.Seconds(),
+				"deletionDelay", RayClusterDeletionDelayDuration.String(),
 			)
 		} else {
-			logger.Info("RayClusterDeletionDelaySeconds is set correctly and will be used.", "RayClusterDeletionDelaySeconds", *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds)
 			deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
+			logger.Info("RayClusterDeletionDelaySeconds is set correctly and will be used.",
+				"RayClusterDeletionDelaySeconds", *rayServiceInstance.Spec.RayClusterDeletionDelaySeconds,
+				"deletionDelay", deletionDelay.String(),
+			)
 		}
 	}
 	// Clean up RayCluster instances. Each instance is deleted 60 seconds
