@@ -119,27 +119,23 @@ func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
 
 func TestAddMetadataToPod(t *testing.T) {
 	tests := []struct {
-		name             string
-		enableGang       bool
-		podHasLabels     bool
-		expectedPodGroup bool
+		name         string
+		enableGang   bool
+		podHasLabels bool
 	}{
-		{"GangEnabled_WithLabels", true, true, true},
-		{"GangDisabled_WithLabels", false, true, false},
-		{"GangDisabled_WithoutLabels", false, false, false},
+		{"GangEnabled_WithLabels", true, true},
+		{"GangDisabled_WithLabels", false, true},
+		{"GangDisabled_WithoutLabels", false, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := assert.New(t)
 			cluster := createTestRayCluster(1)
-			if cluster.Labels == nil {
-				cluster.Labels = make(map[string]string)
-			}
+			cluster.Labels = make(map[string]string)
+
 			if tt.enableGang {
 				cluster.Labels["ray.io/gang-scheduling-enabled"] = "true"
-			} else {
-				delete(cluster.Labels, "ray.io/gang-scheduling-enabled")
 			}
 
 			var pod *corev1.Pod
@@ -156,7 +152,7 @@ func TestAddMetadataToPod(t *testing.T) {
 			scheduler := &KubeScheduler{}
 			scheduler.AddMetadataToPod(context.TODO(), &cluster, "worker", pod)
 
-			if tt.expectedPodGroup {
+			if tt.enableGang {
 				a.Equal(cluster.Name, pod.Labels[kubeSchedulerPodGroupLabelKey])
 			} else {
 				_, exists := pod.Labels[kubeSchedulerPodGroupLabelKey]
