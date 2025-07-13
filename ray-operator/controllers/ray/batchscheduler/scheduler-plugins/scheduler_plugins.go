@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	schedulerName                 string = "scheduler-plugins"
+	schedulerName                 string = "scheduler-plugins-scheduler"
 	kubeSchedulerPodGroupLabelKey string = "scheduling.x-k8s.io/pod-group"
 )
 
