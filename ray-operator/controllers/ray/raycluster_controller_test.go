@@ -186,21 +186,6 @@ var _ = Context("Inside the default namespace", func() {
 			// Note that this test assumes that headPods and workerPods are up-to-date.
 			updatePodsTo(ctx, headPods, corev1.PodRunning, "All Head Pods should be running.")
 			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All worker Pods should be running.")
-			// for _, headPod := range headPods.Items {
-			// 	headPod.Status.Phase = corev1.PodRunning
-			// 	Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
-			// }
-
-			// Eventually(
-			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
-
-			// for _, workerPod := range workerPods.Items {
-			// 	workerPod.Status.Phase = corev1.PodRunning
-			// 	Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
-			// }
-
-			// Eventually(
-			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
@@ -698,14 +683,8 @@ var _ = Context("Inside the default namespace", func() {
 
 			// We need to also manually update Pod statuses back to "Running" or else they will always stay as Pending.
 			// This is because we don't run kubelets in the unit tests to update the status subresource.
-			for _, headPod := range headPods.Items {
-				headPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
-			}
-			for _, workerPod := range workerPods.Items {
-				workerPod.Status.Phase = corev1.PodRunning
-				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
-			}
+			updatePodsTo(ctx, headPods, corev1.PodRunning, "All Head Pods should be running.")
+			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
 		})
 
 		By("RayCluster's .status.state should be updated back to 'ready' after being un-suspended", func() {
