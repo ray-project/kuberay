@@ -87,23 +87,33 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 	}
 }
 
-func isAllPodsInPhase(podlist corev1.PodList, phase corev1.PodPhase) bool {
-	for _, pod := range podlist.Items {
-		if pod.Status.Phase != phase {
+func isAllPodsInPhase(ctx context.Context, podList corev1.PodList, phase corev1.PodPhase) bool {
+	// Check if there are any pods
+	if len(podList.Items) == 0 {
+		return false
+	}
+	// Re-fetch each pod individually and check if all pods are in the desired phase
+	for _, pod := range podList.Items {
+		var updatedPod corev1.Pod
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&pod), &updatedPod)
+		if err != nil {
+			return false
+		}
+		if updatedPod.Status.Phase != phase {
 			return false
 		}
 	}
 	return true
 }
 
-//nolint:unparam // phase parameter is kept for future use with different pod phases
+//nolint:unparam // This function is used to check if all pods are in the desired phase.
 func updatePodsTo(ctx context.Context, podList corev1.PodList, phase corev1.PodPhase, message string) {
 	for _, pod := range podList.Items {
 		pod.Status.Phase = phase
 		Expect(k8sClient.Status().Update(ctx, &pod)).Should(Succeed())
 	}
 	Eventually(func() bool {
-		return isAllPodsInPhase(podList, phase)
+		return isAllPodsInPhase(ctx, podList, phase)
 	}).WithContext(ctx).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), message)
 }
 
@@ -175,7 +185,22 @@ var _ = Context("Inside the default namespace", func() {
 
 			// Note that this test assumes that headPods and workerPods are up-to-date.
 			updatePodsTo(ctx, headPods, corev1.PodRunning, "All Head Pods should be running.")
-			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
+			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All worker Pods should be running.")
+			// for _, headPod := range headPods.Items {
+			// 	headPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			// for _, workerPod := range workerPods.Items {
+			// 	workerPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
@@ -297,7 +322,13 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
 
-			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state and .status.head.ServiceIP should be updated shortly after all Pods are Running", func() {
@@ -385,7 +416,14 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
 
-			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
+			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All worker Pods should be running.")
+			// for _, workerPod := range workerPods.Items {
+			// 	workerPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state and .status.head.ServiceIP should be updated shortly after all Pods are Running", func() {
@@ -938,14 +976,26 @@ var _ = Context("Inside the default namespace", func() {
 		It("Update all Pods to Running", func() {
 			// Note that this test assumes that headPods and workerPods are up-to-date.
 			Eventually(listResourceFunc(ctx, &headPods, headFilters...), time.Second*3, time.Millisecond*500).Should(Equal(numHeadPods), "headPods: %v", headPods.Items)
-
 			updatePodsTo(ctx, headPods, corev1.PodRunning, "All Head Pods should be running.")
+			// for _, headPod := range headPods.Items {
+			// 	headPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			// }
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
 
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 
 			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
+			// for _, workerPod := range workerPods.Items {
+			// 	workerPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state transitions to 'ready' when all worker Pods are Running and check pod counts are correct", func() {
@@ -1114,6 +1164,21 @@ var _ = Context("Inside the default namespace", func() {
 		It("Update all Pods to Running", func() {
 			updatePodsTo(ctx, headPods, corev1.PodRunning, "All Head Pods should be running.")
 			updatePodsTo(ctx, workerPods, corev1.PodRunning, "All Worker Pods should be running.")
+			// for _, headPod := range headPods.Items {
+			// 	headPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			// for _, workerPod := range workerPods.Items {
+			// 	workerPod.Status.Phase = corev1.PodRunning
+			// 	Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			// }
+
+			// Eventually(
+			// 	isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
 		})
 
 		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
