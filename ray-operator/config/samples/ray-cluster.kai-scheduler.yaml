@@ -41,7 +41,7 @@ spec:
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: ray-sample
+  name: raycluster-sample
   labels:
     kai.scheduler/queue: test
 spec:

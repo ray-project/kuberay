@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -35,10 +36,16 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1
 	return nil
 }
 
-func (k *KaiScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
-	if queue, ok := app.Labels[QueueLabelName]; ok {
+func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+	queue, ok := app.Labels[QueueLabelName]
+	if !ok || queue == "" {
+		logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
+		logger.Error(nil, "Queue label missing from RayCluster; pods will remain pending",
+			"requiredLabel", QueueLabelName,
+			"rayCluster", app.Name)
+	} else {
 		if pod.Labels == nil {
-			pod.Labels = map[string]string{}
+			pod.Labels = make(map[string]string)
 		}
 		pod.Labels[QueueLabelName] = queue
 	}
@@ -53,5 +60,5 @@ func (kf *KaiSchedulerFactory) AddToScheme(_ *runtime.Scheme) {
 }
 
 func (kf *KaiSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
-	return b 
+	return b
 }
