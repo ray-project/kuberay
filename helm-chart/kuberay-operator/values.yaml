@@ -50,7 +50,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", "yunikorn", and "scheduler-plugins-scheduler".
+#    "default", "volcano", "yunikorn", and "scheduler-plugins".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
@@ -69,13 +69,13 @@ logging:
 #
 #  4. Use PodGroup
 #       batchScheduler:
-#         name: scheduler-plugins-scheduler
+#         name: scheduler-plugins
 #
 batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano", "yunikorn" or "scheduler-plugins-scheduler", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 

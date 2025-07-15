@@ -308,7 +308,7 @@ rules:
   verbs:
   - get
 {{- end -}}
-{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "scheduler-plugins-scheduler") }}
+{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "scheduler-plugins") }}
 - apiGroups:
   - scheduling.x-k8s.io
   resources:

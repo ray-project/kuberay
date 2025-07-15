@@ -62,7 +62,7 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid option, batch-scheduler=scheduler-plugins-scheduler",
+			name: "valid option, batch-scheduler=scheduler-plugins",
 			args: args{
 				logger: testr.New(t),
 				config: Configuration{

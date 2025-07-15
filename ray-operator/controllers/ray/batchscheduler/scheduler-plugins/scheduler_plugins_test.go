@@ -160,6 +160,10 @@ func TestAddMetadataToPod(t *testing.T) {
 			}
 
 			a.Equal(scheduler.Name(), pod.Spec.SchedulerName)
+			// The default scheduler plugins name is "scheduler-plugins-scheduler"
+			// The batchScheduler name is "scheduler-plugins"
+			// This is to ensure batchScheduler and default scheduler plugins name are not the same.
+			a.NotEqual(scheduler.Name(), GetPluginName())
 		})
 	}
 }

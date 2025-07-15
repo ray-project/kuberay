@@ -21,7 +21,13 @@ import (
 )
 
 const (
-	schedulerName                 string = "scheduler-plugins-scheduler"
+	// This is the batchScheduler name used in the Ray Operator.
+	// We use this name because it is easier to understand and remember.
+	// It is also consistent with the name used in the Helm chart values.yaml.
+	schedulerName string = "scheduler-plugins"
+	// The default scheduler plugins name is "scheduler-plugins-scheduler".
+	// https://github.com/kubernetes-sigs/scheduler-plugins/blob/b3127ba4cc420430ca5322740103220043697eec/manifests/install/charts/as-a-second-scheduler/values.yaml#L6C9-L6C36
+	schedulerInstanceName         string = "scheduler-plugins-scheduler"
 	kubeSchedulerPodGroupLabelKey string = "scheduling.x-k8s.io/pod-group"
 )
 
@@ -36,7 +42,7 @@ func GetPluginName() string {
 }
 
 func (k *KubeScheduler) Name() string {
-	return GetPluginName()
+	return schedulerInstanceName
 }
 
 func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
