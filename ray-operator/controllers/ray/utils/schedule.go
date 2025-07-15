@@ -28,7 +28,7 @@ const (
 	manyMissed
 )
 
-func mostRecentScheduleTime(rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, missedSchedulesType, error) {
+func MostRecentScheduleTime(rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, missedSchedulesType, error) {
 	earliestTime := rj.ObjectMeta.CreationTimestamp.Time
 	missedSchedules := noneMissed
 	if rj.Status.LastScheduleTime != nil {
@@ -119,13 +119,13 @@ func FormatSchedule(rj *rayv1.RayJob, recorder record.EventRecorder) string {
 // the schedule and last schedule time.
 func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
 
-	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
+	earliestTime, mostRecentTime, missedSchedules, err := MostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
 		// we still have to requeue at some point, so aim for the next scheduling slot from now
 		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point, so aim for the next scheduling slot from now", "Error", err)
 		mostRecentTime = &now
 	} else if mostRecentTime == nil {
-		logger.Info("mostRecentTime doesnt exist", "mostRecentTime", mostRecentTime, "earliestTime", earliestTime)
+		logger.Info("mostRecentTime doesnt exist")
 		if missedSchedules == noneMissed {
 			// no missed schedules since earliestTime
 			mostRecentTime = &earliestTime
@@ -144,13 +144,13 @@ func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Tim
 // on the RayJob's creation time (or its last scheduled status) and the current time 'now'.
 func LastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
 
-	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
+	earliestTime, mostRecentTime, missedSchedules, err := MostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
 		// We still have to requeue at some point, so aim for the next scheduling slot from now
 		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point", "Error", err)
 		mostRecentTime = &now
 	} else if mostRecentTime == nil {
-		logger.Info("mostRecentTime doesnt exist", "mostRecentTime", mostRecentTime, "earliestTime", earliestTime)
+		logger.Info("mostRecentTime doesnt exist")
 		if missedSchedules == noneMissed {
 			// No missed schedules since earliestTime
 			mostRecentTime = &earliestTime
