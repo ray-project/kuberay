@@ -495,7 +495,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
 		} else {
 			logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now(), "lastScheduleTimeDuration", t2)
-			// rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
 			return ctrl.Result{RequeueAfter: t1}, nil
 		}
 
