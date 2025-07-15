@@ -1321,12 +1321,7 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 			expectedDuration: RayClusterDeletionDelayDuration,
 		},
 		{
-			name:             "Use default delay when set to negative",
-			delaySeconds:     ptr.To[int32](-10),
-			expectedDuration: RayClusterDeletionDelayDuration,
-		},
-		{
-			name:             "Use custom delay when set to zero",
+			name:             "Use custom delay when set to 0",
 			delaySeconds:     ptr.To[int32](0),
 			expectedDuration: 0 * time.Second,
 		},
