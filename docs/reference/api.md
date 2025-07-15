@@ -253,7 +253,7 @@ _Appears in:_
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
-| `schedule` _string_ | Schedule specifies a cron like string for cron scheduling |  |  |
+| `schedule` _string_ | Schedule specifies a cron like string for cron scheduling<br />When set with shutdownAfterJobFinishes, if shutdownAfterJobFinishes is False<br />the schduled jobs will keep using the same cluster, if True it will delete<br />the cluster and create a new one on the next job. |  |  |
 
 
 

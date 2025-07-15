@@ -35,7 +35,8 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
-	ScheduleDelta                   = 100 * time.Millisecond
+	// The buffer period in which a scheduled rajob can run since the last cron tick
+	ScheduleBuffer = 100 * time.Millisecond
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -489,13 +490,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 		// Checking if we are currently within a buffer to the previous cron schedule time
-		if t2 <= ScheduleDelta {
+		if t2 <= ScheduleBuffer {
 			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
 		} else {
-			logger.Info("We wait for until the next and reconcile", "Time till next job", t1, "Current Time", time.Now(), "LastScheduleTimeDuration", t2)
-			rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
-
+			logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now(), "lastScheduleTimeDuration", t2)
+			// rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
 			return ctrl.Result{RequeueAfter: t1}, nil
 		}
 
@@ -853,7 +853,7 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	// if the rayjob is scheduled according to a cron string set the status to scheduling instead of initializing to begin with
 	// we check the job count to know if its the first job
 	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
-		logger.Info("Initial schedule")
+		logger.Info("Since this is a new schdueled job we enter the Scheduled state not Initalizing")
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
 	} else {
 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
@@ -951,21 +951,19 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 
 func (r *RayJobReconciler) getPreviousAndNextScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("We are Scheduling for the next RayJob")
+	logger.Info("Calculating next schedule for the RayJob")
 	cronSchedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
 	if err != nil {
 		// this is likely a user error in defining the spec value
 		// we should log the error and not reconcile this cronjob until an update to spec
-		logger.Error(err, "The cron schedule provided is unparseable")
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("the cron schedule provided is unparseable: %w", err)
 	}
 	logger.Info("Successfully parsed cron schedule", "CronSchedule", cronSchedule)
 
 	t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
 	t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
 
-	logger.Info("Got the time until we run the next RayJob", "NextScheduleTimeDuration", t1.Abs())
 	return t1, t2, nil
 }
 

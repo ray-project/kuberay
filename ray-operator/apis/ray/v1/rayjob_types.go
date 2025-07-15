@@ -206,6 +206,9 @@ type RayJobSpec struct {
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
 	// Schedule specifies a cron like string for cron scheduling
+	// When set with shutdownAfterJobFinishes, if shutdownAfterJobFinishes is False
+	// the schduled jobs will keep using the same cluster, if True it will delete
+	// the cluster and create a new one on the next job.
 	// +optional
 	Schedule string `json:"schedule,omitempty"`
 }
