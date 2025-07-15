@@ -289,6 +289,7 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 }
 
 func TestUserSpecifiedHeadService(t *testing.T) {
+	ctx := context.Background()
 	// Use any RayCluster instance as a base for the test.
 	testRayClusterWithHeadService := instanceWithWrongSvc.DeepCopy()
 
@@ -332,7 +333,7 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 
 	// The selector field should only use the keys from the five default labels.  The values should be updated with the values from the template labels.
 	// The user-provided HeadService labels should be ignored for the purposes of the selector field. The user-provided Selector field should be ignored.
-	defaultLabels := HeadServiceLabels(*testRayClusterWithHeadService)
+	defaultLabels := HeadServiceLabels(ctx, *testRayClusterWithHeadService)
 	// Make sure this test isn't spuriously passing. Check that RayClusterLabelKey is in the default labels.
 	if _, ok := defaultLabels[utils.RayClusterLabelKey]; !ok {
 		t.Errorf("utils.RayClusterLabelKey=%s should be in the default labels", utils.RayClusterLabelKey)
