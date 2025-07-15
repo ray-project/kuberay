@@ -41,7 +41,7 @@ spec:
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: rc-half-gpu
+  name: raycluster-half-gpu
   labels:
     kai.scheduler/queue: test
 spec:
