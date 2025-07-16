@@ -14,8 +14,8 @@ RAY_OPERATOR_PATH="${PROJECT_ROOT}/ray-operator"
 
 # --- Configuration Variables ---
 IMAGE_NAME="kuberay-operator"
-IMAGE_TAG="kuberay-dev"
-KIND_CLUSTER_NAME="kind"
+IMAGE_TAG="kuberay-dev-tag"
+KIND_CLUSTER_NAME="kuberay-dev"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
 OPERATOR_NAMESPACE="default"
 HELM_RELEASE_NAME="kuberay-operator"
