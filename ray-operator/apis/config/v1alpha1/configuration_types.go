@@ -88,8 +88,15 @@ type Configuration struct {
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 
+	// Host used for Ray Dashboard ingresses. The host will be the same for all `RayClusters` and they
+	// will be differentiated by their paths.
 	IngressHost        string                    `json:"ingressHost,omitempty"`
+
+	// TLS configuration for the Ray Dashboard ingresses. Applies to all `RayClusters`.
 	IngressTLS         []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
+
+	// Default annotations for the Ray Dashboard ingresses. Annotations on the `RayCluster` will override
+	// these on a case-by-case basis.
 	IngressAnnotations map[string]string         `json:"ingressAnnotations,omitempty"`
 }
 
