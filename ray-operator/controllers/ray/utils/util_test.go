@@ -115,7 +115,7 @@ func TestPodName(t *testing.T) {
 			name:     "short cluster name, head pod",
 			prefix:   "ray-cluster-01",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-01-head",
+			expected: "ray-cluster-01-head-",
 		},
 		{
 			name:     "short cluster name, worker pod",
@@ -127,7 +127,7 @@ func TestPodName(t *testing.T) {
 			name:     "long cluster name, head pod",
 			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
 			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-00000000000000000000000111111111222222-head",
+			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
 		},
 		{
 			name:     "long cluster name, worker pod",
@@ -139,8 +139,7 @@ func TestPodName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			isPodNameGenerated := test.nodeType == rayv1.WorkerNode // HeadPod name is now fixed
-			str := PodName(test.prefix, test.nodeType, isPodNameGenerated)
+			str := PodName(test.prefix, test.nodeType, true)
 			if str != test.expected {
 				t.Logf("expected: %q", test.expected)
 				t.Logf("actual: %q", str)
