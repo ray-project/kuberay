@@ -12,7 +12,6 @@ import (
 	"strings"
 	"unicode"
 
-	semver "github.com/Masterminds/semver/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -712,20 +711,4 @@ func GetContainerCommand(additionalOptions []string) []string {
 	}
 	bashOptionsStr := strings.Join(bashOptions, "")
 	return []string{"/bin/bash", "-" + bashOptionsStr, "--"}
-}
-
-// IsVersionLessThan returns true if the source version is less than the target version.
-func IsVersionLessThan(sourceVersion string, targetVersion string) bool {
-	if sourceVersion == "" || targetVersion == "" {
-		return false
-	}
-	v, err := semver.NewVersion(sourceVersion)
-	if err != nil {
-		return false
-	}
-	target, err := semver.NewVersion(targetVersion)
-	if err != nil {
-		return false
-	}
-	return v.LessThan(target)
 }
