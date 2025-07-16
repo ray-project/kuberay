@@ -98,19 +98,21 @@ kubectl logs deployments/kuberay-operator
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
 
 #### Using Local Deployment Script
-You can also run the `local_deploy.sh` bash script (located in `ray-operator/hack`) which runs the steps shown above, but deleting the kind cluster each run for consistency in repeated development.
+
+You can also run the `local_deploy.sh` bash script (located in `ray-operator/hack`) which runs the steps shown above, but deletes and recreates the kind cluster each run for consistency during repeated development.
 
 There are configuable variables in the script, the defaults are shown below: 
+
 ```bash 
-IMAGE_REPO="yourregistry"
 IMAGE_NAME="kuberay-operator"
-IMAGE_TAG="nightly"
+IMAGE_TAG="kuberay-dev"
 KIND_CLUSTER_NAME="kind"
-KIND_NODE_IMAGE="kindest/node:v1.24.0" 
+KIND_NODE_IMAGE="kindest/node:v1.24.0"
 OPERATOR_NAMESPACE="default"
 HELM_RELEASE_NAME="kuberay-operator"
-HELM_CHART_PATH="../../helm-chart/kuberay-operator"
 ```
+
+Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation. 
 
 ### Run the operator outside the cluster
 

@@ -4,24 +4,20 @@ set -euxo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-PROJECT_ROOT="$(dirname "$(dirname "${SCRIPT_DIR}")")" # hack/ -> ray-operator/ -> kuberay/
+PROJECT_ROOT="${SCRIPT_DIR}/../.." # hack/ -> ray-operator/ -> kuberay/
 
 # Path to your Helm chart, relative to the PROJECT_ROOT (kuberay/)
 HELM_CHART_RELATIVE_PATH="helm-chart/kuberay-operator"
 HELM_CHART_PATH="${PROJECT_ROOT}/${HELM_CHART_RELATIVE_PATH}"
 
-RAY_OPERATOR_DIR_RELATIVE="ray-operator"
-RAY_OPERATOR_PATH="${PROJECT_ROOT}/${RAY_OPERATOR_DIR_RELATIVE}"
+RAY_OPERATOR_PATH="${PROJECT_ROOT}/ray-operator"
 
 # --- Configuration Variables ---
 IMAGE_NAME="kuberay-operator"
 IMAGE_TAG="kuberay-dev"
-
 KIND_CLUSTER_NAME="kind"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
-
 OPERATOR_NAMESPACE="default"
-
 HELM_RELEASE_NAME="kuberay-operator"
 
 delete_kind_cluster() {
