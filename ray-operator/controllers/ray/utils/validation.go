@@ -256,5 +256,11 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
 		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
 	}
+
+	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
+		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
+		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+	}
+
 	return nil
 }
