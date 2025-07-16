@@ -37,19 +37,20 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1
 }
 
 func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+	pod.Spec.SchedulerName = k.Name()
+
 	queue, ok := app.Labels[QueueLabelName]
 	if !ok || queue == "" {
 		logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
-		logger.Error(nil, "Queue label missing from RayCluster; pods will remain pending",
+		logger.Info("Queue label missing from RayCluster; pods will remain pending",
 			"requiredLabel", QueueLabelName,
 			"rayCluster", app.Name)
-	} else {
-		if pod.Labels == nil {
-			pod.Labels = make(map[string]string)
-		}
-		pod.Labels[QueueLabelName] = queue
+		return
 	}
-	pod.Spec.SchedulerName = k.Name()
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[QueueLabelName] = queue
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config) (schedulerinterface.BatchScheduler, error) {
