@@ -164,6 +164,9 @@ const (
 	// by default starting with v1.4.0.
 	ENABLE_LOGIN_SHELL = "ENABLE_LOGIN_SHELL"
 
+	// If set to true, we will use deterministic name for head pod. Otherwise, the non-deterministic name id used.
+	ENABLE_DETERMINISTIC_HEAD_POD_NAME = "ENABLE_DETERMINISTIC_HEAD_NAME"
+
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 

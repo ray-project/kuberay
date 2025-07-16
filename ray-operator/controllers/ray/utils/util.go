@@ -712,3 +712,12 @@ func GetContainerCommand(additionalOptions []string) []string {
 	bashOptionsStr := strings.Join(bashOptions, "")
 	return []string{"/bin/bash", "-" + bashOptionsStr, "--"}
 }
+
+// GetEnableDeterministicHeadName returns true if deterministic head pod name is enabled.
+func IsDeterministicHeadPodNameEnabled() bool {
+	enableDeterministicHeadPodName := false
+	if s := os.Getenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME); strings.ToLower(s) == "true" {
+		enableDeterministicHeadPodName = true
+	}
+	return enableDeterministicHeadPodName
+}
