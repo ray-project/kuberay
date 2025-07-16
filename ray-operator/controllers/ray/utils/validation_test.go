@@ -1084,6 +1084,11 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			spec:        rayv1.RayServiceSpec{},
 			expectError: true,
 		},
+		{
+			name:        "Spec.RayClusterDeletionDelaySeconds is negative",
+			spec:        rayv1.RayServiceSpec{RayClusterDeletionDelaySeconds: ptr.To[int32](-1)},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
