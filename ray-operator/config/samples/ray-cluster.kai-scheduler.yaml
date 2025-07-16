@@ -1,49 +1,10 @@
 #A simple example raycluster with KAI
-apiVersion: scheduling.run.ai/v2
-kind: Queue
-metadata:
-  name: default
-spec:
-  resources:
-    cpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
-    gpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
-    memory:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
----
-apiVersion: scheduling.run.ai/v2
-kind: Queue
-metadata:
-  name: test
-spec:
-  parentQueue: default
-  resources:
-    cpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
-    gpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
-    memory:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
----
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: raycluster-sample
   labels:
-    kai.scheduler/queue: test
+    kai.scheduler/queue: team-a
 spec:
   headGroupSpec:
     template:
