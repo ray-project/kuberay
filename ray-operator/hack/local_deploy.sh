@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# set -euxo pipefail:
-# -e: Exit immediately if a command exits with a non-zero status.
-# -u: Treat unset variables as an error when substituting.
-# -x: Print commands and their arguments as they are executed (useful for debugging).
-# -o pipefail: The return value of a pipeline is the status of the last command to exit with a non-zero status,
-#              or zero if all commands in the pipeline exit successfully
 set -euxo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -87,7 +81,6 @@ kubectl create namespace "${OPERATOR_NAMESPACE}" --dry-run=client -o yaml | kube
 echo "--- Keep consistency and Syncing (Project-Specific Synchronization) ---"
 echo "Running make sync from ray-operator path: ${RAY_OPERATOR_PATH}"
 make -C "${RAY_OPERATOR_PATH}" sync
-
 
 # Step 6: Install KubeRay operator with the custom image via local Helm chart
 echo "--- Installing KubeRay Operator via Helm Chart ---"
