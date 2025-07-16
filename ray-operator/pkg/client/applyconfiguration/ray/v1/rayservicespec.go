@@ -9,6 +9,7 @@ import (
 // RayServiceSpecApplyConfiguration represents a declarative configuration of the RayServiceSpec type for use
 // with apply.
 type RayServiceSpecApplyConfiguration struct {
+	RayClusterDeletionDelaySeconds     *int32                                       `json:"rayClusterDeletionDelaySeconds,omitempty"`
 	ServiceUnhealthySecondThreshold    *int32                                       `json:"serviceUnhealthySecondThreshold,omitempty"`
 	DeploymentUnhealthySecondThreshold *int32                                       `json:"deploymentUnhealthySecondThreshold,omitempty"`
 	ServeService                       *corev1.Service                              `json:"serveService,omitempty"`
@@ -22,6 +23,14 @@ type RayServiceSpecApplyConfiguration struct {
 // apply.
 func RayServiceSpec() *RayServiceSpecApplyConfiguration {
 	return &RayServiceSpecApplyConfiguration{}
+}
+
+// WithRayClusterDeletionDelaySeconds sets the RayClusterDeletionDelaySeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RayClusterDeletionDelaySeconds field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithRayClusterDeletionDelaySeconds(value int32) *RayServiceSpecApplyConfiguration {
+	b.RayClusterDeletionDelaySeconds = &value
+	return b
 }
 
 // WithServiceUnhealthySecondThreshold sets the ServiceUnhealthySecondThreshold field in the declarative configuration to the given value
