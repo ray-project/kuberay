@@ -44,7 +44,7 @@ The migration from v1 to v2 will occur in three stages:
 - Stage 1 – v2 released and validated
   - v2 becomes publicly available and feature-complete
   - All major features from v1 are supported
-  - gRPC support is not included in v2, but remains available in v1 during the depreciation period
+  - gRPC support is not included in v2, but remains available in v1 during the deprecation period
   - Integration tests are reused where applicable
   - Middleware-based compute template support is deferred to Stage 2
 - Stage 2 – v1 deprecated (v1 and v2 coexist)
