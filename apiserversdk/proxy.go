@@ -1,10 +1,14 @@
 package apiserversdk
 
 import (
+	"bytes"
+	"context"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/net"
@@ -25,13 +29,16 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 		return nil, err
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	if proxy.Transport, err = rest.TransportFor(config.KubernetesConfig); err != nil { // rest.TransportFor provides the auth to the K8s API server.
+	baseTransport, err := rest.TransportFor(config.KubernetesConfig)
+	if err != nil { // rest.TransportFor provides the auth to the K8s API server.
 		return nil, err
 	}
+	proxy.Transport = newRetryRoundTripper(baseTransport, 3)
 	var handler http.Handler = proxy
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
+	handler = bodyPreserveMiddleware(handler)
 
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
@@ -82,5 +89,76 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 			return
 		}
 		handler.ServeHTTP(w, r)
+	})
+}
+
+type retryRoundTripper struct {
+	base    http.RoundTripper
+	retries int
+}
+
+func newRetryRoundTripper(base http.RoundTripper, retries int) http.RoundTripper {
+	return &retryRoundTripper{base: base, retries: retries}
+}
+
+func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	timeoutCtx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
+	defer cancel()
+
+	req = req.WithContext(timeoutCtx)
+
+	var resp *http.Response
+	var err error
+	for i := 0; i <= rrt.retries; i++ {
+		if i > 0 && req.GetBody != nil {
+			var bodyCopy io.ReadCloser
+			bodyCopy, err = req.GetBody()
+			if err != nil {
+				return nil, err
+			}
+			req.Body = bodyCopy
+		}
+
+		resp, err = rrt.base.RoundTrip(req)
+		if err == nil {
+			return resp, nil
+		} else if !shouldRetry(resp.StatusCode) {
+			return resp, nil
+		}
+		if i < rrt.retries {
+			time.Sleep(time.Duration(1<<i) * time.Second)
+		}
+	}
+	return resp, err
+}
+
+func shouldRetry(statusCode int) bool {
+	switch statusCode {
+	case http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func bodyPreserveMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.GetBody == nil {
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "failed to read request body", http.StatusInternalServerError)
+				return
+			}
+			_ = r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			r.ContentLength = int64(len(bodyBytes))
+			r.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
+		}
+		h.ServeHTTP(w, r)
 	})
 }
