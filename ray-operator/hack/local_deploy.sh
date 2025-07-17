@@ -13,11 +13,9 @@ HELM_CHART_PATH="${PROJECT_ROOT}/${HELM_CHART_RELATIVE_PATH}"
 RAY_OPERATOR_PATH="${PROJECT_ROOT}/ray-operator"
 
 # --- Configuration Variables ---
-IMAGE_NAME="kuberay-operator"
 IMAGE_TAG="kuberay-dev-tag"
 KIND_CLUSTER_NAME="kuberay-dev"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
-OPERATOR_NAMESPACE="default"
 HELM_RELEASE_NAME="kuberay-operator"
 
 delete_kind_cluster() {
@@ -58,7 +56,7 @@ delete_kind_cluster
 create_kind_cluster
 
 echo "--- Building Docker Image ---"
-FULL_IMAGE_NAME="${IMAGE_NAME}:${IMAGE_TAG}"
+FULL_IMAGE_NAME="kuberay-operator:${IMAGE_TAG}"
 echo "Building image: ${FULL_IMAGE_NAME}"
 
 # Execute make docker-build from the ray-operator directory
@@ -71,7 +69,7 @@ echo "--- Loading Image into Kind Cluster ---"
 kind load docker-image "${FULL_IMAGE_NAME}" --name "${KIND_CLUSTER_NAME}"
 
 echo "--- Preparing Namespace for Operator Deployment ---"
-kubectl create namespace "${OPERATOR_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace "default" --dry-run=client -o yaml | kubectl apply -f -
 
 # Step 5: Keep consistency and Syncing
 echo "--- Keep consistency and Syncing (Project-Specific Synchronization) ---"
@@ -83,18 +81,18 @@ echo "--- Installing KubeRay Operator via Helm Chart ---"
 echo "Installing new Helm release: ${HELM_RELEASE_NAME}"
 echo "Helm chart path: ${HELM_CHART_PATH}"
 helm install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}" \
-  --namespace "${OPERATOR_NAMESPACE}" \
+  --namespace "default" \
   --create-namespace \
-  --set "image.repository=${IMAGE_NAME}" \
+  --set "image.repository=kuberay-operator" \
   --set "image.tag=${IMAGE_TAG}"
 
 echo "--- Waiting for Deployment Rollout ---"
-kubectl rollout status deployment "${HELM_RELEASE_NAME}" --namespace "${OPERATOR_NAMESPACE}" --timeout=5m
+kubectl rollout status deployment "${HELM_RELEASE_NAME}" --namespace "default" --timeout=5m
 
 # Step 7: Check the logs
 if [ "$SHOW_LOGS" = true ]; then
   echo "--- Streaming Controller Logs (Ctrl+C to stop) ---"
-  kubectl logs -f deployment/"${HELM_RELEASE_NAME}" -n "${OPERATOR_NAMESPACE}"
+  kubectl logs -f deployment/"${HELM_RELEASE_NAME}" -n "default"
 fi
 
 echo "--- Script Completed ---"
