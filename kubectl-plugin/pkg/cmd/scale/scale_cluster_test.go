@@ -244,11 +244,13 @@ func TestRayScaleClusterRun(t *testing.T) {
 							{
 								GroupName:   workerGroup,
 								MinReplicas: ptr.To(int32(0)),
+								Replicas:    ptr.To(int32(0)),
 							},
 						},
 					},
 				},
 			},
+			replicas:       int32(10),
 			minReplicas:    int32(1),
 			expectedOutput: fmt.Sprintf("minReplicas from %d to %d", int32(0), int32(1)),
 		},
@@ -296,7 +298,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 			replicas:       int32(5),
 			minReplicas:    int32(2),
 			maxReplicas:    int32(10),
-			expectedOutput: "replicas from 3 to 5, minReplicas from 1 to 2, maxReplicas from 5 to 10",
+			expectedOutput: "minReplicas from 1 to 2, maxReplicas from 5 to 10, replicas from 3 to 5",
 		},
 		{
 			name: "should handle nil MinReplicas and MaxReplicas on cluster spec",

@@ -40,9 +40,11 @@ var (
 
 func NewScaleClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *ScaleClusterOptions {
 	return &ScaleClusterOptions{
-		cmdFactory: cmdFactory,
-		ioStreams:  &streams,
-		replicas:   new(int32),
+		cmdFactory:  cmdFactory,
+		ioStreams:   &streams,
+		replicas:    new(int32),
+		minReplicas: new(int32),
+		maxReplicas: new(int32),
 	}
 }
 
@@ -179,21 +181,11 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		return fmt.Errorf("cannot set only one of minReplicas or maxReplicas when both are currently unset (nil) in worker group %s. Please specify both or neither for a valid range", options.workerGroup)
 	}
 
-	// handle replicas update
-	if options.replicas != nil && *options.replicas >= 0 {
-		previousReplicas := int32(0)
-		if targetWorkerGroupSpec.Replicas != nil {
-			previousReplicas = *targetWorkerGroupSpec.Replicas
-		}
+	originalMinReplicas := targetWorkerGroupSpec.MinReplicas
+	originalMaxReplicas := targetWorkerGroupSpec.MaxReplicas
+	originalReplicas := targetWorkerGroupSpec.Replicas
 
-		if previousReplicas != *options.replicas {
-			targetWorkerGroupSpec.Replicas = options.replicas
-			changes = append(changes, fmt.Sprintf("replicas from %d to %d", previousReplicas, *options.replicas))
-		}
-	}
-
-	// handle minReplicas update
-	if options.minReplicas != nil && *options.minReplicas >= 0 {
+	if isMinOptionProvided {
 		previousMinReplicas := int32(0)
 		if targetWorkerGroupSpec.MinReplicas != nil {
 			previousMinReplicas = *targetWorkerGroupSpec.MinReplicas
@@ -205,8 +197,7 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		}
 	}
 
-	// handle maxReplicas update
-	if options.maxReplicas != nil && *options.maxReplicas >= 0 {
+	if isMaxOptionProvided {
 		previousMaxReplicas := int32(0)
 		if targetWorkerGroupSpec.MaxReplicas != nil {
 			previousMaxReplicas = *targetWorkerGroupSpec.MaxReplicas
@@ -215,6 +206,38 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		if previousMaxReplicas != *options.maxReplicas {
 			targetWorkerGroupSpec.MaxReplicas = options.maxReplicas
 			changes = append(changes, fmt.Sprintf("maxReplicas from %d to %d", previousMaxReplicas, *options.maxReplicas))
+		}
+	}
+
+	// TargetWorkerGroupSpec.MinReplicas and .MaxReplicas have the *proposed* new values or are the original values if not provided
+
+	if targetWorkerGroupSpec.MinReplicas != nil && targetWorkerGroupSpec.MaxReplicas != nil {
+		if *targetWorkerGroupSpec.MinReplicas > *targetWorkerGroupSpec.MaxReplicas {
+			targetWorkerGroupSpec.MinReplicas = originalMinReplicas
+			targetWorkerGroupSpec.MaxReplicas = originalMaxReplicas
+			return fmt.Errorf("proposed minReplicas (%d) cannot be greater than proposed maxReplicas (%d) for worker group %s", *options.minReplicas, *options.maxReplicas, options.workerGroup)
+		}
+	}
+
+	if options.replicas != nil && *options.replicas >= 0 {
+		proposedReplicas := *options.replicas
+
+		if targetWorkerGroupSpec.MinReplicas != nil && proposedReplicas < *targetWorkerGroupSpec.MinReplicas {
+			return fmt.Errorf("proposed replicas (%d) cannot be less than the current or proposed minReplicas (%d) for worker group %s", proposedReplicas, *targetWorkerGroupSpec.MinReplicas, options.workerGroup)
+		}
+
+		if targetWorkerGroupSpec.MaxReplicas != nil && proposedReplicas > *targetWorkerGroupSpec.MaxReplicas {
+			return fmt.Errorf("proposed replicas (%d) cannot be greater than the current or proposed maxReplicas (%d) for worker group %s", proposedReplicas, *targetWorkerGroupSpec.MaxReplicas, options.workerGroup)
+		}
+
+		previousReplicas := int32(0)
+		if originalReplicas != nil {
+			previousReplicas = *originalReplicas
+		}
+
+		if previousReplicas != proposedReplicas {
+			targetWorkerGroupSpec.Replicas = options.replicas
+			changes = append(changes, fmt.Sprintf("replicas from %d to %d", previousReplicas, proposedReplicas))
 		}
 	}
 
