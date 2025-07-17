@@ -16,6 +16,30 @@ fullnameOverride: ""
 imagePullSecrets: []
   # - name: an-existing-secret
 
+# gcsFaultTolerance specifies configuration for GCS fault tolerance.
+# See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-gcs-ft.html#kuberay-gcs-ft
+# for more details.
+gcsFaultTolerance:
+  enabled: false
+  # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
+  # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
+  # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
+  # externalStorageNamespace: "my-raycluster-storage"
+  # redisAddress: "redis:6379"
+  # redisPassword:
+    # value: ""
+    # valueFrom: {}
+    #   secretKeyRef:
+    #       name: redis-password-secret
+    #       key: password
+  # redisUsername:
+    # value: ""
+    # valueFrom: {}
+    #   secretKeyRef:
+    #     name: redis-username-secret
+    #     key: username
+
+
 # common defined values shared between the head and worker
 common:
   # containerEnv specifies environment variables for the Ray head and worker containers.
