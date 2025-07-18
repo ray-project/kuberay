@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -105,7 +106,7 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(ctx context.Contex
 	logger.Info("Gang Scheduling enabled for RayCluster")
 }
 
-func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config) (schedulerinterface.BatchScheduler, error) {
+func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
 	return &YuniKornScheduler{}, nil
 }
 

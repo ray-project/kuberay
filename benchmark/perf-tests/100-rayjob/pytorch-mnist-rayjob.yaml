@@ -13,9 +13,8 @@ spec:
       CPUS_PER_WORKER: "1"
       OMP_NUM_THREADS: "1" # Set OMP_NUM_THREADS to avoid KeyErorr race condition.
   rayClusterSpec:
-    rayVersion: '2.9.3'
+    rayVersion: '2.46.0'
     headGroupSpec:
-      rayStartParams: {}
       template:
         spec:
           containers:
@@ -39,7 +38,6 @@ spec:
         minReplicas: 1
         maxReplicas: 5
         groupName: worker-group
-        rayStartParams: {}
         template:
           spec:
             containers:

@@ -38,7 +38,7 @@
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayservice 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-log.tar -T - && exit 1)
     - echo "--- END:e2e rayservice (nightly operator) tests finished"
 
-- label: 'Test Autoscaler E2E (nightly operator)'
+- label: 'Test Autoscaler E2E Part 1 (nightly operator)'
   instance_size: large
   image: golang:1.24
   commands:
@@ -50,32 +50,52 @@
     - bash ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
-    - echo "--- START:Running Autoscaler e2e (nightly operator) tests"
+    - echo "--- START:Running Autoscaler E2E Part 1 (nightly operator) tests"
     - if [ -n "${KUBERAY_TEST_RAY_IMAGE}"]; then echo "Using Ray Image ${KUBERAY_TEST_RAY_IMAGE}"; fi
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2eautoscaler 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1)
-    - echo "--- END:Autoscaler e2e (nightly operator) tests finished"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2eautoscaler/raycluster_autoscaler_test.go ./test/e2eautoscaler/support.go 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1)
+    - echo "--- END:Autoscaler E2E Part 1 (nightly operator) tests finished"
 
-- label: 'Test E2E Operator Version Upgrade (v1.3.0)'
+- label: 'Test Autoscaler E2E Part 2 (nightly operator)'
   instance_size: large
   image: golang:1.24
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
-    # Deploy previous KubeRay operator release (v1.2.2) using helm
-    - echo Deploying KubeRay operator
+    # Build nightly KubeRay operator image
     - pushd ray-operator
-    - helm install kuberay-operator kuberay/kuberay-operator --version 1.2.2
+    - bash ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
-    - echo "--- START:Running e2e Operator upgrade (v1.2.2 to v1.3.0 operator) tests"
+    - echo "--- START:Running Autoscaler E2E Part 2 (nightly operator) tests"
+    - if [ -n "${KUBERAY_TEST_RAY_IMAGE}"]; then echo "Using Ray Image ${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.3.0 go test -timeout 30m -v ./test/e2eupgrade 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-upgrade-log.tar -T - && exit 1)
-    - echo "--- END:e2e Operator upgrade (v1.2.2 to v1.3.0 operator) tests finished"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2eautoscaler/raycluster_autoscaler_part2_test.go ./test/e2eautoscaler/support.go 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1)
+    - echo "--- END:Autoscaler E2E Part 2 (nightly operator) tests finished"
+
+- label: 'Test E2E Operator Version Upgrade (v1.4.0)'
+  instance_size: large
+  image: golang:1.24
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Deploy previous KubeRay operator release (v1.3.2) using helm
+    - echo Deploying KubeRay operator
+    - pushd ray-operator
+    - helm install kuberay-operator kuberay/kuberay-operator --version 1.3.2
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running e2e Operator upgrade (v1.3.2 to v1.4.0 operator) tests"
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.4.0 go test -timeout 30m -v ./test/e2eupgrade 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-upgrade-log.tar -T - && exit 1)
+    - echo "--- END:e2e Operator upgrade (v1.3.2 to v1.4.0 operator) tests finished"
 
 - label: 'Test Apiserver E2E (nightly operator)'
   instance_size: large

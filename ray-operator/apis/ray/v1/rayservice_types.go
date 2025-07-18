@@ -65,6 +65,11 @@ type RayServiceUpgradeStrategy struct {
 
 // RayServiceSpec defines the desired state of RayService
 type RayServiceSpec struct {
+	// RayClusterDeletionDelaySeconds specifies the delay, in seconds, before deleting old RayClusters.
+	// The default value is 60 seconds.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	RayClusterDeletionDelaySeconds *int32 `json:"rayClusterDeletionDelaySeconds,omitempty"`
 	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
 	// +optional
 	ServiceUnhealthySecondThreshold *int32 `json:"serviceUnhealthySecondThreshold,omitempty"`

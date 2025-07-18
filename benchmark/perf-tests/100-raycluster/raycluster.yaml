@@ -5,7 +5,7 @@ metadata:
   labels:
     perf-test: ray-cluster
 spec:
-  rayVersion: '2.9.3'
+  rayVersion: '2.46.0'
   headGroupSpec:
     rayStartParams:
       dashboard-host: '0.0.0.0'
@@ -13,7 +13,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.9.3
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -38,12 +38,11 @@ spec:
     maxReplicas: 10
     # logical group name, for this called small-group, also can be functional
     groupName: small-group
-    rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.9.3
+          image: rayproject/ray:2.46.0
           volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs

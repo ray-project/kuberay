@@ -62,7 +62,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 	}
 
 	// init the batch scheduler manager
-	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig())
+	schedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, rayConfigs, mgr.GetConfig(), mgr.GetClient())
 	if err != nil {
 		// fail fast if the scheduler plugin fails to init
 		// prevent running the controller in an undefined state
@@ -362,62 +362,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
 }
 
-// Checks whether the old and new RayClusterStatus are inconsistent by comparing different fields. If the only
-// differences between the old and new status are the `LastUpdateTime` and `ObservedGeneration` fields, the
-// status update will not be triggered.
-//
-// TODO (kevin85421): The field `ObservedGeneration` is not being well-maintained at the moment. In the future,
-// this field should be used to determine whether to update this CR or not.
-func (r *RayClusterReconciler) inconsistentRayClusterStatus(ctx context.Context, oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
-	logger := ctrl.LoggerFrom(ctx)
-
-	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldState", oldStatus.State,
-			"newState", newStatus.State,
-			"oldReason", oldStatus.Reason,
-			"newReason", newStatus.Reason,
-		)
-		return true
-	}
-	if oldStatus.ReadyWorkerReplicas != newStatus.ReadyWorkerReplicas ||
-		oldStatus.AvailableWorkerReplicas != newStatus.AvailableWorkerReplicas ||
-		oldStatus.DesiredWorkerReplicas != newStatus.DesiredWorkerReplicas ||
-		oldStatus.MinWorkerReplicas != newStatus.MinWorkerReplicas ||
-		oldStatus.MaxWorkerReplicas != newStatus.MaxWorkerReplicas {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldReadyWorkerReplicas", oldStatus.ReadyWorkerReplicas,
-			"newReadyWorkerReplicas", newStatus.ReadyWorkerReplicas,
-			"oldAvailableWorkerReplicas", oldStatus.AvailableWorkerReplicas,
-			"newAvailableWorkerReplicas", newStatus.AvailableWorkerReplicas,
-			"oldDesiredWorkerReplicas", oldStatus.DesiredWorkerReplicas,
-			"newDesiredWorkerReplicas", newStatus.DesiredWorkerReplicas,
-			"oldMinWorkerReplicas", oldStatus.MinWorkerReplicas,
-			"newMinWorkerReplicas", newStatus.MinWorkerReplicas,
-			"oldMaxWorkerReplicas", oldStatus.MaxWorkerReplicas,
-			"newMaxWorkerReplicas", newStatus.MaxWorkerReplicas,
-		)
-		return true
-	}
-	if !reflect.DeepEqual(oldStatus.Endpoints, newStatus.Endpoints) || !reflect.DeepEqual(oldStatus.Head, newStatus.Head) {
-		logger.Info(
-			"inconsistentRayClusterStatus",
-			"oldEndpoints", oldStatus.Endpoints,
-			"newEndpoints", newStatus.Endpoints,
-			"oldHead", oldStatus.Head,
-			"newHead", newStatus.Head,
-		)
-		return true
-	}
-	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayClusterStatus", "old conditions", oldStatus.Conditions, "new conditions", newStatus.Conditions)
-		return true
-	}
-	return false
-}
-
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Ingress")
@@ -689,7 +633,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
-		correctHeadPodName := instance.Name + "-head"
 		headPodNames := make([]string, len(headPods.Items))
 		for i, pod := range headPods.Items {
 			headPodNames[i] = pod.Name
@@ -697,9 +640,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		logger.Info("Multiple head pods found, it should only exist one head pod. Please delete extra head pods.",
 			"found pods", headPodNames,
-			"should only leave", correctHeadPodName,
 		)
-		return fmt.Errorf("%d head pods found %v. Please delete extra head pods and leave only the head pod with name %s", len(headPods.Items), headPodNames, correctHeadPodName)
+		return fmt.Errorf("%d head pods found %v. Please delete extra head pods", len(headPods.Items), headPodNames)
 	}
 
 	// Reconcile worker pods now
@@ -1038,7 +980,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 // Build head instance pod(s).
 func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
-	podName := utils.PodName(instance.Name, rayv1.HeadNode, false)
+	podName := utils.PodName(instance.Name, rayv1.HeadNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
 
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
@@ -1599,7 +1541,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 // We rely on the returning bool to requeue the reconciliation for atomic operations, such as suspending a RayCluster.
 func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, originalRayClusterInstance, newInstance *rayv1.RayCluster) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	inconsistent := r.inconsistentRayClusterStatus(ctx, originalRayClusterInstance.Status, newInstance.Status)
+	inconsistent := utils.InconsistentRayClusterStatus(originalRayClusterInstance.Status, newInstance.Status)
 	if !inconsistent {
 		return inconsistent, nil
 	}

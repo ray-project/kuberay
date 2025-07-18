@@ -17,37 +17,37 @@ spec:
             ray_actor_options:
               num_cpus: 0.1
   rayClusterConfig:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray:2.41.0
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 2Gi
-                requests:
-                  cpu: 1
-                  memory: 2Gi
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: 1
+                memory: 2Gi
+              requests:
+                cpu: 1
+                memory: 2Gi
     workerGroupSpecs:
-      - replicas: 2
-        minReplicas: 1
-        maxReplicas: 5
-        groupName: small-group
-        rayStartParams: {}
-        template:
-          spec:
-            containers:
-              - name: ray-worker
-                image: rayproject/ray:2.41.0
-                resources:
-                  limits:
-                    cpu: "1"
-                    memory: "2Gi"
-                  requests:
-                    cpu: "500m"
-                    memory: "2Gi"
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 5
+      groupName: small-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "500m"
+                memory: "2Gi"

@@ -12,10 +12,10 @@ spec:
       - numpy
       - datasets
       - transformers>=4.19.1
-      - pytorch-lightning==1.6.5
+      - pytorch-lightning==1.8.5
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         dashboard-host: '0.0.0.0'
@@ -26,27 +26,27 @@ spec:
             operator: "Exists"
             effect: "NoSchedule"
           containers:
-            - name: ray-head
-              image: rayproject/ray-ml:2.41.0.021baf-py311
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-              resources:
-                limits:
-                  cpu: "2"
-                  memory: "8G"
-                  nvidia.com/gpu: "1"
-                requests:
-                  cpu: "2"
-                  memory: "8G"
-                  nvidia.com/gpu: "1"
-              volumeMounts:
-                - mountPath: /tmp/ray
-                  name: ray-logs
+          - name: ray-head
+            image: rayproject/ray-ml:2.46.0.0e19ea-py311-gpu
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8G"
+                nvidia.com/gpu: "1"
+              requests:
+                cpu: "2"
+                memory: "8G"
+                nvidia.com/gpu: "1"
+            volumeMounts:
+            - mountPath: /tmp/ray
+              name: ray-logs
           volumes:
-            - name: ray-logs
-              emptyDir: {}
+          - name: ray-logs
+            emptyDir: {}
