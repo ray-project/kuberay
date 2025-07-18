@@ -452,34 +452,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 		}
-		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusFailed {
+		if rayJobInstance.Spec.Schedule != "" {
 			logger.Info("RayJob is scheduled again")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
 		} else {
-			// NOTE: we do not requeue if the job fails even if scheduled, this could change
-			// If the RayJob is completed without scheduling or has failed, we should not requeue it.
+			// If the RayJob is completed without scheduling, we should not requeue it.
 			logger.Info("RayJob is not scheduled")
 			return ctrl.Result{}, nil
 		}
 	case rayv1.JobDeploymentStatusScheduling:
-		// We attempt to delete both the cluster and the job. If they're not fully deleted,
-		// we remain in this state and continue reconciling until resources are freed.
-		// `isClusterDeleted` is initially true for when we dont need to delete our cluster
-		isClusterDeleted := true
 		deleteCluster := rayJobInstance.Spec.ShutdownAfterJobFinishes
-		if deleteCluster {
-			isClusterDeleted, err = r.deleteClusterResources(ctx, rayJobInstance)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-		}
 
 		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		if !isClusterDeleted || !isJobDeleted {
+		if !isJobDeleted {
 			logger.Info("The release of the compute resources has not been completed yet. " +
 				"Wait for the resources to be deleted before the status transitions to avoid a resource leak.")
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -498,14 +487,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
-
 	case rayv1.JobDeploymentStatusScheduled:
-		if rayJobInstance.Status.JobStatus == rayv1.JobStatusScheduled {
-			logger.Info("We have reached the new time for a job after reconciling")
-			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
-			break
-		}
 		// We get the time from the current time to the previous and next cron schedule times
 		// We pass in time.Now() as a parameter so easier unit testing and consistency
 		t1, t2, err := r.getPreviousAndNextScheduleDistance(ctx, time.Now(), rayJobInstance)
@@ -516,7 +498,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Checking if we are currently within a buffer to the previous cron schedule time
 		if t2 <= ScheduleBuffer {
 			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
-			rayJobInstance.Status.JobStatus = rayv1.JobStatusScheduled
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 		} else {
 			logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now(), "lastScheduleTimeDuration", t2)
 			return ctrl.Result{RequeueAfter: t1}, nil
