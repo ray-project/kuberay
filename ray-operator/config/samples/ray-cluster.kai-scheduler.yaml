@@ -11,7 +11,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             requests:
               cpu: "1"
@@ -24,7 +24,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             requests:
               cpu: "1"
