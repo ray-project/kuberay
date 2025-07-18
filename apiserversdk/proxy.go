@@ -2,9 +2,9 @@ package apiserversdk
 
 import (
 	"bytes"
-	"context"
+	"fmt"
 	"io"
-	"log"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -27,14 +27,14 @@ type MuxConfig struct {
 func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse url from config: %w", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	baseTransport, err := rest.TransportFor(config.KubernetesConfig)
 	if err != nil { // rest.TransportFor provides the auth to the K8s API server.
-		return nil, err
+		return nil, fmt.Errorf("failed to get transport for config: %w", err)
 	}
-	proxy.Transport = newRetryRoundTripper(baseTransport, 3)
+	proxy.Transport = newRetryRoundTripper(baseTransport, HTTPClientDefaultMaxRetry)
 	var handler http.Handler = proxy
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
@@ -93,6 +93,8 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 	})
 }
 
+// retryRoundTripper is a custom implementation of http.RoundTripper that retries HTTP requests.
+// It verifies retryable HTTP status codes and retries using exponential backoff.
 type retryRoundTripper struct {
 	base    http.RoundTripper
 	retries int
@@ -103,57 +105,65 @@ func newRetryRoundTripper(base http.RoundTripper, retries int) http.RoundTripper
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	timeoutCtx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
-	defer cancel()
-
-	req = req.WithContext(timeoutCtx)
+	ctx := req.Context()
 
 	var resp *http.Response
 	var err error
-	for i := 0; i < rrt.retries; i++ {
-		if i > 0 && req.GetBody != nil {
+	for attempt := 0; attempt <= rrt.retries; attempt++ {
+		if attempt > 0 && req.GetBody != nil {
 			var bodyCopy io.ReadCloser
 			bodyCopy, err = req.GetBody()
 			if err != nil {
-				log.Printf("[retry %d/%d] failed to read request body: %v", i+1, rrt.retries, err)
-				return nil, err
+				return nil, fmt.Errorf("failed to read request body: %w", err)
 			}
 			req.Body = bodyCopy
 		}
 
 		resp, err = rrt.base.RoundTrip(req)
-		if err == nil {
-			if 200 <= resp.StatusCode && resp.StatusCode < 300 {
-				// Successful status code
-				return resp, nil
-			} else if shouldRetry(resp.StatusCode) {
-				// Error status code that should retry
-				log.Printf("[retry %d/%d] request failed with retryable error status: %s", i+1, rrt.retries, resp.Status)
-			} else {
-				// Error status code that should not retry
-				log.Printf("[retry %d/%d] request failed with received non-retryable error status: %s", i+1, rrt.retries, resp.Status)
-				return resp, nil
-			}
-		} else {
-			log.Printf("[retry %d/%d] request failed with error: %v", i+1, rrt.retries, err)
-			return resp, err
+		if err != nil {
+			return resp, fmt.Errorf("failed with error: %w", err)
 		}
 
-		if i < rrt.retries {
-			time.Sleep(time.Duration(1<<i) * time.Second)
-		} else {
-			log.Printf("[retry %d/%d] maximum retries reached", i+1, rrt.retries)
+		if err == nil && isSuccessfulStatusCode(resp.StatusCode) {
+			return resp, nil
 		}
+
+		if err == nil && !retryableHTTPStatusCodes(resp.StatusCode) {
+			return resp, nil
+		}
+
+		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
+		if sleepDuration > HTTPClientDefaultMaxBackoff {
+			sleepDuration = HTTPClientDefaultMaxBackoff
+		}
+
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return resp, fmt.Errorf("retry timeout exceeded context deadline")
+			}
+			if sleepDuration > remaining {
+				sleepDuration = remaining
+			}
+		}
+
+		time.Sleep(sleepDuration)
 	}
 	return resp, err
 }
 
-func shouldRetry(statusCode int) bool {
+func isSuccessfulStatusCode(statusCode int) bool {
+	return 200 <= statusCode && statusCode < 300
+}
+
+func retryableHTTPStatusCodes(statusCode int) bool {
 	switch statusCode {
-	case http.StatusInternalServerError,
-		http.StatusBadGateway,
-		http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout:
+	case http.StatusRequestTimeout, // 408
+		http.StatusTooManyRequests,     // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout:      // 504
 		return true
 	default:
 		return false
@@ -168,7 +178,11 @@ func bodyPreserveMiddleware(h http.Handler) http.Handler {
 				http.Error(w, "failed to read request body", http.StatusInternalServerError)
 				return
 			}
-			_ = r.Body.Close()
+			err = r.Body.Close()
+			if err != nil {
+				http.Error(w, "failed to close request body", http.StatusInternalServerError)
+				return
+			}
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			r.ContentLength = int64(len(bodyBytes))
 			r.GetBody = func() (io.ReadCloser, error) {
