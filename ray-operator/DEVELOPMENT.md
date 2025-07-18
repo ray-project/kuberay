@@ -107,7 +107,6 @@ There are configuable variables in the script, the defaults are shown below:
 IMAGE_TAG="kuberay-dev-tag"
 KIND_CLUSTER_NAME="kuberay-dev"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
-HELM_RELEASE_NAME="kuberay-operator"
 ```
 
 Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation. 
