@@ -205,10 +205,9 @@ type RayJobSpec struct {
 	// In case of transition to false a new RayCluster will be created.
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
-	// Schedule specifies a cron like string for cron scheduling
-	// When set with shutdownAfterJobFinishes, if shutdownAfterJobFinishes is False
-	// the schduled jobs will keep using the same cluster, if True it will delete
-	// the cluster and create a new one on the next job.
+	// Schedule specifies a cron like string for scheduling Ray jobs.
+	// When shutdownAfterJobFinishes is set to true, a new cluster is provisioned
+	// per scheduled job, otherwise the job is scheduled on an existing cluster.
 	// +optional
 	Schedule string `json:"schedule,omitempty"`
 }
@@ -259,7 +258,7 @@ type RayJobStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// The last time the job was successfully scheduled.
+	// lastScheduledTime is the last time the job was successfully scheduled.
 	// +optional
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
