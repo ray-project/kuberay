@@ -6,17 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PROJECT_ROOT="${SCRIPT_DIR}/../.." # hack/ -> ray-operator/ -> kuberay/
 
-# Path to your Helm chart, relative to the PROJECT_ROOT (kuberay/)
-HELM_CHART_RELATIVE_PATH="helm-chart/kuberay-operator"
-HELM_CHART_PATH="${PROJECT_ROOT}/${HELM_CHART_RELATIVE_PATH}"
+HELM_CHART_PATH="${PROJECT_ROOT}/helm-chart/kuberay-operator"
 
 RAY_OPERATOR_PATH="${PROJECT_ROOT}/ray-operator"
 
-# --- Configuration Variables ---
-IMAGE_TAG="kuberay-dev-tag"
-KIND_CLUSTER_NAME="kuberay-dev"
-KIND_NODE_IMAGE="kindest/node:v1.24.0"
 HELM_RELEASE_NAME="kuberay-operator"
+
+# --- Configuration Variables ---
+IMAGE_TAG="${IMAGE_TAG:=kuberay-dev-tag}"
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:=kuberay-dev}"
+KIND_NODE_IMAGE="${KIND_NODE_IMAGE:=kindest/node:v1.24.0}"
 
 delete_kind_cluster() {
   echo "--- Deleting Kind Cluster ---"
@@ -50,7 +49,6 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
-# Step 1: Ensure a clean Kind cluster
 echo "--- Ensuring Clean Kind Cluster ---"
 delete_kind_cluster
 create_kind_cluster
@@ -59,40 +57,31 @@ echo "--- Building Docker Image ---"
 FULL_IMAGE_NAME="kuberay-operator:${IMAGE_TAG}"
 echo "Building image: ${FULL_IMAGE_NAME}"
 
-# Execute make docker-build from the ray-operator directory
 echo "Running make docker-build from ray-operator path: ${RAY_OPERATOR_PATH}"
 make -C "${RAY_OPERATOR_PATH}" docker-build IMG="${FULL_IMAGE_NAME}"
 
 
-# Step 4: Load the custom KubeRay image into the Kind cluster
 echo "--- Loading Image into Kind Cluster ---"
 kind load docker-image "${FULL_IMAGE_NAME}" --name "${KIND_CLUSTER_NAME}"
 
-echo "--- Preparing Namespace for Operator Deployment ---"
-kubectl create namespace "default" --dry-run=client -o yaml | kubectl apply -f -
-
-# Step 5: Keep consistency and Syncing
-echo "--- Keep consistency and Syncing (Project-Specific Synchronization) ---"
 echo "Running make sync from ray-operator path: ${RAY_OPERATOR_PATH}"
 make -C "${RAY_OPERATOR_PATH}" sync
 
-# Step 6: Install KubeRay operator with the custom image via local Helm chart
 echo "--- Installing KubeRay Operator via Helm Chart ---"
-echo "Installing new Helm release: ${HELM_RELEASE_NAME}"
+echo "Installing new Helm release: kuberay-operator"
 echo "Helm chart path: ${HELM_CHART_PATH}"
-helm install "${HELM_RELEASE_NAME}" "${HELM_CHART_PATH}" \
+helm install "kuberay-operator" "${HELM_CHART_PATH}" \
   --namespace "default" \
-  --create-namespace \
   --set "image.repository=kuberay-operator" \
   --set "image.tag=${IMAGE_TAG}"
-
+  
 echo "--- Waiting for Deployment Rollout ---"
-kubectl rollout status deployment "${HELM_RELEASE_NAME}" --namespace "default" --timeout=5m
+kubectl rollout status deployment "kuberay-operator" --namespace "default" --timeout=5m
 
-# Step 7: Check the logs
+# Check the logs
 if [ "$SHOW_LOGS" = true ]; then
   echo "--- Streaming Controller Logs (Ctrl+C to stop) ---"
-  kubectl logs -f deployment/"${HELM_RELEASE_NAME}" -n "default"
+  kubectl logs -f deployment/"kuberay-operator" -n "default"
 fi
 
 echo "--- Script Completed ---"
