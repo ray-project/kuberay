@@ -91,7 +91,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	// Get RayJob instance
 	var err error
 	rayJobInstance := &rayv1.RayJob{}
-
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
@@ -323,7 +322,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if jobInfo.EndTime != 0 {
 			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
 		}
-	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying, rayv1.JobDeploymentStatusScheduling:
+	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -332,16 +331,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
-
-		// We set isClusterDeleted to true as default, i.e. we dont need to delete the cluster
-		isClusterDeleted := true
-		deleteCluster := rayJobInstance.Status.JobDeploymentStatus != rayv1.JobDeploymentStatusScheduling || rayJobInstance.Spec.ShutdownAfterJobFinishes
-		if deleteCluster {
-			isClusterDeleted, err = r.deleteClusterResources(ctx, rayJobInstance)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-
+		isClusterDeleted, err := r.deleteClusterResources(ctx, rayJobInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
 		if err != nil {
@@ -353,27 +345,21 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Reset the RayCluster and Ray job related status. Done this way to be atomic.
-		if deleteCluster {
-			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
-			rayJobInstance.Status.RayClusterName = ""
-
-		}
+		// Reset the RayCluster and Ray job related status.
+		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
+		rayJobInstance.Status.RayClusterName = ""
 		rayJobInstance.Status.DashboardURL = ""
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
-
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
-		switch rayJobInstance.Status.JobDeploymentStatus {
-		case rayv1.JobDeploymentStatusSuspending:
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
-		case rayv1.JobDeploymentStatusScheduling:
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
-		case rayv1.JobDeploymentStatusRetrying:
+		}
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 		}
 	case rayv1.JobDeploymentStatusSuspended:
@@ -475,6 +461,44 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Info("RayJob is not scheduled")
 			return ctrl.Result{}, nil
 		}
+	case rayv1.JobDeploymentStatusScheduling:
+		// We attempt to delete both the cluster and the job. If they're not fully deleted,
+		// we remain in this state and continue reconciling until resources are freed.
+		// `isClusterDeleted` is initially true for when we dont need to delete our cluster
+		isClusterDeleted := true
+		deleteCluster := rayJobInstance.Spec.ShutdownAfterJobFinishes
+		if deleteCluster {
+			isClusterDeleted, err = r.deleteClusterResources(ctx, rayJobInstance)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+		}
+
+		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		if !isClusterDeleted || !isJobDeleted {
+			logger.Info("The release of the compute resources has not been completed yet. " +
+				"Wait for the resources to be deleted before the status transitions to avoid a resource leak.")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		}
+
+		if deleteCluster {
+			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
+			rayJobInstance.Status.RayClusterName = ""
+
+		}
+		rayJobInstance.Status.DashboardURL = ""
+		rayJobInstance.Status.JobId = ""
+		rayJobInstance.Status.Message = ""
+		rayJobInstance.Status.Reason = ""
+		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+
+		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+
 	case rayv1.JobDeploymentStatusScheduled:
 		if rayJobInstance.Status.JobStatus == rayv1.JobStatusScheduled {
 			logger.Info("We have reached the new time for a job after reconciling")
@@ -511,7 +535,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
-
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
