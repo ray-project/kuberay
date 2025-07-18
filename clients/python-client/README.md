@@ -93,20 +93,21 @@ clients/
     │   ├── __init__.py
     │   ├── constants.py
     │   ├── kuberay_cluster_api.py
+    │   ├── kuberay_cluster_api.py
     │   └── utils
     │       ├── __init__.py
     │       ├── kuberay_cluster_builder.py
     │       └── kuberay_cluster_utils.py
     ├── python_client_test
     │   ├── README.md
-    │   ├── test_api.py
+    │   ├── test_cluster_api.py
+    │   ├── test_job_api.py
     │   ├── test_director.py
     │   └── test_utils.py
     └── setup.cfg
 ```
 
 ## For developers
-
 make sure you have installed setuptool
 
 `pip install -U pip setuptools`
