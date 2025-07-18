@@ -14,9 +14,6 @@ import (
 func TestMostRecentScheduleTime(t *testing.T) {
 	metav1TopOfTheHour := metav1.NewTime(*topOfTheHour())
 	metav1HalfPastTheHour := metav1.NewTime(*deltaTimeAfterTopOfTheHour(30 * time.Minute))
-	// metav1MinuteAfterTopOfTheHour := metav1.NewTime(*deltaTimeAfterTopOfTheHour(1 * time.Minute))
-	// oneMinute := int64(60)
-	// tenSeconds := int64(10)
 
 	tests := []struct {
 		name                  string
@@ -140,25 +137,6 @@ func TestMostRecentScheduleTime(t *testing.T) {
 			expectedEarliestTime:  *topOfTheHour(),
 			expectedTooManyMissed: fewMissed,
 		},
-		// {
-		// 	name: "@every schedule",
-		// 	cj: &rayv1.RayJob{
-		// 		ObjectMeta: metav1.ObjectMeta{
-		// 			CreationTimestamp: metav1.NewTime(*deltaTimeAfterTopOfTheHour(-59 * time.Minute)),
-		// 		},
-		// 		Spec: rayv1.RayJobSpec{
-		// 			Schedule:                "@every 1h",
-		// 			StartingDeadlineSeconds: &tenSeconds,
-		// 		},
-		// 		Status: rayv1.RayJobStatus{
-		// 			LastScheduleTime: &metav1MinuteAfterTopOfTheHour,
-		// 		},
-		// 	},
-		// 	now:                   *deltaTimeAfterTopOfTheHour(7 * 24 * time.Hour),
-		// 	expectedRecentTime:    deltaTimeAfterTopOfTheHour((6 * 24 * time.Hour) + 23*time.Hour + 1*time.Minute),
-		// 	expectedEarliestTime:  *deltaTimeAfterTopOfTheHour(1 * time.Minute),
-		// 	expectedTooManyMissed: manyMissed,
-		// },
 		{
 			name: "rogue cronjob",
 			cj: &rayv1.RayJob{
@@ -207,43 +185,6 @@ func TestMostRecentScheduleTime(t *testing.T) {
 			expectedEarliestTime: *deltaTimeAfterTopOfTheHour(30 * time.Minute),
 			expectedRecentTime:   nil,
 		},
-		// {
-		// 	name: "earliestTime being LastScheduleTime (within StartingDeadlineSeconds)",
-		// 	cj: &rayv1.RayJob{
-		// 		ObjectMeta: metav1.ObjectMeta{
-		// 			CreationTimestamp: metav1TopOfTheHour,
-		// 		},
-		// 		Spec: rayv1.RayJobSpec{
-		// 			Schedule:                "*/5 * * * *",
-		// 			StartingDeadlineSeconds: &oneMinute,
-		// 		},
-		// 		Status: rayv1.RayJobStatus{
-		// 			LastScheduleTime: &metav1HalfPastTheHour,
-		// 		},
-		// 	},
-		// 	now:                  *deltaTimeAfterTopOfTheHour(31 * time.Minute),
-		// 	expectedEarliestTime: *deltaTimeAfterTopOfTheHour(30 * time.Minute),
-		// 	expectedRecentTime:   nil,
-		// },
-		// {
-		// 	name: "earliestTime being LastScheduleTime (outside StartingDeadlineSeconds)",
-		// 	cj: &rayv1.RayJob{
-		// 		ObjectMeta: metav1.ObjectMeta{
-		// 			CreationTimestamp: metav1TopOfTheHour,
-		// 		},
-		// 		Spec: rayv1.RayJobSpec{
-		// 			Schedule:                "*/5 * * * *",
-		// 			StartingDeadlineSeconds: &oneMinute,
-		// 		},
-		// 		Status: rayv1.RayJobStatus{
-		// 			LastScheduleTime: &metav1HalfPastTheHour,
-		// 		},
-		// 	},
-		// 	includeSDS:           true,
-		// 	now:                  *deltaTimeAfterTopOfTheHour(32 * time.Minute),
-		// 	expectedEarliestTime: *deltaTimeAfterTopOfTheHour(31 * time.Minute),
-		// 	expectedRecentTime:   nil,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

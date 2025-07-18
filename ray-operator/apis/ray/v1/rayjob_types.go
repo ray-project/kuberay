@@ -21,7 +21,6 @@ const (
 	JobStatusStopped   JobStatus = "STOPPED"
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
-	JobStatusScheduled JobStatus = "SCHEDULED"
 )
 
 var AllJobStatuses = []JobStatus{
