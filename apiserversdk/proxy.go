@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -109,11 +110,12 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	var resp *http.Response
 	var err error
-	for i := 0; i <= rrt.retries; i++ {
+	for i := 0; i < rrt.retries; i++ {
 		if i > 0 && req.GetBody != nil {
 			var bodyCopy io.ReadCloser
 			bodyCopy, err = req.GetBody()
 			if err != nil {
+				log.Printf("[retry %d/%d] failed to read request body: %v", i+1, rrt.retries, err)
 				return nil, err
 			}
 			req.Body = bodyCopy
@@ -121,12 +123,26 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 		resp, err = rrt.base.RoundTrip(req)
 		if err == nil {
-			return resp, nil
-		} else if !shouldRetry(resp.StatusCode) {
-			return resp, nil
+			if 200 <= resp.StatusCode && resp.StatusCode < 300 {
+				// Successful status code
+				return resp, nil
+			} else if shouldRetry(resp.StatusCode) {
+				// Error status code that should retry
+				log.Printf("[retry %d/%d] request failed with retryable error status: %s", i+1, rrt.retries, resp.Status)
+			} else {
+				// Error status code that should not retry
+				log.Printf("[retry %d/%d] request failed with received non-retryable error status: %s", i+1, rrt.retries, resp.Status)
+				return resp, nil
+			}
+		} else {
+			log.Printf("[retry %d/%d] request failed with error: %v", i+1, rrt.retries, err)
+			return resp, err
 		}
+
 		if i < rrt.retries {
 			time.Sleep(time.Duration(1<<i) * time.Second)
+		} else {
+			log.Printf("[retry %d/%d] maximum retries reached", i+1, rrt.retries)
 		}
 	}
 	return resp, err
