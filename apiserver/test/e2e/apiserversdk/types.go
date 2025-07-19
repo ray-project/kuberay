@@ -2,6 +2,7 @@ package apiserversdk
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -74,9 +74,15 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 }
 
 func withRayHttpClient() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
-		var err error
-		testingContext.rayHttpClient, err = rayv1.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
+		kubernetesConfig, err := config.GetConfig()
+		require.NoError(t, err)
+
+		rt, err := newProxyRoundTripper(kubernetesConfig)
+		require.NoError(t, err)
+		httpClient := &http.Client{Transport: rt}
+
+		testingContext.rayHttpClient, err = rayv1.NewForConfigAndClient(kubernetesConfig, httpClient)
 		if err != nil {
 			return err
 		}
@@ -85,9 +91,11 @@ func withRayHttpClient() contextOption {
 }
 
 func withK8sHttpClient() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
-		var err error
-		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(&rest.Config{Host: testingContext.apiServerBaseURL})
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
+		kubernetesConfig, err := config.GetConfig()
+		require.NoError(t, err)
+
+		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(kubernetesConfig)
 		if err != nil {
 			return err
 		}
@@ -106,7 +114,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil

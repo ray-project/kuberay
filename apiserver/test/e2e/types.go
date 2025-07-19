@@ -103,6 +103,14 @@ func withHttpClient() contextOption {
 		}
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+
+		remoteExecClient, err := newRemoteExecuteClient()
+		if err != nil {
+			return err
+		}
+
+		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
+
 		return nil
 	}
 }
@@ -118,7 +126,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
