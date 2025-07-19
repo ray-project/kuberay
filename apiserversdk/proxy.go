@@ -1,10 +1,15 @@
 package apiserversdk
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/net"
@@ -22,16 +27,19 @@ type MuxConfig struct {
 func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse url from config: %w", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	if proxy.Transport, err = rest.TransportFor(config.KubernetesConfig); err != nil { // rest.TransportFor provides the auth to the K8s API server.
-		return nil, err
+	baseTransport, err := rest.TransportFor(config.KubernetesConfig)
+	if err != nil { // rest.TransportFor provides the auth to the K8s API server.
+		return nil, fmt.Errorf("failed to get transport for config: %w", err)
 	}
+	proxy.Transport = newRetryRoundTripper(baseTransport, HTTPClientDefaultMaxRetry)
 	var handler http.Handler = proxy
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
+	handler = bodyPreserveMiddleware(handler)
 
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
@@ -82,5 +90,105 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 			return
 		}
 		handler.ServeHTTP(w, r)
+	})
+}
+
+// retryRoundTripper is a custom implementation of http.RoundTripper that retries HTTP requests.
+// It verifies retryable HTTP status codes and retries using exponential backoff.
+type retryRoundTripper struct {
+	base    http.RoundTripper
+	retries int
+}
+
+func newRetryRoundTripper(base http.RoundTripper, retries int) http.RoundTripper {
+	return &retryRoundTripper{base: base, retries: retries}
+}
+
+func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
+
+	var resp *http.Response
+	var err error
+	for attempt := 0; attempt <= rrt.retries; attempt++ {
+		if attempt > 0 && req.GetBody != nil {
+			var bodyCopy io.ReadCloser
+			bodyCopy, err = req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read request body: %w", err)
+			}
+			req.Body = bodyCopy
+		}
+
+		resp, err = rrt.base.RoundTrip(req)
+		if err != nil {
+			return resp, fmt.Errorf("failed with error: %w", err)
+		}
+
+		if err == nil && isSuccessfulStatusCode(resp.StatusCode) {
+			return resp, nil
+		}
+
+		if err == nil && !retryableHTTPStatusCodes(resp.StatusCode) {
+			return resp, nil
+		}
+
+		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
+		if sleepDuration > HTTPClientDefaultMaxBackoff {
+			sleepDuration = HTTPClientDefaultMaxBackoff
+		}
+
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return resp, fmt.Errorf("retry timeout exceeded context deadline")
+			}
+			if sleepDuration > remaining {
+				sleepDuration = remaining
+			}
+		}
+
+		time.Sleep(sleepDuration)
+	}
+	return resp, err
+}
+
+func isSuccessfulStatusCode(statusCode int) bool {
+	return 200 <= statusCode && statusCode < 300
+}
+
+func retryableHTTPStatusCodes(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout, // 408
+		http.StatusTooManyRequests,     // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout:      // 504
+		return true
+	default:
+		return false
+	}
+}
+
+func bodyPreserveMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.GetBody == nil {
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "failed to read request body", http.StatusInternalServerError)
+				return
+			}
+			err = r.Body.Close()
+			if err != nil {
+				http.Error(w, "failed to close request body", http.StatusInternalServerError)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			r.ContentLength = int64(len(bodyBytes))
+			r.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
+		}
+		h.ServeHTTP(w, r)
 	})
 }
