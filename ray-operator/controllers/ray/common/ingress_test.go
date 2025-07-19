@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -19,6 +20,8 @@ var instanceWithIngressEnabled = &rayv1.RayCluster{
 		Namespace: "default",
 		Annotations: map[string]string{
 			IngressClassAnnotationKey: "nginx",
+			"annotation0":             "value",
+			"annotation1":             "value",
 		},
 	},
 	Spec: rayv1.RayClusterSpec{
@@ -74,14 +77,17 @@ var instanceWithIngressEnabledWithoutIngressClass = &rayv1.RayCluster{
 
 // only throw warning message and rely on Kubernetes to assign default ingress class
 func TestBuildIngressForHeadServiceWithoutIngressClass(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass, "", []networkingv1.IngressTLS{}, map[string]string{})
 	assert.NotNil(t, ingress)
 	require.NoError(t, err)
 }
 
 func TestBuildIngressForHeadService(t *testing.T) {
-	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled)
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, map[string]string{})
 	require.NoError(t, err)
+
+	// annotations count
+	assert.Len(t, ingress.Annotations, 2)
 
 	// check ingress.class annotation
 	assert.Equal(t, instanceWithIngressEnabled.Name, ingress.Labels[utils.RayClusterLabelKey])
@@ -107,4 +113,45 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	for _, path := range paths {
 		assert.Equal(t, headSvcName, path.Backend.Service.Name)
 	}
+
+	// check host
+	assert.Equal(t, ingress.Spec.Rules[0].Host, "")
+
+	// tls count
+	assert.Len(t, ingress.Spec.TLS, 0)
+}
+
+func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
+	host := "ray.example.com"
+	tls := []networkingv1.IngressTLS{
+		{
+			Hosts:      []string{host},
+			SecretName: "ray-tls-secret",
+		},
+	}
+	ingressClass := "different-ingress-class"
+	annotations := map[string]string{"annotation0": "value2", "annotation1": "value2", IngressClassAnnotationKey: ingressClass}
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabledWithoutIngressClass, host, tls, annotations)
+	require.NoError(t, err)
+
+	assert.Equal(t, *ingress.Spec.IngressClassName, ingressClass)
+	assert.Equal(t, ingress.Annotations, map[string]string{
+		"annotation0": "value2", "annotation1": "value2",
+	})
+	assert.Equal(t, ingress.Spec.Rules[0].Host, host)
+	assert.Equal(t, ingress.Spec.TLS, tls)
+}
+
+func TestBuildIngressForHeadServiceClusterSpecificAnnotationsTakePrecedence(t *testing.T) {
+	annotations := map[string]string{"annotation0": "value2", "annotation2": "value2", IngressClassAnnotationKey: "different-ingress-class"}
+	ingress, err := BuildIngressForHeadService(context.Background(), *instanceWithIngressEnabled, "", []networkingv1.IngressTLS{}, annotations)
+	require.NoError(t, err)
+
+	delete(annotations, IngressClassAnnotationKey)
+	assert.Equal(t, ingress.Annotations, map[string]string{
+		"annotation0": "value", // Overridden by cluster annotation
+		"annotation1": "value",
+		"annotation2": "value2",
+	})
+	assert.Equal(t, instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey], *ingress.Spec.IngressClassName)
 }
