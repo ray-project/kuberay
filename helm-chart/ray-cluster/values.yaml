@@ -27,14 +27,16 @@ gcsFaultTolerance:
   # externalStorageNamespace: "my-raycluster-storage"
   # redisAddress: "redis:6379"
   # redisPassword:
-    # value: ""
-    # valueFrom: {}
+    # Reference to a secret key containing the Redis password
+    # Secret must be manually created in the namespace
+    # valueFrom:
     #   secretKeyRef:
     #       name: redis-password-secret
     #       key: password
   # redisUsername:
-    # value: ""
-    # valueFrom: {}
+    # Reference to a secret key containing the Redis username
+    # Secret must be manually created in the namespace
+    # valueFrom:
     #   secretKeyRef:
     #     name: redis-username-secret
     #     key: username
