@@ -875,8 +875,11 @@ func TestParseConfigFile(t *testing.T) {
 				},
 				WorkerGroups: []WorkerGroup{
 					{
+						Name:     ptr.To("default-group"),
 						Replicas: int32(1),
+						CPU:      ptr.To("2"),
 						GPU:      ptr.To("1"),
+						Memory:   ptr.To("4Gi"),
 					},
 				},
 			},
@@ -981,6 +984,145 @@ gke:
 						GCSFuseMetadataPrefetchOnMount: ptr.To(false),
 						SkipCSIBucketAccessCheck:       ptr.To(false),
 					},
+				},
+			},
+		},
+		"override ray-version, image, service-account": {
+			config: `
+ray-version: 4.16.0
+image: custom/image:tag
+service-account: svcacct
+`,
+			expected: &RayClusterConfig{
+				RayVersion:     ptr.To("4.16.0"),
+				Image:          ptr.To("custom/image:tag"),
+				ServiceAccount: ptr.To("svcacct"),
+				Head: &Head{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("default-group"),
+						Replicas: 1,
+						CPU:      ptr.To("2"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+			},
+		},
+		"override only head CPU": {
+			config: `
+head:
+  cpu: "8"
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    ptr.To("8"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("default-group"),
+						Replicas: 1,
+						CPU:      ptr.To("2"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+			},
+		},
+		"override worker group with only CPU": {
+			config: `
+worker-groups:
+- cpu: "1"
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("default-group"),
+						Replicas: 1,
+						CPU:      ptr.To("1"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+			},
+		},
+		"override worker group with empty name": {
+			config: `
+worker-groups:
+- name: ""
+  replicas: 2
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("default-group"),
+						Replicas: 2,
+						CPU:      ptr.To("2"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+			},
+		},
+		"override worker group with replicas = 0": {
+			config: `
+worker-groups:
+- name: "wg1"
+  replicas: 0
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("wg1"),
+						Replicas: 1, // fallback to default
+						CPU:      ptr.To("2"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+			},
+		},
+		"override autoscaler": {
+			config: `
+autoscaler:
+  version: v2
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      ptr.To(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    ptr.To("2"),
+					Memory: ptr.To("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:     ptr.To("default-group"),
+						Replicas: 1,
+						CPU:      ptr.To("2"),
+						Memory:   ptr.To("4Gi"),
+					},
+				},
+				Autoscaler: &Autoscaler{
+					Version: AutoscalerV2,
 				},
 			},
 		},
