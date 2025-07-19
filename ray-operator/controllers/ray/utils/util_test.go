@@ -104,42 +104,97 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	}
 }
 
-func TestPodName(t *testing.T) {
+func TestWorkerPodName(t *testing.T) {
 	tests := []struct {
 		name     string
 		prefix   string
-		nodeType rayv1.RayNodeType
 		expected string
 	}{
 		{
-			name:     "short cluster name, head pod",
-			prefix:   "ray-cluster-01",
-			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-01-head-",
-		},
-		{
 			name:     "short cluster name, worker pod",
 			prefix:   "ray-cluster-group-name-01",
-			nodeType: rayv1.WorkerNode,
 			expected: "ray-cluster-group-name-01-worker-",
-		},
-		{
-			name:     "long cluster name, head pod",
-			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333",
-			nodeType: rayv1.HeadNode,
-			expected: "ray-cluster-00000000000000000000000111111111222222-head-",
 		},
 		{
 			name:     "long cluster name, worker pod",
 			prefix:   "ray-cluster-0000000000000000000000011111111122222233333333333333-group-name",
-			nodeType: rayv1.WorkerNode,
 			expected: "ray-cluster-00000000000000000000000111111111222222-worker-",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			str := PodName(test.prefix, test.nodeType, true)
+			str := PodName(test.prefix, rayv1.WorkerNode, true)
+			if str != test.expected {
+				t.Logf("expected: %q", test.expected)
+				t.Logf("actual: %q", str)
+				t.Error("PodName returned an unexpected string")
+			}
+
+			// 63 (max pod name length) - 5 random hexadecimal characters from generateName
+			if len(str) > 58 {
+				t.Error("Generated pod name is too long")
+			}
+		})
+	}
+}
+
+func TestHeadPodName(t *testing.T) {
+	defer os.Unsetenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)
+
+	tests := []struct {
+		name                       string
+		prefix                     string
+		enableDeterministicHeadPod string
+		expected                   string
+	}{
+		{
+			name:                       "short cluster name, deterministic head pod name",
+			prefix:                     "ray-cluster-01",
+			enableDeterministicHeadPod: "true",
+			expected:                   "ray-cluster-01-head",
+		},
+		{
+			name:                       "short cluster name, non-deterministic head pod name",
+			prefix:                     "ray-cluster-01",
+			enableDeterministicHeadPod: "false",
+			expected:                   "ray-cluster-01-head-",
+		},
+		{
+			name:                       "short cluster name, feature flag not set",
+			prefix:                     "ray-cluster-01",
+			enableDeterministicHeadPod: "unset",
+			expected:                   "ray-cluster-01-head-",
+		},
+		{
+			name:                       "long cluster name, deterministic head pod name",
+			prefix:                     "ray-cluster-0000000000000000000000011111111122222233333333333333",
+			enableDeterministicHeadPod: "true",
+			expected:                   "ray-cluster-00000000000000000000000111111111222222-head",
+		},
+		{
+			name:                       "long cluster name, non-deterministic head pod name",
+			prefix:                     "ray-cluster-0000000000000000000000011111111122222233333333333333",
+			enableDeterministicHeadPod: "false",
+			expected:                   "ray-cluster-00000000000000000000000111111111222222-head-",
+		},
+		{
+			name:                       "long cluster name, feature flag not set",
+			prefix:                     "ray-cluster-0000000000000000000000011111111122222233333333333333",
+			enableDeterministicHeadPod: "unset",
+			expected:                   "ray-cluster-00000000000000000000000111111111222222-head-",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.enableDeterministicHeadPod == "unset" {
+				os.Unsetenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)
+			} else {
+				os.Setenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME, test.enableDeterministicHeadPod)
+			}
+
+			str := PodName(test.prefix, rayv1.HeadNode, !IsDeterministicHeadPodNameEnabled())
 			if str != test.expected {
 				t.Logf("expected: %q", test.expected)
 				t.Logf("actual: %q", str)
