@@ -97,6 +97,33 @@ tests:
               seccompProfile:
                 type: RuntimeDefault
 
+  - it: Should add GCS fault tolerance options when `gcsFaultTolerance.enabled` is `true`
+    set:
+      gcsFaultTolerance:
+        enabled: true
+        redisAddress: "test-redis:6379"
+        externalStorageNamespace: "test-gcs-namespace"
+        redisPassword:
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        redisUsername:
+          value: "test-user"
+    asserts:
+      - equal:
+          path: spec.gcsFaultToleranceOptions
+          value:
+            redisAddress: "test-redis:6379"
+            externalStorageNamespace: "test-gcs-namespace"
+            redisPassword:
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+            redisUsername:
+              value: "test-user"
+
   # ===========================================================================
   # Test Head Group
   # ===========================================================================
