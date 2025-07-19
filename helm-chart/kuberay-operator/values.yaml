@@ -176,6 +176,20 @@ env:
 # If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
 #   value: "false"
+# This environment variable determines whether to enable a login shell by passing the -l option to the container command /bin/bash.
+# The -l flag was added by default before KubeRay v1.4.0, but it is no longer added by default starting with v1.4.0.
+# - name: ENABLE_LOGIN_SHELL
+#   value: "true"
+# This KubeRay operator environment variable is used to determine if random Pod
+# deletion should be enabled. Note that this only takes effect when autoscaling
+# is enabled for the RayCluster.
+# - name: ENABLE_RANDOM_POD_DELETE
+#   value: "false"
+# If JobDeploymentStatus does not transition to Complete or Failed within
+# this grace period seconds after JobStatus reaches a terminal state,
+# KubeRay will update JobDeploymentStatus directly.
+# - name: RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
+#   value: "300"
 
 # -- Resource requests and limits for containers.
 resources:
