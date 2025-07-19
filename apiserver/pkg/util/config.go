@@ -17,6 +17,7 @@ const (
 	RayClusterEnvironmentLabelKey     = "ray.io/environment"
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
+	KubernetesComponentLabelKey       = "app.kubernetes.io/component"
 
 	// Annotation keys
 	// Role level
@@ -43,6 +44,9 @@ const (
 
 	// The component name for apiserver
 	ComponentName = "kuberay-apiserver"
+
+	// The curl container name for apiserver
+	CurlContainerName = "apiserver-curl"
 
 	// Timeout for apiserver gRPC server
 	GRPCServerDefaultTimeout = 60 * time.Second
