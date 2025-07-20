@@ -30,8 +30,8 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 		return nil, fmt.Errorf("failed to parse url from config: %w", err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	baseTransport, err := rest.TransportFor(config.KubernetesConfig)
-	if err != nil { // rest.TransportFor provides the auth to the K8s API server.
+	baseTransport, err := rest.TransportFor(config.KubernetesConfig) // rest.TransportFor provides the auth to the K8s API server.
+	if err != nil {
 		return nil, fmt.Errorf("failed to get transport for config: %w", err)
 	}
 	proxy.Transport = newRetryRoundTripper(baseTransport, HTTPClientDefaultMaxRetry)
