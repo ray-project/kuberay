@@ -104,7 +104,7 @@ You can also run the `local_deploy.sh` bash script (located in `ray-operator/hac
 There are configuable variables in the script, the defaults are shown below: 
 
 ```bash 
-IMAGE_TAG="kuberay-dev-tag"
+IMAGE_TAG="kuberay-dev"
 KIND_CLUSTER_NAME="kuberay-dev"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
 ```

@@ -1,19 +1,13 @@
 #!/bin/bash
 
 set -euxo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 PROJECT_ROOT="${SCRIPT_DIR}/../.." # hack/ -> ray-operator/ -> kuberay/
-
 HELM_CHART_PATH="${PROJECT_ROOT}/helm-chart/kuberay-operator"
-
 RAY_OPERATOR_PATH="${PROJECT_ROOT}/ray-operator"
 
-HELM_RELEASE_NAME="kuberay-operator"
-
 # --- Configuration Variables ---
-IMAGE_TAG="${IMAGE_TAG:=kuberay-dev-tag}"
+IMAGE_TAG="${IMAGE_TAG:=kuberay-dev}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:=kuberay-dev}"
 KIND_NODE_IMAGE="${KIND_NODE_IMAGE:=kindest/node:v1.24.0}"
 
@@ -40,7 +34,7 @@ while [[ "$#" -gt 0 ]]; do
   case "$1" in
     -l|--logs)
       SHOW_LOGS=true
-      shift # Remove --logs or -l from processing
+      shift
       ;;
     *)
       echo "Unknown option: $1"
@@ -76,12 +70,10 @@ helm install "kuberay-operator" "${HELM_CHART_PATH}" \
   --set "image.tag=${IMAGE_TAG}"
   
 echo "--- Waiting for Deployment Rollout ---"
-kubectl rollout status deployment "kuberay-operator" --namespace "default" --timeout=5m
+kubectl -n default rollout status deployment kuberay-operator --timeout=5m
 
 # Check the logs
 if [ "$SHOW_LOGS" = true ]; then
   echo "--- Streaming Controller Logs (Ctrl+C to stop) ---"
-  kubectl logs -f deployment/"kuberay-operator" -n "default"
+  kubectl -n default logs -f deployment/kuberay-operator
 fi
-
-echo "--- Script Completed ---"
