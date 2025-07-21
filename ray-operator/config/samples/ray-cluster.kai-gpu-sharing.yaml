@@ -1,0 +1,35 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-half-gpu
+  labels:
+    kai.scheduler/queue: team-a
+spec:
+  headGroupSpec:
+    template:
+      spec:
+        containers:
+        - name: head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+  
+  # ---- Two workers share one GPU (0.5 each) ----
+  workerGroupSpecs:
+  - groupName: shared-gpu
+    replicas: 2
+    minReplicas: 2
+    template:
+      metadata:
+        annotations:
+          gpu-fraction: "0.5"
+      spec:
+        containers:
+        - name: worker
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
