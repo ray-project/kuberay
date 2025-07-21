@@ -75,7 +75,7 @@ batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano" or "yunikorn", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
