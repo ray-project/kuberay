@@ -29,7 +29,7 @@ create_kind_cluster() {
 }
 
 # Parsing for arguements
-SHOW_LOGS=false 
+SHOW_LOGS=false
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     -l|--logs)
@@ -54,7 +54,6 @@ echo "Building image: ${FULL_IMAGE_NAME}"
 echo "Running make docker-build from ray-operator path: ${RAY_OPERATOR_PATH}"
 make -C "${RAY_OPERATOR_PATH}" docker-build IMG="${FULL_IMAGE_NAME}"
 
-
 echo "--- Loading Image into Kind Cluster ---"
 kind load docker-image "${FULL_IMAGE_NAME}" --name "${KIND_CLUSTER_NAME}"
 
@@ -68,7 +67,7 @@ helm install "kuberay-operator" "${HELM_CHART_PATH}" \
   --namespace "default" \
   --set "image.repository=kuberay-operator" \
   --set "image.tag=${IMAGE_TAG}"
-  
+
 echo "--- Waiting for Deployment Rollout ---"
 kubectl -n default rollout status deployment kuberay-operator --timeout=5m
 

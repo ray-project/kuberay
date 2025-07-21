@@ -101,15 +101,15 @@ kubectl logs deployments/kuberay-operator
 
 You can also run the `local_deploy.sh` bash script (located in `ray-operator/hack`) which runs the steps shown above, but deletes and recreates the kind cluster each run for consistency during repeated development.
 
-There are configuable variables in the script, the defaults are shown below: 
+There are configuable variables in the script, the defaults are shown below:
 
-```bash 
+```bash
 IMAGE_TAG="kuberay-dev"
 KIND_CLUSTER_NAME="kuberay-dev"
 KIND_NODE_IMAGE="kindest/node:v1.24.0"
 ```
 
-Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation. 
+Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation.
 
 ### Run the operator outside the cluster
 
