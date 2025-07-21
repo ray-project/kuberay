@@ -6,9 +6,9 @@ spec:
   # schedule specifires a cron scheduling string telling the rayjob when to start schedule and run new jobs
   # Here it runs at every 5 minutes of every hour of every day of every week of every year
   schedule: "*/5 * * * *"
- 
+
   entrypoint: python /home/ray/samples/sample_code.py
-  
+
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   # NOTE that the expected behavior with schedule is that the cluster will be deleted and recreated at each schedule if set to true, and it will keep using the same cluster otherwise
   shutdownAfterJobFinishes: true
