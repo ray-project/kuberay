@@ -57,7 +57,7 @@ func NewGetClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 			return options.Run(cmd.Context(), k8sClient)
 		},
 	}
-	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", options.allNamespaces, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list the requested clusters across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 	return cmd
 }
 
