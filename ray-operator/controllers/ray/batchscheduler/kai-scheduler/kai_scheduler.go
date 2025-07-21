@@ -18,6 +18,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -53,7 +54,7 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 	pod.Labels[QueueLabelName] = queue
 }
 
-func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config) (schedulerinterface.BatchScheduler, error) {
+func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
 	return &KaiScheduler{}, nil
 }
 
