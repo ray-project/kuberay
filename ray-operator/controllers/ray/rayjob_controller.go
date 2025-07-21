@@ -455,11 +455,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if rayJobInstance.Spec.Schedule != "" {
 			logger.Info("RayJob is scheduled again")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
-		} else {
-			// If the RayJob is completed without scheduling, we should not requeue it.
-			logger.Info("RayJob is not scheduled")
-			return ctrl.Result{}, nil
+			break
 		}
+
+		// If the RayJob is completed, we should not requeue it.
+		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusScheduling:
 		deleteCluster := rayJobInstance.Spec.ShutdownAfterJobFinishes
 
