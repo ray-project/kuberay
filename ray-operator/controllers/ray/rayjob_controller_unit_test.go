@@ -635,13 +635,13 @@ func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme) // For events
 
 	testCases := []struct {
+		currentTime       time.Time
+		initialLastTime   *metav1.Time
 		name              string
 		schedule          string
-		initialLastTime   *metav1.Time
-		currentTime       time.Time
-		expectedErr       bool
 		expectedNextDelta time.Duration
 		expectedPrevDelta time.Duration
+		expectedErr       bool
 		isWithinBuffer    bool
 	}{
 		{
@@ -695,7 +695,7 @@ func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
 				Scheme:   newScheme,
 			}
 
-			// Call getPreviousAndNextScheduleDistance to get the next and pervious schedule ticks
+			// Call getPreviousAndNextScheduleDistance to get the next and previous schedule ticks
 			nextDuration, prevDuration, err := reconciler.getPreviousAndNextScheduleDistance(context.Background(), tc.currentTime, rayJob)
 
 			if tc.expectedErr {
@@ -717,5 +717,4 @@ func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
 			}
 		})
 	}
-
 }

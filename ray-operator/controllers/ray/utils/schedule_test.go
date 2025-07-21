@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr/testr"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	cron "github.com/robfig/cron/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestMostRecentScheduleTime(t *testing.T) {
@@ -16,13 +17,13 @@ func TestMostRecentScheduleTime(t *testing.T) {
 	metav1HalfPastTheHour := metav1.NewTime(*deltaTimeAfterTopOfTheHour(30 * time.Minute))
 
 	tests := []struct {
-		name                  string
-		cj                    *rayv1.RayJob
-		includeSDS            bool
 		now                   time.Time
 		expectedEarliestTime  time.Time
+		cj                    *rayv1.RayJob
 		expectedRecentTime    *time.Time
-		expectedTooManyMissed missedSchedulesType
+		name                  string
+		expectedTooManyMissed MissedSchedulesType
+		includeSDS            bool
 		wantErr               bool
 	}{
 		{
@@ -225,9 +226,9 @@ func TestNextScheduleTimeDuration(t *testing.T) {
 	metav1TwoHoursLater := metav1.NewTime(*deltaTimeAfterTopOfTheHour(2 * time.Hour))
 
 	tests := []struct {
-		name             string
-		cj               *rayv1.RayJob
 		now              time.Time
+		cj               *rayv1.RayJob
+		name             string
 		expectedDuration time.Duration
 	}{
 		{
@@ -319,9 +320,9 @@ func TestLastScheduleTimeDuration(t *testing.T) {
 	metav1FiveMonthsAgo := metav1.NewTime(metav1TopOfTheHour.AddDate(0, -5, 0))
 
 	tests := []struct {
-		name             string
-		cj               *rayv1.RayJob
 		now              time.Time
+		cj               *rayv1.RayJob
+		name             string
 		expectedDuration time.Duration
 	}{
 		{

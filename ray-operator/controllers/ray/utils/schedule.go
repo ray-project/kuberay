@@ -14,21 +14,22 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-type missedSchedulesType int
+type MissedSchedulesType int
 
 const (
-	noneMissed missedSchedulesType = iota
+	noneMissed MissedSchedulesType = iota
 	fewMissed
 	manyMissed
 )
 
-func MostRecentScheduleTime(rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, missedSchedulesType, error) {
+func MostRecentScheduleTime(rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, MissedSchedulesType, error) {
 	earliestTime := rj.ObjectMeta.CreationTimestamp.Time
 	missedSchedules := noneMissed
 	if rj.Status.LastScheduleTime != nil {
@@ -118,7 +119,6 @@ func FormatSchedule(rj *rayv1.RayJob, recorder record.EventRecorder) string {
 // nextScheduleTimeDuration returns the time duration to requeue a cron schedule based on
 // the schedule and last schedule time.
 func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
-
 	earliestTime, mostRecentTime, missedSchedules, err := MostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
 		// we still have to requeue at some point, so aim for the next scheduling slot from now
@@ -143,7 +143,6 @@ func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Tim
 // It calculates the most recent time a schedule should have executed based
 // on the RayJob's creation time (or its last scheduled status) and the current time 'now'.
 func LastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Time, schedule cron.Schedule) time.Duration {
-
 	earliestTime, mostRecentTime, missedSchedules, err := MostRecentScheduleTime(rj, now, schedule)
 	if err != nil {
 		// We still have to requeue at some point, so aim for the next scheduling slot from now

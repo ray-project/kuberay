@@ -183,6 +183,11 @@ type RayJobSpec struct {
 	// entrypoint command.
 	// +optional
 	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// Schedule specifies a cron like string for scheduling Ray jobs.
+	// When shutdownAfterJobFinishes is set to true, a new cluster is provisioned
+	// per scheduled job, otherwise the job is scheduled on an existing cluster.
+	// +optional
+	Schedule string `json:"schedule,omitempty"`
 	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
 	// +optional
 	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
@@ -204,11 +209,6 @@ type RayJobSpec struct {
 	// In case of transition to false a new RayCluster will be created.
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
-	// Schedule specifies a cron like string for scheduling Ray jobs.
-	// When shutdownAfterJobFinishes is set to true, a new cluster is provisioned
-	// per scheduled job, otherwise the job is scheduled on an existing cluster.
-	// +optional
-	Schedule string `json:"schedule,omitempty"`
 }
 
 // RayJobStatus defines the observed state of RayJob
@@ -240,6 +240,9 @@ type RayJobStatus struct {
 	// or the submitter Job has failed.
 	// +optional
 	EndTime *metav1.Time `json:"endTime,omitempty"`
+	// lastScheduledTime is the last time the job was successfully scheduled.
+	// +optional
+	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 	// Succeeded is the number of times this job succeeded.
 	// +kubebuilder:default:=0
 	// +optional
@@ -256,10 +259,6 @@ type RayJobStatus struct {
 	// RayJob's generation, which is updated on mutation by the API Server.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-
-	// lastScheduledTime is the last time the job was successfully scheduled.
-	// +optional
-	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true
