@@ -210,6 +210,8 @@ func TestHeadPodName(t *testing.T) {
 }
 
 func TestCheckName(t *testing.T) {
+	ctx := context.Background()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -234,7 +236,7 @@ func TestCheckName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			str := CheckName(test.input)
+			str := CheckName(ctx, test.input)
 			if str != test.expected {
 				t.Logf("expected: %q", test.expected)
 				t.Logf("actual: %q", str)
