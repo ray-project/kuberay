@@ -21,30 +21,28 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	// batchv1 "k8s.io/api/batch/v1"
-	// "k8s.io/apimachinery/pkg/api/errors"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/client-go/util/retry" // For creating pointers to int32, string, bool etc.
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-func scheduledRayJobTemplate(name, namespace, schedule string) *rayv1.RayJob {
-	job := rayJobTemplate(name, namespace)
-	job.Spec.Schedule = schedule
-	return job
-}
-
 var _ = Context("RayJob with schedule operation", func() {
-	// This Describe block focuses on the lifecycle of a RayJob configured with a schedule.
 	Describe("When creating a RayJob with a schedule field and NO cluster deletion", Ordered, func() {
+		// The states should transition from Scheduled -> ... -> Initializing  ->  Running -> Complete -> Scheduled
+		// In the last scheduled state the cluster should still exist since ShutdownAfterJobFinishes is False
 		ctx := context.Background()
 		namespace := "default"
-		cronSchedule := "0 0 0 0 0"
-		rayJob := scheduledRayJobTemplate("rayjob-scheduled-no-deletion", namespace, cronSchedule)
-		// rayCluster := &rayv1.RayCluster{}
+		cronSchedule := "*/1 * * * *"
+		rayJob := rayJobTemplate("rayjob-scheduled-no-deletion", namespace)
+		rayJob.Spec.Schedule = cronSchedule
+		rayJob.Spec.ShutdownAfterJobFinishes = false
+		rayCluster := &rayv1.RayCluster{}
 
 		It("should create a RayJob object with the schedule", func() {
 			err := k8sClient.Create(ctx, rayJob)
@@ -58,110 +56,113 @@ var _ = Context("RayJob with schedule operation", func() {
 				"JobDeploymentStatus should be Scheduled")
 		})
 
-		It("should update the CronJob's schedule when the RayJob's schedule is modified", func() {
-			newCronSchedule := "*/1 * * * *"
-			updatedRayJob := &rayv1.RayJob{}
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, updatedRayJob)
-				if err != nil {
-					return err
-				}
-				updatedRayJob.Spec.Schedule = newCronSchedule
-				return k8sClient.Update(ctx, updatedRayJob)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob schedule")
-		})
-
 		// The cron job runs every minute so it will take at most 1 minute to run
-		It("should transition to the New state", func() {
+		It("should transition to the Initializing state", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
-				time.Second*60).Should(Equal(rayv1.JobDeploymentStatusNew),
-				"JobDeploymentStatus should be New")
+				time.Second*60).Should(Equal(rayv1.JobDeploymentStatusInitializing),
+				"JobDeploymentStatus should be Initializing")
 		})
-		// It("should create a raycluster object", func() {
-		// 	// Ray Cluster name can be present on RayJob's CRD
-		// 	Eventually(
-		// 		getRayClusterNameForRayJob(ctx, rayJob),
-		// 		time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
-		// 	// The actual cluster instance and underlying resources SHOULD be created when suspend == false
-		// 	Eventually(
 
-		// 		getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
-		// 		time.Second*3, time.Millisecond*500).Should(Succeed())
-		// })
+		It("should create a raycluster object", func() {
+			Eventually(
+				getRayClusterNameForRayJob(ctx, rayJob),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
+			Eventually(
 
-		// It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
-		// 	underlyingK8sJob := &batchv1.Job{}
-		// 	Consistently(
-		// 		// k8sClient client throws error if resource not found
-		// 		func() bool {
-		// 			err := getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob)()
-		// 			return errors.IsNotFound(err)
-		// 		},
-		// 		time.Second*3, time.Millisecond*500).Should(BeTrue())
-		// })
+				getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed())
+		})
 
-		// It("should be able to update all Pods to Running", func() {
-		// 	updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
-		// 	updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
-		// })
+		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			Consistently(
+				// k8sClient client throws error if resource not found
+				func() bool {
+					err := getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob)()
+					return errors.IsNotFound(err)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+		})
 
-		// It("Dashboard URL should be set", func() {
-		// 	Eventually(
-		// 		getDashboardURLForRayJob(ctx, rayJob),
-		// 		time.Second*3, time.Millisecond*500).Should(HavePrefix(rayJob.Name), "Dashboard URL = %v", rayJob.Status.DashboardURL)
-		// })
+		It("should be able to update all Pods to Running", func() {
+			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+		})
 
-		// It("should create the underlying Kubernetes Job object", func() {
-		// 	underlyingK8sJob := &batchv1.Job{}
-		// 	// The underlying Kubernetes Job should be created when the RayJob is created
-		// 	Eventually(
-		// 		getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob),
-		// 		time.Second*3, time.Millisecond*500).Should(Succeed(), "Expected Kubernetes job to be present")
-		// })
+		It("Dashboard URL should be set", func() {
+			Eventually(
+				getDashboardURLForRayJob(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(HavePrefix(rayJob.Name), "Dashboard URL = %v", rayJob.Status.DashboardURL)
+		})
 
-		// It("should transition to the Initailizing", func() {
-		// 	Eventually(
-		// 		getRayJobDeploymentStatus(ctx, rayJob),
-		// 		time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing),
-		// 		"JobDeploymentStatus should be Initializing")
-		// })
+		It("should create the underlying Kubernetes Job object", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			// The underlying Kubernetes Job should be created when the RayJob is created
+			Eventually(
+				getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob),
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Expected Kubernetes job to be present")
+		})
 
-		// It("should transition to the Running", func() {
-		// 	Eventually(
-		// 		getRayJobDeploymentStatus(ctx, rayJob),
-		// 		time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning),
-		// 		"JobDeploymentStatus should be Initializing")
-		// })
+		It("should transition to the Running", func() {
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning),
+				"JobDeploymentStatus should be Running")
+		})
 
-		// It("should transition to the Complete", func() {
-		// 	Eventually(
-		// 		getRayJobDeploymentStatus(ctx, rayJob),
-		// 		time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete),
-		// 		"JobDeploymentStatus should be Initializing")
-		// })
+		It("RayJobs's JobDeploymentStatus transitions to Scheduled after Job is Complete.", func() {
+			// Update fake dashboard client to return job info with "Succeeded" status.
+			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
 
-		// It("should transition to the Scheduled", func() {
-		// 	Eventually(
-		// 		getRayJobDeploymentStatus(ctx, rayJob),
-		// 		time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusScheduled),
-		// 		"JobDeploymentStatus should be Initializing")
-		// })
+			// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+			Consistently(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 
-		// It("The raycluster object should still exist", func() {
-		// 	Eventually(
+			// Update the submitter Kubernetes Job to Complete.
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			err := k8sClient.Get(ctx, namespacedName, job)
+			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-		// 		getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
-		// 		time.Second*3, time.Millisecond*500).Should(Succeed())
-		// })
+			// Update the submitter Kubernetes Job to Complete.
+			conditions := []batchv1.JobCondition{
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			}
+			job.Status.Conditions = conditions
+			Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+
+			// RayJob transitions to Complete.
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusScheduled), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+		})
+
+		It("The raycluster object should still exist", func() {
+			Eventually(
+				func() bool {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)()
+					return err == nil
+				},
+				time.Second*15, time.Millisecond*500).Should(BeTrue(), "Expected RayCluster to still exist")
+		})
 	})
 
 	Describe("When creating a RayJob with a schedule field and WITH cluster deletion", Ordered, func() {
+		// The states should transition from Scheduled -> ... -> Initializing  ->  Running -> Complete -> Scheduled
+		// In the last scheduled state the cluster should not exist since ShutdownAfterJobFinishes is true
 		ctx := context.Background()
 		namespace := "default"
 		cronSchedule := "*/1 * * * *"
-		rayJob := scheduledRayJobTemplate("rayjob-scheduled-with-deletion", namespace, cronSchedule)
+		rayJob := rayJobTemplate("rayjob-scheduled-with-deletion", namespace)
+		rayJob.Spec.Schedule = cronSchedule
+		rayJob.Spec.ShutdownAfterJobFinishes = true
+		rayCluster := &rayv1.RayCluster{}
 
 		It("should create a RayJob object with the schedule", func() {
 			err := k8sClient.Create(ctx, rayJob)
@@ -176,7 +177,6 @@ var _ = Context("RayJob with schedule operation", func() {
 		})
 
 		It("should NOT create a RayCluster object immediately", func() {
-			rayCluster := &rayv1.RayCluster{}
 			Consistently(
 				func() bool {
 					err := k8sClient.Get(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster)
@@ -185,25 +185,103 @@ var _ = Context("RayJob with schedule operation", func() {
 				time.Second*3, time.Millisecond*500).Should(BeTrue(), "RayCluster should NOT be created upon scheduled RayJob creation")
 		})
 
-		It("should update the CronJob's schedule when the RayJob's schedule is modified", func() {
-			newCronSchedule := "0 1 * * *"
-			updatedRayJob := &rayv1.RayJob{}
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, updatedRayJob)
-				if err != nil {
-					return err
-				}
-				updatedRayJob.Spec.Schedule = newCronSchedule
-				return k8sClient.Update(ctx, updatedRayJob)
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob schedule")
-		})
-
-		It("should transition to the New state", func() {
+		It("should transition to the Initializing state", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
-				time.Second*60).Should(Equal(rayv1.JobDeploymentStatusNew),
-				"JobDeploymentStatus should be New")
+				time.Second*60).Should(Equal(rayv1.JobDeploymentStatusInitializing),
+				"JobDeploymentStatus should be Initializing")
+		})
+
+		It("should create a raycluster object", func() {
+			Eventually(
+				getRayClusterNameForRayJob(ctx, rayJob),
+				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
+			Eventually(
+
+				getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed())
+		})
+
+		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			Consistently(
+				// k8sClient client throws error if resource not found
+				func() bool {
+					err := getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob)()
+					return errors.IsNotFound(err)
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+		})
+
+		It("should be able to update all Pods to Running", func() {
+			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+		})
+
+		It("Dashboard URL should be set", func() {
+			Eventually(
+				getDashboardURLForRayJob(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(HavePrefix(rayJob.Name), "Dashboard URL = %v", rayJob.Status.DashboardURL)
+		})
+
+		It("should create the underlying Kubernetes Job object", func() {
+			underlyingK8sJob := &batchv1.Job{}
+			// The underlying Kubernetes Job should be created when the RayJob is created
+			Eventually(
+				getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob),
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Expected Kubernetes job to be present")
+		})
+
+		It("should transition to the Running", func() {
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning),
+				"JobDeploymentStatus should be Running")
+		})
+
+		It("RayJobs's JobDeploymentStatus transitions to Scheduled after Job is Complete.", func() {
+			// Update fake dashboard client to return job info with "Succeeded" status.
+			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+			Consistently(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+			// Update the submitter Kubernetes Job to Complete.
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			err := k8sClient.Get(ctx, namespacedName, job)
+			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+			// Update the submitter Kubernetes Job to Complete.
+			conditions := []batchv1.JobCondition{
+				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+			}
+			job.Status.Conditions = conditions
+			Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+
+			// RayJob transitions to Complete.
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusScheduled), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+		})
+
+		It("If shutdownAfterJobFinishes is true, RayCluster should be deleted along with the submitter Job.", func() {
+			Eventually(
+				func() bool {
+					return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)())
+				},
+				time.Second*3, time.Millisecond*500).Should(BeTrue())
+			namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+			job := &batchv1.Job{}
+			Consistently(
+				getResourceFunc(ctx, namespacedName, job),
+				time.Second*3, time.Millisecond*500).ShouldNot(Succeed())
 		})
 	})
 })
