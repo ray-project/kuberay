@@ -134,7 +134,7 @@ func NextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayJob, now time.Tim
 			mostRecentTime = &now
 		}
 	}
-	logger.Info("Successfully calculated earliestTime and mostRecentTime", "mostRecentTime", mostRecentTime, "earliestTime", earliestTime, "Next time to aim for", schedule.Next(*mostRecentTime))
+	logger.Info("Successfully calculated earliestTime and mostRecentTime", "mostRecentTime", mostRecentTime, "Current Time", now, "Next time to aim for", schedule.Next(*mostRecentTime))
 	t := schedule.Next(*mostRecentTime).Sub(now)
 	return t
 }
