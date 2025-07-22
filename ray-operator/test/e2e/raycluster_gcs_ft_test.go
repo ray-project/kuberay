@@ -17,11 +17,6 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-const (
-	redisPassword = "5241590000000000"
-	redisAddress  = "redis:6379"
-)
-
 func TestRayClusterGCSFaultTolerance(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
@@ -33,14 +28,14 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	test.T().Run("Test Detached Actor", func(_ *testing.T) {
-		checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+		checkRedisDBSize := DeployRedis(test, namespace.Name, RedisPassword)
 		defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithGcsFaultToleranceOptions(
 				rayv1ac.GcsFaultToleranceOptions().
-					WithRedisAddress(redisAddress).
-					WithRedisPassword(rayv1ac.RedisCredential().WithValue(redisPassword)),
+					WithRedisAddress(RedisAddress).
+					WithRedisPassword(rayv1ac.RedisCredential().WithValue(RedisPassword)),
 			).
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -82,7 +77,7 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_1.py", rayNamespace})
 
 		// [Test 1: Kill GCS process to "restart" the head Pod]
-		// Assertion is implement in python, so no furthur handling needed here, and so are other ExecPodCmd
+		// Assertion is implement in python, so no further handling needed here, and so are other ExecPodCmd
 		stdout, stderr := ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
 		LogWithTimestamp(test.T(), "pkill gcs_server output - stdout: %s, stderr: %s", stdout.String(), stderr.String())
 
@@ -145,7 +140,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
 					newRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
-							WithRedisAddress(redisAddress),
+							WithRedisAddress(RedisAddress),
 					),
 				)
 			},
@@ -153,13 +148,13 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:          "Redis Password",
-			redisPassword: redisPassword,
+			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
 					newRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
-							WithRedisAddress(redisAddress).
-							WithRedisPassword(rayv1ac.RedisCredential().WithValue(redisPassword)),
+							WithRedisAddress(RedisAddress).
+							WithRedisPassword(rayv1ac.RedisCredential().WithValue(RedisPassword)),
 					),
 				)
 			},
@@ -167,14 +162,14 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:          "Redis Password and Username",
-			redisPassword: redisPassword,
+			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
 					newRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
-							WithRedisAddress(redisAddress).
+							WithRedisAddress(RedisAddress).
 							WithRedisUsername(rayv1ac.RedisCredential().WithValue("default")).
-							WithRedisPassword(rayv1ac.RedisCredential().WithValue(redisPassword)),
+							WithRedisPassword(rayv1ac.RedisCredential().WithValue(RedisPassword)),
 					),
 				)
 			},
@@ -182,12 +177,12 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:          "Redis Password In Secret",
-			redisPassword: redisPassword,
+			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
 					newRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
-							WithRedisAddress(redisAddress).
+							WithRedisAddress(RedisAddress).
 							WithRedisPassword(rayv1ac.RedisCredential().
 								WithValueFrom(corev1.EnvVarSource{
 									SecretKeyRef: &corev1.SecretKeySelector{
@@ -209,7 +204,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 				return rayv1ac.RayCluster("raycluster-with-a-very-long-name-exceeding-k8s-limit", namespace).WithSpec(
 					newRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
-							WithRedisAddress(redisAddress),
+							WithRedisAddress(RedisAddress),
 					),
 				)
 			},
@@ -223,7 +218,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
 
-			checkRedisDBSize := deployRedis(test, namespace.Name, tc.redisPassword)
+			checkRedisDBSize := DeployRedis(test, namespace.Name, tc.redisPassword)
 			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			if tc.createSecret {
@@ -283,18 +278,18 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			name:                          "GCS FT with redis password in ray start params",
 			storageNS:                     "",
 			redisPasswordEnv:              "",
-			redisPasswordInRayStartParams: redisPassword,
+			redisPasswordInRayStartParams: RedisPassword,
 		},
 		{
 			name:                          "GCS FT with redis password in ray start params referring to env",
 			storageNS:                     "",
-			redisPasswordEnv:              redisPassword,
+			redisPasswordEnv:              RedisPassword,
 			redisPasswordInRayStartParams: "$REDIS_PASSWORD",
 		},
 		{
 			name:                          "GCS FT with storage namespace",
 			storageNS:                     "test-storage-ns",
-			redisPasswordEnv:              redisPassword,
+			redisPasswordEnv:              RedisPassword,
 			redisPasswordInRayStartParams: "$REDIS_PASSWORD",
 		},
 	}
@@ -315,13 +310,13 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 				redisPassword = tc.redisPasswordInRayStartParams
 			}
 
-			checkRedisDBSize := deployRedis(test, namespace.Name, redisPassword)
+			checkRedisDBSize := DeployRedis(test, namespace.Name, redisPassword)
 			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			// Prepare RayCluster ApplyConfiguration
 			podTemplateAC := headPodTemplateApplyConfiguration()
 			podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
-				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue(redisAddress),
+				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue(RedisAddress),
 			)
 			if tc.redisPasswordEnv != "" {
 				podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
