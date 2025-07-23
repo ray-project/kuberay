@@ -570,19 +570,10 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
-			// Delete the head Pod
-			err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-
-			PodUID := func(p *corev1.Pod) string { return string(p.UID) }
-			g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-				ShouldNot(WithTransform(PodUID, Equal(string(headPod.UID)))) // Use UID to check if the new head pod is created.
-
-			g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-				Should(WithTransform(func(p *corev1.Pod) string { return string(p.Status.Phase) }, Equal("Running")))
-
-			headPod, err = GetHeadPod(test, rayCluster) // Replace the old head pod
-			g.Expect(err).NotTo(HaveOccurred())
+			// Delete the head Pod and wait for the new head pod to be ready.
+			newHeadPod, err := DeletePodAndWait(test, rayCluster, namespace, headPod)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			headPod = newHeadPod
 
 			// Create a detached actor, and a worker should be created after the new head pod is ready.
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor1"})

@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 var (
@@ -51,23 +54,50 @@ func init() {
 	format.MaxLength = 0
 }
 
-func IsPodRunningAndReady(pod *v1.Pod) bool {
-	if pod.Status.Phase != v1.PodRunning {
+func IsPodRunningAndReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}
 	for _, condition := range pod.Status.Conditions {
-		if condition.Type == v1.PodReady && condition.Status == v1.ConditionTrue {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
 			return true
 		}
 	}
 	return false
 }
 
-func AllPodsRunningAndReady(pods []v1.Pod) bool {
+func AllPodsRunningAndReady(pods []corev1.Pod) bool {
 	for _, pod := range pods {
 		if !IsPodRunningAndReady(&pod) {
 			return false
 		}
 	}
 	return true
+}
+
+func DeletePodAndWait(test Test, rayCluster *rayv1.RayCluster, namespace *corev1.Namespace, currentHeadPod *corev1.Pod) (*corev1.Pod, error) {
+	g := NewWithT(test.T())
+
+	err := test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), currentHeadPod.Name, metav1.DeleteOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete head pod %s: %w", currentHeadPod.Name, err)
+	}
+
+	PodUID := func(p *corev1.Pod) string { return string(p.UID) }
+
+	// Wait for a new head pod to be created (different UID)
+	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
+		ShouldNot(WithTransform(PodUID, Equal(string(currentHeadPod.UID))),
+			"New head pod should have different UID than the deleted one")
+
+	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
+		Should(WithTransform(func(p *corev1.Pod) string { return string(p.Status.Phase) }, Equal("Running")),
+			"New head pod should be in Running state")
+
+	newHeadPod, err := GetHeadPod(test, rayCluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get new head pod: %w", err)
+	}
+
+	return newHeadPod, nil
 }
