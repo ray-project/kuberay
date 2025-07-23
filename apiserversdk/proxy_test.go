@@ -3,9 +3,11 @@ package apiserversdk
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -325,3 +327,58 @@ var _ = Describe("kuberay service", Ordered, func() {
 		})
 	})
 })
+
+var _ = Describe("retryRoundTripper", func() {
+	It("should retry failed requests and eventually succeed", func() {
+		var attempts int32
+		mock := &mockRoundTripper{
+			fn: func(_ *http.Request) (*http.Response, error) {
+				count := atomic.AddInt32(&attempts, 1)
+				if count < 3 {
+					return &http.Response{
+						StatusCode: http.StatusInternalServerError,
+						Body:       io.NopCloser(strings.NewReader("internal error")),
+					}, nil
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("ok")),
+				}, nil
+			},
+		}
+		retrier := newRetryRoundTripper(mock, 5)
+		req, _ := http.NewRequest(http.MethodGet, "http://test", nil)
+		resp, err := retrier.RoundTrip(req)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		Expect(attempts).To(Equal(int32(3)))
+	})
+
+	It("should respect context timeout and stop retrying", func() {
+		mock := &mockRoundTripper{
+			fn: func(_ *http.Request) (*http.Response, error) {
+				time.Sleep(100 * time.Millisecond)
+				return &http.Response{
+					StatusCode: http.StatusInternalServerError,
+					Body:       io.NopCloser(strings.NewReader("internal error")),
+				}, nil
+			},
+		}
+		retrier := newRetryRoundTripper(mock, 5)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://test", nil)
+		resp, err := retrier.RoundTrip(req)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("retry timeout exceeded context deadline"))
+		Expect(resp).ToNot(BeNil())
+	})
+})
+
+type mockRoundTripper struct {
+	fn func(*http.Request) (*http.Response, error)
+}
+
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return m.fn(req)
+}
