@@ -156,6 +156,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			sleepDuration = HTTPClientDefaultMaxBackoff
 		}
 
+		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {
 			remaining := time.Until(deadline)
 			if remaining <= 0 {
@@ -175,6 +176,7 @@ func isSuccessfulStatusCode(statusCode int) bool {
 	return 200 <= statusCode && statusCode < 300
 }
 
+// TODO: merge common utils for apiserver v1 and v2
 func retryableHTTPStatusCodes(statusCode int) bool {
 	switch statusCode {
 	case http.StatusRequestTimeout, // 408
