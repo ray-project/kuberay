@@ -39,7 +39,6 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
 	}
-	handler = bodyPreserveMiddleware(handler)
 
 	mux := http.NewServeMux()
 	// TODO: add template features to specify routes.
@@ -110,6 +109,21 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	var resp *http.Response
 	var err error
 	for attempt := 0; attempt <= rrt.retries; attempt++ {
+		if attempt == 0 && req.Body != nil && req.GetBody == nil {
+			bodyBytes, err := io.ReadAll(req.Body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
+			}
+			err = req.Body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("failed to close request body: %w", err)
+			}
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
+		}
+
 		if attempt > 0 && req.GetBody != nil {
 			var bodyCopy io.ReadCloser
 			bodyCopy, err = req.GetBody()
@@ -168,27 +182,4 @@ func retryableHTTPStatusCodes(statusCode int) bool {
 	default:
 		return false
 	}
-}
-
-func bodyPreserveMiddleware(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Body != nil && r.GetBody == nil {
-			bodyBytes, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "failed to read request body", http.StatusInternalServerError)
-				return
-			}
-			err = r.Body.Close()
-			if err != nil {
-				http.Error(w, "failed to close request body", http.StatusInternalServerError)
-				return
-			}
-			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			r.ContentLength = int64(len(bodyBytes))
-			r.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
-			}
-		}
-		h.ServeHTTP(w, r)
-	})
 }
