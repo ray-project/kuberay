@@ -138,12 +138,17 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, fmt.Errorf("failed with error: %w", err)
 		}
 
-		if err == nil && isSuccessfulStatusCode(resp.StatusCode) {
+		if isSuccessfulStatusCode(resp.StatusCode) {
 			return resp, nil
 		}
 
-		if err == nil && !retryableHTTPStatusCodes(resp.StatusCode) {
+		if !retryableHTTPStatusCodes(resp.StatusCode) {
 			return resp, nil
+		}
+
+		if attempt < rrt.retries && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
 		}
 
 		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
