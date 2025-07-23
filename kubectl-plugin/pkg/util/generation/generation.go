@@ -449,57 +449,27 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
-	config, err := mergeWithDefaultConfig(&overrideConfig)
+	// detach worker groups from default config
+	overrideConfigWG := overrideConfig.WorkerGroups
+	overrideConfig.WorkerGroups = nil
+
+	config := newRayClusterConfigWithDefaults()
+	err = mergo.Merge(config, &overrideConfig, mergo.WithOverride)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge config with defaults: %w", err)
 	}
-	return config, nil
-}
-
-func mergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
-	config := newRayClusterConfigWithDefaults()
-
-	// The defaults are not set in the default raycluster config,
-	// so we directly copy the values from overrideConfig
-	config.Namespace = overrideConfig.Namespace
-	config.Name = overrideConfig.Name
-	config.ServiceAccount = overrideConfig.ServiceAccount
-	config.GKE = overrideConfig.GKE
-	config.Autoscaler = overrideConfig.Autoscaler
-
-	if overrideConfig.RayVersion != nil {
-		config.RayVersion = overrideConfig.RayVersion
-	}
-
-	if overrideConfig.Labels != nil {
-		config.Labels = make(map[string]string)
-		maps.Copy(config.Labels, overrideConfig.Labels)
-	}
-	if overrideConfig.Annotations != nil {
-		config.Annotations = make(map[string]string)
-		maps.Copy(config.Annotations, overrideConfig.Annotations)
-	}
-
-	if overrideConfig.Image != nil {
-		config.Image = overrideConfig.Image
-	}
-
-	if overrideConfig.Head != nil {
-		err := mergo.Merge(config.Head, overrideConfig.Head, mergo.WithOverride)
-		if err != nil {
-			return nil, fmt.Errorf("failed to merge head config: %w", err)
-		}
-	}
-
-	if overrideConfig.WorkerGroups != nil {
-		for len(config.WorkerGroups) < len(overrideConfig.WorkerGroups) {
+	// merge WorkerGroups and keep the default values for missing fields
+	// if overrideConfigWG is not nil, we will merge the worker groups from the config file
+	// and keep the default values for missing fields
+	if overrideConfigWG != nil {
+		for len(config.WorkerGroups) < len(overrideConfigWG) {
 			config.WorkerGroups = append(config.WorkerGroups, WorkerGroup{
 				Replicas: util.DefaultWorkerReplicas,
 				CPU:      ptr.To(util.DefaultWorkerCPU),
 				Memory:   ptr.To(util.DefaultWorkerMemory),
 			})
 		}
-		for i, workerGroup := range overrideConfig.WorkerGroups {
+		for i, workerGroup := range overrideConfigWG {
 			err := mergo.Merge(&config.WorkerGroups[i], workerGroup, mergo.WithOverride)
 			if err != nil {
 				return nil, fmt.Errorf("failed to merge worker group %d: %w", i, err)
