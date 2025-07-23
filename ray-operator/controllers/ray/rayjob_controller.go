@@ -957,14 +957,15 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 func (r *RayJobReconciler) getPreviousAndNextScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Calculating next schedule for the RayJob")
-	cronSchedule, err := cron.ParseStandard(utils.FormatSchedule(rayJobInstance, r.Recorder))
+	formatedCron := utils.FormatSchedule(rayJobInstance, r.Recorder)
+	cronSchedule, err := cron.ParseStandard(formatedCron)
 	if err != nil {
 		// this is likely a user error in defining the spec value
 		// we should log the error and not reconcile this cronjob until an update to spec
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
 		return 0, 0, fmt.Errorf("the cron schedule provided is unparseable: %w", err)
 	}
-	logger.Info("Successfully parsed cron schedule", "CronSchedule", cronSchedule)
+	logger.Info("Successfully parsed cron schedule", "CronSchedule", formatedCron)
 
 	t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
 	t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
