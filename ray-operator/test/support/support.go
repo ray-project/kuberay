@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,7 +75,7 @@ func AllPodsRunningAndReady(pods []corev1.Pod) bool {
 }
 
 func DeletePodAndWait(test Test, rayCluster *rayv1.RayCluster, namespace *corev1.Namespace, currentHeadPod *corev1.Pod) (*corev1.Pod, error) {
-	g := NewWithT(test.T())
+	g := gomega.NewWithT(test.T())
 
 	err := test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), currentHeadPod.Name, metav1.DeleteOptions{})
 	if err != nil {
@@ -87,11 +86,11 @@ func DeletePodAndWait(test Test, rayCluster *rayv1.RayCluster, namespace *corev1
 
 	// Wait for a new head pod to be created (different UID)
 	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-		ShouldNot(WithTransform(PodUID, Equal(string(currentHeadPod.UID))),
+		ShouldNot(gomega.WithTransform(PodUID, gomega.Equal(string(currentHeadPod.UID))),
 			"New head pod should have different UID than the deleted one")
 
 	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-		Should(WithTransform(func(p *corev1.Pod) string { return string(p.Status.Phase) }, Equal("Running")),
+		Should(gomega.WithTransform(func(p *corev1.Pod) string { return string(p.Status.Phase) }, gomega.Equal("Running")),
 			"New head pod should be in Running state")
 
 	newHeadPod, err := GetHeadPod(test, rayCluster)
