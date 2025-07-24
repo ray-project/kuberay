@@ -108,7 +108,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	var resp *http.Response
 	var err error
-	for attempt := 0; attempt <= rrt.retries; attempt++ {
+	for attempt := 0; attempt < rrt.retries; attempt++ {
 		if attempt == 0 && req.Body != nil && req.GetBody == nil {
 			bodyBytes, err := io.ReadAll(req.Body)
 			if err != nil {
@@ -146,7 +146,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, nil
 		}
 
-		if attempt < rrt.retries && resp.Body != nil {
+		if attempt < rrt.retries-1 && resp.Body != nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
