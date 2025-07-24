@@ -243,14 +243,6 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		"worker-memory": options.workerMemory,
 	}
 
-	for name, value := range resourceFields {
-		if value != "" || cmd.Flags().Changed(name) {
-			if err := util.ValidateResourceQuantity(value, name); err != nil {
-				return fmt.Errorf("%w", err)
-			}
-		}
-	}
-
 	// Take care of case where there is a filename input
 	if options.fileName != "" {
 		info, err := os.Stat(options.fileName)
@@ -407,6 +399,14 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 
 	if options.workingDir == "" {
 		return fmt.Errorf("working directory is required, use --working-dir or set with runtime env")
+	}
+
+	for name, value := range resourceFields {
+		if value != "" || cmd.Flags().Changed(name) {
+			if err := util.ValidateResourceQuantity(value, name); err != nil {
+				return fmt.Errorf("%w", err)
+			}
+		}
 	}
 
 	return nil
