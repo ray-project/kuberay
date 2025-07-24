@@ -449,12 +449,20 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
+	config, err := mergeWithDefaultConfig(&overrideConfig)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func mergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
 	// detach worker groups from default config
 	overrideConfigWG := overrideConfig.WorkerGroups
 	overrideConfig.WorkerGroups = nil
 
 	config := newRayClusterConfigWithDefaults()
-	err = mergo.Merge(config, &overrideConfig, mergo.WithOverride)
+	err := mergo.Merge(config, overrideConfig, mergo.WithOverride)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge config with defaults: %w", err)
 	}
