@@ -75,7 +75,7 @@ batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano" or "yunikorn", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
@@ -175,6 +175,9 @@ env:
 #   value: "true"
 # If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
+#   value: "false"
+# If set to true, we will use deterministic name for head pod. Otherwise, the non-deterministic name is used.
+# - name: ENABLE_DETERMINISTIC_HEAD_POD_NAME
 #   value: "false"
 
 # -- Resource requests and limits for containers.

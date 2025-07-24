@@ -59,11 +59,17 @@ func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		err := fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, error reading body: %w", resp.StatusCode, resp.Status, err)
+		}
+		err = fmt.Errorf("CheckProxyActorHealth fails. status code: %d, status: %s, body: %s", resp.StatusCode, resp.Status, string(body))
 		return err
 	}
+	// For responses with status code 200, we don't need to allocate memory for the response body.
+	// Instead, we discard the contents directly to avoid unnecessary memory allocations.
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	return nil
 }

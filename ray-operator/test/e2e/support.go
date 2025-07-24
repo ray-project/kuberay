@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"embed"
-	"strings"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -175,41 +174,4 @@ func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyC
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
-}
-
-func deployRedis(t Test, namespace string, password string) func() string {
-	redisContainer := corev1ac.Container().WithName("redis").WithImage("redis:7.4").
-		WithPorts(corev1ac.ContainerPort().WithContainerPort(6379))
-	dbSizeCmd := []string{"redis-cli", "--no-auth-warning", "DBSIZE"}
-	if password != "" {
-		redisContainer.WithCommand("redis-server", "--requirepass", password)
-		dbSizeCmd = []string{"redis-cli", "--no-auth-warning", "-a", password, "DBSIZE"}
-	}
-
-	pod, err := t.Client().Core().CoreV1().Pods(namespace).Apply(
-		t.Ctx(),
-		corev1ac.Pod("redis", namespace).
-			WithLabels(map[string]string{"app": "redis"}).
-			WithSpec(corev1ac.PodSpec().WithContainers(redisContainer)),
-		TestApplyOptions,
-	)
-	require.NoError(t.T(), err)
-
-	_, err = t.Client().Core().CoreV1().Services(namespace).Apply(
-		t.Ctx(),
-		corev1ac.Service("redis", namespace).
-			WithSpec(corev1ac.ServiceSpec().
-				WithSelector(map[string]string{"app": "redis"}).
-				WithPorts(corev1ac.ServicePort().
-					WithPort(6379),
-				),
-			),
-		TestApplyOptions,
-	)
-	require.NoError(t.T(), err)
-
-	return func() string {
-		stdout, stderr := ExecPodCmd(t, pod, "redis", dbSizeCmd)
-		return strings.TrimSpace(stdout.String() + stderr.String())
-	}
 }

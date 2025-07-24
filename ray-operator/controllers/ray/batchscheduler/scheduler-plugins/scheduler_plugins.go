@@ -12,7 +12,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 
@@ -22,7 +21,13 @@ import (
 )
 
 const (
-	schedulerName                 string = "scheduler-plugins"
+	// This is the batchScheduler name used in the Ray Operator.
+	// We use this name because it is easier to understand and remember.
+	// It is also consistent with the name used in the Helm chart values.yaml.
+	schedulerName string = "scheduler-plugins"
+	// The default scheduler plugins name is "scheduler-plugins-scheduler".
+	// https://github.com/kubernetes-sigs/scheduler-plugins/blob/b3127ba4cc420430ca5322740103220043697eec/manifests/install/charts/as-a-second-scheduler/values.yaml#L6C9-L6C36
+	schedulerInstanceName         string = "scheduler-plugins-scheduler"
 	kubeSchedulerPodGroupLabelKey string = "scheduling.x-k8s.io/pod-group"
 )
 
@@ -37,19 +42,11 @@ func GetPluginName() string {
 }
 
 func (k *KubeScheduler) Name() string {
-	return GetPluginName()
+	return schedulerInstanceName
 }
 
-func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
-	// we set replica as 1 for the head pod
-	replica := int32(1)
-	for _, workerGroup := range app.Spec.WorkerGroupSpecs {
-		if workerGroup.Replicas == nil {
-			continue
-		}
-		// TODO(kevin85421): We should consider the case of `numOfHosts` is not 1.
-		replica += *workerGroup.Replicas
-	}
+func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
+	// TODO(troychiu): Consider the case when autoscaling is enabled.
 
 	podGroup := &v1alpha1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -65,7 +62,7 @@ func createPodGroup(_ context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup
 			},
 		},
 		Spec: v1alpha1.PodGroupSpec{
-			MinMember:    replica,
+			MinMember:    utils.CalculateDesiredReplicas(ctx, app) + 1, // +1 for the head pod
 			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
@@ -99,8 +96,7 @@ func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluste
 	if k.isGangSchedulingEnabled(app) {
 		pod.Labels[kubeSchedulerPodGroupLabelKey] = app.Name
 	}
-	// TODO(kevin85421): Currently, we only support "single scheduler" mode. If we want to support
-	// "second scheduler" mode, we need to add `schedulerName` to the pod spec.
+	pod.Spec.SchedulerName = k.Name()
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
@@ -108,32 +104,8 @@ func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
 	return exist
 }
 
-func (kf *KubeSchedulerFactory) New(ctx context.Context, c *rest.Config) (schedulerinterface.BatchScheduler, error) {
-	// TODO(kevin85421): We should not initialize the informer cache here. We should reuse
-	// the reconciler's cache instead.
-	scheme := runtime.NewScheme()
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
-	ccache, err := cache.New(c, cache.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		if err := ccache.Start(ctx); err != nil {
-			panic(err)
-		}
-	}()
-	if synced := ccache.WaitForCacheSync(ctx); !synced {
-		return nil, fmt.Errorf("failed to sync cache")
-	}
-	cli, err := client.New(c, client.Options{
-		Scheme: scheme,
-		Cache: &client.CacheOptions{
-			Reader: ccache,
-		},
-	})
-	if err != nil {
+func (kf *KubeSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
+	if err := v1alpha1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, err
 	}
 	return &KubeScheduler{

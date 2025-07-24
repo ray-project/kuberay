@@ -24,9 +24,9 @@ For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to c
 Currently, KubeRay uses go v1.24 for development.
 
 ```bash
-go install golang.org/dl/go1.24.2@latest
-go1.24.2 download
-export GOROOT=$(go1.24.2 env GOROOT)
+go install golang.org/dl/go1.24.0@latest
+go1.24.0 download
+export GOROOT=$(go1.24.0 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -96,6 +96,20 @@ kubectl logs deployments/kuberay-operator
 * Replace `{IMG_REPO}` and `{IMG_TAG}` with your own repository and tag.
 * The command `make docker-build` (Step 3) will also run `make build` (Go project compilation).
 * Step 6 also installs the custom resource definitions (CRDs) used by the KubeRay operator.
+
+#### Using Local Deployment Script
+
+You can also run the `local_deploy.sh` bash script (located in `ray-operator/hack`) which runs the steps shown above, but deletes and recreates the kind cluster each run for consistency during repeated development.
+
+There are configuable variables in the script, the defaults are shown below:
+
+```bash
+IMAGE_TAG="kuberay-dev"
+KIND_CLUSTER_NAME="kuberay-dev"
+KIND_NODE_IMAGE="kindest/node:v1.24.0"
+```
+
+Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation.
 
 ### Run the operator outside the cluster
 

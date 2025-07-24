@@ -132,7 +132,56 @@ var _ = Describe("RayCluster", Ordered, func() {
 	})
 })
 
-// TODO: add tests for RayJobs
+var _ = Describe("RayJob", Ordered, func() {
+	It("Create RayJob", func() {
+		_, err := rayClient.RayJobs("default").Create(context.Background(), &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{Name: "proxy-test-job"},
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "echo hello",
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: make(map[string]string),
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodPost))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayjobs"))
+	})
+	It("Get RayJob", func() {
+		job, err := rayClient.RayJobs("default").Get(context.Background(), "proxy-test-job", metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(job.Name).To(Equal("proxy-test-job"))
+		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayjobs/proxy-test-job"))
+	})
+	It("List RayJob", func() {
+		jobs, err := rayClient.RayJobs("default").List(context.Background(), metav1.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(jobs.Items).To(HaveLen(1))
+		Expect(jobs.Items[0].Name).To(Equal("proxy-test-job"))
+		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayjobs"))
+	})
+	It("Delete RayJob", func() {
+		err := rayClient.RayJobs("default").Delete(context.Background(), "proxy-test-job", metav1.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodDelete))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayjobs/proxy-test-job"))
+	})
+})
+
 // TODO: add tests for RayServices
 
 var _ = Describe("events", Ordered, func() {

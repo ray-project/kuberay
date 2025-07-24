@@ -6,19 +6,52 @@
 # in this Helm chart.
 
 image:
+  # -- Image repository.
   repository: rayproject/ray
+  # -- Image tag.
   tag: 2.46.0
+  # -- Image pull policy.
   pullPolicy: IfNotPresent
 
+# -- String to partially override release name.
 nameOverride: "kuberay"
+
+# -- String to fully override release name.
 fullnameOverride: ""
 
+# -- Secrets with credentials to pull images from a private registry
 imagePullSecrets: []
   # - name: an-existing-secret
 
+# gcsFaultTolerance specifies configuration for GCS fault tolerance.
+# See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-gcs-ft.html#kuberay-gcs-ft
+# for more details.
+gcsFaultTolerance:
+  enabled: false
+  # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
+  # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
+  # the behaviors of the Ray GCS FT and RayService to avoid misconfiguration.
+  # externalStorageNamespace: "my-raycluster-storage"
+  # redisAddress: "redis:6379"
+  # redisPassword:
+    # Reference to a secret key containing the Redis password
+    # Secret must be manually created in the namespace
+    # valueFrom:
+    #   secretKeyRef:
+    #       name: redis-password-secret
+    #       key: password
+  # redisUsername:
+    # Reference to a secret key containing the Redis username
+    # Secret must be manually created in the namespace
+    # valueFrom:
+    #   secretKeyRef:
+    #     name: redis-username-secret
+    #     key: username
+
+
 # common defined values shared between the head and worker
 common:
-  # containerEnv specifies environment variables for the Ray head and worker containers.
+  # -- containerEnv specifies environment variables for the Ray head and worker containers.
   # Follows standard K8s container env schema.
   containerEnv: []
   #  - name: BLAH
@@ -27,10 +60,12 @@ head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
   # rayVersion: 2.46.0
+
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
   # Ray autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   # enableInTreeAutoscaling: true
+
   # autoscalerOptions is an OPTIONAL field specifying configuration overrides for the Ray autoscaler.
   # The example configuration shown below represents the DEFAULT values.
   # autoscalerOptions:
@@ -52,22 +87,31 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
+
+  # -- Init containers to add to the head pod
   initContainers: []
+  # -- Labels for the head pod
   labels: {}
+
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
   restartPolicy: ""
+
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
   # - name: EXAMPLE_ENV
   #   value: "1"
+
+  # -- envFrom to pass to head pod
   envFrom: []
     # - secretRef:
     #     name: my-env-secret
+
   # ports optionally allows specifying ports for the Ray container.
   # ports: []
+
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production;
@@ -85,14 +129,25 @@ head:
     requests:
       cpu: "1"
       memory: "2G"
+
+  # -- Extra annotations for head pod
   annotations: {}
+
+  # -- Node labels for head pod assignment
   nodeSelector: {}
+
+  # -- Node tolerations for head pod scheduling to nodes with taints
   tolerations: []
+
+  # -- Head pod affinity
   affinity: {}
-  # Pod security context.
+
+  # -- Head pod security context.
   podSecurityContext: {}
-  # Ray container security context.
+
+  # -- Ray container security context.
   securityContext: {}
+
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
   # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
   volumes:
@@ -101,13 +156,16 @@ head:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+
   # See docs/guidance/pod-command.md for more details about how to specify
   # container command for head Pod.
   command: []
   args: []
+
   # Optional, for the user to provide any additional fields to the service.
   # See https://pkg.go.dev/k8s.io/Kubernetes/pkg/api/v1#Service
   headService: {}
@@ -133,24 +191,41 @@ worker:
   # If you want to disable the default workergroup
   # uncomment the line below
   # disabled: true
+
+  # -- The name of the workergroup
   groupName: workergroup
+
+  # -- The number of replicas for the worker pod
   replicas: 1
+
+  # -- The minimum number of replicas for the worker pod
   minReplicas: 1
+
+  # -- The maximum number of replicas for the worker pod
   maxReplicas: 3
+
+  # -- Labels for the worker pod
   labels: {}
   serviceAccountName: ""
   restartPolicy: ""
+
+  # -- Init containers to add to the worker pod
   initContainers: []
+
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
   # - name: EXAMPLE_ENV
   #   value: "1"
+
+  # -- envFrom to pass to worker pod
   envFrom: []
     # - secretRef:
     #     name: my-env-secret
+
   # ports optionally allows specifying ports for the Ray container.
   # ports: []
+
   # resource requests and limits for the Ray head container.
   # Modify as needed for your application.
   # Note that the resources in this example are much too small for production;
@@ -167,14 +242,25 @@ worker:
     requests:
       cpu: "1"
       memory: "1G"
+
+  # -- Extra annotations for worker pod
   annotations: {}
+
+  # -- Node labels for worker pod assignment
   nodeSelector: {}
+
+  # -- Node tolerations for worker pod scheduling to nodes with taints
   tolerations: []
+
+  # -- Worker pod affinity
   affinity: {}
-  # Pod security context.
+
+  # -- Worker pod security context.
   podSecurityContext: {}
-  # Ray container security context.
+
+  # -- Ray container security context.
   securityContext: {}
+
   # Optional: The following volumes/volumeMounts configurations are optional but recommended because
   # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
   volumes:
@@ -183,9 +269,11 @@ worker:
   volumeMounts:
     - mountPath: /tmp/ray
       name: log-volume
+
   # sidecarContainers specifies additional containers to attach to the Ray pod.
   # Follows standard K8s container spec.
   sidecarContainers: []
+
   # See docs/guidance/pod-command.md for more details about how to specify
   # container command for worker Pod.
   command: []
@@ -212,22 +300,35 @@ additionalWorkerGroups:
   smallGroup:
     # Disabled by default
     disabled: true
+
+    # -- The number of replicas for the additional worker pod
     replicas: 0
+
+    # -- The minimum number of replicas for the additional worker pod
     minReplicas: 0
+
+    # -- The maximum number of replicas for the additional worker pod
     maxReplicas: 3
+
+    # -- Labels for the additional worker pod
     labels: {}
     serviceAccountName: ""
     restartPolicy: ""
+
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.
     containerEnv: []
       # - name: EXAMPLE_ENV
       #   value: "1"
+
+    # -- envFrom to pass to additional worker pod
     envFrom: []
         # - secretRef:
         #     name: my-env-secret
+
     # ports optionally allows specifying ports for the Ray container.
     # ports: []
+
     # resource requests and limits for the Ray head container.
     # Modify as needed for your application.
     # Note that the resources in this example are much too small for production;
@@ -244,14 +345,25 @@ additionalWorkerGroups:
       requests:
         cpu: 1
         memory: "1G"
+
+    # -- Extra annotations for additional worker pod
     annotations: {}
+
+    # -- Node labels for additional worker pod assignment
     nodeSelector: {}
+
+    # -- Node tolerations for additional worker pod scheduling to nodes with taints
     tolerations: []
+
+    # -- Additional worker pod affinity
     affinity: {}
-    # Pod security context.
+
+    # -- Additional worker pod security context.
     podSecurityContext: {}
-    # Ray container security context.
+
+    # -- Ray container security context.
     securityContext: {}
+
     # Optional: The following volumes/volumeMounts configurations are optional but recommended because
     # Ray writes logs to /tmp/ray/session_latests/logs instead of stdout/stderr.
     volumes:
@@ -260,7 +372,9 @@ additionalWorkerGroups:
     volumeMounts:
       - mountPath: /tmp/ray
         name: log-volume
+
     sidecarContainers: []
+
     # See docs/guidance/pod-command.md for more details about how to specify
     # container command for worker Pod.
     command: []

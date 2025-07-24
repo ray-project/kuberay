@@ -164,7 +164,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
-	podTemplate.Name = podName
+	if utils.IsDeterministicHeadPodNameEnabled() {
+		podTemplate.Name = podName
+	} else {
+		podTemplate.GenerateName = podName
+	}
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace

@@ -17,6 +17,7 @@ const (
 	RayClusterEnvironmentLabelKey     = "ray.io/environment"
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesManagedByLabelKey       = "app.kubernetes.io/managed-by"
+	KubernetesComponentLabelKey       = "app.kubernetes.io/component"
 
 	// Annotation keys
 	// Role level
@@ -24,6 +25,17 @@ const (
 	RayClusterImageAnnotationKey           = "ray.io/compute-image"
 
 	RayClusterDefaultImageRepository = "rayproject/ray"
+
+	// Max retry times for HTTP Client
+	HTTPClientDefaultMaxRetry = 3
+
+	// Retry backoff settings
+	HTTPClientDefaultBackoffBase = float64(2)
+	HTTPClientDefaultInitBackoff = 500 * time.Millisecond
+	HTTPClientDefaultMaxBackoff  = 10 * time.Second
+
+	// Overall timeout for retries
+	HTTPClientDefaultOverallTimeout = 30 * time.Second
 )
 
 const (
@@ -32,6 +44,9 @@ const (
 
 	// The component name for apiserver
 	ComponentName = "kuberay-apiserver"
+
+	// The curl container name for apiserver
+	CurlContainerName = "apiserver-curl"
 
 	// Timeout for apiserver gRPC server
 	GRPCServerDefaultTimeout = 60 * time.Second

@@ -1,5 +1,5 @@
 # Generate client code (go & json) from API protocol buffers
-FROM golang:1.24.2-bullseye AS generator
+FROM golang:1.24.0-bullseye AS generator
 
 ENV PROTOC_VERSION 3.17.3
 ENV GOLANG_PROTOBUF_VERSION v1.5.2
