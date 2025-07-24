@@ -16,9 +16,7 @@ export default async function fetcher(
   endpoint: string,
   ...args: RequestInit[]
 ) {
-  const baseUrl = config.url;
-  console.log(`${baseUrl}${endpoint}`);
-  // await new Promise((resolve) => setTimeout(resolve, 10000));
+  const baseUrl = await config.getUrl();
   const res = await fetch(`${baseUrl}${endpoint}`, ...args);
   if (!res.ok) {
     const error = new FetchError("An error occurred while fetching the data");
