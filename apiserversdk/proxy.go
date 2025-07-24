@@ -27,7 +27,7 @@ type MuxConfig struct {
 func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse url from config: %w", err)
+		return nil, fmt.Errorf("failed to parse url %s from config: %w", config.KubernetesConfig.Host, err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	baseTransport, err := rest.TransportFor(config.KubernetesConfig) // rest.TransportFor provides the auth to the K8s API server.
