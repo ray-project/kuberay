@@ -346,7 +346,7 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, 5)
+		retrier := newRetryRoundTripper(mock, 5 /*retries*/)
 		req, _ := http.NewRequest(http.MethodGet, "http://test", nil)
 		resp, err := retrier.RoundTrip(req)
 		Expect(err).ToNot(HaveOccurred())
