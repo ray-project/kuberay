@@ -135,7 +135,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 		resp, err = rrt.base.RoundTrip(req)
 		if err != nil {
-			return resp, fmt.Errorf("failed with error: %w", err)
+			return resp, fmt.Errorf("request to %s %s failed with error: %w", req.Method, req.URL.String(), err)
 		}
 
 		if isSuccessfulStatusCode(resp.StatusCode) {
@@ -147,8 +147,12 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 
 		if attempt < rrt.retries-1 && resp.Body != nil {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			if _, err = io.Copy(io.Discard, resp.Body); err != nil {
+				return nil, fmt.Errorf("retryRoundTripper internal failure to drain response body: %w", err)
+			}
+			if err = resp.Body.Close(); err != nil {
+				return nil, fmt.Errorf("retryRoundTripper internal failure to close response body: %w", err)
+			}
 		}
 
 		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
