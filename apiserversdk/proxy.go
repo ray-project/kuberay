@@ -142,7 +142,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, nil
 		}
 
-		if !retryableHTTPStatusCodes(resp.StatusCode) {
+		if !isRetryableHTTPStatusCodes(resp.StatusCode) {
 			return resp, nil
 		}
 
@@ -181,7 +181,7 @@ func isSuccessfulStatusCode(statusCode int) bool {
 }
 
 // TODO: merge common utils for apiserver v1 and v2
-func retryableHTTPStatusCodes(statusCode int) bool {
+func isRetryableHTTPStatusCodes(statusCode int) bool {
 	switch statusCode {
 	case http.StatusRequestTimeout, // 408
 		http.StatusTooManyRequests,     // 429
