@@ -329,8 +329,9 @@ var _ = Describe("kuberay service", Ordered, func() {
 })
 
 var _ = Describe("retryRoundTripper", func() {
+	const maxAttemps = 5
+
 	It("should not retry on successful status OK", func() {
-		const MaxAttemps = 3
 		var attempts int32
 		mock := &mockRoundTripper{
 			fn: func(_ *http.Request) (*http.Response, error) {
@@ -341,7 +342,7 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, MaxAttemps /*retries*/)
+		retrier := newRetryRoundTripper(mock, maxAttemps /*retries*/)
 		req, err := http.NewRequest(http.MethodGet, "http://test", nil)
 		Expect(err).ToNot(HaveOccurred())
 		resp, err := retrier.RoundTrip(req)
@@ -351,12 +352,12 @@ var _ = Describe("retryRoundTripper", func() {
 	})
 
 	It("should retry failed requests and eventually succeed", func() {
-		const MaxFailure = 3
+		const maxFailure = 3
 		var attempts int32
 		mock := &mockRoundTripper{
 			fn: func(_ *http.Request) (*http.Response, error) {
 				count := atomic.AddInt32(&attempts, 1)
-				if count < MaxFailure {
+				if count < maxFailure {
 					return &http.Response{
 						StatusCode: http.StatusInternalServerError,
 						Body:       io.NopCloser(strings.NewReader("internal error")),
@@ -368,17 +369,16 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, 5 /*retries*/)
+		retrier := newRetryRoundTripper(mock, maxAttemps /*retries*/)
 		req, err := http.NewRequest(http.MethodGet, "http://test", nil)
 		Expect(err).ToNot(HaveOccurred())
 		resp, err := retrier.RoundTrip(req)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.StatusCode).To(Equal(http.StatusOK))
-		Expect(attempts).To(Equal(int32(MaxFailure)))
+		Expect(attempts).To(Equal(int32(maxFailure)))
 	})
 
 	It("Retries exceed maximum retry counts", func() {
-		const MaxAttemps = 3
 		var attempts int32
 		mock := &mockRoundTripper{
 			fn: func(_ *http.Request) (*http.Response, error) {
@@ -389,17 +389,16 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, MaxAttemps /*retries*/)
+		retrier := newRetryRoundTripper(mock, maxAttemps /*retries*/)
 		req, err := http.NewRequest(http.MethodGet, "http://test", nil)
 		Expect(err).ToNot(HaveOccurred())
 		resp, err := retrier.RoundTrip(req)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
-		Expect(attempts).To(Equal(int32(MaxAttemps)))
+		Expect(attempts).To(Equal(int32(maxAttemps)))
 	})
 
 	It("should not retry on non-retriable status", func() {
-		const MaxAttemps = 3
 		var attempts int32
 		mock := &mockRoundTripper{
 			fn: func(_ *http.Request) (*http.Response, error) {
@@ -410,7 +409,7 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, MaxAttemps /*retries*/)
+		retrier := newRetryRoundTripper(mock, maxAttemps /*retries*/)
 		req, err := http.NewRequest(http.MethodGet, "http://test", nil)
 		Expect(err).ToNot(HaveOccurred())
 		resp, err := retrier.RoundTrip(req)
@@ -429,7 +428,7 @@ var _ = Describe("retryRoundTripper", func() {
 				}, nil
 			},
 		}
-		retrier := newRetryRoundTripper(mock, 5 /*retries*/)
+		retrier := newRetryRoundTripper(mock, maxAttemps /*retries*/)
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://test", nil)
