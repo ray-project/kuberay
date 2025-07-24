@@ -199,5 +199,24 @@ var _ = Context("RayJob with schedule operation", func() {
 				},
 				time.Second*15, time.Millisecond*500).Should(BeTrue(), "Expected RayCluster to still exist")
 		})
+
+		It("should have a JobDeploymentStatus reflecting its scheduled, new, or initializing state", func() {
+			getStatusFunc := getRayJobDeploymentStatus(ctx, rayJob)
+
+			currentStatus, err := getStatusFunc()
+			Expect(err).NotTo(HaveOccurred(), "Failed to get RayJob status initially")
+
+			if currentStatus == rayv1.JobDeploymentStatusInitializing || currentStatus == rayv1.JobDeploymentStatusNew {
+				Expect(currentStatus).To(Or(Equal(rayv1.JobDeploymentStatusInitializing), Equal(rayv1.JobDeploymentStatusNew)), "RayJob was already Initializing or New")
+				return
+			}
+			// If it's not Initializing, then it should be sheduled
+			Eventually(getStatusFunc, time.Second*5, time.Millisecond*500).Should(
+				Or(
+					Equal(rayv1.JobDeploymentStatusScheduled),
+				),
+				"JobDeploymentStatus should be Scheduled, New or Initializing within 5 seconds",
+			)
+		})
 	})
 })
