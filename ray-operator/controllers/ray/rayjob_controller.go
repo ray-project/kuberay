@@ -461,8 +461,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If the RayJob is completed, we should not requeue it.
 		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusScheduling:
-		deleteCluster := rayJobInstance.Spec.ShutdownAfterJobFinishes
-
 		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -474,7 +472,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		if deleteCluster {
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes {
 			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
 			rayJobInstance.Status.RayClusterName = ""
 
