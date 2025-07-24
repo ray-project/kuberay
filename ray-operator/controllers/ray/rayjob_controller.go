@@ -497,7 +497,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		// Checking if we are currently within a buffer to the previous cron schedule time
 		if t2 <= ScheduleBuffer {
-			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2)
+			logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "LastScheduleTimeDuration", t2, "Previous LastScheduleTime", rayJobInstance.Status.LastScheduleTime)
+			rayJobInstance.Status.LastScheduleTime = &metav1.Time{Time: time.Now()}
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 		} else {
