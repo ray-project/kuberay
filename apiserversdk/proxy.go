@@ -155,6 +155,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			}
 		}
 
+		// TODO: move to HTTP util function in independent util file
 		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
 		if sleepDuration > HTTPClientDefaultMaxBackoff {
 			sleepDuration = HTTPClientDefaultMaxBackoff
@@ -176,6 +177,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	return resp, err
 }
 
+// TODO: move HTTP util function into independent util file / folder
 func isSuccessfulStatusCode(statusCode int) bool {
 	return 200 <= statusCode && statusCode < 300
 }
