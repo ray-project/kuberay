@@ -89,5 +89,6 @@ repos:
           # Make the tool search for charts only under the `helm-chart` directory
           - --chart-search-root=helm-chart
           - --chart-to-generate=helm-chart/kuberay-operator
+          - --chart-to-generate=helm-chart/ray-cluster
           - --template-files=README.md.gotmpl
           - --sort-values-order=file
