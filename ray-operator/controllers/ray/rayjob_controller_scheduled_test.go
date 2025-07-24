@@ -95,6 +95,33 @@ var _ = Context("RayJob with schedule operation", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
+		// We are checking if the LastScheduleTime is correctly set
+		It("should have LastScheduleTime updated in its status", func() {
+			rayJobLookupKey := types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}
+			fetchedRayJob := &rayv1.RayJob{}
+
+			var lastScheduleTime *time.Time
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, rayJobLookupKey, fetchedRayJob)
+				if err != nil {
+					return false
+				}
+				if fetchedRayJob.Status.LastScheduleTime != nil {
+					lastScheduleTime = &fetchedRayJob.Status.LastScheduleTime.Time
+					return true
+				}
+				return false
+			}, time.Second*10, time.Millisecond*500).Should(BeTrue(), "expected LastScheduleTime to be set")
+
+			Expect(lastScheduleTime).ToNot(BeNil(), "LastScheduleTime should not be nil")
+			Expect(*lastScheduleTime).ToNot(BeZero(), "LastScheduleTime should not be a zero time")
+
+			Expect(lastScheduleTime.After(time.Now().Add(-15*time.Second))).To(BeTrue(), "LastScheduleTime should be within the last 15 seconds")
+			Expect(lastScheduleTime.Before(time.Now().Add(5*time.Second))).To(BeTrue(), "LastScheduleTime should not be in the future")
+
+			GinkgoWriter.Printf("Validated LastScheduleTime: %s\n", lastScheduleTime.String())
+		})
+
 		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
 			underlyingK8sJob := &batchv1.Job{}
 			Consistently(
@@ -194,33 +221,6 @@ var _ = Context("RayJob with schedule operation", func() {
 				),
 				"JobDeploymentStatus should be Scheduled, New or Initializing within 5 seconds",
 			)
-		})
-
-		// We are checking if the LastScheduleTime is correctly set
-		It("should have LastScheduleTime updated in its status", func() {
-			rayJobLookupKey := types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}
-			fetchedRayJob := &rayv1.RayJob{}
-
-			var lastScheduleTime *time.Time
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, rayJobLookupKey, fetchedRayJob)
-				if err != nil {
-					return false
-				}
-				if fetchedRayJob.Status.LastScheduleTime != nil {
-					lastScheduleTime = &fetchedRayJob.Status.LastScheduleTime.Time
-					return true
-				}
-				return false
-			}, time.Second*10, time.Millisecond*500).Should(BeTrue(), "expected LastScheduleTime to be set")
-
-			Expect(lastScheduleTime).ToNot(BeNil(), "LastScheduleTime should not be nil")
-			Expect(*lastScheduleTime).ToNot(BeZero(), "LastScheduleTime should not be a zero time")
-
-			Expect(lastScheduleTime.After(time.Now().Add(-15*time.Second))).To(BeTrue(), "LastScheduleTime should be within the last 15 seconds")
-			Expect(lastScheduleTime.Before(time.Now().Add(5*time.Second))).To(BeTrue(), "LastScheduleTime should not be in the future")
-
-			GinkgoWriter.Printf("Validated LastScheduleTime: %s\n", lastScheduleTime.String())
 		})
 
 		// The cron job runs every minute so it will take at most 1 minute to run
