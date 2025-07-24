@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -518,7 +517,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 			checkRedisDBSize := DeployRedis(test, namespace.Name, RedisPassword)
-			defer g.Eventually(checkRedisDBSize, time.Second*60, time.Second).Should(BeEquivalentTo("0"))
+			defer g.Eventually(checkRedisDBSize, time.Second*60, time.Second).Should(gomega.BeEquivalentTo("0"))
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -586,7 +585,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
 			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	}
 }
