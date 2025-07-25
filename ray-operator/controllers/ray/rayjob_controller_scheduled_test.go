@@ -53,6 +53,7 @@ var _ = Context("RayJob with schedule operation", func() {
 			err := k8sClient.Create(ctx, rayJob)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test scheduled RayJob resource")
 		})
+
 		// The cron job runs every minute so it will take at most 1 minute to run
 		It("should transition to the Initializing", func() {
 			Eventually(
