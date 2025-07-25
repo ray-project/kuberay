@@ -34,7 +34,7 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transport for config: %w", err)
 	}
-	proxy.Transport = newRetryRoundTripper(baseTransport, HTTPClientDefaultMaxRetry)
+	proxy.Transport = newRetryRoundTripper(baseTransport)
 	var handler http.Handler = proxy
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
@@ -95,12 +95,14 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 // retryRoundTripper is a custom implementation of http.RoundTripper that retries HTTP requests.
 // It verifies retryable HTTP status codes and retries using exponential backoff.
 type retryRoundTripper struct {
-	base    http.RoundTripper
-	retries int
+	base http.RoundTripper
+
+	// Num of retries after the initial attempt
+	maxRetries int
 }
 
-func newRetryRoundTripper(base http.RoundTripper, retries int) http.RoundTripper {
-	return &retryRoundTripper{base: base, retries: retries}
+func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
+	return &retryRoundTripper{base: base, maxRetries: HTTPClientDefaultMaxRetry}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -108,8 +110,11 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	var resp *http.Response
 	var err error
-	for attempt := 0; attempt < rrt.retries; attempt++ {
+	for attempt := 0; attempt <= rrt.maxRetries; attempt++ {
+		/* Try up to (rrt.maxRetries + 1) times: initial attempt + retries */
+
 		if attempt == 0 && req.Body != nil && req.GetBody == nil {
+			/* Reuse request body in each attempt */
 			bodyBytes, err := io.ReadAll(req.Body)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
@@ -146,7 +151,8 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, nil
 		}
 
-		if attempt < rrt.retries-1 && resp.Body != nil {
+		if attempt < rrt.maxRetries && resp.Body != nil {
+			/* If not last attempt, drain response body */
 			if _, err = io.Copy(io.Discard, resp.Body); err != nil {
 				return nil, fmt.Errorf("retryRoundTripper internal failure to drain response body: %w", err)
 			}
