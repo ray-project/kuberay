@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -518,7 +517,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 			checkRedisDBSize := DeployRedis(test, namespace.Name, RedisPassword)
-			defer g.Eventually(checkRedisDBSize, time.Second*60, time.Second).Should(BeEquivalentTo("0"))
+			defer g.Eventually(checkRedisDBSize, time.Second*60, time.Second).Should(gomega.BeEquivalentTo("0"))
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
@@ -570,19 +569,10 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
-			// Delete the head Pod
-			err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-
-			PodUID := func(p *corev1.Pod) string { return string(p.UID) }
-			g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-				ShouldNot(WithTransform(PodUID, Equal(string(headPod.UID)))) // Use UID to check if the new head pod is created.
-
-			g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-				Should(WithTransform(func(p *corev1.Pod) string { return string(p.Status.Phase) }, Equal("Running")))
-
-			headPod, err = GetHeadPod(test, rayCluster) // Replace the old head pod
-			g.Expect(err).NotTo(HaveOccurred())
+			// Delete the head Pod and wait for the new head pod to be ready.
+			newHeadPod, err := DeletePodAndWait(test, rayCluster, namespace, headPod)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			headPod = newHeadPod
 
 			// Create a detached actor, and a worker should be created after the new head pod is ready.
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "actor1"})
@@ -595,7 +585,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
 			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	}
 }
