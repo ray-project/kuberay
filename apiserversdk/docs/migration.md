@@ -7,7 +7,7 @@
 
 ## Overview
 
-KubeRay API Server v2 introduces a more maintainable, Kubernetes-native, and flexible interface for managing Ray clusters.
+KubeRay APIServer v2 introduces a more maintainable, Kubernetes-native, and flexible interface for managing Ray clusters.
 
 In v1, exposing new fields required modifying protobuf definitions, regenerating HTTP/gRPC clients, and updating
 tests — a time-consuming and error-prone process that often delayed support for new features. This manual
