@@ -3,7 +3,7 @@
 ## Target Customers
 
 - Advanced and early adopters who currently use the APIServer v1 in production
-- Infrastructure and platform engineers who have customized or extended the KubeRay API Server for internal tooling or environments
+- Infrastructure and platform engineers who have customized or extended the KubeRay APIServer for internal tooling or environments
 
 ## Overview
 
