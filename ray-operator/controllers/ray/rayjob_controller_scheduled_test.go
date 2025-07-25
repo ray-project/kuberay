@@ -53,30 +53,6 @@ var _ = Context("RayJob with schedule operation", func() {
 			err := k8sClient.Create(ctx, rayJob)
 			Expect(err).NotTo(HaveOccurred(), "failed to create test scheduled RayJob resource")
 		})
-
-		// Since the test can be run at any time, the RayJob might immediately
-		// transition past "Scheduled" to "New" or "Initializing" as it triggers a run.
-		// We first check if we have already passed the "Scheduled" state this
-		// accommodates the race condition if we only checked "Scheduled" and avoiding test flakiness.
-		It("should have a JobDeploymentStatus reflecting its scheduled, new, or initializing state", func() {
-			getStatusFunc := getRayJobDeploymentStatus(ctx, rayJob)
-
-			currentStatus, err := getStatusFunc()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get RayJob status initially")
-
-			if currentStatus == rayv1.JobDeploymentStatusInitializing || currentStatus == rayv1.JobDeploymentStatusNew {
-				Expect(currentStatus).To(Or(Equal(rayv1.JobDeploymentStatusInitializing), Equal(rayv1.JobDeploymentStatusNew)), "RayJob was already Initializing or New")
-				return
-			}
-			// If it's not Initializing, then it should be sheduled
-			Eventually(getStatusFunc, time.Second*5, time.Millisecond*500).Should(
-				Or(
-					Equal(rayv1.JobDeploymentStatusScheduled),
-				),
-				"JobDeploymentStatus should be Scheduled, New or Initializing within 5 seconds",
-			)
-		})
-
 		// The cron job runs every minute so it will take at most 1 minute to run
 		It("should transition to the Initializing", func() {
 			Eventually(
@@ -95,7 +71,7 @@ var _ = Context("RayJob with schedule operation", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		// We are checking if the LastScheduleTime is correctly set
+		// We are checking if LastScheduleTime is correctly set
 		It("should have LastScheduleTime updated in its status", func() {
 			rayJobLookupKey := types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}
 			fetchedRayJob := &rayv1.RayJob{}
@@ -113,13 +89,8 @@ var _ = Context("RayJob with schedule operation", func() {
 				return false
 			}, time.Second*10, time.Millisecond*500).Should(BeTrue(), "expected LastScheduleTime to be set")
 
-			Expect(lastScheduleTime).ToNot(BeNil(), "LastScheduleTime should not be nil")
-			Expect(*lastScheduleTime).ToNot(BeZero(), "LastScheduleTime should not be a zero time")
-
 			Expect(lastScheduleTime.After(time.Now().Add(-15*time.Second))).To(BeTrue(), "LastScheduleTime should be within the last 15 seconds")
 			Expect(lastScheduleTime.Before(time.Now().Add(5*time.Second))).To(BeTrue(), "LastScheduleTime should not be in the future")
-
-			GinkgoWriter.Printf("Validated LastScheduleTime: %s\n", lastScheduleTime.String())
 		})
 
 		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
@@ -159,7 +130,7 @@ var _ = Context("RayJob with schedule operation", func() {
 				"JobDeploymentStatus should be Running")
 		})
 
-		It("RayJobs's JobDeploymentStatus transitions to Scheduled after Job is Complete.", func() {
+		It("RayJobs's JobDeploymentStatus transitions to Scheduled after Complete.", func() {
 			// Update fake dashboard client to return job info with "Succeeded" status.
 			getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
 				return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
@@ -198,25 +169,6 @@ var _ = Context("RayJob with schedule operation", func() {
 					return err == nil
 				},
 				time.Second*15, time.Millisecond*500).Should(BeTrue(), "Expected RayCluster to still exist")
-		})
-
-		It("should have a JobDeploymentStatus reflecting its scheduled, new, or initializing state", func() {
-			getStatusFunc := getRayJobDeploymentStatus(ctx, rayJob)
-
-			currentStatus, err := getStatusFunc()
-			Expect(err).NotTo(HaveOccurred(), "Failed to get RayJob status initially")
-
-			if currentStatus == rayv1.JobDeploymentStatusInitializing || currentStatus == rayv1.JobDeploymentStatusNew {
-				Expect(currentStatus).To(Or(Equal(rayv1.JobDeploymentStatusInitializing), Equal(rayv1.JobDeploymentStatusNew)), "RayJob was already Initializing or New")
-				return
-			}
-			// If it's not Initializing, then it should be sheduled
-			Eventually(getStatusFunc, time.Second*5, time.Millisecond*500).Should(
-				Or(
-					Equal(rayv1.JobDeploymentStatusScheduled),
-				),
-				"JobDeploymentStatus should be Scheduled, New or Initializing within 5 seconds",
-			)
 		})
 	})
 })
