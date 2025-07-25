@@ -15,7 +15,7 @@ synchronization between CRDs and protobuf definitions added significant maintena
 developer velocity.
 
 With v2, we eliminate these bottlenecks by directly reusing the OpenAPI schema defined in the Kubernetes CRDs.
-Instead of manually defining fields or generating new clients, v2 acts as a transparent HTTP proxy to the
+Instead of manually defining fields or generating new clients, APIServer v2 acts as a transparent HTTP proxy to the
 Kubernetes API server. All CRD fields are exposed by default, and advanced behaviors such as compute template
 injection, default values, and mutations can be implemented using user-defined middleware functions (UDFs).
 
