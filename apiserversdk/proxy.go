@@ -170,11 +170,8 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {
 			remaining := time.Until(deadline)
-			if remaining <= 0 {
+			if remaining <= 0 || sleepDuration > remaining {
 				return resp, fmt.Errorf("retry timeout exceeded context deadline")
-			}
-			if sleepDuration > remaining {
-				sleepDuration = remaining
 			}
 		}
 
