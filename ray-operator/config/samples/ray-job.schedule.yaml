@@ -1,0 +1,121 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-schedule
+spec:
+  # schedule specifires a cron scheduling string telling the rayjob when to start schedule and run new jobs
+  # Here it runs at every 5 minutes of every hour of every day of every week of every year
+  schedule: "*/5 * * * *"
+
+  entrypoint: python /home/ray/samples/sample_code.py
+
+  # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
+  # NOTE that the expected behavior with schedule is that the cluster will be deleted and recreated at each schedule if set to true, and it will keep using the same cluster otherwise
+  shutdownAfterJobFinishes: true
+
+  runtimeEnvYAML: |
+    pip:
+      - requests==2.26.0
+      - pendulum==2.1.2
+    env_vars:
+      counter_name: "test_counter"
+
+
+  rayClusterSpec:
+    rayVersion: '2.46.0'
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                cpu: "1"
+              requests:
+                cpu: "200m"
+            volumeMounts:
+            - mountPath: /home/ray/samples
+              name: code-sample
+          volumes:
+          - name: code-sample
+            configMap:
+              name: ray-job-code-sample
+              items:
+              - key: sample_code.py
+                path: sample_code.py
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 5
+      groupName: small-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: "1"
+              requests:
+                cpu: "200m"
+                # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
+                # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
+                # submitterPodTemplate:
+                #   spec:
+                #     restartPolicy: Never
+                #     containers:
+                #       - name: my-custom-rayjob-submitter-pod
+                #         image: rayproject/ray:2.46.0
+                #         # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
+                #         # Specifying Command is not recommended.
+                #         # command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
+
+
+######################Ray code sample#################################
+# this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
+# it is mounted into the container and executed to show the Ray job at work
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-job-code-sample
+data:
+  sample_code.py: |
+    import ray
+    import os
+    import requests
+
+    ray.init()
+
+    @ray.remote
+    class Counter:
+        def __init__(self):
+            # Used to verify runtimeEnv
+            self.name = os.getenv("counter_name")
+            assert self.name == "test_counter"
+            self.counter = 0
+
+        def inc(self):
+            self.counter += 1
+
+        def get_counter(self):
+            return "{} got {}".format(self.name, self.counter)
+
+    counter = Counter.remote()
+
+    for _ in range(5):
+        ray.get(counter.inc.remote())
+        print(ray.get(counter.get_counter.remote()))
+
+    # Verify that the correct runtime env was used for the job.
+    assert requests.__version__ == "2.26.0"

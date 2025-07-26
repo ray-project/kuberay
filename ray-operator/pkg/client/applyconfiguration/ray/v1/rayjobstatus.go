@@ -20,6 +20,7 @@ type RayJobStatusApplyConfiguration struct {
 	Message             *string                             `json:"message,omitempty"`
 	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
 	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
+	LastScheduleTime    *metav1.Time                        `json:"lastScheduleTime,omitempty"`
 	Succeeded           *int32                              `json:"succeeded,omitempty"`
 	Failed              *int32                              `json:"failed,omitempty"`
 	RayClusterStatus    *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
@@ -109,6 +110,14 @@ func (b *RayJobStatusApplyConfiguration) WithStartTime(value metav1.Time) *RayJo
 // If called multiple times, the EndTime field is set to the value of the last call.
 func (b *RayJobStatusApplyConfiguration) WithEndTime(value metav1.Time) *RayJobStatusApplyConfiguration {
 	b.EndTime = &value
+	return b
+}
+
+// WithLastScheduleTime sets the LastScheduleTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LastScheduleTime field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithLastScheduleTime(value metav1.Time) *RayJobStatusApplyConfiguration {
+	b.LastScheduleTime = &value
 	return b
 }
 

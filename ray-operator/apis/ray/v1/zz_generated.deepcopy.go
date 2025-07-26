@@ -507,6 +507,10 @@ func (in *RayJobStatus) DeepCopyInto(out *RayJobStatus) {
 		in, out := &in.EndTime, &out.EndTime
 		*out = (*in).DeepCopy()
 	}
+	if in.LastScheduleTime != nil {
+		in, out := &in.LastScheduleTime, &out.LastScheduleTime
+		*out = (*in).DeepCopy()
+	}
 	if in.Succeeded != nil {
 		in, out := &in.Succeeded, &out.Succeeded
 		*out = new(int32)
