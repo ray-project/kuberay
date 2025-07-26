@@ -101,18 +101,8 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 		expectedOutput := "3"
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "samples/test_detached_actor_2.py", rayNamespace, expectedOutput})
 
-		// Test 2: Delete the head Pod
-		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-
-		PodUID := func(p *corev1.Pod) string { return string(p.UID) }
-		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-			ShouldNot(WithTransform(PodUID, Equal(string(headPod.UID)))) // Use UID to check if the new head pod is created.
-
-		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-			Should(WithTransform(PodState, Equal("Running")))
-
-		headPod, err = GetHeadPod(test, rayCluster) // Replace the old head pod
+		// Test 2: Delete the head Pod and wait for the new head pod to be created
+		headPod, err = DeletePodAndWait(test, rayCluster, namespace, headPod)
 		g.Expect(err).NotTo(HaveOccurred())
 
 		expectedOutput = "4"
