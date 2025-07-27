@@ -110,24 +110,25 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	var resp *http.Response
 	var err error
+
+	if req.Body != nil && req.GetBody == nil {
+		/* Reuse request body in each attempt */
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
+		}
+		err = req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to close request body: %w", err)
+		}
+		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+		}
+	}
+
 	for attempt := 0; attempt <= rrt.maxRetries; attempt++ {
 		/* Try up to (rrt.maxRetries + 1) times: initial attempt + retries */
-
-		if attempt == 0 && req.Body != nil && req.GetBody == nil {
-			/* Reuse request body in each attempt */
-			bodyBytes, err := io.ReadAll(req.Body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
-			}
-			err = req.Body.Close()
-			if err != nil {
-				return nil, fmt.Errorf("failed to close request body: %w", err)
-			}
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			req.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
-			}
-		}
 
 		if attempt > 0 && req.GetBody != nil {
 			var bodyCopy io.ReadCloser
@@ -151,7 +152,11 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, nil
 		}
 
-		if attempt < rrt.maxRetries && resp.Body != nil {
+		if attempt == rrt.maxRetries {
+			return resp, nil
+		}
+
+		if resp.Body != nil {
 			/* If not last attempt, drain response body */
 			if _, err = io.Copy(io.Discard, resp.Body); err != nil {
 				return nil, fmt.Errorf("retryRoundTripper internal failure to drain response body: %w", err)
@@ -170,12 +175,16 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {
 			remaining := time.Until(deadline)
-			if remaining <= 0 || sleepDuration > remaining {
+			if sleepDuration > remaining {
 				return resp, fmt.Errorf("retry timeout exceeded context deadline")
 			}
 		}
 
-		time.Sleep(sleepDuration)
+		select {
+		case <-time.After(sleepDuration):
+		case <-ctx.Done():
+			return resp, fmt.Errorf("retry canceled during backoff: %w", ctx.Err())
+		}
 	}
 	return resp, err
 }
