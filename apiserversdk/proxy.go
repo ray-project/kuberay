@@ -122,7 +122,6 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to close request body: %w", err)
 		}
-		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
 	for attempt := 0; attempt <= rrt.maxRetries; attempt++ {
