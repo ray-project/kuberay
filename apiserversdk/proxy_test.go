@@ -1,6 +1,7 @@
 package apiserversdk
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -394,6 +395,39 @@ var _ = Describe("retryRoundTripper", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
 		Expect(attempts).To(Equal(int32(HTTPClientDefaultMaxRetry + 1)))
+	})
+
+	It("Retries on request with body", func() {
+		const testBody = "test-body"
+		const maxFailure = 2
+		var attempts int32
+		mock := &mockRoundTripper{
+			fn: func(req *http.Request) (*http.Response, error) {
+				count := atomic.AddInt32(&attempts, 1)
+				reqBody, err := io.ReadAll(req.Body)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(reqBody)).To(Equal(testBody))
+
+				if count <= maxFailure {
+					return &http.Response{
+						StatusCode: http.StatusInternalServerError,
+						Body:       io.NopCloser(strings.NewReader("internal error")),
+					}, nil
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("ok")),
+				}, nil
+			},
+		}
+		retrier := newRetryRoundTripper(mock)
+		body := bytes.NewBufferString(testBody)
+		req, err := http.NewRequest(http.MethodPost, "http://test", body)
+		Expect(err).ToNot(HaveOccurred())
+		resp, err := retrier.RoundTrip(req)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		Expect(attempts).To(Equal(int32(maxFailure + 1)))
 	})
 
 	It("should not retry on non-retriable status", func() {
