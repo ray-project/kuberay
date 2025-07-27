@@ -108,12 +108,13 @@ func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 
+	var bodyBytes []byte
 	var resp *http.Response
 	var err error
 
 	if req.Body != nil && req.GetBody == nil {
 		/* Reuse request body in each attempt */
-		bodyBytes, err := io.ReadAll(req.Body)
+		bodyBytes, err = io.ReadAll(req.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
 		}
@@ -122,21 +123,13 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return nil, fmt.Errorf("failed to close request body: %w", err)
 		}
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		req.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(bodyBytes)), nil
-		}
 	}
 
 	for attempt := 0; attempt <= rrt.maxRetries; attempt++ {
 		/* Try up to (rrt.maxRetries + 1) times: initial attempt + retries */
 
 		if attempt > 0 && req.GetBody != nil {
-			var bodyCopy io.ReadCloser
-			bodyCopy, err = req.GetBody()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read request body: %w", err)
-			}
-			req.Body = bodyCopy
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
 
 		resp, err = rrt.base.RoundTrip(req)
