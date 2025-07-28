@@ -163,12 +163,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
-		// We check the LastScheduleTime to know if its the first job
-		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.LastScheduleTime == nil {
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
-			break
-		}
-
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
 			logger.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
 			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
@@ -176,6 +170,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Error(err, "Failed to update RayJob with finalizer")
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
+		}
+		// We check the LastScheduleTime to know if its the first job
+		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.LastScheduleTime == nil {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+			break
 		}
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
@@ -494,7 +493,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	case rayv1.JobDeploymentStatusScheduled:
 		// We get the time from the current time to the previous and next cron schedule times
 		// We pass in time.Now() as a parameter so easier unit testing and consistency
-		t1, t2, err := r.getPreviousAndNextScheduleDistance(ctx, time.Now(), rayJobInstance)
+		t1, t2, err := r.getNextAndPreviousScheduleDistance(ctx, time.Now(), rayJobInstance)
 		if err != nil {
 			logger.Error(err, "Could not get the previous and next distances for a cron schedule")
 			return ctrl.Result{}, err
@@ -953,7 +952,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	return rayCluster, nil
 }
 
-func (r *RayJobReconciler) getPreviousAndNextScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
+func (r *RayJobReconciler) getNextAndPreviousScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Calculating next schedule for the RayJob")
 	formatedCron := utils.FormatSchedule(rayJobInstance, r.Recorder)
