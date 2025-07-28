@@ -155,7 +155,7 @@ var _ = Context("RayJob with schedule operation", func() {
 
 		It("should create the underlying Kubernetes Job object", func() {
 			underlyingK8sJob := &batchv1.Job{}
-			// The underlying Kubernetes Job should be created when the RayJob is created
+			// The underlying Kubernetes Job should be created when the RayJob is scheduled to run
 			Eventually(
 				getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob),
 				time.Second*3, time.Millisecond*500).Should(Succeed(), "Expected Kubernetes job to be present")
@@ -187,7 +187,6 @@ var _ = Context("RayJob with schedule operation", func() {
 			err := k8sClient.Get(ctx, namespacedName, job)
 			Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-			// Update the submitter Kubernetes Job to Complete.
 			conditions := []batchv1.JobCondition{
 				{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
 			}
