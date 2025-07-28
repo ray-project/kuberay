@@ -625,14 +625,14 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 	}
 }
 
-func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
+func TestGetNextAndPreviousScheduleDistance(t *testing.T) {
 	// Test 1, the cron string is not valid
 	// Test 2, we are not within the the buffer period of a cron tick to run a ray job
 	// Test 3, we are within the buffer period of a cron tick to run a ray job
 
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
-	_ = corev1.AddToScheme(newScheme) // For events
+	_ = corev1.AddToScheme(newScheme)
 
 	testCases := []struct {
 		currentTime       time.Time
@@ -695,8 +695,7 @@ func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
 				Scheme:   newScheme,
 			}
 
-			// Call getPreviousAndNextScheduleDistance to get the next and previous schedule ticks
-			nextDuration, prevDuration, err := reconciler.getPreviousAndNextScheduleDistance(context.Background(), tc.currentTime, rayJob)
+			nextDuration, prevDuration, err := reconciler.getNextAndPreviousScheduleDistance(context.Background(), tc.currentTime, rayJob)
 
 			if tc.expectedErr {
 				require.Error(t, err)
@@ -704,15 +703,10 @@ func TestGetPreviousAndNextScheduleDistance(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				// Asserting that
 				assert.InDelta(t, tc.expectedNextDelta.Seconds(), nextDuration.Seconds(), 1.0, "NextScheduleTimeDuration mismatch")
 				assert.InDelta(t, tc.expectedPrevDelta.Seconds(), prevDuration.Seconds(), 1.0, "LastScheduleTimeDuration mismatch")
 
-				// Testing the ScheduleDelta logic and how it's called in reconcile
-				// Define ScheduleDelta within the test scope or as a global constant for testing
-				const ScheduleDelta = 100 * time.Millisecond
-
-				isCurrentlyWithinBuffer := (nextDuration < ScheduleDelta) || (prevDuration < ScheduleDelta)
+				isCurrentlyWithinBuffer := (nextDuration < ScheduleBuffer) || (prevDuration < ScheduleBuffer)
 				assert.Equal(t, tc.isWithinBuffer, isCurrentlyWithinBuffer, "isWithinBuffer check mismatch")
 			}
 		})
