@@ -319,6 +319,17 @@ func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend
 	})
 }
 
+func updateRayJobScheduleField(ctx context.Context, rayJob *rayv1.RayJob, schedule string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
+		if err != nil {
+			return err
+		}
+		rayJob.Spec.Schedule = schedule
+		return k8sClient.Update(ctx, rayJob)
+	})
+}
+
 func setJobIdOnRayJob(ctx context.Context, rayJob *rayv1.RayJob, jobId string) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)

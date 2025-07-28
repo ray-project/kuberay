@@ -38,7 +38,7 @@ var _ = Context("RayJob with schedule operation", func() {
 		// In the last scheduled state the cluster should still exist since ShutdownAfterJobFinishes is False
 		ctx := context.Background()
 		namespace := "default"
-		cronSchedule := "*/1 * * * *"
+		cronSchedule := "0 0 1 1 *"
 		rayJob := rayJobTemplate("rayjob-scheduled-no-deletion", namespace)
 		rayJob.Spec.Schedule = cronSchedule
 		rayJob.Spec.ShutdownAfterJobFinishes = false
@@ -54,11 +54,48 @@ var _ = Context("RayJob with schedule operation", func() {
 			Expect(err).NotTo(HaveOccurred(), "failed to create test scheduled RayJob resource")
 		})
 
+		It("should start in the Scheduled state", func() {
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*60, time.Microsecond*500).Should(Equal(rayv1.JobDeploymentStatusScheduled),
+				"JobDeploymentStatus should be Initializing")
+		})
+
+		It("should NOT create a raycluster object while scheduled", func() {
+			Consistently(
+				getRayClusterNameForRayJob(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(BeEmpty())
+		})
+
+		It("should update schedule string in its spec", func() {
+			rayJobLookupKey := types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}
+			fetchedRayJob := &rayv1.RayJob{}
+			newSchedule := "*/1 * * * *"
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, rayJobLookupKey, fetchedRayJob)
+				return err == nil
+			}, time.Second*5, time.Millisecond*200).Should(BeTrue(), "expected to fetch the RayJob before update")
+
+			fetchedRayJob.Spec.Schedule = newSchedule
+
+			err := updateRayJobScheduleField(ctx, fetchedRayJob, newSchedule)
+			Expect(err).NotTo(HaveOccurred(), "failed to update RayJob's schedule in spec")
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, rayJobLookupKey, fetchedRayJob)
+				if err != nil {
+					return false
+				}
+				return fetchedRayJob.Spec.Schedule == newSchedule
+			}, time.Second*10, time.Millisecond*500).Should(BeTrue(), "expected RayJob's Spec.Schedule to be updated and match")
+		})
+
 		// The cron job runs every minute so it will take at most 1 minute to run
 		It("should transition to the Initializing", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
-				time.Second*60, time.Microsecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing),
+				time.Second*70, time.Microsecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing),
 				"JobDeploymentStatus should be Initializing")
 		})
 
@@ -95,11 +132,11 @@ var _ = Context("RayJob with schedule operation", func() {
 		})
 
 		It("should NOT create the underlying K8s job yet because the cluster is not ready", func() {
-			underlyingK8sJob := &batchv1.Job{}
+			k8sJob := &batchv1.Job{}
 			Consistently(
 				// k8sClient client throws error if resource not found
 				func() bool {
-					err := getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), underlyingK8sJob)()
+					err := getResourceFunc(ctx, common.RayJobK8sJobNamespacedName(rayJob), k8sJob)()
 					return errors.IsNotFound(err)
 				},
 				time.Second*3, time.Millisecond*500).Should(BeTrue())

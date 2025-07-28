@@ -163,6 +163,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
 	case rayv1.JobDeploymentStatusNew:
+		// We check the LastScheduleTime to know if its the first job
+		if rayJobInstance.Spec.Schedule != "" && rayJobInstance.Status.LastScheduleTime == nil {
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
+			break
+		}
+
 		if !controllerutil.ContainsFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer) {
 			logger.Info("Add a finalizer", "finalizer", utils.RayJobStopJobFinalizer)
 			controllerutil.AddFinalizer(rayJobInstance, utils.RayJobStopJobFinalizer)
@@ -453,7 +459,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 		if rayJobInstance.Spec.Schedule != "" {
-			logger.Info("RayJob is scheduled again")
+			logger.Info("Rescheduling RayJob")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduling
 			break
 		}
@@ -854,13 +860,8 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-	// if the rayjob is scheduled according to a cron string set the status to scheduling instead of initializing to begin with
-	// we check the job count to know if its the first job
 
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
-	if rayJob.Spec.Schedule != "" && rayJob.Status.Failed == nil && rayJob.Status.Succeeded == nil {
-		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusScheduled
-	}
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
 	return nil
 }
