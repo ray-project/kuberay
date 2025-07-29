@@ -59,8 +59,7 @@ The migration from v1 to v2 will occur in three stages:
 ## Dev Progress
 
 - Not all v2 features will ship in the kuberay v1.4 release
-- All essential features from v1 are supported
-- Some advanced customization (e.g., compute templates) will be fully available in Stage 1
+- Essential features, such as creating KubeRay CR, from v1 are supported
 
 ## Issue Report
 
