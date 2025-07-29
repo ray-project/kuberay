@@ -38,7 +38,7 @@ export const config = {
     const cfg = await fetchRuntimeConfig();
     return cfg.url;
   },
-  
+
   get url(): string {
     return runtimeConfig?.url || defaultConfig.url;
   }
