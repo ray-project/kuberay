@@ -93,7 +93,6 @@ var _ = Context("RayJob with schedule operation", func() {
 				getRayClusterNameForRayJob(ctx, rayJob),
 				time.Second*15, time.Millisecond*500).Should(Not(BeEmpty()))
 			Eventually(
-
 				getResourceFunc(ctx, common.RayJobRayClusterNamespacedName(rayJob), rayCluster),
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
