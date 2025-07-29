@@ -262,6 +262,10 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 			return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
 		}
 
+		if options.RayJob.Spec.Entrypoint != "" {
+			log.Printf("entrypoint in Ray job is set to '%s', but it will be overwritten by the command's entrypoint '%s'", options.RayJob.Spec.Entrypoint, options.entryPoint)
+		}
+
 		runtimeEnvYaml := options.RayJob.Spec.RuntimeEnvYAML
 		if options.runtimeEnv == "" && options.runtimeEnvJson == "" && runtimeEnvYaml != "" {
 			runtimeJson, err := yaml.YAMLToJSON([]byte(runtimeEnvYaml))
