@@ -182,7 +182,67 @@ var _ = Describe("RayJob", Ordered, func() {
 	})
 })
 
-// TODO: add tests for RayServices
+var _ = Describe("RayService", Ordered, func() {
+	It("Create RayService", func() {
+		_, err := rayClient.RayServices("default").Create(context.Background(), &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Name: "proxy-test-service"},
+			Spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: make(map[string]string),
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "test",
+										Image: "test",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodPost))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayservices"))
+	})
+	It("Get RayService", func() {
+		service, err := rayClient.RayServices("default").Get(context.Background(), "proxy-test-service", metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(service.Name).To(Equal("proxy-test-service"))
+		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayservices/proxy-test-service"))
+	})
+	It("Update RayService", func() {
+		service, err := rayClient.RayServices("default").Get(context.Background(), "proxy-test-service", metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		service.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image = "new-image"
+		_, err = rayClient.RayServices("default").Update(context.Background(), service, metav1.UpdateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodPut))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayservices/proxy-test-service"))
+
+		updatedSvc, err := rayClient.RayServices("default").Get(context.Background(), "proxy-test-service", metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(updatedSvc.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image).To(Equal("new-image"))
+	})
+	It("List RayService", func() {
+		services, err := rayClient.RayServices("default").List(context.Background(), metav1.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(services.Items).To(HaveLen(1))
+		Expect(services.Items[0].Name).To(Equal("proxy-test-service"))
+		Expect(lastReq.Load().Method).To(Equal(http.MethodGet))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayservices"))
+	})
+	It("Delete RayService", func() {
+		err := rayClient.RayServices("default").Delete(context.Background(), "proxy-test-service", metav1.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lastReq.Load().Method).To(Equal(http.MethodDelete))
+		Expect(lastReq.Load().RequestURI).To(Equal("/apis/ray.io/v1/namespaces/default/rayservices/proxy-test-service"))
+	})
+})
 
 var _ = Describe("events", Ordered, func() {
 	It("List events", func() {
