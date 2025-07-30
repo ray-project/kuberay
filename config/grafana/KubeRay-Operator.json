@@ -670,7 +670,7 @@
               "refId": "A"
             }
           ],
-          "title": "Provisioned Duration ",
+          "title": "Provisioned Duration",
           "transformations": [
             {
               "id": "joinByField",
@@ -1125,7 +1125,7 @@
               "refId": "A"
             }
           ],
-          "title": "Count of Existing RayClusters in Namespaces",
+          "title": "Count of Existing RayServices in Namespaces",
           "transformations": [
             {
               "id": "organize",
@@ -1689,7 +1689,7 @@
               "refId": "A"
             }
           ],
-          "title": "Execution Duration ",
+          "title": "Execution Duration",
           "transformations": [
             {
               "id": "organize",
