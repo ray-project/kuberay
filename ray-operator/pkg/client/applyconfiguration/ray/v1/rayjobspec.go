@@ -24,7 +24,6 @@ type RayJobSpecApplyConfiguration struct {
 	JobId                    *string                                   `json:"jobId,omitempty"`
 	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
 	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
-	Schedule                 *string                                   `json:"schedule,omitempty"`
 	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
 	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
 	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
@@ -159,14 +158,6 @@ func (b *RayJobSpecApplyConfiguration) WithSubmissionMode(value rayv1.JobSubmiss
 // If called multiple times, the EntrypointResources field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithEntrypointResources(value string) *RayJobSpecApplyConfiguration {
 	b.EntrypointResources = &value
-	return b
-}
-
-// WithSchedule sets the Schedule field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Schedule field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithSchedule(value string) *RayJobSpecApplyConfiguration {
-	b.Schedule = &value
 	return b
 }
 
