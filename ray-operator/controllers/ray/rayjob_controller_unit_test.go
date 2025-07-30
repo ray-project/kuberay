@@ -626,10 +626,6 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 }
 
 func TestGetNextAndPreviousScheduleDistance(t *testing.T) {
-	// Test 1, the cron string is not valid
-	// Test 2, we are not within the the buffer period of a cron tick to run a ray job
-	// Test 3, we are within the buffer period of a cron tick to run a ray job
-
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)

@@ -859,7 +859,6 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Status.JobStatus == "" {
 		rayJob.Status.JobStatus = rayv1.JobStatusNew
 	}
-
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
 	return nil
@@ -954,7 +953,6 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 
 func (r *RayJobReconciler) getNextAndPreviousScheduleDistance(ctx context.Context, currentTime time.Time, rayJobInstance *rayv1.RayJob) (time.Duration, time.Duration, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("Calculating next schedule for the RayJob")
 	formatedCron := utils.FormatSchedule(rayJobInstance, r.Recorder)
 	cronSchedule, err := cron.ParseStandard(formatedCron)
 	if err != nil {
@@ -963,7 +961,6 @@ func (r *RayJobReconciler) getNextAndPreviousScheduleDistance(ctx context.Contex
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, "UnparseableSchedule", "unparseable schedule: %q : %s", rayJobInstance.Spec.Schedule, err)
 		return 0, 0, fmt.Errorf("the cron schedule provided is unparseable: %w", err)
 	}
-	logger.Info("Successfully parsed cron schedule", "CronSchedule", formatedCron)
 
 	t1 := utils.NextScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
 	t2 := utils.LastScheduleTimeDuration(logger, rayJobInstance, currentTime, cronSchedule)
