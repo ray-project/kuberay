@@ -39,7 +39,16 @@ class RayjobApi:
     # initial config to setup the kube client
     def __init__(self):
         # loading the config
-        self.kube_config: Optional[Any] = config.load_kube_config()
+        try:
+            self.kube_config: Optional[Any] = config.load_kube_config()
+        except config.ConfigException:
+            # No kubeconfig found, try in-cluster config
+            try:
+                self.kube_config: Optional[Any] = config.load_incluster_config()
+            except config.ConfigException:
+                log.error("Failed to load both kubeconfig and in-cluster config")
+                raise
+
         self.api = client.CustomObjectsApi()
 
     def __del__(self):
