@@ -205,6 +205,22 @@ func getPendingRayClusterWorkerGroupSpecsFunc(ctx context.Context, rayService *r
 	}
 }
 
+func getLastScheduleTime(ctx context.Context, k8sClient client.Client, rayJob *rayv1.RayJob) func() (*time.Time, error) {
+	return func() (*time.Time, error) {
+		rayJobLookupKey := client.ObjectKey{Name: rayJob.Name, Namespace: rayJob.Namespace}
+		fetchedRayJob := &rayv1.RayJob{}
+
+		if err := k8sClient.Get(ctx, rayJobLookupKey, fetchedRayJob); err != nil {
+			return nil, err
+		}
+
+		if fetchedRayJob.Status.LastScheduleTime != nil {
+			return &fetchedRayJob.Status.LastScheduleTime.Time, nil
+		}
+		return nil, nil
+	}
+}
+
 func checkServiceHealth(ctx context.Context, rayService *rayv1.RayService) func() (bool, error) {
 	return func() (bool, error) {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: rayService.Namespace}, rayService); err != nil {
@@ -315,6 +331,17 @@ func updateRayJobSuspendField(ctx context.Context, rayJob *rayv1.RayJob, suspend
 			return err
 		}
 		rayJob.Spec.Suspend = suspend
+		return k8sClient.Update(ctx, rayJob)
+	})
+}
+
+func updateRayJobScheduleField(ctx context.Context, rayJob *rayv1.RayJob, schedule string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: rayJob.Name}, rayJob)
+		if err != nil {
+			return err
+		}
+		rayJob.Spec.Schedule = schedule
 		return k8sClient.Update(ctx, rayJob)
 	})
 }

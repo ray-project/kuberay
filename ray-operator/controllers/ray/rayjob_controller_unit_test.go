@@ -624,3 +624,87 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestGetNextAndPreviousScheduleDistance(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	testCases := []struct {
+		currentTime       time.Time
+		initialLastTime   *metav1.Time
+		name              string
+		schedule          string
+		expectedNextDelta time.Duration
+		expectedPrevDelta time.Duration
+		expectedErr       bool
+		isWithinBuffer    bool
+	}{
+		{
+			name:        "Test 1: Invalid cron string",
+			schedule:    "INVLAID * CRON * STRING * WOW",
+			currentTime: time.Now(),
+			expectedErr: true,
+		},
+		{
+			name:        "Test 2: Not within the buffer period - future schedule",
+			schedule:    "0 0 * * *",                                          // Every day at midnight
+			currentTime: time.Date(2025, time.July, 1, 10, 0, 0, 0, time.UTC), // 2025-07-01 10:00 AM
+			// Next schedule tick is 2025-07-02 00:00:00 (in 14 hours)
+			// Last schedule tick is 2025-07-01 00:00:00 (10 hours ago)
+			expectedNextDelta: 14 * time.Hour,
+			expectedPrevDelta: 10 * time.Hour,
+			expectedErr:       false,
+			isWithinBuffer:    false,
+		},
+		{
+			name:        "Test 3: Within the buffer period - next schedule",
+			schedule:    "*/10 * * * *",                                        // Every 10 minutes
+			currentTime: time.Date(2025, time.July, 1, 10, 10, 0, 0, time.UTC), // 2025-07-01 10:10:00
+			// Next schedule tick is 2025-07-01 10:10:00 (in 10 minutes)
+			// Last schedule tick is 2025-07-01 10:00:00 (10 minutes ago)
+			expectedNextDelta: 10 * time.Minute,
+			expectedPrevDelta: 0 * time.Minute,
+			expectedErr:       false,
+			isWithinBuffer:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rayjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					Schedule: tc.schedule,
+				},
+			}
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).Build()
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+
+			nextDuration, prevDuration, err := reconciler.getNextAndPreviousScheduleDistance(context.Background(), tc.currentTime, rayJob)
+
+			if tc.expectedErr {
+				require.Error(t, err)
+				assert.Contains(t, <-recorder.Events, "UnparseableSchedule")
+			} else {
+				require.NoError(t, err)
+
+				assert.InDelta(t, tc.expectedNextDelta.Seconds(), nextDuration.Seconds(), 1.0, "NextScheduleTimeDuration mismatch")
+				assert.InDelta(t, tc.expectedPrevDelta.Seconds(), prevDuration.Seconds(), 1.0, "LastScheduleTimeDuration mismatch")
+
+				isCurrentlyWithinBuffer := (nextDuration < ScheduleBuffer) || (prevDuration < ScheduleBuffer)
+				assert.Equal(t, tc.isWithinBuffer, isCurrentlyWithinBuffer, "isWithinBuffer check mismatch")
+			}
+		})
+	}
+}
