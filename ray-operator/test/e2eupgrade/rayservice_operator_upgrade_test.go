@@ -13,7 +13,6 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
-	e2e "github.com/ray-project/kuberay/ray-operator/test/e2erayservice"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -36,7 +35,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	test.T().Logf("Detected upgrade version: %s", upgradeVersion)
 
 	// Create RayService custom resource
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(e2e.RayServiceSampleYamlApplyConfiguration())
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfigurationWithWorker())
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -65,11 +64,11 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
-	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint because the cluster only has a head Pod", svcName)
+	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint and two addresses", svcName)
 	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(endpoints.Subsets).To(HaveLen(1))
-	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(2))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
