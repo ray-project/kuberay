@@ -287,3 +287,33 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Expect(GetHeadPod(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 	g.Expect(GetWorkerPods(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 }
+
+func TestRayServiceRayClusterDeletionDelaySeconds(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+	namespace := test.NewTestNamespace()
+
+	// Apply the RayService YAML with deletion delay set to 10 second
+	KubectlApplyYAML(test, "testdata/rayservice.deletiondelay.yaml", namespace.Name)
+	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for RayService to be ready
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	// Save the current RayCluster name
+	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	oldClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+
+	// Try updating and see if the new cluster created
+	LogWithTimestamp(test.T(), "Updating RayService")
+	newRayService := rayService.DeepCopy()
+	newRayService.Spec.RayClusterSpec.RayVersion = ""
+	newRayService, err = test.Client().Ray().RayV1().RayServices(newRayService.Namespace).Update(test.Ctx(), newRayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	waitingForRayClusterSwitchWithDeletionDelay(g, test, newRayService, oldClusterName, 10*time.Second)
+}
