@@ -365,6 +365,18 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Deploy Kuberay operator
+        run: |
+          echo "Deploying Kuberay operator"
+          cd ray-operator
+
+          IMG=kuberay/operator:latest
+          make docker-build -e IMG="${IMG}" -e ENGINE=docker
+          kind load docker-image ${IMG}
+
+          make deploy -e IMG="${IMG}"
+          kubectl wait --timeout=90s --for=condition=Available=true deployment -n default kuberay-operator
+
       - name: Install package and run unittest for Python client
         working-directory: ./clients/python-client
         run: |

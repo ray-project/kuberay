@@ -1,13 +1,9 @@
 import unittest
-import copy
-import re
-from python_client.utils import kuberay_cluster_utils, kuberay_cluster_builder
 from python_client import kuberay_cluster_api
 
 
-
 test_cluster_body: dict = {
-    "apiVersion": "ray.io/v1alpha1",
+    "apiVersion": "ray.io/v1",
     "kind": "RayCluster",
     "metadata": {
         "labels": {"controller-tools.k8s.io": "1.0"},
@@ -91,6 +87,7 @@ test_cluster_body: dict = {
         ],
     },
     "status": {
+        "state": "ready",
         "availableWorkerReplicas": 2,
         "desiredWorkerReplicas": 1,
         "endpoints": {

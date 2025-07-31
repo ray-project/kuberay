@@ -21,7 +21,7 @@ for sibling_dir in sibling_dirs:
 from python_client import kuberay_cluster_api
 
 cluster_body: dict = {
-    "apiVersion": "ray.io/v1alpha1",
+    "apiVersion": "ray.io/v1",
     "kind": "RayCluster",
     "metadata": {
         "labels": {"controller-tools.k8s.io": "1.0", "demo-cluster": "yes"},
@@ -59,7 +59,7 @@ cluster_body: dict = {
 
 
 cluster_body2: dict = {
-    "apiVersion": "ray.io/v1alpha1",
+    "apiVersion": "ray.io/v1",
     "kind": "RayCluster",
     "metadata": {
         "labels": {"controller-tools.k8s.io": "1.0", "demo-cluster": "yes"},
