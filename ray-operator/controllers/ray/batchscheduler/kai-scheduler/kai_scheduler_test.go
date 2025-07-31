@@ -11,21 +11,21 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-func createTestRayCluster(name, namespace string, labels map[string]string) *rayv1.RayCluster {
+func createTestRayCluster(labels map[string]string) *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      "test-cluster",
+			Namespace: "default",
 			Labels:    labels,
 		},
 	}
 }
 
-func createTestPod(name, namespace string) *corev1.Pod {
+func createTestPod() *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      "test-pod",
+			Namespace: "default",
 			Labels: map[string]string{
 				"ray.io/cluster":   "test-cluster",
 				"ray.io/node-type": "worker",
@@ -47,10 +47,10 @@ func TestAddMetadataToPod_WithQueueLabel(t *testing.T) {
 	ctx := context.Background()
 
 	// Create RayCluster with queue label
-	rayCluster := createTestRayCluster("test-cluster", "default", map[string]string{
+	rayCluster := createTestRayCluster(map[string]string{
 		QueueLabelName: "test-queue",
 	})
-	pod := createTestPod("test-pod", "default")
+	pod := createTestPod()
 
 	// Call AddMetadataToPod
 	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
@@ -69,8 +69,8 @@ func TestAddMetadataToPod_WithoutQueueLabel(t *testing.T) {
 	ctx := context.Background()
 
 	// Create RayCluster without queue label
-	rayCluster := createTestRayCluster("test-cluster", "default", map[string]string{})
-	pod := createTestPod("test-pod", "default")
+	rayCluster := createTestRayCluster(map[string]string{})
+	pod := createTestPod()
 
 	// Call AddMetadataToPod
 	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
@@ -91,10 +91,10 @@ func TestAddMetadataToPod_WithEmptyQueueLabel(t *testing.T) {
 	ctx := context.Background()
 
 	// Create RayCluster with empty queue label
-	rayCluster := createTestRayCluster("test-cluster", "default", map[string]string{
+	rayCluster := createTestRayCluster(map[string]string{
 		QueueLabelName: "",
 	})
-	pod := createTestPod("test-pod", "default")
+	pod := createTestPod()
 
 	// Call AddMetadataToPod
 	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
@@ -115,15 +115,15 @@ func TestAddMetadataToPod_PreservesExistingPodLabels(t *testing.T) {
 	ctx := context.Background()
 
 	// Create RayCluster with queue label
-	rayCluster := createTestRayCluster("test-cluster", "default", map[string]string{
+	rayCluster := createTestRayCluster(map[string]string{
 		QueueLabelName: "test-queue",
 	})
-	
+
 	// Create pod with existing labels
-	pod := createTestPod("test-pod", "default")
+	pod := createTestPod()
 	pod.Labels = map[string]string{
 		"existing-label": "existing-value",
-		"app":           "ray",
+		"app":            "ray",
 	}
 
 	// Call AddMetadataToPod

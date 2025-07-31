@@ -6,8 +6,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 
+	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
 	schedulerPlugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 )
