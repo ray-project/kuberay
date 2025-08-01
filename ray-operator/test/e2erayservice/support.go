@@ -181,7 +181,7 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 								})))))))
 }
 
-func ApplyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
+func applyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
 	t.T().Helper()
 
 	// Apply the RayService YAML with deletion delay set to 10 second
