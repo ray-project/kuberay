@@ -21,7 +21,7 @@ injection, default values, and mutations can be implemented using user-defined m
 
 To simplify the system further, gRPC support has been removed in favor of HTTP-only APIs. This approach aligns
 better with native Kubernetes tooling and improves extensibility, maintainability, and onboarding for
-infrastructure engineers. This guide outlines the major changes from APIServer v1 to v2 and provides guidance for migrating
+infrastructure engineers. This document outlines the major changes from APIServer v1 to v2.
 existing workflows.
 
 ## What’s Changed v1 vs v2
