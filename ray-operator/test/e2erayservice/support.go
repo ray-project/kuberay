@@ -181,6 +181,21 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 								})))))))
 }
 
+func ApplyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
+	t.T().Helper()
+
+	// Apply the RayService YAML with deletion delay set to 10 second
+	KubectlApplyYAML(t, filename, namespace)
+	rayService, err := GetRayService(t, namespace, name)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(t.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
+
+	// Wait for RayService to be ready
+	LogWithTimestamp(t.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(t, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+}
+
 func waitingForRayClusterSwitch(g *WithT, test Test, rayService *rayv1.RayService, oldRayClusterName string) {
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))

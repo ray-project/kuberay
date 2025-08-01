@@ -30,14 +30,8 @@ func TestStaticRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	KubectlApplyYAML(test, rayserviceYamlFile, namespace.Name)
-	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	rayServiceName := "test-rayservice"
+	ApplyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -80,17 +74,11 @@ func TestAutoscalingRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	KubectlApplyYAML(test, rayserviceYamlFile, namespace.Name)
-	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	rayServiceName := "test-rayservice"
+	ApplyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Get the underlying RayCluster of the RayService
-	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	rayServiceUnderlyingRayCluster, err := GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -150,14 +138,8 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	KubectlApplyYAML(test, rayserviceYamlFile, namespace.Name)
-	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	rayServiceName := "test-rayservice"
+	ApplyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Create Locust RayCluster
 	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
@@ -224,20 +206,14 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	KubectlApplyYAML(test, rayserviceYamlFile, namespace.Name)
-	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
+	rayServiceName := "test-rayservice"
+	ApplyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
-
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
+	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
 		Should(WithTransform(RayServicesNumEndPoints, Equal(int32(1))))
 
 	// Get the underlying RayCluster of the RayService
-	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	rayServiceUnderlyingRayCluster, err := GetRayCluster(test, namespace.Name, rayService.Status.ActiveServiceStatus.RayClusterName)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -289,22 +265,18 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 }
 
 func TestRayServiceRayClusterDeletionDelaySeconds(t *testing.T) {
+	rayserviceYamlFile := "testdata/rayservice.deletiondelay.yaml"
+
 	test := With(t)
 	g := NewWithT(t)
 	namespace := test.NewTestNamespace()
 
 	// Apply the RayService YAML with deletion delay set to 10 second
-	KubectlApplyYAML(test, "testdata/rayservice.deletiondelay.yaml", namespace.Name)
-	rayService, err := GetRayService(test, namespace.Name, "test-rayservice")
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Wait for RayService to be ready
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	rayServiceName := "test-rayservice"
+	ApplyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Save the current RayCluster name
-	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	oldClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
 
