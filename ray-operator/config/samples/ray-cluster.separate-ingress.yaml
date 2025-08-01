@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-ingress
 spec:
-  rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
   headGroupSpec:
     serviceType: NodePort
     # The `rayStartParams` are used to configure the `ray start` command.
@@ -19,7 +19,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: "1"
@@ -59,4 +59,4 @@ spec:
             port: # port number should match the port specified for dashboard in the RayCluster setting above
               number: 8265
         path: /raycluster-ingress/(.*) # (.*) is regex
-        pathType: Exact # Matches the URL path exactly and with case sensitivity.
+        pathType: ImplementationSpecific

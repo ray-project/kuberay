@@ -18,24 +18,18 @@ package ray
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-	"github.com/ray-project/kuberay/ray-operator/test/support"
-
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
+	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -50,14 +44,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	// +kubebuilder:scaffold:imports
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 var (
@@ -338,7 +339,7 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    ptr.To[int32](expectReplicaNum),
+					Replicas:    ptr.To(expectReplicaNum),
 					MinReplicas: ptr.To[int32](0),
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
@@ -526,9 +527,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 			numRandomDelete := expectedNumWorkersToDelete - (len(tc.workersToDelete) - len(nonExistentPodSet))
 			assert.Equal(t, tc.numRandomDelete, numRandomDelete)
@@ -623,9 +622,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 			// Check if the workersToDelete are deleted.
 			for _, pod := range podList.Items {
-				if contains(tc.workersToDelete, pod.Name) {
-					t.Fatalf("WorkersToDelete is not actually deleted, %s", pod.Name)
-				}
+				assert.NotContainsf(t, tc.workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 			}
 		})
 	}
@@ -673,10 +670,8 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	assert.Len(t, podList.Items, int(localExpectReplicaNum),
 		"Replica number is wrong after reconcile expect %d actual %d", expectReplicaNum, len(podList.Items))
 
-	for i := 0; i < len(podList.Items); i++ {
-		if contains(workersToDelete, podList.Items[i].Name) {
-			t.Fatalf("WorkersToDelete is not actually deleted, %s", podList.Items[i].Name)
-		}
+	for _, pod := range podList.Items {
+		assert.NotContainsf(t, workersToDelete, pod.Name, "WorkersToDelete is not actually deleted, %s", pod.Name)
 	}
 }
 
@@ -1158,16 +1153,6 @@ func TestReconcileHeadlessService(t *testing.T) {
 	assert.Len(t, serviceList.Items, 1, "Service list len is wrong")
 }
 
-func contains(slice []string, item string) bool {
-	set := make(map[string]struct{}, len(slice))
-	for _, s := range slice {
-		set[s] = struct{}{}
-	}
-
-	_, ok := set[item]
-	return ok
-}
-
 func getNotFailedPodItemNum(podList corev1.PodList) int {
 	count := 0
 	for _, aPod := range podList.Items {
@@ -1621,146 +1606,6 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 	assert.Equal(t, cluster.Status.State, state, "Cluster state should be updated")
 }
 
-func TestInconsistentRayClusterStatus(t *testing.T) {
-	newScheme := runtime.NewScheme()
-	_ = rayv1.AddToScheme(newScheme)
-	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects().Build()
-	r := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-	}
-
-	// Mock data
-	timeNow := metav1.Now()
-	oldStatus := rayv1.RayClusterStatus{
-		State:                   rayv1.Ready,
-		ReadyWorkerReplicas:     1,
-		AvailableWorkerReplicas: 1,
-		DesiredWorkerReplicas:   1,
-		MinWorkerReplicas:       1,
-		MaxWorkerReplicas:       10,
-		LastUpdateTime:          &timeNow,
-		Endpoints: map[string]string{
-			utils.ClientPortName:    strconv.Itoa(utils.DefaultClientPort),
-			utils.DashboardPortName: strconv.Itoa(utils.DefaultDashboardPort),
-			utils.GcsServerPortName: strconv.Itoa(utils.DefaultGcsServerPort),
-			utils.MetricsPortName:   strconv.Itoa(utils.DefaultMetricsPort),
-		},
-		Head: rayv1.HeadInfo{
-			PodIP:     "10.244.0.6",
-			ServiceIP: "10.96.140.249",
-		},
-		ObservedGeneration: 1,
-		Reason:             "test reason",
-	}
-
-	// `inconsistentRayClusterStatus` is used to check whether the old and new RayClusterStatus are inconsistent
-	// by comparing different fields. If the only differences between the old and new status are the `LastUpdateTime`
-	// and `ObservedGeneration` fields, the status update will not be triggered.
-	ctx := context.Background()
-
-	testCases := []struct {
-		modifyStatus func(*rayv1.RayClusterStatus)
-		name         string
-		expectResult bool
-	}{
-		{
-			name: "State is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.State = rayv1.Suspended
-			},
-			expectResult: true,
-		},
-		{
-			name: "Reason is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.Reason = "new reason"
-			},
-			expectResult: true,
-		},
-		{
-			name: "ReadyWorkerReplicas is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.ReadyWorkerReplicas = oldStatus.ReadyWorkerReplicas + 1
-			},
-			expectResult: true,
-		},
-		{
-			name: "AvailableWorkerReplicas is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.AvailableWorkerReplicas = oldStatus.AvailableWorkerReplicas + 1
-			},
-			expectResult: true,
-		},
-		{
-			name: "DesiredWorkerReplicas is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.DesiredWorkerReplicas = oldStatus.DesiredWorkerReplicas + 1
-			},
-			expectResult: true,
-		},
-		{
-			name: "MinWorkerReplicas is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.MinWorkerReplicas = oldStatus.MinWorkerReplicas + 1
-			},
-			expectResult: true,
-		},
-		{
-			name: "MaxWorkerReplicas is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.MaxWorkerReplicas = oldStatus.MaxWorkerReplicas + 1
-			},
-			expectResult: true,
-		},
-		{
-			name: "Endpoints is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.Endpoints["fakeEndpoint"] = "10009"
-			},
-			expectResult: true,
-		},
-		{
-			name: "Head.PodIP is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.Head.PodIP = "test head pod ip"
-			},
-			expectResult: true,
-		},
-		{
-			name: "RayClusterReplicaFailure is updated, expect result to be true",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				meta.SetStatusCondition(&newStatus.Conditions, metav1.Condition{Type: string(rayv1.RayClusterReplicaFailure), Status: metav1.ConditionTrue})
-			},
-			expectResult: true,
-		},
-		{
-			name: "LastUpdateTime is updated, expect result to be false",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.LastUpdateTime = &metav1.Time{Time: timeNow.Add(time.Hour)}
-			},
-			expectResult: false,
-		},
-		{
-			name: "ObservedGeneration is updated, expect result to be false",
-			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.ObservedGeneration = oldStatus.ObservedGeneration + 1
-			},
-			expectResult: false,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			newStatus := oldStatus.DeepCopy()
-			testCase.modifyStatus(newStatus)
-			result := r.inconsistentRayClusterStatus(ctx, oldStatus, *newStatus)
-			assert.Equal(t, testCase.expectResult, result)
-		})
-	}
-}
-
 func TestCalculateStatus(t *testing.T) {
 	setupTest(t)
 	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
@@ -1937,7 +1782,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	setupTest(t)
 
-	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To[bool](true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To(true)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
@@ -3002,6 +2847,7 @@ func Test_RedisCleanup(t *testing.T) {
 				assert.Len(t, rayClusterList.Items, 1)
 				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 				assert.Equal(t, int64(300), *jobList.Items[0].Spec.ActiveDeadlineSeconds)
+				assert.Equal(t, []string{"/bin/bash", "-c", "--"}, jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex].Command)
 
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
@@ -3569,5 +3415,119 @@ func Test_ReconcileManagedBy(t *testing.T) {
 				assert.InDelta(t, result.RequeueAfter.Seconds(), time.Duration(0).Seconds(), 1e-6)
 			}
 		})
+	}
+}
+
+func TestEmitRayClusterProvisionedDuration(t *testing.T) {
+	clusterName := "test-ray-cluster"
+	clusterNamespace := "default"
+
+	// Creation time 5 minutes ago to simulate cluster runtime
+	creationTime := time.Now().Add(-5 * time.Minute)
+
+	testCases := []struct {
+		name             string
+		oldStatus        rayv1.RayClusterStatus
+		newStatus        rayv1.RayClusterStatus
+		expectMetric     bool
+		expectedDuration float64
+	}{
+		{
+			name: "transition from unprovisioned to provisioned (should emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionFalse,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:     true,
+			expectedDuration: time.Since(creationTime).Seconds(),
+		},
+		{
+			name: "already provisioned (should not emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:     false,
+			expectedDuration: time.Since(creationTime).Seconds(),
+		},
+		{
+			name:      "transition from unset to provisioned (should emit metrics)",
+			oldStatus: rayv1.RayClusterStatus{},
+			newStatus: rayv1.RayClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayClusterProvisioned),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+			expectMetric:     true,
+			expectedDuration: time.Since(creationTime).Seconds(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCollector := mocks.NewMockRayClusterMetricsObserver(ctrl)
+			if tc.expectMetric {
+				mockCollector.EXPECT().
+					ObserveRayClusterProvisionedDuration(
+						clusterName,
+						clusterNamespace,
+						mock.MatchedBy(func(d float64) bool {
+							// Allow some wiggle room in timing
+							return math.Abs(d-tc.expectedDuration) < 1.0
+						}),
+					).Times(1)
+			}
+
+			emitRayClusterProvisionedDuration(
+				mockCollector,
+				clusterName,
+				clusterNamespace,
+				tc.oldStatus,
+				tc.newStatus,
+				creationTime,
+			)
+		})
+	}
+}
+
+func TestSetDefaults(t *testing.T) {
+	setupTest(t)
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.RayStartParams = nil
+	cluster.Spec.WorkerGroupSpecs[0].RayStartParams = nil
+
+	setDefaults(cluster)
+
+	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
 	}
 }

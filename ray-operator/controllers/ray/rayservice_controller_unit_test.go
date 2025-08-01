@@ -7,12 +7,13 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
-	"k8s.io/apimachinery/pkg/api/meta"
-
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -60,52 +61,6 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
-}
-
-func TestInconsistentRayServiceStatuses(t *testing.T) {
-	oldStatus := rayv1.RayServiceStatuses{
-		ActiveServiceStatus: rayv1.RayServiceStatus{
-			RayClusterName: "new-cluster",
-			Applications: map[string]rayv1.AppStatus{
-				utils.DefaultServeAppName: {
-					Status:  rayv1.ApplicationStatusEnum.RUNNING,
-					Message: "OK",
-					Deployments: map[string]rayv1.ServeDeploymentStatus{
-						"serve-1": {
-							Status:  rayv1.DeploymentStatusEnum.UNHEALTHY,
-							Message: "error",
-						},
-					},
-				},
-			},
-		},
-		PendingServiceStatus: rayv1.RayServiceStatus{
-			RayClusterName: "old-cluster",
-			Applications: map[string]rayv1.AppStatus{
-				utils.DefaultServeAppName: {
-					Status:  rayv1.ApplicationStatusEnum.NOT_STARTED,
-					Message: "application not started yet",
-					Deployments: map[string]rayv1.ServeDeploymentStatus{
-						"serve-1": {
-							Status:  rayv1.DeploymentStatusEnum.HEALTHY,
-							Message: "Serve is healthy",
-						},
-					},
-				},
-			},
-		},
-		ServiceStatus: rayv1.NotRunning,
-	}
-	ctx := context.Background()
-
-	// Test 1: Update ServiceStatus only.
-	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.Running
-	assert.True(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
-
-	// Test 2: Test RayServiceStatus
-	newStatus = oldStatus.DeepCopy()
-	assert.False(t, inconsistentRayServiceStatuses(ctx, oldStatus, *newStatus))
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -1276,6 +1231,89 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 			os.Setenv(ENABLE_ZERO_DOWNTIME, tt.enableZeroDowntimeEnvVar)
 			isEnabled := isZeroDowntimeUpgradeEnabled(ctx, tt.upgradeStrategy)
 			assert.Equal(t, tt.expected, isEnabled)
+		})
+	}
+}
+
+func TestRayClusterDeletionDelaySeconds(t *testing.T) {
+	namespace := "test-namespace"
+	rayClusterName := "test-cluster"
+	rayServiceName := "test-rayservice"
+
+	// Helper to create a RayService with optional RayClusterDeletionDelaySeconds
+	createRayService := func(delaySeconds *int32) *rayv1.RayService {
+		return &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      rayServiceName,
+				Namespace: namespace,
+			},
+			Spec: rayv1.RayServiceSpec{
+				RayClusterDeletionDelaySeconds: delaySeconds,
+			},
+		}
+	}
+
+	rayCluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rayClusterName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRNameLabelKey: rayServiceName,
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+			},
+		},
+	}
+
+	tests := []struct {
+		delaySeconds     *int32
+		name             string
+		expectedDuration time.Duration
+	}{
+		{
+			name:             "Use default delay when not set",
+			delaySeconds:     nil,
+			expectedDuration: RayClusterDeletionDelayDuration,
+		},
+		{
+			name:             "Use custom delay when set to 0",
+			delaySeconds:     ptr.To[int32](0),
+			expectedDuration: 0 * time.Second,
+		},
+		{
+			name:             "Use custom delay when set to positive",
+			delaySeconds:     ptr.To[int32](5),
+			expectedDuration: 5 * time.Second,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			ctx := context.TODO()
+
+			rayService := createRayService(tc.delaySeconds)
+
+			// Initialize a fake client with newScheme and runtimeObjects.
+			runtimeObjects := []runtime.Object{rayService, &rayCluster}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+			r := RayServiceReconciler{
+				Client:                       fakeClient,
+				Scheme:                       newScheme,
+				Recorder:                     record.NewFakeRecorder(1),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
+			}
+
+			now := time.Now()
+			err := r.cleanUpRayClusterInstance(ctx, rayService)
+			require.NoError(t, err)
+
+			// Check that the deletion timestamp is set and equals to the expected value
+			ts, exists := r.RayClusterDeletionTimestamps.Get(rayClusterName)
+			assert.True(t, exists, "Deletion timestamp should be set for the cluster")
+			expectedTs := now.Add(tc.expectedDuration)
+
+			assert.InDelta(t, expectedTs.Unix(), ts.Unix(), 1, "Deletion timestamp should be within 1 second of expected timestamp")
 		})
 	}
 }

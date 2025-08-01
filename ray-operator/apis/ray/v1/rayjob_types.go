@@ -12,6 +12,8 @@ import (
 type JobStatus string
 
 // https://docs.ray.io/en/latest/cluster/running-applications/job-submission/jobs-package-ref.html#jobstatus
+//
+// NOTICE: [AllJobStatuses] should be kept in sync with all job statuses below.
 const (
 	JobStatusNew       JobStatus = ""
 	JobStatusPending   JobStatus = "PENDING"
@@ -20,6 +22,15 @@ const (
 	JobStatusSucceeded JobStatus = "SUCCEEDED"
 	JobStatusFailed    JobStatus = "FAILED"
 )
+
+var AllJobStatuses = []JobStatus{
+	JobStatusNew,
+	JobStatusPending,
+	JobStatusRunning,
+	JobStatusStopped,
+	JobStatusSucceeded,
+	JobStatusFailed,
+}
 
 // This function should be synchronized with the function `is_terminal()` in Ray Job.
 func IsJobTerminal(status JobStatus) bool {
@@ -45,13 +56,24 @@ const (
 	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
 )
 
+// IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
+// is in a terminal state. Terminal states are either Complete or Failed.
+func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
+	terminalStatusSet := map[JobDeploymentStatus]struct{}{
+		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
+	}
+	_, ok := terminalStatusSet[status]
+	return ok
+}
+
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
 type JobFailedReason string
 
 const (
-	SubmissionFailed JobFailedReason = "SubmissionFailed"
-	DeadlineExceeded JobFailedReason = "DeadlineExceeded"
-	AppFailed        JobFailedReason = "AppFailed"
+	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
+	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	AppFailed                                        JobFailedReason = "AppFailed"
+	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 )
 
 type JobSubmissionMode string
@@ -62,19 +84,40 @@ const (
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
 )
 
-type DeletionPolicy string
+type DeletionPolicyType string
+
+type DeletionStrategy struct {
+	OnSuccess DeletionPolicy `json:"onSuccess"`
+	OnFailure DeletionPolicy `json:"onFailure"`
+}
+
+type DeletionPolicy struct {
+	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the policy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
+	Policy *DeletionPolicyType `json:"policy"`
+}
 
 const (
-	DeleteClusterDeletionPolicy DeletionPolicy = "DeleteCluster" // Deletion policy to delete the entire RayCluster custom resource on job completion.
-	DeleteWorkersDeletionPolicy DeletionPolicy = "DeleteWorkers" // Deletion policy to delete only the workers on job completion.
-	DeleteSelfDeletionPolicy    DeletionPolicy = "DeleteSelf"    // Deletion policy to delete the RayJob custom resource (and all associated resources) on job completion.
-	DeleteNoneDeletionPolicy    DeletionPolicy = "DeleteNone"    // Deletion policy to delete no resources on job completion.
+	DeleteCluster DeletionPolicyType = "DeleteCluster" // To delete the entire RayCluster custom resource on job completion.
+	DeleteWorkers DeletionPolicyType = "DeleteWorkers" // To delete only the workers on job completion.
+	DeleteSelf    DeletionPolicyType = "DeleteSelf"    // To delete the RayJob custom resource (and all associated resources) on job completion.
+	DeleteNone    DeletionPolicyType = "DeleteNone"    // To delete no resources on job completion.
 )
 
 type SubmitterConfig struct {
 	// BackoffLimit of the submitter k8s job.
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+}
+
+// `RayJobStatusInfo` is a subset of `RayJobInfo` from `dashboard_httpclient.py`.
+// This subset is used to store information in the CR status.
+//
+// TODO(kevin85421): We can consider exposing the whole `RayJobInfo` in the CR status
+// after careful consideration. In that case, we can remove `RayJobStatusInfo`.
+type RayJobStatusInfo struct {
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	EndTime   *metav1.Time `json:"endTime,omitempty"`
 }
 
 // RayJobSpec defines the desired state of RayJob
@@ -112,13 +155,11 @@ type RayJobSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
-	// DeletionPolicy indicates what resources of the RayJob are deleted upon job completion.
-	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
+	// DeletionStrategy indicates what resources of the RayJob and how they are deleted upon job completion.
 	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
 	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
-	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the deletionPolicy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
 	// +optional
-	DeletionPolicy *DeletionPolicy `json:"deletionPolicy,omitempty"`
+	DeletionStrategy *DeletionStrategy `json:"deletionStrategy,omitempty"`
 	// Entrypoint represents the command to start execution.
 	// +optional
 	Entrypoint string `json:"entrypoint,omitempty"`
@@ -167,6 +208,9 @@ type RayJobSpec struct {
 type RayJobStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
+	// +optional
+	RayJobStatusInfo RayJobStatusInfo `json:"rayJobInfo,omitempty"`
 	// +optional
 	JobId string `json:"jobId,omitempty"`
 	// +optional

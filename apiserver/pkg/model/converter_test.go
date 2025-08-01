@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	util "github.com/ray-project/kuberay/apiserver/pkg/util"
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	util "github.com/ray-project/kuberay/apiserver/pkg/util"
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
@@ -46,15 +46,15 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 			Labels: map[string]string{
 				"app.kubernetes.io/created-by": "kuberay-operator",
 				"app.kubernetes.io/name":       "kuberay",
-				"ray.io/cluster":               "boris-cluster",
-				"ray.io/cluster-dashboard":     "boris-cluster-dashboard",
+				"ray.io/cluster":               "kuberay-cluster",
+				"ray.io/cluster-dashboard":     "kuberay-cluster-dashboard",
 				"ray.io/group":                 utils.RayNodeHeadGroupLabelValue,
-				"ray.io/identifier":            "boris-cluster-head",
+				"ray.io/identifier":            "kuberay-cluster-head",
 				"ray.io/is-ray-node":           "yes",
 				"ray.io/node-type":             "head",
 				"test":                         "value",
 			},
-			Name:      "boris-cluster-head-f7zx2",
+			Name:      "kuberay-cluster-head-f7zx2",
 			Namespace: "max",
 		},
 		Spec: corev1.PodSpec{
@@ -179,15 +179,15 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			Labels: map[string]string{
 				"app.kubernetes.io/created-by": "kuberay-operator",
 				"app.kubernetes.io/name":       "kuberay",
-				"ray.io/cluster":               "boris-cluster",
-				"ray.io/cluster-dashboard":     "boris-cluster-dashboard",
+				"ray.io/cluster":               "kuberay-cluster",
+				"ray.io/cluster-dashboard":     "kuberay-cluster-dashboard",
 				"ray.io/group":                 "8-CPUs",
-				"ray.io/identifier":            "boris-cluster-worker",
+				"ray.io/identifier":            "kuberay-cluster-worker",
 				"ray.io/is-ray-node":           "yes",
 				"ray.io/node-type":             "worker",
 				"test":                         "value",
 			},
-			Name:      "boris-cluster-worker-8-cpus-4dp9v",
+			Name:      "kuberay-cluster-worker-8-cpus-4dp9v",
 			Namespace: "max",
 		},
 		Spec: corev1.PodSpec{
@@ -204,8 +204,9 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "ray-worker",
-					Image: "blublinsky1/ray310:2.5.0",
+					Name:            "ray-worker",
+					Image:           "blublinsky1/ray310:2.5.0",
+					ImagePullPolicy: "Always",
 					Env: []corev1.EnvVar{
 						{
 							Name:  "AWS_KEY",
@@ -225,7 +226,7 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 						},
 						{
 							Name:  "RAY_IP",
-							Value: "boris-cluster-head-svc",
+							Value: "kuberay-cluster-head-svc",
 						},
 						{
 							Name:  "RAY_USAGE_STATS_KUBERAY_IN_USE",
@@ -276,7 +277,7 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		},
 		EnableInTreeAutoscaling: ptr.To(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+			IdleTimeoutSeconds: ptr.To(int32(60)),
 			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
 			Resources: &corev1.ResourceRequirements{
@@ -302,9 +303,10 @@ var JobNewClusterTest = rayv1api.RayJob{
 		Metadata: map[string]string{
 			"job_submission_id": "123",
 		},
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
-		RayClusterSpec:          &ClusterSpecTest.Spec,
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
+		RayClusterSpec:           &ClusterSpecTest.Spec,
 	},
 }
 
@@ -317,9 +319,10 @@ var JobExistingClusterTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
@@ -335,9 +338,10 @@ var JobExistingClusterSubmitterTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
 		ClusterSelector: map[string]string{
 			util.RayClusterUserLabelKey: "test",
 		},
@@ -374,10 +378,11 @@ var JobWithOutputTest = rayv1api.RayJob{
 		},
 	},
 	Spec: rayv1api.RayJobSpec{
-		Entrypoint:              "python /home/ray/samples/sample_code.py",
-		RuntimeEnvYAML:          "mytest yaml",
-		TTLSecondsAfterFinished: secondsValue,
-		RayClusterSpec:          &ClusterSpecTest.Spec,
+		Entrypoint:               "python /home/ray/samples/sample_code.py",
+		RuntimeEnvYAML:           "mytest yaml",
+		ShutdownAfterJobFinishes: true,
+		TTLSecondsAfterFinished:  secondsValue,
+		RayClusterSpec:           &ClusterSpecTest.Spec,
 	},
 	Status: rayv1api.RayJobStatus{
 		JobStatus:           "RUNNING",
@@ -405,7 +410,7 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: ptr.To[int32](int32(60)),
+	IdleTimeoutSeconds: ptr.To(int32(60)),
 	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
 	Image:              ptr.To("Some Image"),
 	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
@@ -541,6 +546,9 @@ func TestPopulateWorkerNodeSpec(t *testing.T) {
 	if groupSpec.ImagePullSecret != "foo" {
 		t.Errorf("failed to convert image pull secret")
 	}
+	if groupSpec.ImagePullPolicy != "Always" {
+		t.Errorf("failed to convert image pull policy")
+	}
 	if !reflect.DeepEqual(groupSpec.Annotations, expectedAnnotations) {
 		t.Errorf("failed to convert annotations, got %v, expected %v", groupSpec.Annotations, expectedAnnotations)
 	}
@@ -566,6 +574,24 @@ func TestAutoscalerOptions(t *testing.T) {
 	assert.Len(t, options.Envs.Values, 1)
 	assert.Len(t, options.Envs.ValuesFrom, 2)
 	assert.Len(t, options.Volumes, 2)
+}
+
+func TestNilAutoscalerOptions(t *testing.T) {
+	options := convertAutoscalingOptions(nil)
+	assert.Nil(t, options)
+}
+
+func TestFromCrdToAPIClusters(t *testing.T) {
+	clusters := []*rayv1api.RayCluster{&ClusterSpecTest}
+	clusterEventsMap := map[string][]corev1.Event{}
+	apiClusters := FromCrdToAPIClusters(clusters, clusterEventsMap)
+	assert.Len(t, apiClusters, 1)
+
+	apiCluster := apiClusters[0]
+	if len(apiCluster.Annotations) != 1 {
+		t.Errorf("failed to convert cluster's annotations")
+	}
+	assert.Equal(t, "nginx", apiCluster.Annotations["kubernetes.io/ingress.class"])
 }
 
 func TestPopulateRayClusterSpec(t *testing.T) {
@@ -610,6 +636,18 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 	}
 }
 
+func TestFromKubeToAPIComputeTemplates(t *testing.T) {
+	configMaps := []*corev1.ConfigMap{&configMapWithoutTolerations}
+	templates := FromKubeToAPIComputeTemplates(configMaps)
+	assert.Len(t, templates, 1)
+
+	template := templates[0]
+	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
+	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
+	assert.Equal(t, "", template.GpuAccelerator, "GPU accelerator mismatch")
+}
+
 func TestPopulateTemplate(t *testing.T) {
 	template := FromKubeToAPIComputeTemplate(&configMapWithoutTolerations)
 	if len(template.Tolerations) != 0 {
@@ -640,6 +678,19 @@ func TestPopulateTemplate(t *testing.T) {
 
 func tolerationToString(toleration *api.PodToleration) string {
 	return "Key: " + toleration.Key + " Operator: " + toleration.Operator + " Effect: " + toleration.Effect
+}
+
+func TestFromCrdToAPIJobs(t *testing.T) {
+	jobs := []*rayv1api.RayJob{&JobNewClusterTest}
+	apiJobs := FromCrdToAPIJobs(jobs)
+	assert.Len(t, apiJobs, 1)
+
+	apiJob := apiJobs[0]
+	assert.Equal(t, "test", apiJob.Name)
+	assert.Equal(t, "test", apiJob.Namespace)
+	assert.Equal(t, "user", apiJob.User)
+	assert.Equal(t, "python /home/ray/samples/sample_code.py", apiJob.Entrypoint)
+	assert.Equal(t, "123", apiJob.Metadata["job_submission_id"])
 }
 
 func TestPopulateJob(t *testing.T) {
@@ -680,4 +731,84 @@ func TestPopulateJob(t *testing.T) {
 	assert.Equal(t, "Initializing", job.JobDeploymentStatus)
 	assert.Equal(t, "Job is currently running", job.Message)
 	assert.Equal(t, "raycluster-sample-xxxxx", job.RayClusterName)
+}
+
+func TestFromCrdToAPIServices(t *testing.T) {
+	services := []*rayv1api.RayService{&ServiceV2Test}
+	serviceEventsMap := map[string][]corev1.Event{}
+	apiServices := FromCrdToAPIServices(services, serviceEventsMap)
+	assert.Len(t, apiServices, 1)
+
+	apiService := apiServices[0]
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, apiService.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, apiService.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], apiService.User)
+}
+
+func TestPopulateService(t *testing.T) {
+	service := FromCrdToAPIService(&ServiceV2Test, []corev1.Event{})
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Name, service.Name)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Namespace, service.Namespace)
+	assert.Equal(t, ServiceV2Test.ObjectMeta.Labels["ray.io/user"], service.User)
+	assert.Equal(t, ServiceV2Test.Spec.ServeConfigV2, service.ServeConfig_V2)
+	assert.Equal(t, int64(-1), service.DeleteAt.Seconds)
+}
+
+func TestPopulateServeApplicationStatus(t *testing.T) {
+	expectedAppName := "app0"
+	expectedAppStatus := rayv1api.AppStatus{
+		Deployments: map[string]rayv1api.ServeDeploymentStatus{},
+		Status:      rayv1api.ApplicationStatusEnum.DEPLOYING,
+		Message:     "Deploying...",
+	}
+	serveApplicationStatuses := map[string]rayv1api.AppStatus{
+		expectedAppName: expectedAppStatus,
+	}
+	appStatuses := PopulateServeApplicationStatus(serveApplicationStatuses)
+	assert.Len(t, appStatuses, 1)
+
+	appStatus := appStatuses[0]
+	assert.Equal(t, expectedAppName, appStatus.Name)
+	assert.Equal(t, expectedAppStatus.Status, appStatus.Status)
+	assert.Equal(t, expectedAppStatus.Message, appStatus.Message)
+}
+
+func TestPopulateServeDeploymentStatus(t *testing.T) {
+	expectedDeploymentStatus := rayv1api.ServeDeploymentStatus{
+		Status:  rayv1api.DeploymentStatusEnum.UPDATING,
+		Message: "Updating...",
+	}
+	serveDeploymentStatuses := map[string]rayv1api.ServeDeploymentStatus{
+		"deployment0": expectedDeploymentStatus,
+	}
+	deploymentStatuses := PopulateServeDeploymentStatus(serveDeploymentStatuses)
+	assert.Len(t, deploymentStatuses, 1)
+
+	deploymentStatus := deploymentStatuses[0]
+	assert.Equal(t, expectedDeploymentStatus.Status, deploymentStatus.Status)
+	assert.Equal(t, expectedDeploymentStatus.Message, deploymentStatus.Message)
+}
+
+func TestPopulateRayServiceEvent(t *testing.T) {
+	expectedServiceName := "svc0"
+	expectedEvent := corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Reason:  "test",
+		Message: "test",
+		Type:    "Normal",
+		Count:   2,
+	}
+	events := []corev1.Event{expectedEvent}
+	serviceEvents := PopulateRayServiceEvent(expectedServiceName, events)
+	assert.Len(t, serviceEvents, 1)
+
+	serviceEvent := serviceEvents[0]
+	assert.Equal(t, expectedEvent.Name, serviceEvent.Id)
+	assert.Equal(t, expectedServiceName+"-"+expectedEvent.ObjectMeta.Name, serviceEvent.Name)
+	assert.Equal(t, expectedEvent.Reason, serviceEvent.Reason)
+	assert.Equal(t, expectedEvent.Message, serviceEvent.Message)
+	assert.Equal(t, expectedEvent.Type, serviceEvent.Type)
+	assert.Equal(t, expectedEvent.Count, serviceEvent.Count)
 }

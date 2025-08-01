@@ -1,10 +1,13 @@
 package manager
 
 import (
+	"k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/client"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
-	"k8s.io/klog/v2"
 )
+
+//go:generate mockgen -source=client_manager.go -destination=client_manager_mock.go -package=manager
 
 type ClientManagerInterface interface {
 	ClusterClient() client.ClusterClientInterface

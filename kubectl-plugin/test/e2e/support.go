@@ -1,11 +1,14 @@
 package e2e
 
 import (
+	"encoding/json"
 	"math/rand"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -49,4 +52,27 @@ func deployTestRayCluster(ns string) {
 	cmd = exec.Command("kubectl", "wait", "--timeout=300s", "--for", "jsonpath={.status.state}=ready", "raycluster/raycluster-kuberay", "-n", ns)
 	err = cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
+}
+
+//nolint:unparam // Currently all tests use the same param; will remove the parameter once more test cases are added
+func getAndCheckRayJob(
+	namespace,
+	name,
+	expectedJobID,
+	expectedJobStatus,
+	expectedJobDeploymentStatus string,
+) (rayjob rayv1.RayJob) {
+	GinkgoHelper()
+	cmd := exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
+	output, err := cmd.CombinedOutput()
+	Expect(err).ToNot(HaveOccurred())
+
+	var rayJob rayv1.RayJob
+	err = json.Unmarshal(output, &rayJob)
+	Expect(err).ToNot(HaveOccurred())
+
+	Expect(rayJob.Status.JobId).To(Equal(expectedJobID))
+	Expect(string(rayJob.Status.JobStatus)).To(Equal(expectedJobStatus))
+	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal(expectedJobDeploymentStatus))
+	return rayJob
 }

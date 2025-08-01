@@ -51,17 +51,10 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "kuberay-operator.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create -}}
-    {{ default (include "kuberay-operator.fullname" .) .Values.serviceAccount.name }}
-{{- else -}}
-    {{ default "default" .Values.serviceAccount.name }}
+{{- /* Create the name of the deployment to use. */ -}}
+{{- define "kuberay-operator.deployment.name" -}}
+{{- include "kuberay-operator.fullname" . }}
 {{- end -}}
-{{- end -}}
-
 
 {{/*
 FeatureGates
@@ -77,6 +70,49 @@ FeatureGates
 {{- end }}
 {{- end }}
 
+{{- /* Create the name of the service to use. */ -}}
+{{- define "kuberay-operator.service.name" -}}
+{{- include "kuberay-operator.fullname" . }}
+{{- end -}}
+
+{{- /* Create the name of the service account to use. */ -}}
+{{- define "kuberay-operator.serviceAccount.name" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "kuberay-operator.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{- /* Create the name of the cluster role to use. */ -}}
+{{- define "kuberay-operator.clusterRole.name" -}}
+{{- include "kuberay-operator.fullname" . -}}
+{{- end -}}
+
+{{- /* Create the name of the cluster role binding to use. */ -}}
+{{- define "kuberay-operator.clusterRoleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}
+{{- end -}}
+
+{{- /* Create the name of the role to use. */ -}}
+{{- define "kuberay-operator.role.name" -}}
+{{- include "kuberay-operator.fullname" . -}}
+{{- end -}}
+
+{{- /* Create the name of the role binding to use. */ -}}
+{{- define "kuberay-operator.roleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}
+{{- end -}}
+
+{{- /* Create the name of the leader election role to use. */ -}}
+{{- define "kuberay-operator.leaderElectionRole.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-leader-election
+{{- end -}}
+
+{{- /* Create the name of the leader election role binding to use. */ -}}
+{{- define "kuberay-operator.leaderElectionRoleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-leader-election
+{{- end -}}
 
 {{/*
 Create a template to ensure consistency for Role and ClusterRole.
@@ -271,5 +307,16 @@ rules:
   - customresourcedefinitions
   verbs:
   - get
+{{- end -}}
+{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "scheduler-plugins") }}
+- apiGroups:
+  - scheduling.x-k8s.io
+  resources:
+  - podgroups
+  verbs:
+  - create
+  - get
+  - list
+  - watch
 {{- end -}}
 {{- end -}}

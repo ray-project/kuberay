@@ -6,12 +6,10 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -198,19 +196,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 		newRayService, err = test.Client().Ray().RayV1().RayServices(newRayService.Namespace).Update(test.Ctx(), newRayService, metav1.UpdateOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", newRayService.Namespace, newRayService.Name)
-		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
-
-		// Assert that the active RayCluster is eventually different
-		LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to switch to a new cluster", newRayService.Namespace, newRayService.Name)
-		g.Eventually(RayService(test, newRayService.Namespace, newRayService.Name), TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) string {
-			return rayService.Status.ActiveServiceStatus.RayClusterName
-		}, Not(Equal(rayClusterName))))
-
-		LogWithTimestamp(test.T(), "Verifying RayService %s/%s UpgradeInProgress condition to be false", newRayService.Namespace, newRayService.Name)
-		rayService, err = GetRayService(test, namespace.Name, "test-rayservice")
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceUpgrading(rayService)).To(BeFalse())
+		waitingForRayClusterSwitch(g, test, newRayService, rayClusterName)
 	}()
 
 	// Run Locust test
@@ -281,7 +267,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	// Kill gcs server
 	ExecPodCmd(test, oldHeadPod, common.RayHeadContainer, []string{"pkill", "gcs_server"})
 	// wait for head pod not to be ready
-	g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeFalse()))
+	g.Eventually(HeadPod(test, rayServiceUnderlyingRayCluster), TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeFalse()))
 
 	startTime := time.Now()
 	// Run Locust test
@@ -298,6 +284,6 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	g.Expect(newHeadPod.Name).To(Equal(oldHeadPodName))
 	g.Expect(newHeadPod.Status.ContainerStatuses[0].RestartCount).To(Equal(int32(1)))
 	// Verify that all pods are running
-	g.Expect(GetHeadPod(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-	g.Expect(GetWorkerPods(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(sampleyaml.AllPodsRunningAndReady, BeTrue()))
+	g.Expect(GetHeadPod(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
+	g.Expect(GetWorkerPods(test, rayServiceUnderlyingRayCluster)).Should(WithTransform(AllPodsRunningAndReady, BeTrue()))
 }

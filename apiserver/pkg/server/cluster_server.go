@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+	corev1 "k8s.io/api/core/v1"
+	klog "k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/protobuf/types/known/emptypb"
-	corev1 "k8s.io/api/core/v1"
-	klog "k8s.io/klog/v2"
 )
 
 type ClusterServerOptions struct {
@@ -68,7 +69,6 @@ func (s *ClusterServer) GetCluster(ctx context.Context, request *api.GetClusterR
 }
 
 // Finds all Clusters in a given namespace.
-// TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListClustersRequest) (*api.ListClustersResponse, error) {
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
@@ -95,7 +95,6 @@ func (s *ClusterServer) ListCluster(ctx context.Context, request *api.ListCluste
 }
 
 // Finds all Clusters in all namespaces.
-// TODO: Supports pagination and sorting on certain fields when we have DB support. request needs to be extended.
 func (s *ClusterServer) ListAllClusters(ctx context.Context, request *api.ListAllClustersRequest) (*api.ListAllClustersResponse, error) {
 	// Leave the namespace empty to list all clusters in all namespaces.
 	clusters, continueToken, err := s.resourceManager.ListClusters(ctx /*namespace=*/, "", request.Continue, request.Limit)

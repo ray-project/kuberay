@@ -5,10 +5,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -61,6 +60,10 @@ env_vars:
 		// Refresh the RayJob status
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
+
+		LogWithTimestamp(test.T(), "Checking that the RayJob status info has been set correctly.")
+		g.Expect(rayJob.Status.RayJobStatusInfo.StartTime).NotTo(BeNil())
+		g.Expect(rayJob.Status.RayJobStatusInfo.EndTime).NotTo(BeNil())
 
 		// Assert the RayCluster has been torn down
 		g.Eventually(func() error {

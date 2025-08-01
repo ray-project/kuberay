@@ -3,8 +3,9 @@ package e2e
 import (
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/require"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 func TestCreateJobSubmission(t *testing.T) {
@@ -40,7 +41,7 @@ func TestCreateJobSubmission(t *testing.T) {
 		Cluster: &api.Cluster{
 			Name:        tCtx.GetNextName(),
 			Namespace:   tCtx.GetNamespaceName(),
-			User:        "boris",
+			User:        "kuberay",
 			Version:     tCtx.GetRayVersion(),
 			Environment: api.Cluster_DEV,
 			ClusterSpec: &api.ClusterSpec{
@@ -77,6 +78,7 @@ func TestCreateJobSubmission(t *testing.T) {
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualCluster, "A cluster is expected")
+	require.True(t, clusterSpecEqual(clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster specs should be equal. Expected: %v, Actual: %v", clusterReq.Cluster.ClusterSpec, actualCluster.ClusterSpec)
 	waitForRunningCluster(t, tCtx, actualCluster.Name)
 
 	// Submit job

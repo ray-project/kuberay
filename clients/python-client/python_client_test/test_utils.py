@@ -13,7 +13,7 @@ test_cluster_body: dict = {
         "name": "raycluster-complete-raw",
     },
     "spec": {
-        "rayVersion": "2.9.0",
+        "rayVersion": "2.46.0",
         "headGroupSpec": {
             "rayStartParams": {"dashboard-host": "0.0.0.0"},
             "template": {
@@ -22,7 +22,7 @@ test_cluster_body: dict = {
                     "containers": [
                         {
                             "name": "ray-head",
-                            "image": "rayproject/ray:2.9.0",
+                            "image": "rayproject/ray:2.46.0",
                             "ports": [
                                 {"containerPort": 6379, "name": "gcs"},
                                 {"containerPort": 8265, "name": "dashboard"},
@@ -58,7 +58,7 @@ test_cluster_body: dict = {
                         "containers": [
                             {
                                 "name": "ray-worker",
-                                "image": "rayproject/ray:2.9.0",
+                                "image": "rayproject/ray:2.46.0",
                                 "lifecycle": {
                                     "preStop": {
                                         "exec": {
@@ -76,7 +76,7 @@ test_cluster_body: dict = {
                             },
                             {
                                 "name": "side-car",
-                                "image": "rayproject/ray:2.9.0",
+                                "image": "rayproject/ray:2.46.0",
                                 "resources": {
                                     "limits": {"cpu": "1", "memory": "1G"},
                                     "requests": {"cpu": "500m", "memory": "1G"},
@@ -115,7 +115,7 @@ class TestUtils(unittest.TestCase):
     def test_populate_worker_group(self):
         worker_group, succeeded = self.utils.populate_worker_group(
             group_name="small-group",
-            ray_image="rayproject/ray:2.9.0",
+            ray_image="rayproject/ray:2.46.0",
             ray_command=["/bin/bash", "-lc"],
             init_image="busybox:1.28",
             cpu_requests="3",
@@ -137,7 +137,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(worker_group["replicas"], 1)
 
         container = worker_group["template"]["spec"]["containers"][0]
-        self.assertEqual(container["image"], "rayproject/ray:2.9.0")
+        self.assertEqual(container["image"], "rayproject/ray:2.46.0")
         self.assertEqual(container["command"], ["/bin/bash", "-lc"])
 
         resources = container["resources"]
@@ -149,7 +149,7 @@ class TestUtils(unittest.TestCase):
         # min_replicas can be 0 and ray_start_params can be an empty dict.
         worker_group, succeeded = self.utils.populate_worker_group(
             group_name="small-group",
-            ray_image="rayproject/ray:2.3.0",
+            ray_image="rayproject/ray:2.46.0",
             ray_command=["/bin/bash", "-lc"],
             init_image="busybox:1.28",
             cpu_requests="3",
@@ -282,25 +282,6 @@ class TestUtils(unittest.TestCase):
         )
 
 
-    def test_delete_worker_group(self):
-        cluster = self.director.build_small_cluster(name="small-cluster")
-        actual = cluster["metadata"]["name"]
-        expected = "small-cluster"
-        self.assertEqual(actual, expected)
-
-        cluster, succeeded = self.utils.delete_worker_group(
-            cluster,
-            group_name="small-cluster-workers",
-        )
-        self.assertEqual(succeeded, True)
-        self.assertEqual(len(cluster["spec"]["workerGroupSpecs"]),0)
-
-        # deleting the same worker group again should fail
-        with self.assertRaises(AssertionError):
-            cluster, succeeded = self.utils.delete_worker_group(
-                cluster,
-                group_name="small-cluster-workers",
-            )
     def test_delete_worker_group(self):
         """
         Test delete_worker_group

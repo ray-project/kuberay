@@ -1,15 +1,14 @@
 package common
 
 import (
-	"reflect"
 	"testing"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // Test subject and role ref names in the function BuildRoleBinding.
@@ -82,9 +81,7 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			rb, err := BuildRoleBinding(tc.input)
 			require.NoError(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("got %v, want %v", got, tc.want)
-			}
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }

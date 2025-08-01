@@ -16,48 +16,42 @@ spec:
             ray_actor_options:
               num_cpus: 1
   rayClusterConfig:
-    rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.46.0' # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
       rayStartParams: {}
       #pod template
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray-ml:2.41.0.deprecated-py39-cpu
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 4Gi
-                requests:
-                  cpu: 1
-                  memory: 4Gi
+          - name: ray-head
+            image: rayproject/ray-ml:2.46.0.0e19ea-py39-cpu
+            resources:
+              limits:
+                cpu: 1
+                memory: 4Gi
+              requests:
+                cpu: 1
+                memory: 4Gi
     workerGroupSpecs:
-      # the pod replicas in this group typed worker
-      - replicas: 1
-        minReplicas: 1
-        maxReplicas: 5
-        # logical group name, for this called small-group, also can be functional
-        groupName: worker
-        # The `rayStartParams` are used to configure the `ray start` command.
-        # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-        # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-        rayStartParams: {}
-        #pod template
-        template:
-          spec:
-            containers:
-              - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-                image: rayproject/ray-ml:2.41.0.deprecated-py39-cpu
-                resources:
-                  limits:
-                    cpu: 1
-                    memory: 4Gi
-                  requests:
-                    cpu: 1
-                    memory: 4Gi
+    # the pod replicas in this group typed worker
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 5
+      # logical group name, for this called small-group, also can be functional
+      groupName: worker
+      rayStartParams: {}
+      #pod template
+      template:
+        spec:
+          containers:
+          - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+            image: rayproject/ray-ml:2.46.0.0e19ea-py39-cpu
+            resources:
+              limits:
+                cpu: 1
+                memory: 4Gi
+              requests:
+                cpu: 1
+                memory: 4Gi

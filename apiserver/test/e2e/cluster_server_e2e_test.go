@@ -1,19 +1,14 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/require"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -80,7 +75,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -140,7 +135,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -165,6 +160,30 @@ func TestCreateClusterEndpoint(t *testing.T) {
 							},
 						},
 						WorkerGroupSpec: []*api.WorkerGroupSpec{},
+					},
+				},
+				Namespace: tCtx.GetNamespaceName(),
+			},
+			ExpectedError: nil,
+		},
+		{
+			Name: "Create cluster with head service annotations",
+			Input: &api.CreateClusterRequest{
+				Cluster: &api.Cluster{
+					Name:      tCtx.GetNextName(),
+					Namespace: tCtx.GetNamespaceName(),
+					User:      "kuberay",
+					ClusterSpec: &api.ClusterSpec{
+						HeadGroupSpec: &api.HeadGroupSpec{
+							ComputeTemplate: tCtx.GetComputeTemplateName(),
+							Image:           tCtx.GetRayImage(),
+							RayStartParams: map[string]string{
+								"dashboard-host": "0.0.0.0",
+							},
+						},
+						HeadServiceAnnotations: map[string]string{
+							"foo": "bar",
+						},
 					},
 				},
 				Namespace: tCtx.GetNamespaceName(),
@@ -282,7 +301,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -310,7 +329,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -318,7 +337,6 @@ func TestCreateClusterEndpoint(t *testing.T) {
 							ComputeTemplate: tCtx.GetComputeTemplateName(),
 							Image:           tCtx.GetRayImage(),
 							ServiceType:     "NodePort",
-							RayStartParams:  map[string]string{},
 						},
 						WorkerGroupSpec: []*api.WorkerGroupSpec{},
 					},
@@ -335,7 +353,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -365,7 +383,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -399,7 +417,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				Cluster: &api.Cluster{
 					Name:        tCtx.GetNextName(),
 					Namespace:   tCtx.GetNamespaceName(),
-					User:        "boris",
+					User:        "kuberay",
 					Version:     tCtx.GetRayVersion(),
 					Environment: api.Cluster_DEV,
 					ClusterSpec: &api.ClusterSpec{
@@ -437,6 +455,7 @@ func TestCreateClusterEndpoint(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualCluster, "A cluster is expected")
+				require.True(t, clusterSpecEqual(tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec), "Cluster spec is not as expected. Expected: %v, Actual: %v", tc.Input.Cluster.ClusterSpec, actualCluster.ClusterSpec)
 				waitForRunningCluster(t, tCtx, actualCluster.Name)
 				tCtx.DeleteRayCluster(t, actualCluster.Name)
 			} else {
@@ -458,7 +477,7 @@ func TestDeleteCluster(t *testing.T) {
 	tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
+	}, []rayv1api.RayClusterConditionType{})
 	tests := []GenericEnd2EndTest[*api.DeleteClusterRequest]{
 		{
 			Name: "Delete an existing cluster",
@@ -507,7 +526,7 @@ func TestDeleteCluster(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedCluster(t, tCtx, tc.Input.Name)
+				waitForClusterToDisappear(t, tCtx, tc.Input.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -516,7 +535,7 @@ func TestDeleteCluster(t *testing.T) {
 	}
 }
 
-func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*End2EndTestingContext {
+func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int, expectedConditions []rayv1api.RayClusterConditionType) []*End2EndTestingContext {
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
 	for i := 0; i < numberOfNamespaces; i++ {
 		tCtx, err := NewEnd2EndTestingContext(t)
@@ -529,7 +548,7 @@ func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int) []*E
 		actualCluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-		})
+		}, expectedConditions)
 		t.Cleanup(func() {
 			tCtx.DeleteRayCluster(t, actualCluster.Name)
 			tCtx.DeleteConfigMap(t, configMapName)
@@ -546,7 +565,7 @@ func isMatchingCluster(tCtx *End2EndTestingContext, cluster *api.Cluster) bool {
 // TestGetAllClusters tests gets all Ray clusters from k8s cluster
 func TestGetAllClusters(t *testing.T) {
 	numberOfNamespaces := 3
-	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces, []rayv1api.RayClusterConditionType{})
 	tCtx := tCtxs[0]
 	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{})
 	require.NoError(t, err, "No error expected")
@@ -574,7 +593,7 @@ func TestGetAllClusters(t *testing.T) {
 // TestGetAllClustersByPagination tests gets all Ray clusters from k8s cluster with pagination
 func TestGetAllClustersByPagination(t *testing.T) {
 	numberOfNamespaces := 3
-	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces, []rayv1api.RayClusterConditionType{})
 	tCtx := tCtxs[0]
 	gotClusters := make([]bool, numberOfNamespaces)
 	continueToken := ""
@@ -614,7 +633,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 // TestGetAllClustersByPaginationWithAllResults tests gets all Ray clusters from k8s cluster with pagination returning all results
 func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	numberOfNamespaces := 3
-	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces)
+	tCtxs := createOneClusterInEachNamespaces(t, numberOfNamespaces, []rayv1api.RayClusterConditionType{})
 	tCtx := tCtxs[0]
 	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 		Limit: 10,
@@ -653,7 +672,7 @@ func TestGetClustersInNamespace(t *testing.T) {
 	cluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
+	}, []rayv1api.RayClusterConditionType{})
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster.Name)
 		tCtx.DeleteConfigMap(t, configMapName)
@@ -690,11 +709,11 @@ func TestGetClustersByPaginationInNamespace(t *testing.T) {
 	cluster1, configMapName1 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	}, "cluster1")
+	}, []rayv1api.RayClusterConditionType{}, "cluster1")
 	cluster2, configMapName2 := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	}, "cluster2")
+	}, []rayv1api.RayClusterConditionType{}, "cluster2")
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster1.Name)
 		tCtx.DeleteRayCluster(t, cluster2.Name)
@@ -733,7 +752,7 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 	cluster, configMapName := tCtx.CreateRayClusterWithConfigMaps(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 		"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-	})
+	}, []rayv1api.RayClusterConditionType{})
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster.Name)
 		tCtx.DeleteConfigMap(t, configMapName)
@@ -793,33 +812,4 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 			}
 		})
 	}
-}
-
-func waitForRunningCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
-	// wait for the cluster to be in a running state for 3 minutes
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil {
-			return true, err00
-		}
-		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return rayCluster.Status.State == rayv1api.Ready, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", tCtx.GetRayClusterName(), err)
-}
-
-func waitForDeletedCluster(t *testing.T, tCtx *End2EndTestingContext, clusterName string) {
-	// wait for the cluster to be deleted
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := tCtx.GetRayClusterByName(clusterName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayclusters.ray.io \""+tCtx.GetRayClusterName()+"\" not found") {
-			return true, nil
-		}
-		t.Logf("Found status of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return false, err00
-	})
-	require.NoErrorf(t, err, "No error expected when deleting ray cluster: '%s', err %v", clusterName, err)
 }

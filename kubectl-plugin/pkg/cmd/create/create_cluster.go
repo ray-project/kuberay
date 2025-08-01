@@ -5,19 +5,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/templates"
 	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/kubectl/pkg/util/templates"
-
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 )
@@ -32,20 +30,21 @@ type CreateClusterOptions struct {
 	headNodeSelectors      map[string]string
 	workerNodeSelectors    map[string]string
 	rayClusterConfig       *generation.RayClusterConfig
-	namespace              string
-	clusterName            string
+	headMemory             string
+	workerMemory           string
 	rayVersion             string
 	image                  string
 	headCPU                string
-	headMemory             string
+	namespace              string
 	headEphemeralStorage   string
 	headGPU                string
 	workerCPU              string
-	workerMemory           string
+	clusterName            string
 	workerEphemeralStorage string
 	workerGPU              string
 	workerTPU              string
 	configFile             string
+	autoscaler             generation.AutoscalerVersion
 	timeout                time.Duration
 	numOfHosts             int32
 	workerReplicas         int32
@@ -55,6 +54,8 @@ type CreateClusterOptions struct {
 
 var (
 	defaultProvisionedTimeout = 5 * time.Minute
+	defaultImage              = "rayproject/ray"
+	defaultImageWithTag       = fmt.Sprintf("%s:%s", defaultImage, util.RayVersion)
 
 	createClusterLong = templates.LongDesc(`
 	Create a Ray cluster with the given name and options.
@@ -117,13 +118,13 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().StringToStringVar(&options.labels, "labels", nil, "K8s labels (e.g. --labels app=ray,env=dev)")
 	cmd.Flags().StringToStringVar(&options.annotations, "annotations", nil, "K8s annotations (e.g. --annotations ttl-hours=24,owner=chthulu)")
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.image, "image", defaultImageWithTag, "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", util.DefaultHeadCPU, "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", util.DefaultHeadMemory, "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", util.DefaultHeadGPU, "number of GPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headEphemeralStorage, "head-ephemeral-storage", util.DefaultHeadEphemeralStorage, "amount of ephemeral storage in the Ray head")
-	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", options.headRayStartParams, "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
-	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.headRayStartParams, "head-ray-start-params", make(map[string]string), "a map of arguments to the Ray head's 'ray start' entrypoint, e.g. '--head-ray-start-params dashboard-host=0.0.0.0,num-cpus=2'")
+	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", make(map[string]string), "Node selectors to apply to all head pods in the cluster (e.g. --head-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", util.DefaultWorkerReplicas, "desired worker group replicas")
 	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", util.DefaultWorkerCPU, "number of CPUs in each worker group replica")
 	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", util.DefaultWorkerMemory, "amount of memory in each worker group replica")
@@ -136,9 +137,10 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 			util.NodeSelectorGKETPUTopology,
 		),
 	)
-	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", options.workerRayStartParams, "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
-	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.workerRayStartParams, "worker-ray-start-params", make(map[string]string), "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
+	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", make(map[string]string), "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selector=cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", util.DefaultNumOfHosts, "number of hosts in default worker group per replica")
+	cmd.Flags().Var(&options.autoscaler, "autoscaler", fmt.Sprintf("autoscaler to use, supports: %q, %q", generation.AutoscalerV1, generation.AutoscalerV2))
 	cmd.Flags().StringVar(&options.configFile, "file", "", "path to a YAML file containing Ray cluster configuration")
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
@@ -160,7 +162,12 @@ func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string)
 	options.clusterName = args[0]
 
 	if options.image == "" {
-		options.image = fmt.Sprintf("rayproject/ray:%s", options.rayVersion)
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
+	}
+
+	// If the image is the default but the ray version is not the default, set the image to use the specified ray version
+	if options.image == defaultImageWithTag && options.rayVersion != util.RayVersion {
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
 	}
 
 	return nil
@@ -198,11 +205,10 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 		}
 
 		for name, value := range resourceFields {
-			if (name == "head-ephemeral-storage" || name == "worker-ephemeral-storage") && value == "" {
-				continue
-			}
-			if err := util.ValidateResourceQuantity(value, name); err != nil {
-				return fmt.Errorf("%w", err)
+			if value != "" || cmd.Flags().Changed(name) {
+				if err := util.ValidateResourceQuantity(value, name); err != nil {
+					return fmt.Errorf("%w", err)
+				}
 			}
 		}
 	}
@@ -300,6 +306,9 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 					RayStartParams:   options.workerRayStartParams,
 					NodeSelectors:    options.workerNodeSelectors,
 				},
+			},
+			Autoscaler: &generation.Autoscaler{
+				Version: options.autoscaler,
 			},
 		}
 	}

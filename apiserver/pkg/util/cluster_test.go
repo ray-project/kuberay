@@ -6,12 +6,13 @@ import (
 	"sort"
 	"testing"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
 var sizelimit = resource.MustParse("100Gi")
@@ -637,9 +638,9 @@ func TestGetNodeHostIP(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		addresses   []corev1.NodeAddress
 		expectIP    string
 		expectError string
+		addresses   []corev1.NodeAddress
 	}{
 		{
 			name: "InternalOnly",
@@ -684,7 +685,7 @@ func TestGetNodeHostIP(t *testing.T) {
 			if tc.expectError != "" {
 				assert.EqualError(t, err, tc.expectError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expectIP, ip.String())
 			}
 		})

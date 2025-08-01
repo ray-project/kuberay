@@ -2,11 +2,11 @@ package schedulerinterface
 
 import (
 	"context"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // BatchScheduler manages submitting RayCluster pods to a third-party scheduler.
@@ -28,7 +28,7 @@ type BatchScheduler interface {
 // necessary callbacks with the operator, and the creation of the BatchScheduler itself.
 type BatchSchedulerFactory interface {
 	// New creates a new BatchScheduler for the scheduler plugin.
-	New(ctx context.Context, config *rest.Config) (BatchScheduler, error)
+	New(ctx context.Context, config *rest.Config, cli client.Client) (BatchScheduler, error)
 
 	// AddToScheme adds the types in this scheduler to the given scheme (runs during init).
 	AddToScheme(scheme *runtime.Scheme)
@@ -57,7 +57,7 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 func (d *DefaultBatchScheduler) PropagateMetadata(ctx context.Context, parent client.Object, groupName string, child client.Object) {
 }
 
-func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config) (BatchScheduler, error) {
+func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {
 	return &DefaultBatchScheduler{}, nil
 }
 

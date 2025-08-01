@@ -62,17 +62,44 @@ make build
 make test
 ```
 
+To generate mock files for interfaces, add a `//go:generate` comment in the target Go file:
+
+```go
+//go:generate mockgen -source=your_file.go -destination=your_file_mock.go -package=your_package
+```
+
+Then run:
+
+```sh
+make generate
+```
+
+This will create or update mock files.
+
 #### End to End Testing
 
-There are two `make` targets provide execute the end to end test (integration between Kuberay API server and Kuberay Operator):
+There are two `make` targets provided to execute the end to end test (integration between Kuberay API server and Kuberay Operator):
 
-* `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads.
+* `make e2e-test` executes all the tests defined in the [test/e2e package](./test/e2e/). It uses the cluster defined in `~/.kube/config` to submit the workloads. Please make sure you have done the following before running `make e2e-test`:
+    1. Install the KubeRay Operator into the cluster by running `make operator-image load-operator-image deploy-operator`
+    2. Install the KubeRay API server into the cluster by running `make install`
+    3. Verify the setup with a smoke test `curl -I localhost:31888/healthz`, and you should see a response like:
+
+```bash
+> curl -I localhost:31888/healthz
+HTTP/1.1 200 OK
+Date: Tue, 29 Apr 2025 12:36:05 GMT
+```
+
+> [!NOTE]
+> Please rerun `make uninstall && make install` whenever you make changes to the `apiserver/` codebase to ensure the KubeRay API server is rebuilt and redeployed properly. Alternatively, you can simply run `make start-local-apiserver` to spin up the API server within the kind cluster in one single command.
+
 * `make local-e2e-test` creates a local kind cluster, builds the Kuberay operator and API server images from the current branch and deploys the operator and API server into the kind cluster. It shuts down the kind cluster upon successful execution of the end to end test. If the tests fail the cluster will be left running and will have to manually be shutdown by executing the `make clean-cluster`
 
 The `e2e` test targets use two variables to control what version of Ray images to use in the end to end tests:
 
-* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.9.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added to the image.
-* `E2E_API_SERVER_URL` -- for the base URL of the deployed KubeRayAPI server. The default value is: `http://localhost:31888`
+* `E2E_API_SERVER_RAY_IMAGE` -- for the ray docker image. Currently set to `rayproject/ray:2.46.0-py310`. On Apple silicon or arm64 development machines the `-aarch64` suffix is added to the image.
+* `E2E_API_SERVER_URL` -- for the base URL of the deployed KubeRay API server. The default value is: `http://localhost:31888`
 
 The end to end test targets share the usage of the `GO_TEST_FLAGS`. Overriding the make file variable with a `-v` option allows for both unit and end to end tests to print any output / debug messages. By default, only if there's a test failure those messages are shown.
 

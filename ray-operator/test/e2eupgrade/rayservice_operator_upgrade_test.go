@@ -2,6 +2,7 @@ package e2eupgrade
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 
@@ -12,8 +13,6 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
-	e2e "github.com/ray-project/kuberay/ray-operator/test/e2erayservice"
-	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -33,8 +32,10 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	// Get the upgrade version from environment
 	upgradeVersion := GetKubeRayUpgradeVersion()
 
+	test.T().Logf("Detected upgrade version: %s", upgradeVersion)
+
 	// Create RayService custom resource
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(e2e.RayServiceSampleYamlApplyConfiguration())
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfigurationWithWorker())
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -54,14 +55,8 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	curlContainerName := "curl-container"
 
 	test.T().Logf("Creating curl pod %s/%s", namespace.Name, curlPodName)
-	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(func(g Gomega) *corev1.Pod {
-		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		return updatedCurlPod
-	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-	test.T().Logf("Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
 	// Validate RayService is able to serve requests
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")
@@ -69,22 +64,45 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
-	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint because the cluster only has a head Pod", svcName)
+	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint and two addresses", svcName)
 	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(endpoints.Subsets).To(HaveLen(1))
-	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
+	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(2))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
-	test.T().Logf("Upgrading the KubeRay operator to the latest release")
-	cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
-	err = cmd.Run()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
-	cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
-	err = cmd.Run()
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
+
+	useLocalHelmChart := false
+
+	if val, ok := os.LookupEnv("USE_LOCAL_HELM_CHART"); ok && val == "true" {
+		useLocalHelmChart = true
+	}
+
+	if useLocalHelmChart {
+		cmd := exec.Command("kubectl", "replace", "-k", "../../config/crd")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			test.T().Logf("Error upgrading KubeRay operator: %v\nCommand output:\n%s", err, string(output))
+			t.Fatal("Failed to upgrade KubeRay operator")
+		}
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+
+		t.Logf("Upgrading operator deployment using local helm image version: %s", upgradeVersion)
+		cmd = exec.Command("helm", "upgrade", "kuberay-operator", "../../../helm-chart/kuberay-operator", "--set", fmt.Sprintf("image.repository=kuberay/kuberay-operator,image.tag=%s", upgradeVersion)) //nolint:gosec // required for upgrade
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+	} else {
+		cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+		cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
+	}
 
 	// Validate RayService is able to serve requests during the upgrade
 	test.T().Logf("Sending requests to the RayService to make sure it is ready to serve requests")

@@ -6,40 +6,33 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/utils/lru"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-
-	cmap "github.com/orcaman/concurrent-map/v2"
-
 	"github.com/go-logr/logr"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/lru"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -159,7 +152,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
-	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil {
+	if activeRayClusterInstance != nil && pendingRayClusterInstance == nil &&
+		!shouldPrepareNewCluster(ctx, rayServiceInstance, activeRayClusterInstance, nil, false) {
 		// Only reconcile serve applications for the active cluster when there is no pending cluster. That is, during the upgrade process,
 		// in-place update and updating the serve application status for the active cluster will not work.
 		logger.Info("Reconciling the Serve applications for active cluster", "clusterName", activeRayClusterInstance.Name)
@@ -206,7 +200,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Final status update for any CR modification.
-	if inconsistentRayServiceStatuses(ctx, originalRayServiceInstance.Status, rayServiceInstance.Status) {
+	if utils.InconsistentRayServiceStatuses(originalRayServiceInstance.Status, rayServiceInstance.Status) {
 		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
 		if errStatus := r.Status().Update(ctx, rayServiceInstance); errStatus != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, errStatus
@@ -349,90 +343,6 @@ func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayS
 	meta.SetStatusCondition(&rayServiceInstance.Status.Conditions, condition)
 }
 
-// Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
-func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.RayClusterName != newStatus.RayClusterName {
-		logger.Info("inconsistentRayServiceStatus RayService RayClusterName", "oldRayClusterName", oldStatus.RayClusterName, "newRayClusterName", newStatus.RayClusterName)
-		return true
-	}
-
-	if len(oldStatus.Applications) != len(newStatus.Applications) {
-		return true
-	}
-
-	var ok bool
-	for appName, newAppStatus := range newStatus.Applications {
-		var oldAppStatus rayv1.AppStatus
-		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
-			logger.Info("inconsistentRayServiceStatus RayService new application found", "appName", appName)
-			return true
-		}
-
-		if oldAppStatus.Status != newAppStatus.Status {
-			logger.Info("inconsistentRayServiceStatus RayService application status changed", "appName", appName, "oldStatus", oldAppStatus.Status, "newStatus", newAppStatus.Status)
-			return true
-		} else if oldAppStatus.Message != newAppStatus.Message {
-			logger.Info("inconsistentRayServiceStatus RayService application status message changed", "appName", appName, "oldStatus", oldAppStatus.Message, "newStatus", newAppStatus.Message)
-			return true
-		}
-
-		if len(oldAppStatus.Deployments) != len(newAppStatus.Deployments) {
-			return true
-		}
-
-		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
-			var oldDeploymentStatus rayv1.ServeDeploymentStatus
-			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
-				logger.Info("inconsistentRayServiceStatus RayService new deployment found in application", "deploymentName", deploymentName, "appName", appName)
-				return true
-			}
-
-			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
-				logger.Info("inconsistentRayServiceStatus RayService DeploymentStatus changed", "oldDeploymentStatus", oldDeploymentStatus.Status, "newDeploymentStatus", newDeploymentStatus.Status)
-				return true
-			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
-				logger.Info("inconsistentRayServiceStatus RayService deployment status message changed", "oldDeploymentStatus", oldDeploymentStatus.Message, "newDeploymentStatus", newDeploymentStatus.Message)
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// Determine whether to update the status of the RayService instance.
-func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
-		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
-		return true
-	}
-
-	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
-		logger.Info("inconsistentRayServiceStatus RayService NumServeEndpoints changed", "oldNumServeEndpoints", oldStatus.NumServeEndpoints, "newNumServeEndpoints", newStatus.NumServeEndpoints)
-		return true
-	}
-
-	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayServiceStatus RayService Conditions changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService ActiveServiceStatus changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService PendingServiceStatus changed")
-		return true
-	}
-
-	return false
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *RayServiceReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -561,16 +471,22 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 		return err
 	}
 
-	// Clean up RayCluster instances. Each instance is deleted 60 seconds
+	// Determine the ray cluster deletion delay seconds
+	deletionDelay := RayClusterDeletionDelayDuration
+	if rayServiceInstance.Spec.RayClusterDeletionDelaySeconds != nil {
+		deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
+	}
+	// Clean up RayCluster instances. Each instance is deleted after the configured deletion delay.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
 			if !exists {
-				deletionTimestamp := metav1.Now().Add(RayClusterDeletionDelayDuration)
+				deletionTimestamp := metav1.Now().Add(deletionDelay)
 				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
 				logger.Info(
 					"Scheduled dangling RayCluster for deletion",
 					"rayClusterName", rayClusterInstance.Name,
+					"deletionDelay", deletionDelay.String(),
 					"deletionTimestamp", deletionTimestamp,
 				)
 			} else {
@@ -994,7 +910,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	return nil, err
 }
 
-// Reconciles the Serve applications on the RayCluster. Returns (isReady, error).
+// Reconciles the Serve applications on the RayCluster. Returns (isReady, serveApplicationStatus, error).
 // The `isReady` flag indicates whether the RayCluster is ready to handle incoming traffic.
 func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (bool, map[string]rayv1.AppStatus, error) {
 	logger := ctrl.LoggerFrom(ctx)

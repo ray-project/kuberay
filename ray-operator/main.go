@@ -9,11 +9,9 @@ import (
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,7 +21,6 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +36,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
-	// +kubebuilder:scaffold:imports
 )
 
 var (
@@ -235,34 +231,35 @@ func main() {
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
-	var rayClusterMetricCollector *metrics.RayClusterMetricCollector
-	if config.EnableMetrics {
-		rayClusterMetricCollector = metrics.NewRayClusterMetricCollector()
-		ctrlmetrics.Registry.MustRegister(rayClusterMetricCollector)
-	}
-
 	ctx := ctrl.SetupSignalHandler()
-	batchSchedulerMgr, err := batchscheduler.NewSchedulerManager(ctx, config, mgr.GetConfig())
-	if err != nil {
-		// fail fast if the scheduler plugin fails to init
-		// prevent running the controller in an undefined state
-		panic(err)
+	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
+	var rayJobMetricsManager *metrics.RayJobMetricsManager
+	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
+	if config.EnableMetrics {
+		mgrClient := mgr.GetClient()
+		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
+		rayJobMetricsManager = metrics.NewRayJobMetricsManager(ctx, mgrClient)
+		rayServiceMetricsManager = metrics.NewRayServiceMetricsManager(ctx, mgrClient)
+		ctrlmetrics.Registry.MustRegister(
+			rayClusterMetricsManager,
+			rayJobMetricsManager,
+			rayServiceMetricsManager,
+		)
 	}
-	batchSchedulerMgr.AddToScheme(mgr.GetScheme())
-
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:     config.HeadSidecarContainers,
-		WorkerSidecarContainers:   config.WorkerSidecarContainers,
-		IsOpenShift:               utils.GetClusterType(),
-		RayClusterMetricCollector: rayClusterMetricCollector,
+		HeadSidecarContainers:    config.HeadSidecarContainers,
+		WorkerSidecarContainers:  config.WorkerSidecarContainers,
+		IsOpenShift:              utils.GetClusterType(),
+		RayClusterMetricsManager: rayClusterMetricsManager,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, batchSchedulerMgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
+
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		EnableMetrics: config.EnableMetrics,
+		RayJobMetricsManager: rayJobMetricsManager,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, batchSchedulerMgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")

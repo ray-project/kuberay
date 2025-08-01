@@ -3,68 +3,13 @@ package util
 import (
 	"fmt"
 
-	klog "k8s.io/klog/v2"
-
-	"github.com/go-openapi/runtime"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	k8metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	klog "k8s.io/klog/v2"
 )
-
-type CustomCode uint32
-
-const (
-	CUSTOM_CODE_TRANSIENT CustomCode = 0
-	CUSTOM_CODE_PERMANENT CustomCode = 1
-	CUSTOM_CODE_NOT_FOUND CustomCode = 2
-	CUSTOM_CODE_GENERIC   CustomCode = 3
-)
-
-type APICode int
-
-const (
-	API_CODE_NOT_FOUND = 404
-)
-
-type CustomError struct {
-	error error
-	code  CustomCode
-}
-
-func NewCustomError(err error, code CustomCode, format string, a ...interface{}) *CustomError {
-	message := fmt.Sprintf(format, a...)
-	return &CustomError{
-		error: errors.Wrapf(err, "CustomError (code: %v): %v", code, message),
-		code:  code,
-	}
-}
-
-func NewCustomErrorf(code CustomCode, format string, a ...interface{}) *CustomError {
-	message := fmt.Sprintf(format, a...)
-	return &CustomError{
-		error: errors.Errorf("CustomError (code: %v): %v", code, message),
-		code:  code,
-	}
-}
-
-func (e *CustomError) Error() string {
-	return e.error.Error()
-}
-
-func HasCustomCode(err error, code CustomCode) bool {
-	if err == nil {
-		return false
-	}
-
-	var customErr *CustomError
-	if errors.As(err, &customErr) {
-		return customErr.code == code
-	}
-
-	return false
-}
 
 type UserError struct {
 	// Error for internal debugging.
@@ -83,32 +28,6 @@ func newUserError(internalError error, externalMessage string,
 		externalMessage:    externalMessage,
 		externalStatusCode: externalStatusCode,
 	}
-}
-
-func NewUserErrorWithSingleMessage(err error, message string) *UserError {
-	return NewUserError(err, message, message)
-}
-
-func NewUserError(err error, internalMessage string, externalMessage string) *UserError {
-	// Note apiError.Response is of type github.com/go-openapi/runtime/client
-	var apiError *runtime.APIError
-	if errors.As(err, &apiError) {
-		if apiError.Code == API_CODE_NOT_FOUND {
-			return newUserError(
-				errors.Wrapf(err, internalMessage),
-				fmt.Sprintf("%v: %v", externalMessage, "Resource not found"),
-				codes.Code(apiError.Code))
-		}
-		return newUserError(
-			errors.Wrapf(err, internalMessage),
-			fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-			codes.Code(apiError.Code))
-	}
-
-	return newUserError(
-		errors.Wrapf(err, internalMessage),
-		fmt.Sprintf("%v. Raw error from the service: %v", externalMessage, err.Error()),
-		codes.Internal)
 }
 
 func ExtractErrorForCLI(err error, isDebugMode bool) error {
@@ -274,7 +193,7 @@ func Wrap(err error, message string) error {
 		return userErr.wrap(message)
 	}
 
-	return errors.Wrapf(err, message)
+	return errors.Wrapf(err, "%s", message)
 }
 
 func LogError(err error) {

@@ -211,7 +211,7 @@ type ListRayServicesRequest struct {
 
 	// Required. The namespace of the ray services to be retrieved.
 	Namespace string `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	// A page token to request the next page of results. The token is acquried
+	// A page token to request the next page of results. The token is acquired
 	// from the nextPageToken field of the response from the previous
 	// ListRayServices call or can be omitted when fetching the first page.
 	PageToken string `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
@@ -284,6 +284,8 @@ type ListRayServicesResponse struct {
 	// The total number of RayServices for the given query.
 	TotalSize int32 `protobuf:"varint,2,opt,name=total_size,json=totalSize,proto3" json:"total_size,omitempty"`
 	// The token to list the next page of RayServices.
+	//
+	// If there are no more clusters, this field will be empty.
 	NextPageToken string `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 }
 
@@ -345,7 +347,7 @@ type ListAllRayServicesRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// A page token to request the next page of results. The token is acquried
+	// A page token to request the next page of results. The token is acquired
 	// from the nextPageToken field of the response from the previous
 	// ListRayServices call or can be omitted when fetching the first page.
 	PageToken string `protobuf:"bytes,1,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
@@ -411,6 +413,7 @@ type ListAllRayServicesResponse struct {
 	// The total number of RayServices for the given query.
 	TotalSize int32 `protobuf:"varint,2,opt,name=total_size,json=totalSize,proto3" json:"total_size,omitempty"`
 	// The token to list the next page of RayServices.
+	// If there is no more service, this field will be empty.
 	NextPageToken string `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 }
 

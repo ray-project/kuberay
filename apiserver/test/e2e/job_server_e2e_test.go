@@ -1,19 +1,14 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
-
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -220,7 +215,8 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
-				waitForRayJob(t, tCtx, tc.Input.Job.Name, tc.ExpectedJobStatus)
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", tc.Input.Job, actualJob)
+				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -238,7 +234,7 @@ func TestDeleteJob(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testJobRequest := createTestJob(t, tCtx)
+	testJobRequest := createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded})
 
 	tests := []GenericEnd2EndTest[*api.DeleteRayJobRequest]{
 		{
@@ -278,7 +274,7 @@ func TestDeleteJob(t *testing.T) {
 			if tc.ExpectedError == nil {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				waitForDeletedRayJob(t, tCtx, testJobRequest.Job.Name)
+				waitForRayJobToDisappear(t, tCtx, testJobRequest.Job.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
 				require.NotNil(t, actualRPCStatus, "A not nill RPC status is required")
@@ -295,16 +291,17 @@ func TestGetAllJobs(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testJobRequest := createTestJob(t, tCtx)
+	testJobRequest := createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded})
 	t.Cleanup(func() {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
 
-	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayJobs()
+	response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{})
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, response, "A response is expected")
 	require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+	require.Empty(t, response.Continue, "No continue token is expected")
 	foundName := false
 	for _, job := range response.Jobs {
 		if testJobRequest.Job.Name == job.Name && tCtx.GetNamespaceName() == job.Namespace {
@@ -315,6 +312,93 @@ func TestGetAllJobs(t *testing.T) {
 	require.True(t, foundName)
 }
 
+func TestGetAllJobsWithPagination(t *testing.T) {
+	const numberOfNamespaces = 3
+	testContexts := make([]*End2EndTestingContext, 0, numberOfNamespaces)
+
+	for idx := 0; idx < numberOfNamespaces; idx++ {
+		tCtx, err := NewEnd2EndTestingContext(t)
+		require.NoError(t, err, "No error expected when creating testing context")
+
+		tCtx.CreateComputeTemplate(t)
+		t.Cleanup(func() {
+			tCtx.DeleteComputeTemplate(t)
+		})
+		testContexts = append(testContexts, tCtx)
+		createTestJob(t, tCtx, rayv1api.AllJobStatuses)
+	}
+
+	// Test pagination with limit 1, which is less than the total number of jobs.
+	t.Run("Test pagination return part of the result jobs", func(t *testing.T) {
+		// Used to check all jobs have been returned.
+		gotJob := []bool{false, false, false}
+
+		continueToken := ""
+		for i := 0; i < numberOfNamespaces; i++ {
+			response, actualRPCStatus, err := testContexts[i].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+				Limit:    int64(1),
+				Continue: continueToken,
+			})
+			require.NoError(t, err, "No error expected")
+			require.Nil(t, actualRPCStatus, "No RPC status expected")
+			require.NotNil(t, response, "A response is expected")
+			if i != numberOfNamespaces-1 {
+				require.NotEmpty(t, response.Continue, "A continue token is expected")
+			} else {
+				require.Empty(t, response.Continue, "No continue token is expected")
+			}
+			require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+			require.Len(t, response.Jobs, 1, "Number of jobs returned is not as expected")
+			for _, curJob := range response.Jobs {
+				for j := 0; j < numberOfNamespaces; j++ {
+					if testContexts[j].GetCurrentName() == curJob.Name && testContexts[j].GetNamespaceName() == curJob.Namespace {
+						gotJob[j] = true
+						break
+					}
+				}
+			}
+			continueToken = response.Continue
+		}
+		for i := 0; i < numberOfNamespaces; i++ {
+			if !gotJob[i] {
+				t.Errorf("ListAllJobs did not return expected jobs %s", testContexts[i].GetCurrentName())
+			}
+		}
+	})
+
+	// Test pagination with limit 4, which is larger than the total number of jobs.
+	t.Run("Test pagination return all result jobs", func(t *testing.T) {
+		// Used to check all jobs have been returned.
+		gotJob := []bool{false, false, false}
+
+		continueToken := ""
+		response, actualRPCStatus, err := testContexts[0].GetRayAPIServerClient().ListAllRayJobs(&api.ListAllRayJobsRequest{
+			Limit:    numberOfNamespaces + 1,
+			Continue: continueToken,
+		})
+		require.NoError(t, err, "No error expected")
+		require.Nil(t, actualRPCStatus, "No RPC status expected")
+		require.NotNil(t, response, "A response is expected")
+		require.Empty(t, response.Continue, "No continue token is expected")
+		require.NotEmpty(t, response.Jobs, "A list of jobs is required")
+		require.Len(t, response.Jobs, numberOfNamespaces, "Number of jobs returned is not as expected")
+		for _, curJob := range response.Jobs {
+			for j := 0; j < numberOfNamespaces; j++ {
+				if testContexts[j].GetCurrentName() == curJob.Name && testContexts[j].GetNamespaceName() == curJob.Namespace {
+					gotJob[j] = true
+					break
+				}
+			}
+		}
+
+		for i := 0; i < numberOfNamespaces; i++ {
+			if !gotJob[i] {
+				t.Errorf("ListAllJobs did not return expected jobs %s", testContexts[i].GetCurrentName())
+			}
+		}
+	})
+}
+
 func TestGetJobsInNamespace(t *testing.T) {
 	tCtx, err := NewEnd2EndTestingContext(t)
 	require.NoError(t, err, "No error expected when creating testing context")
@@ -323,7 +407,7 @@ func TestGetJobsInNamespace(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testJobRequest := createTestJob(t, tCtx)
+	testJobRequest := createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded})
 	t.Cleanup(func() {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
@@ -358,7 +442,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 	for i := 0; i < testJobNum; i++ {
 		tCtx.currentName = fmt.Sprintf("job%d", i)
 		tCtx.configMapName = fmt.Sprintf("job%d-cm", i)
-		testJobs = append(testJobs, createTestJob(t, tCtx))
+		testJobs = append(testJobs, createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded}))
 	}
 
 	t.Cleanup(func() {
@@ -421,7 +505,7 @@ func TestGetJob(t *testing.T) {
 	t.Cleanup(func() {
 		tCtx.DeleteComputeTemplate(t)
 	})
-	testJobRequest := createTestJob(t, tCtx)
+	testJobRequest := createTestJob(t, tCtx, []rayv1api.JobStatus{rayv1api.JobStatusNew, rayv1api.JobStatusPending, rayv1api.JobStatusRunning, rayv1api.JobStatusSucceeded})
 	t.Cleanup(func() {
 		tCtx.DeleteRayJobByName(t, testJobRequest.Job.Name)
 	})
@@ -494,7 +578,7 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 		map[string]string{
 			"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
 			"fail_fast.py":      ReadFileAsString(t, "resources/fail_fast_sample.py"),
-		})
+		}, []rayv1api.RayClusterConditionType{rayv1api.RayClusterProvisioned})
 	t.Cleanup(func() {
 		tCtx.DeleteRayCluster(t, cluster.Name)
 		tCtx.DeleteConfigMap(t, configMapName)
@@ -510,15 +594,16 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 			Name: "Submit a correct job on an already running cluster",
 			Input: &api.CreateRayJobRequest{
 				Job: &api.RayJob{
-					Name:                    tCtx.GetNextName(),
-					Namespace:               tCtx.GetNamespaceName(),
-					User:                    "r2d2",
-					Version:                 tCtx.GetRayVersion(),
-					Entrypoint:              "python /home/ray/samples/counter_sample.py",
-					Metadata:                map[string]string{},
-					RuntimeEnv:              "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
-					ClusterSelector:         map[string]string{"ray.io/cluster": cluster.Name},
-					TtlSecondsAfterFinished: 60,
+					Name:                     tCtx.GetNextName(),
+					Namespace:                tCtx.GetNamespaceName(),
+					User:                     "r2d2",
+					Version:                  tCtx.GetRayVersion(),
+					Entrypoint:               "python /home/ray/samples/counter_sample.py",
+					Metadata:                 map[string]string{},
+					RuntimeEnv:               "pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
+					ClusterSelector:          map[string]string{"ray.io/cluster": cluster.Name},
+					ShutdownAfterJobFinishes: true,
+					TtlSecondsAfterFinished:  60,
 					JobSubmitter: &api.RayJobSubmitter{
 						Image: cluster.ClusterSpec.HeadGroupSpec.Image,
 					},
@@ -559,7 +644,8 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
 				require.NotNil(t, actualJob, "A job is expected")
-				waitForRayJob(t, tCtx, tc.Input.Job.Name, tc.ExpectedJobStatus)
+				require.True(t, jobSpecEqual(tc.Input.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", tc.Input.Job, actualJob)
+				waitForRayJobInExpectedStatuses(t, tCtx, tc.Input.Job.Name, []rayv1api.JobStatus{tc.ExpectedJobStatus})
 				tCtx.DeleteRayJobByName(t, actualJob.Name)
 			} else {
 				require.EqualError(t, err, tc.ExpectedError.Error(), "Matching error expected")
@@ -569,7 +655,8 @@ func TestCreateJobWithClusterSelector(t *testing.T) {
 	}
 }
 
-func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobRequest {
+func createTestJob(t *testing.T, tCtx *End2EndTestingContext, expectedJobStatues []rayv1api.JobStatus) *api.CreateRayJobRequest {
+	// `expectedJobStatues` is a slice of job statuses that we expect the job to be in
 	// create config map and register a cleanup hook upon success
 	configMapName := tCtx.CreateConfigMap(t, map[string]string{
 		"counter_sample.py": ReadFileAsString(t, "resources/counter_sample.py"),
@@ -636,35 +723,7 @@ func createTestJob(t *testing.T, tCtx *End2EndTestingContext) *api.CreateRayJobR
 	require.NoError(t, err, "No error expected")
 	require.Nil(t, actualRPCStatus, "No RPC status expected")
 	require.NotNil(t, actualJob, "A job is expected")
-	waitForRayJob(t, tCtx, testJobRequest.Job.Name, rayv1api.JobStatusSucceeded)
+	require.True(t, jobSpecEqual(testJobRequest.Job, actualJob), "Job spec should match the input spec. Expected: %v, Actual: %v", testJobRequest.Job, actualJob)
+	waitForRayJobInExpectedStatuses(t, tCtx, testJobRequest.Job.Name, expectedJobStatues)
 	return testJobRequest
-}
-
-func waitForRayJob(t *testing.T, tCtx *End2EndTestingContext, rayJobName string, rayJobStatus rayv1api.JobStatus) {
-	// wait for the job to be in a JobStatusSucceeded state for 3 minutes
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(rayJobName)
-		if err00 != nil {
-			return true, err00
-		}
-		t.Logf("Found ray job with state '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
-		return rayJob.Status.JobStatus == rayJobStatus, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting status for ray job: '%s', err %v", rayJobName, err)
-}
-
-func waitForDeletedRayJob(t *testing.T, tCtx *End2EndTestingContext, jobName string) {
-	// wait for the job to be deleted
-	// if is not in that state, return an error
-	err := wait.PollUntilContextTimeout(tCtx.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := tCtx.GetRayJobByName(jobName)
-		if err00 != nil &&
-			assert.EqualError(t, err00, "rayjobs.ray.io \""+jobName+"\" not found") {
-			return true, nil
-		}
-		t.Logf("Found status of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, jobName)
-		return false, err00
-	})
-	require.NoErrorf(t, err, "No error expected when deleting ray job: '%s', err %v", jobName, err)
 }

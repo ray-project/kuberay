@@ -10,12 +10,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/remotecommand"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
 )
 
@@ -148,7 +147,7 @@ func SetupPortForward(t Test, podName, namespace string, localPort, remotePort i
 	return stopChan, nil
 }
 
-func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
+func CreateCurlPod(g *gomega.WithT, t Test, podName, containerName, namespace string) (*corev1.Pod, error) {
 	// Define the podSpec spec
 	podSpec := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -165,5 +164,16 @@ func CreateCurlPod(t Test, podName, containerName, namespace string) (*corev1.Po
 			},
 		},
 	}
-	return t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
+
+	curlPod, err := t.Client().Core().CoreV1().Pods(namespace).Create(t.Ctx(), podSpec, metav1.CreateOptions{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// Wait until curl pod is created
+	g.Eventually(func(g gomega.Gomega) *corev1.Pod {
+		updatedCurlPod, err := t.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(t.Ctx(), curlPod.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return updatedCurlPod
+	}, TestTimeoutShort).Should(gomega.WithTransform(IsPodRunningAndReady, gomega.BeTrue()))
+
+	LogWithTimestamp(t.T(), "Curl pod %s/%s is running and ready", curlPod.Namespace, curlPod.Name)
+	return t.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(t.Ctx(), curlPod.Name, metav1.GetOptions{})
 }

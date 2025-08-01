@@ -253,6 +253,11 @@ spec:
                         - Aggressive
                         - Conservative
                         type: string
+                      version:
+                        enum:
+                        - v1
+                        - v2
+                        type: string
                       volumeMounts:
                         items:
                           properties:
@@ -1313,6 +1318,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -2023,6 +2030,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -2747,6 +2756,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -4275,7 +4286,6 @@ spec:
                             type: object
                         type: object
                     required:
-                    - rayStartParams
                     - template
                     type: object
                   headServiceAnnotations:
@@ -5032,6 +5042,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -5742,6 +5754,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -6466,6 +6480,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -7997,13 +8013,16 @@ spec:
                       - groupName
                       - maxReplicas
                       - minReplicas
-                      - rayStartParams
                       - template
                       type: object
                     type: array
                 required:
                 - headGroupSpec
                 type: object
+              rayClusterDeletionDelaySeconds:
+                format: int32
+                minimum: 0
+                type: integer
               serveConfigV2:
                 type: string
               serveService:
@@ -9699,6 +9718,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -10409,6 +10430,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -11133,6 +11156,8 @@ spec:
                                               - port
                                               type: object
                                           type: object
+                                        stopSignal:
+                                          type: string
                                       type: object
                                     livenessProbe:
                                       properties:
@@ -13401,6 +13426,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -14111,6 +14138,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:
@@ -14835,6 +14864,8 @@ spec:
                                                 - port
                                                 type: object
                                             type: object
+                                          stopSignal:
+                                            type: string
                                         type: object
                                       livenessProbe:
                                         properties:

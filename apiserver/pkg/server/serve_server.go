@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+	corev1 "k8s.io/api/core/v1"
+	klog "k8s.io/klog/v2"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/protobuf/types/known/emptypb"
-	corev1 "k8s.io/api/core/v1"
-	klog "k8s.io/klog/v2"
 )
 
 type ServiceServerOptions struct {
@@ -87,10 +88,11 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 	if request.Namespace == "" {
 		return nil, util.NewInvalidInputError("ray service namespace is empty. Please specify a valid value.")
 	}
-	services, err := s.resourceManager.ListServices(ctx, request.Namespace)
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, request.Namespace, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "failed to list rayservice.")
 	}
+
 	serviceEventMap := make(map[string][]corev1.Event)
 	for _, service := range services {
 		serviceEvents, err := s.resourceManager.GetServiceEvents(ctx, *service)
@@ -101,12 +103,13 @@ func (s *RayServiceServer) ListRayServices(ctx context.Context, request *api.Lis
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListRayServicesResponse{
-		Services: model.FromCrdToAPIServices(services, serviceEventMap),
+		Services:      model.FromCrdToAPIServices(services, serviceEventMap),
+		NextPageToken: nextPageToken,
 	}, nil
 }
 
-func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
-	services, err := s.resourceManager.ListAllServices(ctx)
+func (s *RayServiceServer) ListAllRayServices(ctx context.Context, request *api.ListAllRayServicesRequest) (*api.ListAllRayServicesResponse, error) {
+	services, nextPageToken, err := s.resourceManager.ListServices(ctx, "" /*namespace*/, request.PageToken, request.PageSize)
 	if err != nil {
 		return nil, util.Wrap(err, "list all services failed.")
 	}
@@ -120,7 +123,8 @@ func (s *RayServiceServer) ListAllRayServices(ctx context.Context, _ *api.ListAl
 		serviceEventMap[service.Name] = serviceEvents
 	}
 	return &api.ListAllRayServicesResponse{
-		Services: model.FromCrdToAPIServices(services, serviceEventMap),
+		Services:      model.FromCrdToAPIServices(services, serviceEventMap),
+		NextPageToken: nextPageToken,
 	}, nil
 }
 
@@ -160,7 +164,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 	}
 
 	if request.Service.User == "" {
-		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("User who created the Service is empty. Please specify a valid value.")
 	}
 
 	return ValidateClusterSpec(request.Service.ClusterSpec)
@@ -168,7 +172,7 @@ func ValidateCreateServiceRequest(request *api.CreateRayServiceRequest) error {
 
 func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 	if request.Name == "" {
-		return util.NewInvalidInputError("Service name is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("Name is empty. Please specify a valid value.")
 	}
 	if request.Namespace == "" {
 		return util.NewInvalidInputError("Namespace is empty. Please specify a valid value.")
@@ -187,7 +191,7 @@ func ValidateUpdateServiceRequest(request *api.UpdateRayServiceRequest) error {
 	}
 
 	if request.Service.User == "" {
-		return util.NewInvalidInputError("User who create the Service is empty. Please specify a valid value.")
+		return util.NewInvalidInputError("User who updated the Service is empty. Please specify a valid value.")
 	}
 
 	return ValidateClusterSpec(request.Service.ClusterSpec)

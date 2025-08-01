@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-py-spy
 spec:
-  rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     rayStartParams: {}
@@ -12,7 +12,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: 1
@@ -36,15 +36,15 @@ spec:
           - containerPort: 10001
             name: client
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: profiling-example-configmap
+          - mountPath: /home/ray/samples
+            name: profiling-example-configmap
         volumes:
-          - name: profiling-example-configmap
-            configMap:
-              name: ray-example
-              items:
-                - key: long_running_task.py
-                  path: long_running_task.py
+        - name: profiling-example-configmap
+          configMap:
+            name: ray-example
+            items:
+            - key: long_running_task.py
+              path: long_running_task.py
 ---
 apiVersion: v1
 kind: ConfigMap

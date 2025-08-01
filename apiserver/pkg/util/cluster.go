@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/ray-project/kuberay/proto/go_client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -83,7 +83,8 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 			Template:       *headPodTemplate,
 			RayStartParams: clusterSpec.HeadGroupSpec.RayStartParams,
 		},
-		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{},
+		WorkerGroupSpecs:       []rayv1api.WorkerGroupSpec{},
+		HeadServiceAnnotations: clusterSpec.HeadServiceAnnotations,
 	}
 
 	// If enable ingress is specified, add it to the head node spec.

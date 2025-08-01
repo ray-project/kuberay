@@ -277,6 +277,8 @@ Perform basic validation to ensure the released artifacts work together.
     go install github.com/ray-project/kuberay/ray-operator@v1.4.0
     ```
 
+6. Open a PR to the master branch to update the version for KubeRay upgrade tests and make sure all tests pass. Example PR: #3825
+
 ---
 
 ### Step 8: Generate the CHANGELOG

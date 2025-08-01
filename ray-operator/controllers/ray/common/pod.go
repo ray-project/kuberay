@@ -6,19 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 const (
@@ -165,7 +164,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
-	podTemplate.Name = podName
+	if utils.IsDeterministicHeadPodNameEnabled() {
+		podTemplate.Name = podName
+	} else {
+		podTemplate.GenerateName = podName
+	}
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
@@ -193,6 +196,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
+
+		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
+			setAutoscalerV2EnvVars(&podTemplate)
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
@@ -208,6 +216,18 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	return podTemplate
+}
+
+// setAutoscalerV2EnvVars sets env vars for autoscaler v2 in the head node
+func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
+	if podTemplate.Spec.Containers[utils.RayContainerIndex].Env == nil {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
+	}
+
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+		Value: "true",
+	})
 }
 
 func getEnableInitContainerInjection() bool {
@@ -243,7 +263,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         utils.GetContainerCommand([]string{}),
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -309,6 +329,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			ContainerPort: int32(utils.DefaultMetricsPort),
 		}
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
+	}
+
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
 	return podTemplate
@@ -445,7 +469,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -512,11 +536,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				Value: "v1",
 			},
 		},
-		Command: []string{
-			"/bin/bash",
-			"-lc",
-			"--",
-		},
+		Command: utils.GetContainerCommand([]string{}),
 		Args: []string{
 			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},
@@ -832,9 +852,9 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 	for _, resourceKeyString := range sortedResourceKeys {
 		resourceValue := resourceLimits[corev1.ResourceName(resourceKeyString)]
 
-		// Scan for resource keys ending with "gpu" like "nvidia.com/gpu"
+		// Scan for resource keys of gpus
 		if _, ok := rayStartParams["num-gpus"]; !ok {
-			if strings.HasSuffix(resourceKeyString, "gpu") && !resourceValue.IsZero() {
+			if isGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
@@ -1006,4 +1026,15 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+func isGPUResourceKey(key string) bool {
+	// ending with "gpu" like "nvidia.com/gpu"
+	if strings.HasSuffix(key, "gpu") {
+		return true
+	}
+	// Nvidia Multi-Instance GPU in the form of "nvidia.com/mig-<slice_count>g.<memory_size>gb" like "nvidia.com/mig-2g.32gb"
+	// reference: https://github.com/NVIDIA/k8s-device-plugin#configuration-option-details
+	match, _ := regexp.MatchString(`nvidia\.com/mig-\d+g\.\d+gb$`, key)
+	return match
 }

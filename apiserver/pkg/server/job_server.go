@@ -3,11 +3,12 @@ package server
 import (
 	"context"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	"github.com/ray-project/kuberay/apiserver/pkg/model"
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type JobServerOptions struct {
@@ -80,14 +81,16 @@ func (s *RayJobServer) ListRayJobs(ctx context.Context, request *api.ListRayJobs
 }
 
 // Finds all Jobs in all namespaces.
-func (s *RayJobServer) ListAllRayJobs(ctx context.Context, _ *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
-	jobs, err := s.resourceManager.ListAllJobs(ctx)
+func (s *RayJobServer) ListAllRayJobs(ctx context.Context, request *api.ListAllRayJobsRequest) (*api.ListAllRayJobsResponse, error) {
+	// Leave the namespace empty to list all jobs in all namespaces.
+	jobs, continueToken, err := s.resourceManager.ListJobs(ctx, "" /*namespace*/, request.Continue, request.Limit)
 	if err != nil {
 		return nil, util.Wrap(err, "List jobs failed.")
 	}
 
 	return &api.ListAllRayJobsResponse{
-		Jobs: model.FromCrdToAPIJobs(jobs),
+		Jobs:     model.FromCrdToAPIJobs(jobs),
+		Continue: continueToken,
 	}, nil
 }
 

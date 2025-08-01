@@ -10,8 +10,7 @@ import (
 	"time"
 
 	petnames "github.com/dustinkirkland/golang-petname"
-	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
-	api "github.com/ray-project/kuberay/proto/go_client"
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -19,10 +18,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sApiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
@@ -92,7 +93,24 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
+
+		retryCfg := kuberayHTTP.RetryConfig{
+			MaxRetry:       util.HTTPClientDefaultMaxRetry,
+			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+			InitBackoff:    util.HTTPClientDefaultInitBackoff,
+			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
+		}
+
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+
+		remoteExecClient, err := newRemoteExecuteClient()
+		if err != nil {
+			return err
+		}
+
+		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
+
 		return nil
 	}
 }
@@ -108,7 +126,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
@@ -245,8 +263,8 @@ func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 		ComputeTemplate: &api.ComputeTemplate{
 			Name:      e2etc.computeTemplateName,
 			Namespace: e2etc.namespaceName,
-			Cpu:       2,
-			Memory:    4,
+			Cpu:       ComputeTemplateCPUForE2E,
+			Memory:    CompTemplateMemGiBForE2E,
 		},
 		Namespace: e2etc.namespaceName,
 	}
@@ -264,7 +282,7 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T) {
 	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", e2etc.computeTemplateName, e2etc.namespaceName)
 }
 
-func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, name ...string) (*api.Cluster, string) {
+func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T, configMapValues map[string]string, expectedConditions []rayv1api.RayClusterConditionType, name ...string) (*api.Cluster, string) {
 	configMapName := e2etc.CreateConfigMap(t, configMapValues, name...)
 	t.Cleanup(func() {
 		e2etc.DeleteConfigMap(t, configMapName)
@@ -332,17 +350,7 @@ func (e2etc *End2EndTestingContext) CreateRayClusterWithConfigMaps(t *testing.T,
 	})
 	require.NoErrorf(t, err, "No error expected while creating cluster (%s/%s)", e2etc.namespaceName, clusterName)
 
-	// wait for the cluster to be in a running state for 3 minutes
-	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(actualCluster.Name)
-		if err00 != nil {
-			return true, err00
-		}
-		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return rayCluster.Status.State == rayv1api.Ready, nil
-	})
-	require.NoErrorf(t, err, "No error expected when getting ray cluster: '%s', err %v", clusterName, err)
+	waitForClusterConditions(t, e2etc, actualCluster.Name, expectedConditions)
 	return actualCluster, configMapName
 }
 
@@ -355,15 +363,15 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayCluster, err00 := e2etc.GetRayClusterByName(clusterName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayCluster, err := e2etc.GetRayClusterByName(clusterName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting for ray cluster: '%s' to be deleted, err %v", clusterName, err)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName string) {
@@ -376,15 +384,15 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayService, err00 := e2etc.GetRayServiceByName(serviceName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayService, err := e2etc.GetRayServiceByName(serviceName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
-		t.Logf("Found service state of '%s' for ray cluster '%s'", rayService.Status.ServiceStatus, serviceName)
-		return false, nil
-	})
-	require.NoErrorf(t, err, "No error expected when waiting to delete ray service: '%s', err %v", serviceName, err)
+		t.Logf("Found service state of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName string) {
@@ -397,14 +405,15 @@ func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, rayJobName 
 
 	// wait for the cluster to be deleted for 3 minutes
 	// if is not in that state, return an error
-	err = wait.PollUntilContextTimeout(e2etc.ctx, 500*time.Millisecond, 3*time.Minute, false, func(_ context.Context) (done bool, err error) {
-		rayJob, err00 := e2etc.GetRayJobByName(rayJobName)
-		if err00 != nil && k8sApiErrors.IsNotFound(err00) {
-			return true, nil
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		rayJob, err := e2etc.GetRayJobByName(rayJobName)
+		if err != nil && k8sApiErrors.IsNotFound(err) {
+			return true
 		}
-		t.Logf("Found job state of '%s' for ray cluster '%s'", rayJob.Status.JobStatus, rayJobName)
-		return false, nil
-	})
+		t.Logf("Found job state of '%s' for ray job '%s'", rayJob.Status.JobStatus, rayJobName)
+		return false
+	}, TestTimeoutMedium).Should(gomega.BeTrue())
 	require.NoErrorf(t, err, "No error expected when waiting to delete ray job: '%s', err %v", rayJobName, err)
 }
 

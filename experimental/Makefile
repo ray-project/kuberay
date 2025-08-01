@@ -65,7 +65,7 @@ build: fmt vet fumpt lint ## Build api server binary.
 ##@ Docker Build
 
 docker-image: ## Build image for the security proxy.
-	$(ENGINE) build -t ${IMG} .
+	$(ENGINE) build -t ${IMG} -f Dockerfile ..
 
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
@@ -85,7 +85,7 @@ GOBINDATA ?= $(REPO_ROOT_BIN)/go-bindata
 ## Tool Versions
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.54.1
+GOLANGCI_LINT_VERSION ?= v1.64.8
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 
