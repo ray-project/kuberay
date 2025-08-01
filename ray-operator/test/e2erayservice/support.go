@@ -222,9 +222,12 @@ func waitingForRayClusterSwitchWithDeletionDelay(g *WithT, test Test, rayService
 		return rayService.Status.ActiveServiceStatus.RayClusterName
 	}, Not(Equal(oldRayClusterName))))
 
-	// Wait for the deletion delay duration before checking deletion
-	LogWithTimestamp(test.T(), "Sleeping for deletionDelayDuration (%v) before checking RayCluster deletion", deletionDelayDuration)
-	time.Sleep(deletionDelayDuration)
+	// Ensure the old RayCluster still exists during the deletion delay
+	LogWithTimestamp(test.T(), "Ensuring old RayCluster %s/%s still exists for deletionDelayDuration (%v)", rayService.Namespace, oldRayClusterName, deletionDelayDuration)
+	g.Consistently(func() error {
+		_, err := GetRayCluster(test, rayService.Namespace, oldRayClusterName)
+		return err
+	}, deletionDelayDuration, time.Second).Should(Not(HaveOccurred()))
 
 	// Verify that the old RayCluster is eventually deleted with the grace period of 5 second
 	LogWithTimestamp(test.T(), "Checking that old RayCluster %s/%s is eventually deleted", rayService.Namespace, oldRayClusterName)
