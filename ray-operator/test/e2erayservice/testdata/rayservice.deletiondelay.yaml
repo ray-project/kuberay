@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: test-rayservice
+  name: test-rayservice-deletion-delay
 spec:
   rayClusterDeletionDelaySeconds: 10
   serveConfigV2: |

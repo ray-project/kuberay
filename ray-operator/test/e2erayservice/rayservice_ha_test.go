@@ -30,7 +30,7 @@ func TestStaticRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	rayServiceName := "test-rayservice-static"
+	rayServiceName := "test-rayservice"
 	applyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Create Locust RayCluster
@@ -74,7 +74,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	rayServiceName := "test-rayservice-autoscale"
+	rayServiceName := "test-rayservice"
 	applyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Get the underlying RayCluster of the RayService
@@ -138,7 +138,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	rayServiceName := "test-rayservice-zero-downtime"
+	rayServiceName := "test-rayservice"
 	applyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	// Create Locust RayCluster
@@ -206,7 +206,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
 
 	// Create the RayService for testing
-	rayServiceName := "test-rayservice-gcs"
+	rayServiceName := "test-rayservice"
 	applyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 
 	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
