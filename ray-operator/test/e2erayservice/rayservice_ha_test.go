@@ -271,7 +271,7 @@ func TestRayServiceRayClusterDeletionDelaySeconds(t *testing.T) {
 	g := NewWithT(t)
 	namespace := test.NewTestNamespace()
 
-	// Apply the RayService YAML with deletion delay set to 10 second
+	// Apply the RayService YAML with deletion delay set to 10 seconds
 	rayServiceName := "test-rayservice-deletion-delay"
 	applyRayServiceYAMLAndWaitReady(g, test, rayserviceYamlFile, namespace.Name, rayServiceName)
 

@@ -184,7 +184,7 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 func applyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
 	t.T().Helper()
 
-	// Apply the RayService YAML with deletion delay set to 10 second
+	// Apply the RayService YAML
 	KubectlApplyYAML(t, filename, namespace)
 	rayService, err := GetRayService(t, namespace, name)
 	g.Expect(err).NotTo(HaveOccurred())
