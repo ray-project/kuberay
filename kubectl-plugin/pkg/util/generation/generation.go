@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dario.cat/mergo"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -444,11 +445,45 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	config := newRayClusterConfigWithDefaults()
-	if err := yaml.UnmarshalStrict(data, &config); err != nil {
+	var overrideConfig RayClusterConfig
+	if err := yaml.UnmarshalStrict(data, &overrideConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
+	config, err := mergeWithDefaultConfig(&overrideConfig)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
 
+func mergeWithDefaultConfig(overrideConfig *RayClusterConfig) (*RayClusterConfig, error) {
+	// detach worker groups from default config
+	overrideConfigWG := overrideConfig.WorkerGroups
+	overrideConfig.WorkerGroups = nil
+
+	config := newRayClusterConfigWithDefaults()
+	err := mergo.Merge(config, overrideConfig, mergo.WithOverride)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge config with defaults: %w", err)
+	}
+	// merge WorkerGroups and keep the default values for missing fields
+	// if overrideConfigWG is not nil, we will merge the worker groups from the config file
+	// and keep the default values for missing fields
+	if overrideConfigWG != nil {
+		for len(config.WorkerGroups) < len(overrideConfigWG) {
+			config.WorkerGroups = append(config.WorkerGroups, WorkerGroup{
+				Replicas: util.DefaultWorkerReplicas,
+				CPU:      ptr.To(util.DefaultWorkerCPU),
+				Memory:   ptr.To(util.DefaultWorkerMemory),
+			})
+		}
+		for i, workerGroup := range overrideConfigWG {
+			err := mergo.Merge(&config.WorkerGroups[i], workerGroup, mergo.WithOverride)
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge worker group %d: %w", i, err)
+			}
+		}
+	}
 	return config, nil
 }
 
