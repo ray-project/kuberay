@@ -229,7 +229,7 @@ func waitingForRayClusterSwitchWithDeletionDelay(g *WithT, test Test, rayService
 		return err
 	}, deletionDelayDuration, time.Second).Should(Not(HaveOccurred()))
 
-	// Verify that the old RayCluster is eventually deleted with the grace period of 5 second
+	// Verify that the old RayCluster is eventually deleted with the grace period of 5 seconds
 	LogWithTimestamp(test.T(), "Checking that old RayCluster %s/%s is eventually deleted", rayService.Namespace, oldRayClusterName)
 	g.Eventually(func() error {
 		_, err := GetRayCluster(test, rayService.Namespace, oldRayClusterName)
