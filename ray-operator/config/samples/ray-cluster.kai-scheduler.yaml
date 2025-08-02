@@ -1,0 +1,31 @@
+#A simple example raycluster with KAI
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-sample
+  labels:
+    kai.scheduler/queue: team-a
+spec:
+  headGroupSpec:
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+  workerGroupSpecs:
+  - groupName: worker
+    replicas: 2
+    minReplicas: 2
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
