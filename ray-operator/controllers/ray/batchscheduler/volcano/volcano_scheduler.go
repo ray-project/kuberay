@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -46,18 +47,24 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
-	var minMember int32
-	var totalResource corev1.ResourceList
-	if !utils.IsAutoscalingEnabled(&app.Spec) {
-		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
-		totalResource = utils.CalculateDesiredResources(app)
-	} else {
-		minMember = utils.CalculateMinReplicas(app) + 1
-		totalResource = utils.CalculateMinResources(app)
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app client.Object) error {
+	// Only support RayCluster
+	rayCluster, ok := app.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("expected RayCluster, got %T", app)
 	}
 
-	return v.syncPodGroup(ctx, app, minMember, totalResource)
+	var minMember int32
+	var totalResource corev1.ResourceList
+	if !utils.IsAutoscalingEnabled(&rayCluster.Spec) {
+		minMember = utils.CalculateDesiredReplicas(ctx, rayCluster) + 1
+		totalResource = utils.CalculateDesiredResources(rayCluster)
+	} else {
+		minMember = utils.CalculateMinReplicas(rayCluster) + 1
+		totalResource = utils.CalculateMinResources(rayCluster)
+	}
+
+	return v.syncPodGroup(ctx, rayCluster, minMember, totalResource)
 }
 
 func getAppPodGroupName(app *rayv1.RayCluster) string {
@@ -129,7 +136,17 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (v *VolcanoBatchScheduler) PropagateMetadata(_ context.Context, parent client.Object, groupName string, child client.Object) {
+	// Only support parent is RayCluster and child is Pod
+	pod, ok := child.(*corev1.Pod)
+	if !ok {
+		return
+	}
+	app, ok := parent.(*rayv1.RayCluster)
+	if !ok {
+		return
+	}
+
 	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
