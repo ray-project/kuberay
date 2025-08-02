@@ -1,4 +1,4 @@
-# KubeRay APIServer v2 Migration Guide
+# KubeRay APIServer v2 Migration Plan
 
 ## Target Customers
 
