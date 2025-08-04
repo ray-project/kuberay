@@ -18,19 +18,22 @@ metadata:
 spec:
   # priority: 100  # Optional: Higher priority queues get surplus resources first
   resources:
+    # quota: Guaranteed resources for this queue
+    # limit: Maximum resources this queue can use
+    # overQuotaWeight: How surplus resources are shared among queues
+    # Note: Using -1 (unlimited) for demo purposes
     cpu:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Determines how leftover (surplus) CPU resources are distributed among
-      # queues that have the same priority. Higher weights receive larger portion
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
     gpu:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Share of surplus resources among same-priority queues
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
     memory:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Share of surplus resources among same-priority queues
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
 ---
 # Child queue: Represents a team within the department-1
 apiVersion: scheduling.run.ai/v2
@@ -41,19 +44,22 @@ spec:
   parentQueue: department-1 # Inherits from parent queue
   # priority: 50   # Optional: Team priority within department
   resources:
+    # quota: Guaranteed resources for this queue
+    # limit: Maximum resources this queue can use
+    # overQuotaWeight: How surplus resources are shared among queues
+    # Note: Using -1 (unlimited) for demo purposes
     cpu:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Determines how leftover (surplus) CPU resources are distributed among
-      # queues that have the same priority. Higher weights receive larger portion
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
     gpu:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Share of surplus resources among same-priority queues
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
     memory:
-      quota: -1 # Unlimited quota (demo setting)
-      limit: -1 # Unlimited burst limit (demo setting)
-      overQuotaWeight: 1 # Share of surplus resources among same-priority queues
+      quota: -1
+      limit: -1
+      overQuotaWeight: 1
 ---
 # RayCluster with KAI Scheduler and GPU Sharing
 apiVersion: ray.io/v1
