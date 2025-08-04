@@ -251,6 +251,9 @@ func main() {
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
+		IngressHost:              config.IngressHost,
+		IngressTLS:               config.IngressTLS,
+		IngressAnnotations:       config.IngressAnnotations,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
