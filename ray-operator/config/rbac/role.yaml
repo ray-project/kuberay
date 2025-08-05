@@ -70,12 +70,29 @@ rules:
 - apiGroups:
   - batch
   resources:
-  - jobs
+  - cronjobs
   verbs:
   - create
   - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs/status
+  verbs:
+  - get
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - ;getlist
+  - create
+  - delete
   - patch
   - update
   - watch
@@ -108,6 +125,38 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - ray.example.com
+  resources:
+  - raycronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ray.example.com
+  resources:
+  - raycronjobs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ray.example.com
+  resources:
+  - rayjobs
+  verbs:
+  - create
+  - delete // RBAC for creating RayJobs
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ray.io

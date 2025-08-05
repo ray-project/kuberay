@@ -11,6 +11,7 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 ### Resource Types
 - [RayCluster](#raycluster)
+- [RayCronJob](#raycronjob)
 - [RayJob](#rayjob)
 - [RayService](#rayservice)
 
@@ -52,6 +53,8 @@ _Validation:_
 
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
+
+
 
 
 
@@ -203,6 +206,47 @@ _Appears in:_
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
 
 
+#### RayCronJob
+
+
+
+
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `ray.io/v1` | | |
+| `kind` _string_ | `RayCronJob` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayCronJobSpec](#raycronjobspec)_ |  |  |  |
+
+
+#### RayCronJobSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [RayCronJob](#raycronjob)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `schedule` _string_ | The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron. |  |  |
+| `timeZone` _string_ | The time zone name for the given schedule, see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones.<br />If not specified, this will default to the time zone of the kube-controller-manager process.<br />The set of valid time zone names and the time zone offset is loaded from the system-wide time zone<br />database by the API server during CronJob validation and the controller manager during execution.<br />If no system-wide time zone database can be found a bundled version of the database is used instead.<br />If the time zone name becomes invalid during the lifetime of a CronJob or due to a change in host<br />configuration, the controller will stop creating new new Jobs and will create a system event with the<br />reason UnknownTimeZone.<br />More information can be found in https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#time-zones |  |  |
+| `startingDeadlineSeconds` _integer_ | Optional deadline in seconds for starting the job if it misses scheduled<br />time for any reason.  Missed jobs executions will be counted as failed ones. |  |  |
+| `concurrencyPolicy` _[ConcurrencyPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#concurrencypolicy-v1-batch)_ | Specifies how to treat concurrent executions of a Job.<br />Valid values are:<br /><br />- "Allow" (default): allows CronJobs to run concurrently;<br />- "Forbid": forbids concurrent runs, skipping next run if previous run hasn't finished yet;<br />- "Replace": cancels currently running job and replaces it with a new one |  |  |
+| `suspend` _boolean_ | This flag tells the controller to suspend subsequent executions, it does<br />not apply to already started executions.  Defaults to false. |  |  |
+| `rayJobTemplate` _[RayJobSpec](#rayjobspec)_ | Specifies the job that will be created when executing a CronJob. |  |  |
+| `successfulJobsHistoryLimit` _integer_ | The number of successful finished jobs to retain.<br />This is a pointer to distinguish between explicit zero and not specified.<br />Defaults to 3. |  |  |
+| `failedJobsHistoryLimit` _integer_ | The number of failed finished jobs to retain.<br />This is a pointer to distinguish between explicit zero and not specified.<br />Defaults to 1. |  |  |
+
+
 #### RayJob
 
 
@@ -230,6 +274,7 @@ RayJobSpec defines the desired state of RayJob
 
 
 _Appears in:_
+- [RayCronJobSpec](#raycronjobspec)
 - [RayJob](#rayjob)
 
 | Field | Description | Default | Validation |
