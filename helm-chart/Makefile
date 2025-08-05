@@ -64,6 +64,7 @@ helm-lint: ## Run Helm chart lint test.
 helm-docs: helm-docs-plugin ## Generates markdown documentation for Helm charts from requirements and values files.
 	$(HELM_DOCS) --chart-search-root=$(WORKDIR) --chart-to-generate=$(KUBERAY_OPERATOR_CHART_PATH) --sort-values-order=file
 	$(HELM_DOCS) --chart-search-root=$(WORKDIR) --chart-to-generate=$(RAY_CLUSTER_CHART_PATH) --sort-values-order=file
+	$(HELM_DOCS) --chart-search-root=$(WORKDIR) --chart-to-generate=$(KUBERAY_APISERVER_CHART_PATH) --sort-values-order=file
 
 ##@ Dependencies
 
