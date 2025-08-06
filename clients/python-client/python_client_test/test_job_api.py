@@ -342,3 +342,122 @@ class TestUtils(unittest.TestCase):
 
         result = self.api.submit_job(job=invalid_job, k8s_namespace="default")
         self.assertIsNone(result, "Should return None for invalid job specification")
+
+    def test_submit_job_with_ray_cluster_spec(self):
+        """Test submitting a job with rayClusterSpec - KubeRay will create and manage the cluster lifecycle."""
+        job_name = "cluster-spec-job"
+        namespace = "default"
+
+        try:
+            # Create job spec with rayClusterSpec - KubeRay will create the cluster automatically
+            job_body = {
+                "apiVersion": constants.GROUP + "/" + constants.JOB_VERSION,
+                "kind": constants.JOB_KIND,
+                "metadata": {
+                    "name": job_name,
+                    "namespace": namespace,
+                    "labels": {
+                        "app.kubernetes.io/name": job_name,
+                        "app.kubernetes.io/managed-by": "kuberay",
+                    },
+                },
+                "spec": {
+                    "rayClusterSpec": {
+                        "headGroupSpec": {
+                            "serviceType": "ClusterIP",
+                            "replicas": 1,
+                            "rayStartParams": {
+                                "dashboard-host": "0.0.0.0",
+                            },
+                            "template": {
+                                "spec": {
+                                    "containers": [
+                                        {
+                                            "name": "ray-head",
+                                            "image": "rayproject/ray:2.48.0",
+                                            "ports": [
+                                                {"containerPort": 6379, "name": "gcs"},
+                                                {"containerPort": 8265, "name": "dashboard"},
+                                                {"containerPort": 10001, "name": "client"},
+                                            ],
+                                            "resources": {
+                                                "limits": {
+                                                    "cpu": "1",
+                                                    "memory": "2Gi",
+                                                },
+                                                "requests": {
+                                                    "cpu": "500m",
+                                                    "memory": "1Gi",
+                                                },
+                                            },
+                                        }
+                                    ]
+                                }
+                            },
+                        },
+                        "workerGroupSpecs": [
+                            {
+                                "groupName": "small-worker",
+                                "replicas": 1,
+                                "rayStartParams": {
+                                    "num-cpus": "1",
+                                },
+                                "template": {
+                                    "spec": {
+                                        "containers": [
+                                            {
+                                                "name": "ray-worker",
+                                                "image": "rayproject/ray:2.48.0",
+                                                "resources": {
+                                                    "limits": {
+                                                        "cpu": "1",
+                                                        "memory": "1Gi",
+                                                    },
+                                                    "requests": {
+                                                        "cpu": "500m",
+                                                        "memory": "512Mi",
+                                                    },
+                                                },
+                                            }
+                                        ]
+                                    }
+                                },
+                            }
+                        ],
+                    },
+                    "entrypoint": "python -c \"import ray; ray.init(); print('Hello from Ray job with auto-managed cluster'); import time; time.sleep(10); print('Job completed successfully')\"",
+                    "submissionMode": "K8sJobMode",
+                },
+            }
+
+            submitted_job = self.api.submit_job(
+                job=job_body,
+                k8s_namespace=namespace,
+            )
+
+            self.assertIsNotNone(submitted_job, "Job should be submitted successfully")
+            self.assertEqual(submitted_job["metadata"]["name"], job_name)
+            
+            # Verify that rayClusterSpec is present in the submitted job
+            self.assertIn("rayClusterSpec", submitted_job["spec"], "Job should have rayClusterSpec")
+            self.assertIn("headGroupSpec", submitted_job["spec"]["rayClusterSpec"], "rayClusterSpec should have headGroupSpec")
+            self.assertIn("workerGroupSpecs", submitted_job["spec"]["rayClusterSpec"], "rayClusterSpec should have workerGroupSpecs")
+
+            # Wait for job to finish - this will also wait for cluster creation and job completion
+            result = self.api.wait_until_job_finished(job_name, namespace, 300, 10)
+            self.assertTrue(result, "Job should complete successfully within timeout")
+
+            # Get final job status to verify completion
+            final_status = self.api.get_job_status(
+                job_name, namespace, timeout=10, delay_between_attempts=1
+            )
+            self.assertIsNotNone(final_status, "Final job status should be retrieved")
+            self.assertIn(
+                "jobDeploymentStatus",
+                final_status,
+                "Final status should contain jobDeploymentStatus field",
+            )
+
+        finally:
+            # Clean up - delete the job (cluster will be automatically cleaned up by KubeRay)
+            self.api.delete_job(job_name, namespace)
