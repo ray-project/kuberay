@@ -1,4 +1,4 @@
-# KubeRay API Server
+# KubeRay APIServer
 
 ![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
@@ -6,9 +6,9 @@ A Helm chart for kuberay-apiserver
 
 ## Introduction
 
-This document provides instructions to install the KubeRay API Server with a Helm chart.
+This document provides instructions to install the KubeRay APIServer with a Helm chart.
 KubeRay APIServer V2 is enabled by default, for more information,
-please refer to the [KubeRay API Server V2 documentation].
+please refer to the [KubeRay APIServer V2 documentation].
 
 ## Helm
 
@@ -19,7 +19,7 @@ v3.9.4.
 helm version
 ```
 
-## Install KubeRay API Server
+## Install KubeRay APIServer
 
 ### Without security proxy
 
@@ -40,7 +40,7 @@ helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0 --set s
 # Step2: Navigate to `helm-chart/kuberay-apiserver`
 cd helm-chart/kuberay-apiserver
 
-# Step3: Install the KubeRay apiserver
+# Step3: Install the KubeRay APIServer
 helm install kuberay-apiserver . --set security=null
 ```
 
@@ -63,7 +63,7 @@ helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.0
 # Step2: Navigate to `helm-chart/kuberay-apiserver`
 cd helm-chart/kuberay-apiserver
 
-# Step3: Install the KubeRay apiserver
+# Step3: Install the KubeRay APIServer
 helm install kuberay-apiserver .
 ```
 
@@ -88,13 +88,13 @@ helm ls
 # Uninstall the `kuberay-apiserver` release
 helm uninstall kuberay-apiserver
 
-# The API Server Pod should be removed.
+# The APIServer Pod should be removed.
 kubectl get pods
 # No resources found in default namespace.
 ```
 
 [existing CI tests]: https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm.yaml
-[KubeRay API Server V2 documentation]: https://github.com/ray-project/kuberay/blob/master/apiserversdk/README.md
+[KubeRay APIServer V2 documentation]: https://github.com/ray-project/kuberay/blob/master/apiserversdk/README.md
 
 ## Values
 
@@ -129,8 +129,8 @@ kubectl get pods
 | ingress.tls | list | `[]` |  |
 | route.enabled | bool | `false` |  |
 | route.annotations | object | `{}` |  |
-| rbacEnable | bool | `true` | If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on. |
-| singleNamespaceInstall | bool | `false` |  |
-| enableAPIServerV2 | bool | `true` |  |
+| rbacEnable | bool | `true` | Install Default RBAC roles and bindings |
+| singleNamespaceInstall | bool | `false` | The chart can be installed by users with permissions to a single namespace only |
+| enableAPIServerV2 | bool | `true` | If set to true, APIServer v2 would be served on the same port as the APIServer v1. |
 | security.proxy | object | `{"pullPolicy":"IfNotPresent","repository":"quay.io/kuberay/security-proxy","tag":"nightly"}` | security proxy image. |
 | security.env | object | `{"ENABLE_GRPC":"true","GRPC_LOCAL_PORT":8987,"HTTP_LOCAL_PORT":8988,"SECURITY_PREFIX":"/","SECURITY_TOKEN":"12345"}` | security proxy environment variables. |

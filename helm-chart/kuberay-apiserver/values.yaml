@@ -96,13 +96,13 @@ route:
   enabled: false
   annotations: {}
 
-# -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
+# -- Install Default RBAC roles and bindings
 rbacEnable: true
 
-# the chart can be installed by users with permissions to a single namespace only
+# -- The chart can be installed by users with permissions to a single namespace only
 singleNamespaceInstall: false
 
-# If set to true, API server v2 would be served on the same port as the API server v1.
+# -- If set to true, APIServer v2 would be served on the same port as the APIServer v1.
 enableAPIServerV2: true
 
 # security definition. Comment it out if security is not required
