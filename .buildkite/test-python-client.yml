@@ -1,5 +1,5 @@
 - label: 'Test Python Client'
-  instance_size: medium
+  instance_size: large
   image: golang:1.24
   commands:
     - source .buildkite/setup-env.sh
