@@ -342,6 +342,8 @@ jobs:
         run: go test ./pkg/... -race -parallel 4
         working-directory: ${{env.working-directory}}
 
+  # TODO: Move the below tests to buildkite and remote the
+  # second worker from Kind cluster config in ./actions/kind/kind.yaml
   python-client-test:
     runs-on: ubuntu-22.04
     name: Python Client Test
@@ -349,13 +351,8 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-docker-action@v4
 
-      - name: Install Kind
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-          kind create cluster
-        shell: bash
+      - name: Setup and start KinD cluster
+        uses: ./.github/workflows/actions/kind
 
       - name: Checkout Python
         uses: actions/checkout@v2
