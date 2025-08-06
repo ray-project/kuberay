@@ -178,7 +178,8 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 								WithLimits(corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("2"),
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
-								})))))))
+								})))))),
+		)
 }
 
 func applyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
