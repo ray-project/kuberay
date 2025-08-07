@@ -151,7 +151,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 		},
 	}
 	cmd.Flags().StringVarP(&options.fileName, "filename", "f", "", "Path and name of the Ray Job YAML file")
-	cmd.Flags().StringVar(&options.address, "address", "", "Address of the Ray cluster to connect to")
+	cmd.Flags().StringVar(&options.address, "address", dashboardAddr, "Address of the Ray cluster to connect to")
 	cmd.Flags().BoolVar(&options.useIngress, "use-ingress", false, "Skip port-forwarding and use the provided --address (e.g. an Ingress endpoint)")
 	cmd.Flags().StringVar(&options.submissionID, "submission-id", "", "ID to specify for the Ray job. If not provided, one will be generated")
 	cmd.Flags().StringVar(&options.runtimeEnv, "runtime-env", "", "Path and name to the runtime env YAML file.")
@@ -203,10 +203,6 @@ func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
 
 	if options.fileName != "" {
 		options.fileName = filepath.Clean(options.fileName)
-	}
-
-	if options.address == "" {
-		options.address = dashboardAddr
 	}
 	return nil
 }
