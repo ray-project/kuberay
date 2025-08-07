@@ -195,6 +195,62 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 	}
 }
 
+func TestRayJobSubmit_UseIngressValidation(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	tests := []struct {
+		name        string
+		useIngress  bool
+		address     string
+		expectError string
+	}{
+		{
+			name:        "useIngress=true, address empty",
+			useIngress:  true,
+			address:     "",
+			expectError: "--use-ingress was set, but --address is missing",
+		},
+		{
+			name:       "useIngress=true, address set",
+			useIngress: true,
+			address:    "https://ingress.example.com",
+		},
+		{
+			name:        "useIngress=false, address=custom",
+			useIngress:  false,
+			address:     "https://custom.example.com",
+			expectError: `--address="https://custom.example.com" is not valid unless --use-ingress is set`,
+		},
+		{
+			name:       "useIngress=false, address=dashboardAddr",
+			useIngress: false,
+			address:    dashboardAddr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &SubmitJobOptions{
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				useIngress: tc.useIngress,
+				address:    tc.address,
+				rayjobName: "fake-rayjob-name",
+				workingDir: "fake/dir",
+			}
+
+			err := opts.Validate(&cobra.Command{})
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestRayJobSubmitCmdFlagsOverrideYaml(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
@@ -438,6 +494,7 @@ func TestRaySubmitCmd(t *testing.T) {
 	fakeSubmitJobOptions.verify = "True"
 	fakeSubmitJobOptions.workingDir = "/fake/working/dir"
 	fakeSubmitJobOptions.entryPoint = "python fake_python_script.py"
+	fakeSubmitJobOptions.address = dashboardAddr
 
 	actualCmd, err := fakeSubmitJobOptions.raySubmitCmd()
 	require.NoError(t, err)
