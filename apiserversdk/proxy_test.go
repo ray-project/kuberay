@@ -23,8 +23,9 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	apiserver_util "github.com/ray-project/kuberay/apiserversdk/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	ray_util "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayclient "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
@@ -319,7 +320,7 @@ var _ = Describe("kuberay service", Ordered, func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: svcName,
 					Labels: map[string]string{
-						utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+						ray_util.KubernetesApplicationNameLabelKey: ray_util.ApplicationName,
 					},
 				},
 				Spec: corev1.ServiceSpec{
@@ -454,7 +455,7 @@ var _ = Describe("retryRoundTripper", func() {
 		resp, err := retrier.RoundTrip(req)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
-		Expect(attempts).To(Equal(int32(HTTPClientDefaultMaxRetry + 1)))
+		Expect(attempts).To(Equal(int32(apiserver_util.HTTPClientDefaultMaxRetry + 1)))
 	})
 
 	It("Retries on request with body", func() {

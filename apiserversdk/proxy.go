@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -16,7 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	apiserver_util "github.com/ray-project/kuberay/apiserversdk/util"
+	ray_util "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type MuxConfig struct {
@@ -78,7 +78,7 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 		}
 		services, err := k8sClient.CoreV1().Services(namespace).List(r.Context(), metav1.ListOptions{
 			FieldSelector: "metadata.name=" + serviceName,
-			LabelSelector: "app.kubernetes.io/name=" + utils.ApplicationName,
+			LabelSelector: "app.kubernetes.io/name=" + ray_util.ApplicationName,
 		})
 		if err != nil {
 			http.Error(w, "failed to list kuberay services", http.StatusInternalServerError)
@@ -102,7 +102,7 @@ type retryRoundTripper struct {
 }
 
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
-	return &retryRoundTripper{base: base, maxRetries: HTTPClientDefaultMaxRetry}
+	return &retryRoundTripper{base: base, maxRetries: apiserver_util.HTTPClientDefaultMaxRetry}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -136,11 +136,11 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, fmt.Errorf("request to %s %s failed with error: %w", req.Method, req.URL.String(), err)
 		}
 
-		if isSuccessfulStatusCode(resp.StatusCode) {
+		if apiserver_util.IsSuccessfulStatusCode(resp.StatusCode) {
 			return resp, nil
 		}
 
-		if !isRetryableHTTPStatusCodes(resp.StatusCode) {
+		if !apiserver_util.IsRetryableHTTPStatusCodes(resp.StatusCode) {
 			return resp, nil
 		}
 
@@ -159,10 +159,10 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 
 		// TODO: move to HTTP util function in independent util file
-		sleepDuration := HTTPClientDefaultInitBackoff * time.Duration(math.Pow(HTTPClientDefaultBackoffBase, float64(attempt)))
-		if sleepDuration > HTTPClientDefaultMaxBackoff {
-			sleepDuration = HTTPClientDefaultMaxBackoff
-		}
+		sleepDuration := apiserver_util.RetryBackoff(attempt,
+			apiserver_util.HTTPClientDefaultInitBackoff,
+			apiserver_util.HTTPClientDefaultBackoffBase,
+			apiserver_util.HTTPClientDefaultMaxBackoff)
 
 		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {
@@ -179,24 +179,4 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 	}
 	return resp, err
-}
-
-// TODO: move HTTP util function into independent util file / folder
-func isSuccessfulStatusCode(statusCode int) bool {
-	return 200 <= statusCode && statusCode < 300
-}
-
-// TODO: merge common utils for apiserver v1 and v2
-func isRetryableHTTPStatusCodes(statusCode int) bool {
-	switch statusCode {
-	case http.StatusRequestTimeout, // 408
-		http.StatusTooManyRequests,     // 429
-		http.StatusInternalServerError, // 500
-		http.StatusBadGateway,          // 502
-		http.StatusServiceUnavailable,  // 503
-		http.StatusGatewayTimeout:      // 504
-		return true
-	default:
-		return false
-	}
 }
