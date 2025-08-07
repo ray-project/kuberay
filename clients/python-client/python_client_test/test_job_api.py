@@ -437,7 +437,7 @@ class TestUtils(unittest.TestCase):
 
             self.assertIsNotNone(submitted_job, "Job should be submitted successfully")
             self.assertEqual(submitted_job["metadata"]["name"], job_name)
-            
+
             # Verify that rayClusterSpec is present in the submitted job
             self.assertIn("rayClusterSpec", submitted_job["spec"], "Job should have rayClusterSpec")
             self.assertIn("headGroupSpec", submitted_job["spec"]["rayClusterSpec"], "rayClusterSpec should have headGroupSpec")
