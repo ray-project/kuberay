@@ -46,7 +46,11 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error {
+	app, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if !utils.IsAutoscalingEnabled(&app.Spec) {
@@ -129,7 +133,15 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, parent client.Object, groupName string, child client.Object) {
+	app, ok := parent.(*rayv1.RayCluster)
+	if !ok {
+		return // currently only RayCluster is supported
+	}
+	pod, ok := child.(*corev1.Pod)
+	if !ok {
+		return // currently only Pod is supported
+	}
 	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
