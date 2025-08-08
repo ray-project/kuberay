@@ -730,7 +730,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		}
 
 		// Backoff before retry
-		sleep := apiserverutil.RetryBackoff(attempt,
+		sleep := apiserverutil.GetRetryBackoff(attempt,
 			krc.retryCfg.InitBackoff,
 			krc.retryCfg.BackoffFactor,
 			krc.retryCfg.MaxBackoff)

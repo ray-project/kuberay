@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func RetryBackoff(attempt int, initBackoff time.Duration, backoffBase float64, maxBackoff time.Duration) time.Duration {
+func GetRetryBackoff(attempt int, initBackoff time.Duration, backoffBase float64, maxBackoff time.Duration) time.Duration {
 	sleepDuration := initBackoff * time.Duration(math.Pow(backoffBase, float64(attempt)))
 	if sleepDuration > maxBackoff {
 		sleepDuration = maxBackoff
