@@ -13,7 +13,7 @@ import (
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	apiserver_util "github.com/ray-project/kuberay/apiserversdk/util"
+	apiserverutil "github.com/ray-project/kuberay/apiserversdk/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 

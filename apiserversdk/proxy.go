@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	apiserver_util "github.com/ray-project/kuberay/apiserversdk/util"
-	ray_util "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	apiserverutil "github.com/ray-project/kuberay/apiserversdk/util"
+	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type MuxConfig struct {
