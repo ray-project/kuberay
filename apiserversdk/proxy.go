@@ -78,7 +78,7 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 		}
 		services, err := k8sClient.CoreV1().Services(namespace).List(r.Context(), metav1.ListOptions{
 			FieldSelector: "metadata.name=" + serviceName,
-			LabelSelector: "app.kubernetes.io/name=" + ray_util.ApplicationName,
+			LabelSelector: "app.kubernetes.io/name=" + rayutil.ApplicationName,
 		})
 		if err != nil {
 			http.Error(w, "failed to list kuberay services", http.StatusInternalServerError)
@@ -102,7 +102,7 @@ type retryRoundTripper struct {
 }
 
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
-	return &retryRoundTripper{base: base, maxRetries: apiserver_util.HTTPClientDefaultMaxRetry}
+	return &retryRoundTripper{base: base, maxRetries: apiserverutil.HTTPClientDefaultMaxRetry}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -136,11 +136,11 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, fmt.Errorf("request to %s %s failed with error: %w", req.Method, req.URL.String(), err)
 		}
 
-		if apiserver_util.IsSuccessfulStatusCode(resp.StatusCode) {
+		if apiserverutil.IsSuccessfulStatusCode(resp.StatusCode) {
 			return resp, nil
 		}
 
-		if !apiserver_util.IsRetryableHTTPStatusCodes(resp.StatusCode) {
+		if !apiserverutil.IsRetryableHTTPStatusCodes(resp.StatusCode) {
 			return resp, nil
 		}
 
@@ -159,10 +159,10 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 
 		// TODO: move to HTTP util function in independent util file
-		sleepDuration := apiserver_util.RetryBackoff(attempt,
-			apiserver_util.HTTPClientDefaultInitBackoff,
-			apiserver_util.HTTPClientDefaultBackoffBase,
-			apiserver_util.HTTPClientDefaultMaxBackoff)
+		sleepDuration := apiserverutil.RetryBackoff(attempt,
+			apiserverutil.HTTPClientDefaultInitBackoff,
+			apiserverutil.HTTPClientDefaultBackoffBase,
+			apiserverutil.HTTPClientDefaultMaxBackoff)
 
 		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {

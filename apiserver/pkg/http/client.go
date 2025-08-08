@@ -721,16 +721,16 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			HTTPStatusCode: statusCode,
 		}
 
-		if apiserver_util.IsSuccessfulStatusCode(statusCode) {
+		if apiserverutil.IsSuccessfulStatusCode(statusCode) {
 			break
 		}
 
-		if !apiserver_util.IsRetryableHTTPStatusCodes(statusCode) {
+		if !apiserverutil.IsRetryableHTTPStatusCodes(statusCode) {
 			break
 		}
 
 		// Backoff before retry
-		sleep := apiserver_util.RetryBackoff(attempt,
+		sleep := apiserverutil.RetryBackoff(attempt,
 			krc.retryCfg.InitBackoff,
 			krc.retryCfg.BackoffFactor,
 			krc.retryCfg.MaxBackoff)
