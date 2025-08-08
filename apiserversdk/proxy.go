@@ -158,7 +158,6 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			}
 		}
 
-		// TODO: move to HTTP util function in independent util file
 		sleepDuration := apiserverutil.GetRetryBackoff(attempt,
 			apiserverutil.HTTPClientDefaultInitBackoff,
 			apiserverutil.HTTPClientDefaultBackoffBase,
