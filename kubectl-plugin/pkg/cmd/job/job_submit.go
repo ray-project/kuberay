@@ -283,108 +283,8 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 			options.runtimeEnvJson = string(runtimeJson)
 		}
 
-		if cmd.Flags().Changed("name") {
-			options.RayJob.Name = options.rayjobName
-		}
-
-		if cmd.Flags().Changed("ray-version") {
-			options.RayJob.Spec.RayClusterSpec.RayVersion = options.rayVersion
-		}
-		if cmd.Flags().Changed("image") {
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image = options.image
-		}
-
-		if cmd.Flags().Changed("head-cpu") {
-			q, _ := resource.ParseQuantity(options.headCPU)
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-			}
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
-			}
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits["cpu"] = q
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests["cpu"] = q
-		}
-
-		if cmd.Flags().Changed("head-memory") {
-			q, _ := resource.ParseQuantity(options.headMemory)
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-			}
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
-			}
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits["memory"] = q
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests["memory"] = q
-		}
-		if cmd.Flags().Changed("head-gpu") {
-			q, _ := resource.ParseQuantity(options.headGPU)
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-			}
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
-			}
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
-			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
-		}
-		if cmd.Flags().Changed("worker-replicas") {
-			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas = &options.workerReplicas
-			}
-		}
-		if cmd.Flags().Changed("worker-cpu") {
-			q, _ := resource.ParseQuantity(options.workerCPU)
-			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
-				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
-					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-				}
-				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests == nil {
-					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
-				}
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits["cpu"] = q
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests["cpu"] = q
-			}
-		}
-		if cmd.Flags().Changed("worker-memory") {
-			q, _ := resource.ParseQuantity(options.workerMemory)
-			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
-				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
-					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-				}
-				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests == nil {
-					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests = make(corev1.ResourceList)
-				}
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits["memory"] = q
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Requests["memory"] = q
-			}
-		}
-		if cmd.Flags().Changed("worker-gpu") {
-			q, _ := resource.ParseQuantity(options.workerGPU)
-			for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
-				if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits == nil {
-					options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0].Resources.Limits = make(corev1.ResourceList)
-				}
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = q
-			}
-		}
-		if cmd.Flags().Changed("head-node-selectors") {
-			if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector == nil {
-				options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector = make(map[string]string)
-			}
-			maps.Copy(options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector, options.headNodeSelectors)
-		}
-		if cmd.Flags().Changed("worker-node-selectors") {
-			if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector == nil {
-				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector = make(map[string]string)
-			}
-			maps.Copy(options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.NodeSelector, options.workerNodeSelectors)
-		}
-
-		if cmd.Flags().Changed("ttl-seconds-after-finished") {
-			options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
-			options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
+		if err := options.applyOverridesToRayJob(cmd); err != nil {
+			return err
 		}
 
 		if options.RayJob.Spec.TTLSecondsAfterFinished < 0 {
@@ -766,6 +666,127 @@ func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
 	raySubmitCmd = append(raySubmitCmd, entryPointSanitized...)
 
 	return raySubmitCmd, nil
+}
+
+func (options *SubmitJobOptions) applyOverridesToRayJob(cmd *cobra.Command) error {
+	if cmd.Flags().Changed("name") {
+		options.RayJob.Name = options.rayjobName
+	}
+
+	if cmd.Flags().Changed("ray-version") {
+		options.RayJob.Spec.RayClusterSpec.RayVersion = options.rayVersion
+	}
+	if cmd.Flags().Changed("image") {
+		options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Image = options.image
+	}
+
+	if options.RayJob.Spec.RayClusterSpec == nil {
+		options.RayJob.Spec.RayClusterSpec = &rayv1.RayClusterSpec{}
+	}
+
+	rayClusterSpec := options.RayJob.Spec.RayClusterSpec
+
+	if rayClusterSpec.HeadGroupSpec.Template.Spec.Containers == nil {
+		rayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{{}}
+	}
+
+	headContainer := &options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0]
+
+	err := overrideContainerResourceIfChanged(cmd, "head-cpu", options.headCPU, headContainer, "cpu")
+	if err != nil {
+		return fmt.Errorf("failed to override head CPU resource: %w", err)
+	}
+	err = overrideContainerResourceIfChanged(cmd, "head-memory", options.headMemory, headContainer, "memory")
+	if err != nil {
+		return fmt.Errorf("failed to override head memory resource: %w", err)
+	}
+	err = overrideContainerResourceIfChanged(cmd, "head-gpu", options.headGPU, headContainer, util.ResourceNvidiaGPU)
+	if err != nil {
+		return fmt.Errorf("failed to override head GPU resource: %w", err)
+	}
+
+	if cmd.Flags().Changed("head-node-selectors") {
+		if headContainer.Resources.Limits == nil {
+			headContainer.Resources.Limits = make(corev1.ResourceList)
+		}
+		if headContainer.Resources.Requests == nil {
+			headContainer.Resources.Requests = make(corev1.ResourceList)
+		}
+		if options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector == nil {
+			options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector = make(map[string]string)
+		}
+		maps.Copy(options.RayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.NodeSelector, options.headNodeSelectors)
+	}
+
+	if len(rayClusterSpec.WorkerGroupSpecs) == 0 {
+		rayClusterSpec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+			{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{}},
+					},
+				},
+			},
+		}
+	}
+
+	if cmd.Flags().Changed("worker-replicas") {
+		for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+			options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Replicas = &options.workerReplicas
+		}
+	}
+
+	for i := range options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+		if rayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers == nil {
+			rayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers = []corev1.Container{{}}
+		}
+		workerContainer := &options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Containers[0]
+
+		err = overrideContainerResourceIfChanged(cmd, "worker-cpu", options.workerCPU, workerContainer, "cpu")
+		if err != nil {
+			return fmt.Errorf("failed to override worker CPU resource: %w", err)
+		}
+		err = overrideContainerResourceIfChanged(cmd, "worker-memory", options.workerMemory, workerContainer, "memory")
+		if err != nil {
+			return fmt.Errorf("failed to override worker memory resource: %w", err)
+		}
+		err = overrideContainerResourceIfChanged(cmd, "worker-gpu", options.workerGPU, workerContainer, util.ResourceNvidiaGPU)
+		if err != nil {
+			return fmt.Errorf("failed to override worker GPU resource: %w", err)
+		}
+
+		if cmd.Flags().Changed("worker-node-selectors") {
+			if options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.NodeSelector == nil {
+				options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.NodeSelector = make(map[string]string)
+			}
+			maps.Copy(options.RayJob.Spec.RayClusterSpec.WorkerGroupSpecs[i].Template.Spec.NodeSelector, options.workerNodeSelectors)
+		}
+	}
+
+	if cmd.Flags().Changed("ttl-seconds-after-finished") {
+		options.RayJob.Spec.TTLSecondsAfterFinished = options.ttlSecondsAfterFinished
+		options.RayJob.Spec.ShutdownAfterJobFinishes = options.shutdownAfterJobFinishes
+	}
+	return nil
+}
+
+func overrideContainerResourceIfChanged(cmd *cobra.Command, flagName, value string, container *corev1.Container, resourceName string) error {
+	if !cmd.Flags().Changed(flagName) {
+		return nil
+	}
+	q, err := resource.ParseQuantity(value)
+	if err != nil {
+		return err
+	}
+	if container.Resources.Limits == nil {
+		container.Resources.Limits = make(corev1.ResourceList)
+	}
+	if container.Resources.Requests == nil {
+		container.Resources.Requests = make(corev1.ResourceList)
+	}
+	container.Resources.Limits[corev1.ResourceName(resourceName)] = q
+	container.Resources.Requests[corev1.ResourceName(resourceName)] = q
+	return nil
 }
 
 // Decode RayJob YAML if we decide to submit job using kube client
