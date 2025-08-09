@@ -37,7 +37,7 @@ configmap_body: dict = {
 }
 
 cluster_body: dict = {
-  "apiVersion": "ray.io/v1alpha1",
+  "apiVersion": "ray.io/v1",
   "kind": "RayCluster",
   "metadata": {
     "labels": {
