@@ -84,6 +84,12 @@ func (r *RayJobMetricsManager) ObserveRayJobExecutionDuration(name, namespace st
 	r.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, string(jobDeploymentStatus), strconv.Itoa(retryCount)).Set(duration)
 }
 
+// deleteRayJobMetrics removes metrics that belongs to the specified RayJob.
+func (r *RayJobMetricsManager) DeleteRayJobMetrics(name, namespace string) {
+	numCleanedUpMetrics := r.rayJobExecutionDurationSeconds.DeletePartialMatch(prometheus.Labels{"name": name, "namespace": namespace})
+	r.log.Info("Cleaned up expired rayJob metric", "name", name, "namespace", namespace, "numCleanedUpMetrics", numCleanedUpMetrics)
+}
+
 func (r *RayJobMetricsManager) collectRayJobInfo(rayJob *rayv1.RayJob, ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		r.rayJobInfo,
