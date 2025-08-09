@@ -92,6 +92,77 @@ func TestMetricRayJobInfo(t *testing.T) {
 	}
 }
 
+func TestDeleteRayJobMetrics(t *testing.T) {
+	k8sScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(k8sScheme))
+	client := fake.NewClientBuilder().WithScheme(k8sScheme).Build()
+	manager := NewRayJobMetricsManager(context.Background(), client)
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(manager)
+
+	// Test case 1: Delete specific job metrics
+	// Manually add some metrics
+	manager.ObserveRayJobExecutionDuration("job1", "ns1", rayv1.JobDeploymentStatusComplete, 0, 10.5)
+	manager.ObserveRayJobExecutionDuration("job2", "ns2", rayv1.JobDeploymentStatusFailed, 1, 20.3)
+	manager.ObserveRayJobExecutionDuration("job3", "ns1", rayv1.JobDeploymentStatusRunning, 0, 5.7)
+
+	// Test deleting metrics for job1 in ns1
+	manager.DeleteRayJobMetrics("job1", "ns1")
+
+	// Verify metrics
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	body := recorder.Body.String()
+	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+
+	// Test case 2: Delete with empty name
+	manager.DeleteRayJobMetrics("", "ns1")
+
+	// Verify metrics again
+	recorder2 := httptest.NewRecorder()
+	handler.ServeHTTP(recorder2, req)
+
+	assert.Equal(t, http.StatusOK, recorder2.Code)
+	body2 := recorder2.Body.String()
+	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+
+	// Test case 3: Delete with empty name and namespace
+	manager.DeleteRayJobMetrics("", "")
+
+	// Verify all metrics are deleted
+	recorder3 := httptest.NewRecorder()
+	handler.ServeHTTP(recorder3, req)
+
+	assert.Equal(t, http.StatusOK, recorder3.Code)
+	body3 := recorder3.Body.String()
+	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+
+	// Test case 4: Delete with false name and namespace
+	manager.DeleteRayJobMetrics("ns2", "job2")
+
+	// Verify all metrics are deleted
+	recorder4 := httptest.NewRecorder()
+	handler.ServeHTTP(recorder4, req)
+
+	assert.Equal(t, http.StatusOK, recorder4.Code)
+	body4 := recorder4.Body.String()
+	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+
+}
+
 func TestMetricRayJobDeploymentStatus(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -141,7 +212,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
@@ -154,7 +225,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 			}
 
 			if len(tc.rayJobs) > 0 {
-				err = client.Delete(t.Context(), &tc.rayJobs[0])
+				err = client.Delete(context.Background(), &tc.rayJobs[0])
 				require.NoError(t, err)
 			}
 
