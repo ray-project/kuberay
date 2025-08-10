@@ -10,7 +10,7 @@
     - bash ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
-    - echo "--- START:Running e2e RayCluster & GCS tests"
+    - echo "--- START:Running e2e (nightly operator) RayCluster & GCS tests"
     - if [ -n "${KUBERAY_TEST_RAY_IMAGE}"]; then echo "Using Ray Image ${KUBERAY_TEST_RAY_IMAGE}"; fi
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
@@ -30,7 +30,7 @@
     - bash ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
-    - echo "--- START:Running e2e RayJob tests"
+    - echo "--- START:Running e2e (nightly operator) RayJob tests"
     - if [ -n "${KUBERAY_TEST_RAY_IMAGE}"]; then echo "Using Ray Image ${KUBERAY_TEST_RAY_IMAGE}"; fi
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
