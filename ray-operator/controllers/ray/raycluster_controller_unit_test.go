@@ -3165,7 +3165,7 @@ func TestSumGPUs(t *testing.T) {
 			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU:                 resource.MustParse("1"),
 				nvidiaGPUResourceName:              resource.MustParse("3"),
-				nvidiaMIG1g10gbResourceName:		resource.MustParse("2"),
+				nvidiaMIG1g10gbResourceName:        resource.MustParse("2"),
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
 				googleTPUResourceName:              resource.MustParse("1"),
 			},
@@ -3174,15 +3174,15 @@ func TestSumGPUs(t *testing.T) {
 		{
 			name: "multiple MIG types specified",
 			input: map[corev1.ResourceName]resource.Quantity{
-				corev1.ResourceCPU:    			resource.MustParse("1"),
-				nvidiaGPUResourceName:			resource.MustParse("1"),
-				nvidiaMIG1g10gbResourceName:	resource.MustParse("2"),
-				nvidiaMIG2g20gbResourceName:	resource.MustParse("3"),
-				nvidiaMIG3g40gbResourceName:	resource.MustParse("4"),
-				googleTPUResourceName: 			resource.MustParse("1"),
+				corev1.ResourceCPU:          resource.MustParse("1"),
+				nvidiaGPUResourceName:       resource.MustParse("1"),
+				nvidiaMIG1g10gbResourceName: resource.MustParse("2"),
+				nvidiaMIG2g20gbResourceName: resource.MustParse("3"),
+				nvidiaMIG3g40gbResourceName: resource.MustParse("4"),
+				googleTPUResourceName:       resource.MustParse("1"),
 			},
 			expected: resource.MustParse("10"),
-		},		
+		},
 	}
 
 	for _, tc := range tests {
