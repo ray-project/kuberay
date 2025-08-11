@@ -66,8 +66,8 @@ func NewRayCronJobReconciler(_ context.Context, mgr manager.Manager, options Ray
 func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
-	rayCronJobInstance := &rayv1.RayCronJob{}
-	if err := r.Get(ctx, request.NamespacedName, rayCronJobInstance); err != nil {
+	rayCronJob := &rayv1.RayCronJob{}
+	if err := r.Get(ctx, request.NamespacedName, rayCronJob); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
 			logger.Info("RayJob resource not found. Ignoring since object must be deleted")
@@ -77,23 +77,26 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		logger.Error(err, "Failed to get RayJob")
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	if err := utils.ValidateRayCronJobMetadata(rayCronJobInstance.ObjectMeta); err != nil {
+	if err := utils.ValidateRayCronJobMetadata(rayCronJob.ObjectMeta); err != nil {
 		logger.Error(err, "The RayJob metadata is invalid")
-		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
-			"The RayJob metadata is invalid %s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
+		r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
+			"The RayJob metadata is invalid %s/%s: %v", rayCronJob.Namespace, rayCronJob.Name, err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if err := utils.ValidateRayCronJobSpec(rayCronJobInstance); err != nil {
+	if err := utils.ValidateRayCronJobSpec(rayCronJob); err != nil {
 		logger.Error(err, "The RayJob spec is invalid")
-		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
-			"The RayJob spec is invalid %s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
+		r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
+			"The RayJob spec is invalid %s/%s: %v", rayCronJob.Namespace, rayCronJob.Name, err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if *rayCronJobInstance.Spec.Suspend {
+	// If suspend is true then we dont do any logic and wait for next request
+	if rayCronJob.Spec.Suspend != nil && *rayCronJob.Spec.Suspend {
+		logger.Info("Not starting job because the cron is suspended")
 		return ctrl.Result{}, err
 	}
+
 	return ctrl.Result{}, nil
 
 }
