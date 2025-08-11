@@ -704,7 +704,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			break
 		}
 
-		if statusCode == http.StatusOK {
+		if apiserverutil.IsSuccessfulStatusCode(statusCode) {
 			return bodyBytes, nil, nil
 		}
 
@@ -719,10 +719,6 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		lastStatus = status
 		lastErr = &KuberayAPIServerClientError{
 			HTTPStatusCode: statusCode,
-		}
-
-		if apiserverutil.IsSuccessfulStatusCode(statusCode) {
-			break
 		}
 
 		if !apiserverutil.IsRetryableHTTPStatusCodes(statusCode) {

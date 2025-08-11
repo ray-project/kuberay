@@ -99,10 +99,21 @@ type retryRoundTripper struct {
 
 	// Num of retries after the initial attempt
 	maxRetries int
+
+	// Retry backoff settings
+	initBackoff time.Duration
+	backoffBase float64
+	maxBackoff  time.Duration
 }
 
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
-	return &retryRoundTripper{base: base, maxRetries: apiserverutil.HTTPClientDefaultMaxRetry}
+	return &retryRoundTripper{
+		base:        base,
+		maxRetries:  apiserverutil.HTTPClientDefaultMaxRetry,
+		initBackoff: apiserverutil.HTTPClientDefaultInitBackoff,
+		backoffBase: apiserverutil.HTTPClientDefaultBackoffBase,
+		maxBackoff:  apiserverutil.HTTPClientDefaultMaxBackoff,
+	}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -158,10 +169,7 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			}
 		}
 
-		sleepDuration := apiserverutil.GetRetryBackoff(attempt,
-			apiserverutil.HTTPClientDefaultInitBackoff,
-			apiserverutil.HTTPClientDefaultBackoffBase,
-			apiserverutil.HTTPClientDefaultMaxBackoff)
+		sleepDuration := apiserverutil.GetRetryBackoff(attempt, rrt.initBackoff, rrt.backoffBase, rrt.maxBackoff)
 
 		// TODO: merge common utils for apiserver v1 and v2
 		if deadline, ok := ctx.Deadline(); ok {
