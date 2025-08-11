@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"runtime"
@@ -75,7 +76,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 
 func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndTestingContext, error) {
 	testingContext := &End2EndTestingContext{
-		namespaceName:       petnames.Generate(2, "-"),
+		namespaceName:       fmt.Sprintf("%s-%d", petnames.Generate(2, "-"), time.Now().UnixNano()),
 		computeTemplateName: petnames.Name(),
 		clusterName:         petnames.Name(),
 		configMapName:       petnames.Generate(2, "-"),
