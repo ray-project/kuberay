@@ -75,7 +75,6 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
 		Recorder:                   mgr.GetEventRecorderFor("raycluster-controller"),
-		BatchSchedulerMgr:          schedulerMgr,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		options:                    options,
 	}
@@ -86,13 +85,13 @@ type RayClusterReconciler struct {
 	client.Client
 	Scheme                     *k8sruntime.Scheme
 	Recorder                   record.EventRecorder
-	BatchSchedulerMgr          *batchscheduler.SchedulerManager
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
 	options                    RayClusterReconcilerOptions
 }
 
 type RayClusterReconcilerOptions struct {
 	RayClusterMetricsManager *metrics.RayClusterMetricsManager
+	BatchSchedulerManager    *batchscheduler.SchedulerManager
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
 	IsOpenShift              bool
@@ -592,8 +591,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	}
 	// check if the batch scheduler integration is enabled
 	// call the scheduler plugin if so
-	if r.BatchSchedulerMgr != nil {
-		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetSchedulerForCluster(); err == nil {
 			if err := scheduler.DoBatchSchedulingOnSubmission(ctx, instance); err != nil {
 				return err
 			}
@@ -935,8 +934,8 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	pod := r.buildHeadPod(ctx, instance)
 	// check if the batch scheduler integration is enabled
 	// call the scheduler plugin if so
-	if r.BatchSchedulerMgr != nil {
-		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetSchedulerForCluster(); err == nil {
 			scheduler.AddMetadataToPod(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
 			return err
@@ -958,8 +957,8 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	// build the pod then create it
 	pod := r.buildWorkerPod(ctx, instance, worker)
-	if r.BatchSchedulerMgr != nil {
-		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetSchedulerForCluster(); err == nil {
 			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
 		} else {
 			return err
@@ -1123,8 +1122,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{})
-	if r.BatchSchedulerMgr != nil {
-		r.BatchSchedulerMgr.ConfigureReconciler(b)
+	if r.options.BatchSchedulerManager != nil {
+		r.options.BatchSchedulerManager.ConfigureReconciler(b)
 	}
 
 	return b.

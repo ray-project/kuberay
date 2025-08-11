@@ -31,6 +31,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -235,6 +236,7 @@ func main() {
 	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
+	var batchSchedulerManager *batchscheduler.SchedulerManager
 	if config.EnableMetrics {
 		mgrClient := mgr.GetClient()
 		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
@@ -246,11 +248,18 @@ func main() {
 			rayServiceMetricsManager,
 		)
 	}
+
+	if config.EnableBatchScheduler {
+		batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient())
+		exitOnError(err, "unable to create batch scheduler manager")
+	}
+
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
+		BatchSchedulerManager:    batchSchedulerManager,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
