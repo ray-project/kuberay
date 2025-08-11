@@ -7,14 +7,12 @@ import (
 
 type RayJobTemplateSpec struct {
 	// Standard object's metadata of the jobs created from this template.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// Specification of the desired behavior of the job.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
 	// +optional
-	Spec RayJob `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec RayJobSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // CronJobSpec describes how the job execution will look like and when it will actually run.
@@ -91,12 +89,7 @@ type RayCronJob struct {
 
 // CronJobList is a collection of cron jobs.
 type RayCronJobList struct {
-	metav1.TypeMeta
-	// Standard list metadata.
-	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-	// +optional
-	metav1.ListMeta
-
-	// items is the list of CronJobs.
-	Items []RayCronJob
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []RayCronJob `json:"items"`
 }

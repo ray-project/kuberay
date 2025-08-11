@@ -227,6 +227,9 @@ const (
 	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
 	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
 	MaxRayJobNameLength = MaxRayClusterNameLength - 6
+	// MaxRayJobNameLength is the maximum RayCronJob name to make sure it pass the RayCluster validation
+	// Minus 6 since we append 6 characters to the RayCronJob name to create the cluster (GenerateRayClusterName).
+	MaxRayCronJobNameLength = MaxRayClusterNameLength - 6
 )
 
 type ServiceType string

@@ -264,3 +264,19 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 
 	return nil
 }
+
+func ValidateRayCronJobMetadata(metadata metav1.ObjectMeta) error {
+
+	// dont know if this is needed
+	if len(metadata.Name) > MaxRayJobNameLength {
+		return fmt.Errorf("RayCronJob name should be no more than %d characters", MaxRayJobNameLength)
+	}
+	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
+		return fmt.Errorf("RayCronJob name should be a valid DNS1035 label: %v", errs)
+	}
+	return nil
+}
+
+func ValidateRayCronJobSpec(rayJob *rayv1.RayCronJob) error {
+	return nil
+}
