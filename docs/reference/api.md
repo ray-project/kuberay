@@ -11,6 +11,7 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 ### Resource Types
 - [RayCluster](#raycluster)
+- [RayCronJob](#raycronjob)
 - [RayJob](#rayjob)
 - [RayService](#rayservice)
 
@@ -52,6 +53,22 @@ _Validation:_
 
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
+
+
+
+#### ConcurrencyPolicy
+
+_Underlying type:_ _string_
+
+ConcurrencyPolicy describes how the job will be handled.
+Only one of the following concurrent policies may be specified.
+If none of the following policies is specified, the default one
+is AllowConcurrent.
+
+
+
+_Appears in:_
+- [RayCronJobSpec](#raycronjobspec)
 
 
 
@@ -203,6 +220,43 @@ _Appears in:_
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
 
 
+#### RayCronJob
+
+
+
+CronJob represents the configuration of a single cron job.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `ray.io/v1` | | |
+| `kind` _string_ | `RayCronJob` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayCronJobSpec](#raycronjobspec)_ |  |  |  |
+
+
+#### RayCronJobSpec
+
+
+
+CronJobSpec describes how the job execution will look like and when it will actually run.
+
+
+
+_Appears in:_
+- [RayCronJob](#raycronjob)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `schedule` _string_ | The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron. |  |  |
+| `concurrencyPolicy` _[ConcurrencyPolicy](#concurrencypolicy)_ | Specifies how to treat concurrent executions of a Job.<br />Valid values are:<br /><br />- "Allow" (default): allows CronJobs to run concurrently;<br />- "Forbid": forbids concurrent runs, skipping next run if previous run hasn't finished yet;<br />- "Replace": cancels currently running job and replaces it with a new one |  |  |
+| `suspend` _boolean_ | This flag tells the controller to suspend subsequent executions, it does<br />not apply to already started executions. Defaults to false. |  |  |
+| `rayJobTemplate` _[RayJobTemplateSpec](#rayjobtemplatespec)_ | Specifies the job that will be created when executing a CronJob. |  |  |
+
+
 #### RayJob
 
 
@@ -231,6 +285,7 @@ RayJobSpec defines the desired state of RayJob
 
 _Appears in:_
 - [RayJob](#rayjob)
+- [RayJobTemplateSpec](#rayjobtemplatespec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -255,6 +310,23 @@ _Appears in:_
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
 
 
+
+
+#### RayJobTemplateSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [RayCronJobSpec](#raycronjobspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayJobSpec](#rayjobspec)_ | Specification of the desired behavior of the job. |  |  |
 
 
 
