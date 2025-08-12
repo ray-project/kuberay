@@ -235,15 +235,19 @@ func main() {
 	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
+	var rayCronJobMetricsManager *metrics.RayCronJobMetricsManager
+
 	if config.EnableMetrics {
 		mgrClient := mgr.GetClient()
 		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
 		rayJobMetricsManager = metrics.NewRayJobMetricsManager(ctx, mgrClient)
 		rayServiceMetricsManager = metrics.NewRayServiceMetricsManager(ctx, mgrClient)
+		rayCronJobMetricsManager = metrics.NewRayCronJobMetricsManager(ctx, mgrClient)
 		ctrlmetrics.Registry.MustRegister(
 			rayClusterMetricsManager,
 			rayJobMetricsManager,
 			rayServiceMetricsManager,
+			rayCronJobMetricsManager,
 		)
 	}
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
@@ -263,6 +267,12 @@ func main() {
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
+
+	rayCronJobOptions := ray.RayCronJobReconcilerOptions{
+		RayCronJobMetricsManager: rayCronJobMetricsManager,
+	}
+	exitOnError(ray.NewRayCronJobReconciler(ctx, mgr, rayCronJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+		"unable to create controller", "controller", "RayCronJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),

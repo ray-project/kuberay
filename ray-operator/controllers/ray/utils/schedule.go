@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type MissedSchedulesType int
@@ -159,4 +161,85 @@ func LastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayCronJob, now time
 		}
 	}
 	return now.Sub(*mostRecentTime)
+}
+
+// nextScheduleTime returns the time.Time of the next schedule after the last scheduled
+// and before now, or nil if no unmet schedule times, and an error.
+// If there are too many (>100) unstarted times, it will also record a warning.
+func NextScheduleTime(logger logr.Logger, cj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule, recorder record.EventRecorder) (*time.Time, error) {
+	_, mostRecentTime, missedSchedules, err := MostRecentScheduleTime(cj, now, schedule)
+
+	if mostRecentTime == nil || mostRecentTime.After(now) {
+		return nil, err
+	}
+
+	if missedSchedules == manyMissed {
+		recorder.Eventf(cj, corev1.EventTypeWarning, "TooManyMissedTimes", "too many missed start times. Set or decrease .spec.startingDeadlineSeconds or check clock skew")
+		logger.Info("too many missed times")
+	}
+
+	return mostRecentTime, err
+}
+
+// getJobFromTemplate2 makes a Job from a CronJob. It converts the unix time into minutes from
+// epoch time and concatenates that to the job name, because the cronjob_controller v2 has the lowest
+// granularity of 1 minute for scheduling job.
+func GetRayJobFromTemplate2(cj *rayv1.RayCronJob, scheduledTime time.Time) (*rayv1.RayJob, error) {
+	labels := copyLabels(&cj.Spec.RayJobTemplate)
+	annotations := copyAnnotations(&cj.Spec.RayJobTemplate)
+	// We want job names for a given nominal start time to have a deterministic name to avoid the same job being created twice
+	name := getJobName(cj, scheduledTime)
+
+	job := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:            labels,
+			Annotations:       annotations,
+			Name:              name,
+			CreationTimestamp: metav1.Time{Time: scheduledTime},
+			OwnerReferences:   []metav1.OwnerReference{*metav1.NewControllerRef(cj, rayv1.SchemeGroupVersion.WithKind("RayCronJob"))},
+		},
+	}
+	cj.Spec.RayJobTemplate.Spec.DeepCopyInto(&job.Spec)
+	job.Namespace = cj.Namespace
+	return job, nil
+}
+
+func getJobName(cj *rayv1.RayCronJob, scheduledTime time.Time) string {
+	return fmt.Sprintf("%s-%s-%d", "rayjob", cj.Name, getTimeHashInMinutes(scheduledTime))
+}
+
+func copyLabels(template *rayv1.RayJobTemplate) labels.Set {
+	l := make(labels.Set)
+	for k, v := range template.Labels {
+		l[k] = v
+	}
+	return l
+}
+
+func copyAnnotations(template *rayv1.RayJobTemplate) labels.Set {
+	a := make(labels.Set)
+	for k, v := range template.Annotations {
+		a[k] = v
+	}
+	return a
+}
+
+// getTimeHashInMinutes returns Unix Epoch Time in minutes
+func getTimeHashInMinutes(scheduledTime time.Time) int64 {
+	return scheduledTime.Unix() / 60
+}
+
+func DeleteFromActiveList(cj *rayv1.RayCronJob, uid types.UID) {
+	if cj == nil {
+		return
+	}
+	// TODO: @alpatel the memory footprint can may be reduced here by
+	//  cj.Status.Active = append(cj.Status.Active[:indexToRemove], cj.Status.Active[indexToRemove:]...)
+	newActive := []corev1.ObjectReference{}
+	for _, j := range cj.Status.Active {
+		if j.UID != uid {
+			newActive = append(newActive, j)
+		}
+	}
+	cj.Status.Active = newActive
 }
