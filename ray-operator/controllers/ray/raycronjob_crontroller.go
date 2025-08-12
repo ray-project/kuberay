@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,12 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/go-logr/logr"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/robfig/cron/v3"
-	ref "k8s.io/client-go/tools/reference"
 )
 
 const (
@@ -141,7 +141,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	sched, err := cron.ParseStandard(utils.FormatSchedule(rayCronJob, r.Recorder))
-
 	if err != nil {
 		// this is likely a user error in defining the spec value
 		// we should log the error and not reconcile this cronjob until an update to spec
@@ -162,7 +161,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	t1 := utils.LastScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
 	if t1 <= ScheduleBuffer {
 		logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "Previous LastScheduleTime", rayCronJob.Status.LastScheduleTime)
-
 	} else {
 		logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now())
 		return ctrl.Result{RequeueAfter: utils.NextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)}, nil
@@ -189,7 +187,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Info("Deleting job that was still running at next scheduled start time")
 			job := &rayv1.RayJob{}
 			err := r.Client.Get(ctx, types.NamespacedName{Name: j.Name, Namespace: j.Namespace}, job)
-
 			if err != nil {
 				// If the job is already gone, just log it and continue.
 				r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, "FailedGet", "Error getting active job %s: %v", j.Name, err)
@@ -245,7 +242,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	t := utils.NextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
 	return ctrl.Result{RequeueAfter: t}, nil
-
 }
 
 // The receiver (r *RayCronJobReconciler) attaches this function to the struct, making it a method.

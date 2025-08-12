@@ -4,6 +4,7 @@ import (
 	errstd "errors"
 	"fmt"
 
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -266,7 +267,6 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 }
 
 func ValidateRayCronJobMetadata(metadata metav1.ObjectMeta) error {
-
 	// dont know if this is needed
 	if len(metadata.Name) > MaxRayJobNameLength {
 		return fmt.Errorf("RayCronJob name should be no more than %d characters", MaxRayJobNameLength)
@@ -277,6 +277,30 @@ func ValidateRayCronJobMetadata(metadata metav1.ObjectMeta) error {
 	return nil
 }
 
-func ValidateRayCronJobSpec(rayJob *rayv1.RayCronJob) error {
+func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// The schedule must be a non-empty string and a valid cron expression.
+	if rayCronJob.Spec.Schedule == "" {
+		return fmt.Errorf("schedule must be a non-empty string")
+	}
+
+	if _, err := cron.ParseStandard(FormatSchedule(rayCronJob, nil)); err != nil {
+		return fmt.Errorf("invalid schedule format: %w", err)
+	}
+
+	// Ensure the provided policy is one of the supported values.
+	switch rayCronJob.Spec.ConcurrencyPolicy {
+	case "", rayv1.AllowConcurrent, rayv1.ForbidConcurrent, rayv1.ReplaceConcurrent:
+	default:
+		return fmt.Errorf("invalid concurrency policy: %s", rayCronJob.Spec.ConcurrencyPolicy)
+	}
+
+	// Valid the Ray Job managed by the Ray Cron Job
+	dummyRayJob := &rayv1.RayJob{
+		Spec: rayCronJob.Spec.RayJobTemplate.Spec,
+	}
+	if err := ValidateRayJobSpec(dummyRayJob); err != nil {
+		return fmt.Errorf("invalid RayJob: %w", err)
+	}
+
 	return nil
 }

@@ -17,7 +17,6 @@ type RayJobTemplate struct {
 
 // CronJobSpec describes how the job execution will look like and when it will actually run.
 type RayCronJobSpec struct {
-
 	// The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.
 	Schedule string `json:"schedule"`
 
@@ -59,17 +58,9 @@ const (
 
 // CronJobStatus represents the current state of a cron job.
 type RayCronJobStatus struct {
-	// A list of pointers to currently running jobs.
-	// +optional
-	Active []v1.ObjectReference `json:"active,omitempty"`
-
-	// Information when was the last time the job was successfully scheduled.
-	// +optional
-	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
-
-	// Information when was the last time the job successfully completed.
-	// +optional
-	LastSuccessfulTime *metav1.Time `json:"lastSuccessfulTime,omitempty"`
+	LastScheduleTime   *metav1.Time         `json:"lastScheduleTime,omitempty"`
+	LastSuccessfulTime *metav1.Time         `json:"lastSuccessfulTime,omitempty"`
+	Active             []v1.ObjectReference `json:"active,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -79,10 +70,10 @@ type RayCronJobStatus struct {
 // +genclient
 // CronJob represents the configuration of a single cron job.
 type RayCronJob struct {
+	Status            RayCronJobStatus `json:"status,omitempty"`
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RayCronJobSpec   `json:"spec,omitempty"`
-	Status            RayCronJobStatus `json:"status,omitempty"`
+	Spec              RayCronJobSpec `json:"spec,omitempty"`
 }
 
 //+kubebuilder:object:root=true
