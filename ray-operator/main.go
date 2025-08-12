@@ -249,10 +249,9 @@ func main() {
 		)
 	}
 
-		batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient())
-		batchSchedulerManager.AddToScheme(mgr.GetScheme())
-		exitOnError(err, "unable to create batch scheduler manager")
-	}
+	batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient())
+	batchSchedulerManager.AddToScheme(mgr.GetScheme())
+	exitOnError(err, "unable to create batch scheduler manager")
 
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
