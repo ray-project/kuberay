@@ -1,0 +1,115 @@
+apiVersion: ray.io/v1
+kind: RayCronJob
+metadata:
+  name: raycronjob-sample
+spec:
+  # Run this job every 5 minutes
+  schedule: "*/5 * * * *"
+
+  # If a job is already running, cancel it and start a new one.
+  concurrencyPolicy: Replace
+
+  # This is the template for the RayJob that will be created on schedule.
+  rayJobTemplate:
+    spec:
+      entrypoint: python /home/ray/samples/sample_code.py
+
+      # RuntimeEnvYAML represents the runtime environment configuration.
+      runtimeEnvYAML: |
+        pip:
+          - requests==2.26.0
+          - pendulum==2.1.2
+        env_vars:
+          counter_name: "test_counter"
+
+      # rayClusterSpec specifies the RayCluster to be created by the RayJob.
+      rayClusterSpec:
+        # CORRECTION: Updated to a valid Ray version.
+        rayVersion: '2.9.3'
+        headGroupSpec:
+          rayStartParams:
+            dashboard-host: '0.0.0.0'
+          template:
+            spec:
+              containers:
+              - name: ray-head
+                # CORRECTION: Updated to a valid image tag.
+                image: rayproject/ray:2.46.0
+                ports:
+                - containerPort: 6379
+                  name: gcs-server
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: "2Gi"
+                  requests:
+                    cpu: "200m"
+                    memory: "2Gi"
+                volumeMounts:
+                - mountPath: /home/ray/samples
+                  name: code-sample
+              volumes:
+              - name: code-sample
+                configMap:
+                  name: ray-job-code-sample
+                  items:
+                  - key: sample_code.py
+                    path: sample_code.py
+        workerGroupSpecs:
+        - replicas: 1
+          minReplicas: 1
+          maxReplicas: 5
+          groupName: small-group
+          rayStartParams: {}
+          template:
+            spec:
+              containers:
+              - name: ray-worker
+                # CORRECTION: Updated to a valid image tag.
+                image: rayproject/ray:2.46.0
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: "1Gi"
+                  requests:
+                    cpu: "200m"
+                    memory: "1Gi"
+---
+# This ConfigMap provides the Python script that the RayJob will execute.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-job-code-sample
+data:
+  sample_code.py: |
+    import ray
+    import os
+    import requests
+
+    ray.init()
+
+    @ray.remote
+    class Counter:
+        def __init__(self):
+            self.name = os.getenv("counter_name")
+            assert self.name == "test_counter"
+            self.counter = 0
+
+        def inc(self):
+            self.counter += 1
+
+        def get_counter(self):
+            return "{} got {}".format(self.name, self.counter)
+
+    counter = Counter.remote()
+
+    for _ in range(5):
+        ray.get(counter.inc.remote())
+        print(ray.get(counter.get_counter.remote()))
+
+    # Verify that the correct runtime env was used for the job.
+    assert requests.__version__ == "2.26.0"
