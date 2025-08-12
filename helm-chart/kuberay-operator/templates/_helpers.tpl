@@ -228,6 +228,7 @@ rules:
   - ray.io
   resources:
   - rayclusters
+  - raycronjobs
   - rayjobs
   - rayservices
   verbs:
@@ -242,6 +243,7 @@ rules:
   - ray.io
   resources:
   - rayclusters/finalizers
+  - raycronjobs/finalizers
   - rayjobs/finalizers
   - rayservices/finalizers
   verbs:
@@ -250,6 +252,7 @@ rules:
   - ray.io
   resources:
   - rayclusters/status
+  - raycronjobs/status
   - rayjobs/status
   - rayservices/status
   verbs:
