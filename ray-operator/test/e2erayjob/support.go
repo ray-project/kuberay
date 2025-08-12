@@ -1,4 +1,4 @@
-package e2e
+package e2erayjob
 
 import (
 	"embed"
@@ -68,8 +68,8 @@ func files(t Test, fileNames ...string) option[corev1ac.ConfigMapApplyConfigurat
 	return options(files...)
 }
 
-func newRayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
-	return rayClusterSpecWith(rayClusterSpec())
+func newRayClusterSpec(options ...option[rayv1ac.RayClusterSpecApplyConfiguration]) *rayv1ac.RayClusterSpecApplyConfiguration {
+	return rayClusterSpecWith(rayClusterSpec(), options...)
 }
 
 func rayClusterSpecWith(spec *rayv1ac.RayClusterSpecApplyConfiguration, options ...option[rayv1ac.RayClusterSpecApplyConfiguration]) *rayv1ac.RayClusterSpecApplyConfiguration {
@@ -114,6 +114,10 @@ func rayClusterSpec() *rayv1ac.RayClusterSpecApplyConfiguration {
 			WithTemplate(workerPodTemplateApplyConfiguration()))
 }
 
+func podTemplateSpecApplyConfiguration(template *corev1ac.PodTemplateSpecApplyConfiguration, options ...option[corev1ac.PodTemplateSpecApplyConfiguration]) *corev1ac.PodTemplateSpecApplyConfiguration {
+	return apply(template, options...)
+}
+
 func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfiguration {
 	return corev1ac.PodTemplateSpec().
 		WithSpec(corev1ac.PodSpec().
@@ -151,5 +155,23 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 					WithLimits(corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
+					}))))
+}
+
+func jobSubmitterPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfiguration {
+	return corev1ac.PodTemplateSpec().
+		WithSpec(corev1ac.PodSpec().
+			WithRestartPolicy(corev1.RestartPolicyNever).
+			WithContainers(corev1ac.Container().
+				WithName("ray-job-submitter").
+				WithImage(GetRayImage()).
+				WithResources(corev1ac.ResourceRequirements().
+					WithRequests(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("200m"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					}).
+					WithLimits(corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					}))))
 }
