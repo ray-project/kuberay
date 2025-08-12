@@ -460,7 +460,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		portforwardWaitStartTime := time.Now()
 		currTime = portforwardWaitStartTime
 
-		portforwardCheckRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, options.address, nil)
+		portforwardCheckRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr, nil)
 		if err != nil {
 			return fmt.Errorf("Error occurred when trying to create request to probe cluster endpoint: %w", err)
 		}
@@ -484,6 +484,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		if !portforwardReady {
 			return fmt.Errorf("Timed out waiting for port forwarding")
 		}
+		options.address = dashboardAddr
 		fmt.Printf("Portforwarding started on %s\n", options.address)
 	} else {
 		fmt.Printf("Using address %s (no port-forwarding)\n", options.address)
