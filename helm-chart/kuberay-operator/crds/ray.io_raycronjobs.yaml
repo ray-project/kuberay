@@ -28,8 +28,6 @@ spec:
             type: object
           spec:
             properties:
-              concurrencyPolicy:
-                type: string
               rayJobTemplate:
                 properties:
                   metadata:
@@ -11786,38 +11784,13 @@ spec:
                 type: object
               schedule:
                 type: string
-              suspend:
-                type: boolean
             required:
             - rayJobTemplate
             - schedule
             type: object
           status:
             properties:
-              active:
-                items:
-                  properties:
-                    apiVersion:
-                      type: string
-                    fieldPath:
-                      type: string
-                    kind:
-                      type: string
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                    resourceVersion:
-                      type: string
-                    uid:
-                      type: string
-                  type: object
-                  x-kubernetes-map-type: atomic
-                type: array
               lastScheduleTime:
-                format: date-time
-                type: string
-              lastSuccessfulTime:
                 format: date-time
                 type: string
             type: object
