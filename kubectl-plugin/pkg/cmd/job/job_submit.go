@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,7 +46,6 @@ type SubmitJobOptions struct {
 	workerNodeSelectors      map[string]string
 	headNodeSelectors        map[string]string
 	logColor                 string
-	useIngress               bool
 	address                  string
 	image                    string
 	fileName                 string
@@ -89,7 +89,8 @@ type JobInfo struct {
 var (
 	jobSubmitLong = templates.LongDesc(`
 		Submit Ray job to Ray cluster as one would using Ray CLI e.g. 'ray job submit ENTRYPOINT'.
-		If Ray cluster is already setup, use 'kubectl ray session' instead.
+		If Ray cluster is already setup, use 'kubectl ray session' instead. If '--address' is set, we connect directly 
+		without port-forwarding; if empty, we port-forward to localhost:8265.
 
 		If no RayJob YAML file is specified, the command will create a default RayJob for the user.
 
@@ -151,8 +152,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 		},
 	}
 	cmd.Flags().StringVarP(&options.fileName, "filename", "f", "", "Path and name of the Ray Job YAML file")
-	cmd.Flags().StringVar(&options.address, "address", dashboardAddr, "Address of the Ray cluster to connect to")
-	cmd.Flags().BoolVar(&options.useIngress, "use-ingress", false, "Skip port-forwarding and use the provided --address (e.g. an Ingress endpoint)")
+	cmd.Flags().StringVar(&options.address, "address", "", "Ray Dashboard base URL (e.g., https://ray.example.com). If set, skips port-forwarding.")
 	cmd.Flags().StringVar(&options.submissionID, "submission-id", "", "ID to specify for the Ray job. If not provided, one will be generated")
 	cmd.Flags().StringVar(&options.runtimeEnv, "runtime-env", "", "Path and name to the runtime env YAML file.")
 	cmd.Flags().StringVar(&options.workingDir, "working-dir", "", "Directory containing files that your job will run in")
@@ -311,14 +311,16 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		}
 	}
 
-	if options.useIngress && options.address == "" {
-		return fmt.Errorf("--use-ingress was set, but --address is missing or empty")
+	if cmd.Flags().Changed("address") {
+		if strings.TrimSpace(options.address) == "" {
+			return fmt.Errorf("--address was provided but is empty")
+		}
+		u, err := url.Parse(options.address)
+		if err != nil || u.Scheme == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("--address must be a valid http(s) URL, got %q", options.address)
+		}
+		options.address = strings.TrimRight(options.address, "/")
 	}
-
-	if !options.useIngress && options.address != "" && options.address != dashboardAddr {
-		return fmt.Errorf("--address=%q is not valid unless --use-ingress is set", options.address)
-	}
-
 	return nil
 }
 
@@ -433,7 +435,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Timed out waiting for cluster")
 	}
 
-	if !options.useIngress {
+	if options.address == "" {
 		svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
 		if err != nil {
 			return fmt.Errorf("Failed to find service name: %w", err)
@@ -484,7 +486,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		}
 		fmt.Printf("Portforwarding started on %s\n", options.address)
 	} else {
-		fmt.Printf("Using ingress at %s, skipping port forwarding\n", options.address)
+		fmt.Printf("Using address %s (no port-forwarding)\n", options.address)
 	}
 
 	// If submission ID is not provided by the user, generate one.
@@ -624,7 +626,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 }
 
 func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
-	raySubmitCmd := []string{"ray", "job", "submit", "--address", options.address}
+	addr := options.address
+	if addr == "" {
+		addr = dashboardAddr
+	}
+	raySubmitCmd := []string{"ray", "job", "submit", "--address", addr}
 
 	if len(options.runtimeEnv) > 0 {
 		raySubmitCmd = append(raySubmitCmd, "--runtime-env", options.runtimeEnv)
