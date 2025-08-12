@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"os"
 	"strconv"
 	"strings"
@@ -39,8 +40,9 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	BatchSchedulerMgr *batchscheduler.SchedulerManager
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
 	options             RayJobReconcilerOptions
@@ -51,12 +53,13 @@ type RayJobReconcilerOptions struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
+func NewRayJobReconciler(_ context.Context, mgr manager.Manager, batchSchedulerMgr *batchscheduler.SchedulerManager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
+		BatchSchedulerMgr:   batchSchedulerMgr,
 		dashboardClientFunc: dashboardClientFunc,
 		options:             options,
 	}
@@ -633,6 +636,14 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 		},
 	}
 
+	if r.BatchSchedulerMgr != nil {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
+			scheduler.PropagateMetadata(ctx, rayJobInstance, utils.RaySubmitterGroupLabelValue, job)
+		} else {
+			return err
+		}
+	}
+
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		return err
@@ -748,11 +759,17 @@ func (r *RayJobReconciler) suspendWorkerGroups(ctx context.Context, rayJobInstan
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayJob{}).
 		Owns(&rayv1.RayCluster{}).
 		Owns(&corev1.Service{}).
-		Owns(&batchv1.Job{}).
+		Owns(&batchv1.Job{})
+
+	if r.BatchSchedulerMgr != nil {
+		r.BatchSchedulerMgr.ConfigureReconciler(b)
+	}
+
+	return b.
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
@@ -848,7 +865,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 
 			logger.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
-			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(ctx, rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -872,7 +889,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	return rayClusterInstance, nil
 }
 
-func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
 	for key, value := range rayJobInstance.Labels {
 		labels[key] = value
@@ -887,6 +904,14 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 			Namespace:   rayJobInstance.Namespace,
 		},
 		Spec: *rayJobInstance.Spec.RayClusterSpec.DeepCopy(),
+	}
+
+	if r.BatchSchedulerMgr != nil {
+		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
+			scheduler.PropagateMetadata(ctx, rayJobInstance, "", rayCluster)
+		} else {
+			return nil, err
+		}
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.

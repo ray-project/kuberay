@@ -53,7 +53,7 @@ var (
 )
 
 // NewReconciler returns a new reconcile.Reconciler
-func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions, rayConfigs configapi.Configuration) *RayClusterReconciler {
+func NewReconciler(ctx context.Context, mgr manager.Manager, batchSchedulerMgr *batchscheduler.SchedulerManager, options RayClusterReconcilerOptions, rayConfigs configapi.Configuration) *RayClusterReconciler {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
 		pod := rawObj.(*corev1.Pod)
 		return []string{string(pod.UID)}
@@ -75,7 +75,7 @@ func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterR
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
 		Recorder:                   mgr.GetEventRecorderFor("raycluster-controller"),
-		BatchSchedulerMgr:          schedulerMgr,
+		BatchSchedulerMgr:          batchSchedulerMgr,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		options:                    options,
 	}
@@ -937,7 +937,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	// call the scheduler plugin if so
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
-			scheduler.AddMetadataToPod(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
+			scheduler.PropagateMetadata(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
 			return err
 		}
@@ -960,7 +960,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	pod := r.buildWorkerPod(ctx, instance, worker)
 	if r.BatchSchedulerMgr != nil {
 		if scheduler, err := r.BatchSchedulerMgr.GetSchedulerForCluster(); err == nil {
-			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
+			scheduler.PropagateMetadata(ctx, &instance, worker.GroupName, &pod)
 		} else {
 			return err
 		}
