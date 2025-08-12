@@ -34,7 +34,6 @@ import (
 
 const (
 	dashboardAddr      = "http://localhost:8265"
-	clusterTimeout     = 120.0
 	portForwardTimeout = 60.0
 )
 
@@ -77,6 +76,7 @@ type SubmitJobOptions struct {
 	verbose                  bool
 	shutdownAfterJobFinishes bool
 	ttlSecondsAfterFinished  int32
+	clusterTimeout           float64
 }
 
 type JobInfo struct {
@@ -182,6 +182,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
+	cmd.Flags().Float64Var(&options.clusterTimeout, "cluster-timeout", 120.0, "Timeout in seconds for waiting for the RayCluster to be ready")
 
 	return cmd
 }
@@ -291,6 +292,10 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 
 	if options.workingDir == "" {
 		return fmt.Errorf("working directory is required, use --working-dir or set with runtime env")
+	}
+
+	if options.clusterTimeout <= 0 {
+		return fmt.Errorf("--cluster-timeout must be greater than 0")
 	}
 
 	resourceFields := map[string]string{
@@ -417,7 +422,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	currTime := clusterWaitStartTime
 	fmt.Printf("Waiting for RayCluster\n")
 	fmt.Printf("Checking Cluster Status for cluster %s...\n", options.cluster)
-	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= clusterTimeout {
+	for !clusterReady && currTime.Sub(clusterWaitStartTime).Seconds() <= options.clusterTimeout {
 		time.Sleep(2 * time.Second)
 		currCluster, err := k8sClients.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 		if err != nil {
