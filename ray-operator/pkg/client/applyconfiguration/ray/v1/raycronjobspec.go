@@ -9,10 +9,10 @@ import (
 // RayCronJobSpecApplyConfiguration represents a declarative configuration of the RayCronJobSpec type for use
 // with apply.
 type RayCronJobSpecApplyConfiguration struct {
-	Schedule          *string                               `json:"schedule,omitempty"`
-	ConcurrencyPolicy *rayv1.ConcurrencyPolicy              `json:"concurrencyPolicy,omitempty"`
-	Suspend           *bool                                 `json:"suspend,omitempty"`
-	RayJobTemplate    *RayJobTemplateSpecApplyConfiguration `json:"rayJobTemplate,omitempty"`
+	Schedule          *string                           `json:"schedule,omitempty"`
+	ConcurrencyPolicy *rayv1.ConcurrencyPolicy          `json:"concurrencyPolicy,omitempty"`
+	Suspend           *bool                             `json:"suspend,omitempty"`
+	RayJobTemplate    *RayJobTemplateApplyConfiguration `json:"rayJobTemplate,omitempty"`
 }
 
 // RayCronJobSpecApplyConfiguration constructs a declarative configuration of the RayCronJobSpec type for use with
@@ -48,7 +48,7 @@ func (b *RayCronJobSpecApplyConfiguration) WithSuspend(value bool) *RayCronJobSp
 // WithRayJobTemplate sets the RayJobTemplate field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the RayJobTemplate field is set to the value of the last call.
-func (b *RayCronJobSpecApplyConfiguration) WithRayJobTemplate(value *RayJobTemplateSpecApplyConfiguration) *RayCronJobSpecApplyConfiguration {
+func (b *RayCronJobSpecApplyConfiguration) WithRayJobTemplate(value *RayJobTemplateApplyConfiguration) *RayCronJobSpecApplyConfiguration {
 	b.RayJobTemplate = value
 	return b
 }

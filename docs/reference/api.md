@@ -254,7 +254,7 @@ _Appears in:_
 | `schedule` _string_ | The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron. |  |  |
 | `concurrencyPolicy` _[ConcurrencyPolicy](#concurrencypolicy)_ | Specifies how to treat concurrent executions of a Job.<br />Valid values are:<br /><br />- "Allow" (default): allows CronJobs to run concurrently;<br />- "Forbid": forbids concurrent runs, skipping next run if previous run hasn't finished yet;<br />- "Replace": cancels currently running job and replaces it with a new one |  |  |
 | `suspend` _boolean_ | This flag tells the controller to suspend subsequent executions, it does<br />not apply to already started executions. Defaults to false. |  |  |
-| `rayJobTemplate` _[RayJobTemplateSpec](#rayjobtemplatespec)_ | Specifies the job that will be created when executing a CronJob. |  |  |
+| `rayJobTemplate` _[RayJobTemplate](#rayjobtemplate)_ | Specifies the job that will be created when executing a CronJob. |  |  |
 
 
 #### RayJob
@@ -285,7 +285,7 @@ RayJobSpec defines the desired state of RayJob
 
 _Appears in:_
 - [RayJob](#rayjob)
-- [RayJobTemplateSpec](#rayjobtemplatespec)
+- [RayJobTemplate](#rayjobtemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -312,7 +312,7 @@ _Appears in:_
 
 
 
-#### RayJobTemplateSpec
+#### RayJobTemplate
 
 
 

@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type RayJobTemplateSpec struct {
+type RayJobTemplate struct {
 	// Standard object's metadata of the jobs created from this template.
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
@@ -36,7 +36,7 @@ type RayCronJobSpec struct {
 	Suspend *bool `json:"suspend,omitempty"`
 
 	// Specifies the job that will be created when executing a CronJob.
-	RayJobTemplate RayJobTemplateSpec `json:"rayJobTemplate"`
+	RayJobTemplate RayJobTemplate `json:"rayJobTemplate"`
 }
 
 // ConcurrencyPolicy describes how the job will be handled.
@@ -92,4 +92,8 @@ type RayCronJobList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayCronJob `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&RayCronJob{}, &RayCronJobList{})
 }
