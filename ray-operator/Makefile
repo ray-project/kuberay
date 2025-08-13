@@ -103,6 +103,8 @@ build: fmt vet ## Build manager binary.
 # KubeRay sends HTTP requests to the Ray head using ${HEAD_SVC_FQDN}:52365 which is not reachable from outside of a K8s cluster.
 # For detail, see https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#issue-5-fail-to-create-update-serve-applications
 # 	go run ./main.go -enable-leader-election=false
+build-rayjobsubmitter:
+	go build -o bin/submitter ./rayjobsubmitter/cmd/main.go
 
 docker-image: ## Build image only
 	${ENGINE} build -t ${IMG} .
