@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 func TestMetricRayJobInfo(t *testing.T) {
@@ -61,11 +61,7 @@ func TestMetricRayJobInfo(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
@@ -74,7 +70,7 @@ func TestMetricRayJobInfo(t *testing.T) {
 			}
 
 			if len(tc.rayJobs) > 0 {
-				err = client.Delete(t.Context(), &tc.rayJobs[0])
+				err := client.Delete(t.Context(), &tc.rayJobs[0])
 				require.NoError(t, err)
 			}
 
@@ -110,11 +106,7 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	manager.DeleteRayJobMetrics("job1", "ns1")
 
 	// Verify metrics
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-	require.NoError(t, err)
-	recorder := httptest.NewRecorder()
-	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})
-	handler.ServeHTTP(recorder, req)
+	req, recorder, handler := support.CreateAndExecuteMetricsRequest(t, reg)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	body := recorder.Body.String()
@@ -212,11 +204,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
@@ -225,7 +213,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 			}
 
 			if len(tc.rayJobs) > 0 {
-				err = client.Delete(context.Background(), &tc.rayJobs[0])
+				err := client.Delete(context.Background(), &tc.rayJobs[0])
 				require.NoError(t, err)
 			}
 

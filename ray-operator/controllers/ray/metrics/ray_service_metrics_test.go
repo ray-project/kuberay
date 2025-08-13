@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 func TestRayServiceInfo(t *testing.T) {
@@ -60,11 +60,7 @@ func TestRayServiceInfo(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
@@ -186,11 +182,7 @@ func TestRayServiceCondition(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			body := rr.Body.String()
