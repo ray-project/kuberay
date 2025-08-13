@@ -28,7 +28,7 @@ func TestRayClusterManagedBy(t *testing.T) {
 		t.Parallel()
 
 		rayClusterAC := rayv1ac.RayCluster("raycluster-ok", namespace.Name).
-			WithSpec(newRayClusterSpec().
+			WithSpec(NewRayClusterSpec().
 				WithManagedBy(utils.KubeRayController))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -44,7 +44,7 @@ func TestRayClusterManagedBy(t *testing.T) {
 		t.Parallel()
 
 		rayClusterAC := rayv1ac.RayCluster("raycluster-skip", namespace.Name).
-			WithSpec(newRayClusterSpec().
+			WithSpec(NewRayClusterSpec().
 				WithManagedBy("kueue.x-k8s.io/multikueue"))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -70,7 +70,7 @@ func TestRayClusterManagedBy(t *testing.T) {
 		t.Parallel()
 
 		rayClusterAC := rayv1ac.RayCluster("raycluster-fail", namespace.Name).
-			WithSpec(newRayClusterSpec().
+			WithSpec(NewRayClusterSpec().
 				WithManagedBy("controller.com/not-supported"))
 
 		_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -85,7 +85,7 @@ func TestRayClusterSuspend(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("raycluster-suspend", namespace.Name).WithSpec(newRayClusterSpec())
+	rayClusterAC := rayv1ac.RayCluster("raycluster-suspend", namespace.Name).WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -134,7 +134,7 @@ func TestRayClusterWithResourceQuota(t *testing.T) {
 	// Create a resource quota
 	CreateResourceQuota(test, namespace.Name, "test-quota", "0.1", "0.1Gi")
 
-	rayClusterAC := rayv1ac.RayCluster("raycluster-resource-quota", namespace.Name).WithSpec(newRayClusterSpec())
+	rayClusterAC := rayv1ac.RayCluster("raycluster-resource-quota", namespace.Name).WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -157,14 +157,14 @@ func TestRayClusterScalingDown(t *testing.T) {
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
-				WithTemplate(headPodTemplateApplyConfiguration().WithFinalizers("test.kuberay.io/finalizers"))).
+				WithTemplate(HeadPodTemplateApplyConfiguration().WithFinalizers("test.kuberay.io/finalizers"))).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(2).
 				WithMinReplicas(1).
 				WithMaxReplicas(5).
 				WithGroupName("small-group").
 				WithRayStartParams(map[string]string{"num-cpus": "1"}).
-				WithTemplate(workerPodTemplateApplyConfiguration().WithFinalizers("test.kuberay.io/finalizers"))))
+				WithTemplate(WorkerPodTemplateApplyConfiguration().WithFinalizers("test.kuberay.io/finalizers"))))
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())

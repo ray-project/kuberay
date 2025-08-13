@@ -20,7 +20,7 @@ func TestRayJobRetry(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, files(test, "fail.py"))
+	jobsAC := NewConfigMap(namespace.Name, Files(test, "fail.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -32,10 +32,10 @@ func TestRayJobRetry(t *testing.T) {
 				WithBackoffLimit(2).
 				WithSubmitterConfig(rayv1ac.SubmitterConfig().
 					WithBackoffLimit(1)).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -91,10 +91,10 @@ func TestRayJobRetry(t *testing.T) {
 				WithBackoffLimit(2).
 				WithSubmitterConfig(rayv1ac.SubmitterConfig().
 					WithBackoffLimit(0)).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("The command will be overridden by the submitter Job").
 				WithShutdownAfterJobFinishes(true).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		// In this test, we try to simulate the case where the submitter Job can't connect to the RayCluster successfully.
 		// Hence, KubeRay can't get the Ray job information from the RayCluster. When the RayJob reaches the backoff
@@ -148,12 +148,12 @@ func TestRayJobRetry(t *testing.T) {
 				WithBackoffLimit(2).
 				WithSubmitterConfig(rayv1ac.SubmitterConfig().
 					WithBackoffLimit(0)).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
 				WithShutdownAfterJobFinishes(true).
 				WithTTLSecondsAfterFinished(600).
 				WithActiveDeadlineSeconds(5).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -181,7 +181,7 @@ func TestRayJobRetry(t *testing.T) {
 				WithBackoffLimit(2).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())

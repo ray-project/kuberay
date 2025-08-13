@@ -21,14 +21,14 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, files(test, "counter.py", "fail.py"))
+	jobsAC := NewConfigMap(namespace.Name, Files(test, "counter.py", "fail.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
 
 	// RayCluster
 	rayClusterAC := rayv1ac.RayCluster("raycluster", namespace.Name).
-		WithSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs")))
+		WithSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs")))
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -50,7 +50,7 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 env_vars:
   counter_name: test_counter
 `).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -74,7 +74,7 @@ env_vars:
 				WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
 				WithEntrypoint("python /home/ray/jobs/fail.py").
 				WithShutdownAfterJobFinishes(false).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -101,7 +101,7 @@ env_vars:
 env_vars:
   counter_name: test_counter
 `).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()).
 				WithManagedBy("kueue.x-k8s.io/multikueue"))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
@@ -126,7 +126,7 @@ env_vars:
 env_vars:
   counter_name: test_counter
 `).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()).
 				WithManagedBy("invalid.com/controller"))
 
 		_, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
