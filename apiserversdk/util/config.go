@@ -14,3 +14,11 @@ const (
 	// Overall timeout for retries
 	HTTPClientDefaultOverallTimeout = 30 * time.Second
 )
+
+type RetryConfig struct {
+	MaxRetry       int
+	BackoffFactor  float64
+	InitBackoff    time.Duration
+	MaxBackoff     time.Duration
+	OverallTimeout time.Duration
+}

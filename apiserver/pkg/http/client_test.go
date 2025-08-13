@@ -53,7 +53,7 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestUnmarshalHttpResponseOK(t *testing.T) {
-	retryCfg := RetryConfig{
+	retryCfg := util.RetryConfig{
 		MaxRetry:       util.HTTPClientDefaultMaxRetry,
 		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
@@ -89,7 +89,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 
 // Unmarshal response fails and check error returned.
 func TestUnmarshalHttpResponseFails(t *testing.T) {
-	retryCfg := RetryConfig{
+	retryCfg := util.RetryConfig{
 		MaxRetry:       util.HTTPClientDefaultMaxRetry,
 		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
@@ -207,7 +207,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &http.Client{Transport: tt.transport}
 
-			retryCfg := RetryConfig{
+			retryCfg := util.RetryConfig{
 				MaxRetry:       tt.maxRetry,
 				BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 				InitBackoff:    util.HTTPClientDefaultInitBackoff,
@@ -261,7 +261,7 @@ func TestAPIServerClientBackoff(t *testing.T) {
 
 	mockClient := &http.Client{Transport: mockTransport}
 
-	retryCfg := RetryConfig{
+	retryCfg := util.RetryConfig{
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
 		BackoffFactor: util.HTTPClientDefaultBackoffBase,
 		// Set short backoff time
@@ -303,7 +303,7 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 
 	mockClient := &http.Client{Transport: mockTransport}
 
-	retryCfg := RetryConfig{
+	retryCfg := util.RetryConfig{
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
 		BackoffFactor: util.HTTPClientDefaultBackoffBase,
 		InitBackoff:   1 * time.Millisecond,

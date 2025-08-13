@@ -95,7 +95,7 @@ func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 
-		retryCfg := kuberayHTTP.RetryConfig{
+		retryCfg := util.RetryConfig{
 			MaxRetry:       util.HTTPClientDefaultMaxRetry,
 			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
 			InitBackoff:    util.HTTPClientDefaultInitBackoff,
