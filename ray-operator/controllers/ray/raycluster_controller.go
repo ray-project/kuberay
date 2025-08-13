@@ -135,7 +135,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
-		r.options.RayClusterMetricsManager.DeleteRayClusterMetrics(request.Name, request.Namespace)
+		cleanUpRayClusterMetrics(r.options.RayClusterMetricsManager, request.Name, request.Namespace)
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -1570,6 +1570,13 @@ func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClus
 		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
 		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
 	}
+}
+
+func cleanUpRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string) {
+	if rayClusterMetricsManager == nil {
+		return
+	}
+	rayClusterMetricsManager.DeleteRayClusterMetrics(clusterName, namespace)
 }
 
 // sumGPUs sums the GPUs in the given resource list.
