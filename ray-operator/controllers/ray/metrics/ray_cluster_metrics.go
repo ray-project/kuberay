@@ -91,7 +91,7 @@ func (r *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, na
 
 // DeleteRayClusterMetrics removes metrics that belongs to the specified RayCluster.
 func (r *RayClusterMetricsManager) DeleteRayClusterMetrics(name, namespace string) {
-	numCleanedUpMetrics := r.rayClusterProvisionedDurationSeconds.DeletePartialMatch(prometheus.Labels{"name": name, "namespace": namespace})
+	numCleanedUpMetrics := r.rayClusterProvisionedDurationSeconds.Delete(prometheus.Labels{"name": name, "namespace": namespace})
 	r.log.Info("Cleaned up expired RayCluster metric", "name", name, "namespace", namespace, "numCleanedUpMetrics", numCleanedUpMetrics)
 }
 
