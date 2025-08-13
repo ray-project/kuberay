@@ -2,6 +2,7 @@ package apiserversdk
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -104,20 +105,29 @@ type retryRoundTripper struct {
 	initBackoff time.Duration
 	backoffBase float64
 	maxBackoff  time.Duration
+
+	// Timeout settings
+	OverallTimeout time.Duration
 }
 
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
 	return &retryRoundTripper{
-		base:        base,
-		maxRetries:  apiserverutil.HTTPClientDefaultMaxRetry,
-		initBackoff: apiserverutil.HTTPClientDefaultInitBackoff,
-		backoffBase: apiserverutil.HTTPClientDefaultBackoffBase,
-		maxBackoff:  apiserverutil.HTTPClientDefaultMaxBackoff,
+		base:           base,
+		maxRetries:     apiserverutil.HTTPClientDefaultMaxRetry,
+		initBackoff:    apiserverutil.HTTPClientDefaultInitBackoff,
+		backoffBase:    apiserverutil.HTTPClientDefaultBackoffBase,
+		maxBackoff:     apiserverutil.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: apiserverutil.HTTPClientDefaultOverallTimeout,
 	}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, rrt.OverallTimeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
 
 	var bodyBytes []byte
 	var resp *http.Response
