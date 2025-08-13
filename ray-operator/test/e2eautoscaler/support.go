@@ -1,6 +1,9 @@
 package e2eautoscaler
 
 import (
+	"embed"
+
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -9,6 +12,16 @@ import (
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
+
+//go:embed *.py
+var _files embed.FS
+
+func readFile(t Test, fileName string) []byte {
+	t.T().Helper()
+	file, err := _files.ReadFile(fileName)
+	require.NoError(t.T(), err)
+	return file
+}
 
 type option[T any] func(t *T) *T
 
@@ -42,7 +55,7 @@ func configMapWith(configMapAC *corev1ac.ConfigMapApplyConfiguration, options ..
 
 func file(t Test, fileName string) option[corev1ac.ConfigMapApplyConfiguration] {
 	return func(cmAC *corev1ac.ConfigMapApplyConfiguration) *corev1ac.ConfigMapApplyConfiguration {
-		cmAC.WithBinaryData(map[string][]byte{fileName: ReadFile(t, fileName)})
+		cmAC.WithBinaryData(map[string][]byte{fileName: readFile(t, fileName)})
 		return cmAC
 	}
 }
