@@ -142,7 +142,7 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	// Test case 3: Delete with empty name and namespace
 	manager.DeleteRayClusterMetrics("", "")
 
-	// Verify all metrics are deleted
+	// Verify no metrics were deleted
 	recorder3 := httptest.NewRecorder()
 	handler.ServeHTTP(recorder3, req)
 
@@ -155,7 +155,7 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	// Test case 4: Delete with false name and namespace
 	manager.DeleteRayClusterMetrics("ns2", "cluster2")
 
-	// Verify all metrics are deleted
+	// Verify no metrics were deleted
 	recorder4 := httptest.NewRecorder()
 	handler.ServeHTTP(recorder4, req)
 
