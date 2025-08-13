@@ -1,10 +1,30 @@
 package util
 
 import (
+	"context"
 	"math"
 	"net/http"
 	"time"
 )
+
+func SleepWithContextCancel(ctx context.Context, sleepDuration time.Duration) bool {
+	select {
+	case <-time.After(sleepDuration):
+	case <-ctx.Done():
+		return false
+	}
+	return true
+}
+
+func CheckContextDeadline(ctx context.Context, sleepDuration time.Duration) bool {
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if sleepDuration > remaining {
+			return false
+		}
+	}
+	return true
+}
 
 func GetRetryBackoff(attempt int, initBackoff time.Duration, backoffBase float64, maxBackoff time.Duration) time.Duration {
 	sleepDuration := initBackoff * time.Duration(math.Pow(backoffBase, float64(attempt)))

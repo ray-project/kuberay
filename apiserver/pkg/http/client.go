@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -723,11 +722,12 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			krc.retryCfg.BackoffFactor,
 			krc.retryCfg.MaxBackoff)
 
-		select {
-		case <-time.After(sleep):
-			// continue to the next retry after backoff
-		case <-ctx.Done():
-			return nil, lastStatus, fmt.Errorf("overall timeout reached: %w", ctx.Err())
+		if ok := apiserversdkutil.CheckContextDeadline(ctx, sleep); !ok {
+			return nil, lastStatus, fmt.Errorf("retry timeout exceeded context deadline")
+		}
+
+		if ok := apiserversdkutil.SleepWithContextCancel(ctx, sleep); !ok {
+			return nil, lastStatus, fmt.Errorf("retry canceled during backoff: %w", ctx.Err())
 		}
 
 	}

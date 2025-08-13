@@ -322,5 +322,5 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 
 	// Expect a timeout error
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "timeout")
+	require.Contains(t, err.Error(), "retry timeout exceeded context deadline")
 }
