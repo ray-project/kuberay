@@ -1,0 +1,15 @@
+apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metadata:
+  name: ray-operator-config-mtls
+  namespace: default
+spec:
+  metricsAddr: ":8080"
+  probeAddr: ":8082"
+  enableLeaderElection: true
+  reconcileConcurrency: 1
+
+  # MTLS Configuration
+  enableMTLS: true
+  certGeneratorImage: "registry.redhat.io/ubi9@sha256:770cf07083e1c85ae69c25181a205b7cdef63c11b794c89b3b487d4670b4c328"
+  mtlsSecretNamespace: "default"
