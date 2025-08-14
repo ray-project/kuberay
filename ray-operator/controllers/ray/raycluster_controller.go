@@ -1564,7 +1564,7 @@ func sumGPUs(resources map[corev1.ResourceName]resource.Quantity) resource.Quant
 	totalGPUs := resource.Quantity{}
 
 	for key, val := range resources {
-		if strings.HasSuffix(string(key), "gpu") && !val.IsZero() {
+		if utils.IsGPUResourceKey(string(key)) && !val.IsZero() {
 			totalGPUs.Add(val)
 		}
 	}
