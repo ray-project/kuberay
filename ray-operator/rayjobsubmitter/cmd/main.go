@@ -64,7 +64,7 @@ func main() {
 
 func exitOnError(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: ", err)
+		fmt.Fprintln(os.Stderr, "ERROR -- ", err)
 		os.Exit(1)
 	}
 }

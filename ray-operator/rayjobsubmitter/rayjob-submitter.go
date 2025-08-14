@@ -66,21 +66,7 @@ func logTailingURL(address, submissionId string) (string, error) {
 	return address, nil
 }
 
-func Submit(address string, req utils.RayJobRequest, out io.Writer) error {
-	_, _ = fmt.Fprintf(out, "INFO -- Job submission server address: %s\n", address)
-
-	address, err := jobSubmissionURL(address)
-	if err != nil {
-		return err
-	}
-	submissionId, err := submitJobReq(address, req)
-	if err != nil {
-		return err
-	}
-
-	_, _ = fmt.Fprintf(out, "SUCC -- Job '%s' submitted successfully\n", submissionId)
-	_, _ = fmt.Fprintf(out, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
-
+func logJob(address, submissionId string, out io.Writer) error {
 	wsAddr, err := logTailingURL(address, submissionId)
 	if err != nil {
 		return err
@@ -94,11 +80,32 @@ func Submit(address string, req utils.RayJobRequest, out io.Writer) error {
 		_, msg, err := c.Read(context.Background())
 		if err != nil {
 			if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-				_, _ = fmt.Fprintf(out, "SUCC -- Job '%s' succeeded\n", submissionId)
+				fmt.Fprintf(out, "SUCC -- Job '%s' succeeded\n", submissionId)
 				return nil
 			}
 			return err
 		}
-		_, _ = out.Write(msg)
+		_, err = out.Write(msg)
+		if err != nil {
+			return err
+		}
 	}
+}
+
+func Submit(address string, req utils.RayJobRequest, out io.Writer) error {
+	fmt.Fprintf(out, "INFO -- Job submission server address: %s\n", address)
+
+	address, err := jobSubmissionURL(address)
+	if err != nil {
+		return err
+	}
+	submissionId, err := submitJobReq(address, req)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "SUCC -- Job '%s' submitted successfully\n", submissionId)
+	fmt.Fprintf(out, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
+
+	return logJob(address, submissionId, out)
 }
