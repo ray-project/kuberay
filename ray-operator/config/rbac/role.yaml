@@ -174,3 +174,24 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  - certificates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates/status
+  verbs:
+  - get
+  - patch
+  - update

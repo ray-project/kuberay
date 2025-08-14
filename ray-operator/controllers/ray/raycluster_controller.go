@@ -978,6 +978,13 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
+
+	// Configure mTLS if enabled
+	if features.Enabled(features.MTLS) {
+		logger.Info("mTLS is enabled, configuring mTLS for head pod")
+		r.configureMTLSForPod(&podConf, instance)
+	}
+
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
@@ -1006,6 +1013,13 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	if len(r.options.WorkerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
+
+	// Configure mTLS if enabled
+	if features.Enabled(features.MTLS) {
+		logger.Info("mTLS is enabled, configuring mTLS for head pod")
+		r.configureMTLSForPod(&podTemplateSpec, instance)
+	}
+
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
 	// Set raycluster instance as the owner and controller
@@ -1014,6 +1028,103 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	}
 
 	return pod
+}
+
+// configureMTLSForPod configures mTLS settings for a pod template if mTLS is enabled
+func (r *RayClusterReconciler) configureMTLSForPod(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster) {
+
+	// Determine the appropriate secret name based on node type
+	// We can determine this from the pod labels or container name
+	var secretName string
+	var isWorker bool
+	if podTemplate.Labels != nil && podTemplate.Labels[utils.RayNodeTypeLabelKey] == string(rayv1.HeadNode) {
+		isWorker = false
+		secretName = fmt.Sprintf("ray-head-secret-%s", instance.Name)
+	} else {
+		isWorker = true
+		secretName = fmt.Sprintf("ray-worker-secret-%s", instance.Name)
+	}
+
+	for i := range podTemplate.Spec.Containers {
+		// Add TLS environment variables
+		r.addTLSEnvironmentVariables(&podTemplate.Spec.Containers[i], isWorker)
+		// Add certificate volume mounts
+		r.addCertVolumeMounts(&podTemplate.Spec.Containers[i])
+	}
+
+	// Add mTLS configuration to init containers as well
+	for i := range podTemplate.Spec.InitContainers {
+		// Add TLS environment variables
+		r.addTLSEnvironmentVariables(&podTemplate.Spec.InitContainers[i], isWorker)
+		// Add certificate volume mounts
+		r.addCertVolumeMounts(&podTemplate.Spec.InitContainers[i])
+	}
+
+	// Add CA volumes with proper secret references
+	r.addCAVolumes(&podTemplate.Spec, secretName)
+
+}
+
+// addTLSEnvironmentVariables adds Ray TLS environment variables to a container
+func (r *RayClusterReconciler) addTLSEnvironmentVariables(container *corev1.Container, isWorker bool) {
+	// Check if this is a worker container by looking at the container name
+
+	if isWorker {
+		// Worker pods only need basic TLS environment variables
+		tlsEnvVars := []corev1.EnvVar{
+			{Name: "RAY_USE_TLS", Value: "1"},
+			{Name: "RAY_TLS_CA_CERT", Value: "/home/ray/workspace/tls/ca.crt"},
+		}
+		container.Env = append(container.Env, tlsEnvVars...)
+		return
+	}
+
+	// Head pods need all TLS environment variables
+	tlsEnvVars := []corev1.EnvVar{
+		{
+			Name: "MY_POD_IP",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			},
+		},
+		{Name: "RAY_USE_TLS", Value: "1"},
+		{Name: "RAY_TLS_SERVER_CERT", Value: "/home/ray/workspace/tls/tls.crt"},
+		{Name: "RAY_TLS_SERVER_KEY", Value: "/home/ray/workspace/tls/tls.key"},
+		{Name: "RAY_TLS_CA_CERT", Value: "/home/ray/workspace/tls/ca.crt"},
+	}
+	container.Env = append(container.Env, tlsEnvVars...)
+
+}
+
+// addCAVolumes adds CA and certificate volumes to a pod spec
+func (r *RayClusterReconciler) addCAVolumes(podSpec *corev1.PodSpec, secretName string) {
+	caVolumes := []corev1.Volume{
+		{
+			Name: "ca-vol",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretName,
+				},
+			},
+		},
+	}
+
+	podSpec.Volumes = append(podSpec.Volumes, caVolumes...)
+}
+
+// addCertVolumeMounts adds certificate volume mounts to a container
+func (r *RayClusterReconciler) addCertVolumeMounts(container *corev1.Container) {
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "ca-vol",
+			MountPath: "/home/ray/workspace/tls",
+			ReadOnly:  true,
+		},
+	}
+
+	container.VolumeMounts = append(container.VolumeMounts, volumeMounts...)
 }
 
 func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instance rayv1.RayCluster) batchv1.Job {
