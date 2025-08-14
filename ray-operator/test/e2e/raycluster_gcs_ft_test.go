@@ -23,7 +23,7 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	testScriptAC := newConfigMap(namespace.Name, files(test, "test_detached_actor_1.py", "test_detached_actor_2.py"))
+	testScriptAC := NewConfigMap(namespace.Name, Files(test, "test_detached_actor_1.py", "test_detached_actor_2.py"))
 	testScript, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), testScriptAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -42,7 +42,7 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 				WithRayStartParams(map[string]string{
 					"num-cpus": "0",
 				}).
-				WithTemplate(headPodTemplateApplyConfiguration()),
+				WithTemplate(HeadPodTemplateApplyConfiguration()),
 			).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithRayStartParams(map[string]string{
@@ -52,10 +52,10 @@ func TestRayClusterGCSFaultTolerance(t *testing.T) {
 				WithReplicas(1).
 				WithMinReplicas(1).
 				WithMaxReplicas(2).
-				WithTemplate(workerPodTemplateApplyConfiguration()),
+				WithTemplate(WorkerPodTemplateApplyConfiguration()),
 			)
 		rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).
-			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScript, "/home/ray/samples")))
+			WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](testScript, "/home/ray/samples")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 
@@ -128,7 +128,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			redisPassword: "",
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
-					newRayClusterSpec().WithGcsFaultToleranceOptions(
+					NewRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
 							WithRedisAddress(RedisAddress),
 					),
@@ -141,7 +141,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
-					newRayClusterSpec().WithGcsFaultToleranceOptions(
+					NewRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
 							WithRedisAddress(RedisAddress).
 							WithRedisPassword(rayv1ac.RedisCredential().WithValue(RedisPassword)),
@@ -155,7 +155,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
-					newRayClusterSpec().WithGcsFaultToleranceOptions(
+					NewRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
 							WithRedisAddress(RedisAddress).
 							WithRedisUsername(rayv1ac.RedisCredential().WithValue("default")).
@@ -170,7 +170,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			redisPassword: RedisPassword,
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				return rayv1ac.RayCluster("raycluster-gcsft", namespace).WithSpec(
-					newRayClusterSpec().WithGcsFaultToleranceOptions(
+					NewRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
 							WithRedisAddress(RedisAddress).
 							WithRedisPassword(rayv1ac.RedisCredential().
@@ -192,7 +192,7 @@ func TestGcsFaultToleranceOptions(t *testing.T) {
 			rayClusterFn: func(namespace string) *rayv1ac.RayClusterApplyConfiguration {
 				// Intentionally using a long name to test job name trimming
 				return rayv1ac.RayCluster("raycluster-with-a-very-long-name-exceeding-k8s-limit", namespace).WithSpec(
-					newRayClusterSpec().WithGcsFaultToleranceOptions(
+					NewRayClusterSpec().WithGcsFaultToleranceOptions(
 						rayv1ac.GcsFaultToleranceOptions().
 							WithRedisAddress(RedisAddress),
 					),
@@ -304,7 +304,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			defer g.Eventually(checkRedisDBSize, time.Second*30, time.Second).Should(BeEquivalentTo("0"))
 
 			// Prepare RayCluster ApplyConfiguration
-			podTemplateAC := headPodTemplateApplyConfiguration()
+			podTemplateAC := HeadPodTemplateApplyConfiguration()
 			podTemplateAC.Spec.Containers[utils.RayContainerIndex].WithEnv(
 				corev1ac.EnvVar().WithName("RAY_REDIS_ADDRESS").WithValue(RedisAddress),
 			)
@@ -316,7 +316,7 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 			rayClusterAC := rayv1ac.RayCluster("raycluster-gcsft", namespace.Name).WithAnnotations(
 				map[string]string{utils.RayFTEnabledAnnotationKey: "true"},
 			).WithSpec(
-				rayClusterSpecWith(
+				RayClusterSpecWith(
 					rayv1ac.RayClusterSpec().
 						WithRayVersion(GetRayVersion()).
 						WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
