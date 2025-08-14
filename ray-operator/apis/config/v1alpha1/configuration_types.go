@@ -12,67 +12,26 @@ import (
 
 // Configuration is the Schema for Ray operator config.
 type Configuration struct {
-	metav1.TypeMeta `json:",inline"`
-
-	// MetricsAddr is the address the metrics endpoint binds to.
-	MetricsAddr string `json:"metricsAddr,omitempty"`
-
-	// ProbeAddr is the address the probe endpoint binds to.
-	ProbeAddr string `json:"probeAddr,omitempty"`
-
-	// EnableLeaderElection enables leader election. Enabling this will ensure
-	// there is only one active instance of the operator.
-	EnableLeaderElection *bool `json:"enableLeaderElection,omitempty"`
-
-	// LeaderElectionNamespace is the namespace where the leader election
-	// resources live. Defaults to the pod namesapce if not set.
-	LeaderElectionNamespace string `json:"leaderElectionNamespace,omitempty"`
-
-	// WatchNamespace specifies a list of namespaces to watch for custom resources, separated by commas.
-	// If empty, all namespaces will be watched.
-	WatchNamespace string `json:"watchNamespace,omitempty"`
-
-	// LogFile is a path to a local file for synchronizing logs.
-	LogFile string `json:"logFile,omitempty"`
-
-	// LogFileEncoder is the encoder to use when logging to a file. Valid values are "json" and "console".
-	// Defaults to `json` if empty.
-	LogFileEncoder string `json:"logFileEncoder,omitempty"`
-
-	// LogFileEncoder is the encoder to use when logging to a file. Valid values are "json" and "console".
-	// Defaults to `json` if empty.
-	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
-
-	// BatchScheduler enables the batch scheduler integration with a specific scheduler
-	// based on the given name, currently, supported values are volcano, yunikorn, kai-scheduler.
-	BatchScheduler string `json:"batchScheduler,omitempty"`
-
-	// HeadSidecarContainers includes specification for a sidecar container
-	// to inject into every Head pod.
-	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
-
-	// WorkerSidecarContainers includes specification for a sidecar container
-	// to inject into every Worker pod.
-	WorkerSidecarContainers []corev1.Container `json:"workerSidecarContainers,omitempty"`
-
-	// ReconcileConcurrency is the max concurrency for each reconciler.
-	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
-
-	// EnableBatchScheduler enables the batch scheduler. Currently this is supported
-	// by Volcano to support gang scheduling.
-	EnableBatchScheduler bool `json:"enableBatchScheduler,omitempty"`
-
-	// UseKubernetesProxy indicates that the services/proxy and pods/proxy subresource should be used
-	// when connecting to the Ray Head node. This is useful when network policies disallow
-	// ingress traffic to the Ray cluster from other pods or Kuberay is running in a network without
-	// connectivity to Pods.
-	UseKubernetesProxy bool `json:"useKubernetesProxy,omitempty"`
-
-	// DeleteRayJobAfterJobFinishes deletes the RayJob CR itself if shutdownAfterJobFinishes is set to true.
-	DeleteRayJobAfterJobFinishes bool `json:"deleteRayJobAfterJobFinishes,omitempty"`
-
-	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
-	EnableMetrics bool `json:"enableMetrics,omitempty"`
+	EnableLeaderElection         *bool `json:"enableLeaderElection,omitempty"`
+	EnableMTLS                   *bool `json:"enableMTLS,omitempty"`
+	metav1.TypeMeta              `json:",inline"`
+	LogFile                      string             `json:"logFile,omitempty"`
+	LeaderElectionNamespace      string             `json:"leaderElectionNamespace,omitempty"`
+	WatchNamespace               string             `json:"watchNamespace,omitempty"`
+	ProbeAddr                    string             `json:"probeAddr,omitempty"`
+	LogFileEncoder               string             `json:"logFileEncoder,omitempty"`
+	LogStdoutEncoder             string             `json:"logStdoutEncoder,omitempty"`
+	BatchScheduler               string             `json:"batchScheduler,omitempty"`
+	MetricsAddr                  string             `json:"metricsAddr,omitempty"`
+	MTLSSecretNamespace          string             `json:"mtlsSecretNamespace,omitempty"`
+	CertGeneratorImage           string             `json:"certGeneratorImage,omitempty"`
+	HeadSidecarContainers        []corev1.Container `json:"headSidecarContainers,omitempty"`
+	WorkerSidecarContainers      []corev1.Container `json:"workerSidecarContainers,omitempty"`
+	ReconcileConcurrency         int                `json:"reconcileConcurrency,omitempty"`
+	UseKubernetesProxy           bool               `json:"useKubernetesProxy,omitempty"`
+	DeleteRayJobAfterJobFinishes bool               `json:"deleteRayJobAfterJobFinishes,omitempty"`
+	EnableMetrics                bool               `json:"enableMetrics,omitempty"`
+	EnableBatchScheduler         bool               `json:"enableBatchScheduler,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {

@@ -20,6 +20,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,6 +71,9 @@ func main() {
 	var enableBatchScheduler bool
 	var batchScheduler string
 	var enableMetrics bool
+	var enableMTLS bool
+	var certGeneratorImage string
+	var mtlsSecretNamespace string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -101,6 +105,9 @@ func main() {
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
+	flag.BoolVar(&enableMTLS, "enable-mtls", configapi.DefaultEnableMTLS, "Enable mutual TLS support for Ray clusters.")
+	flag.StringVar(&certGeneratorImage, "cert-generator-image", configapi.DefaultCertGeneratorImage, "Container image for generating certificates.")
+	flag.StringVar(&mtlsSecretNamespace, "mtls-secret-namespace", "", "Namespace where CA secrets should be stored.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -131,6 +138,9 @@ func main() {
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
+		config.EnableMTLS = &enableMTLS
+		config.CertGeneratorImage = certGeneratorImage
+		config.MTLSSecretNamespace = mtlsSecretNamespace
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -272,8 +282,15 @@ func main() {
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
+	// Setup MTLS controller if enabled
+	if ptr.Deref(config.EnableMTLS, false) {
+		mtlsController := ray.NewRayClusterMTLSController(mgr.GetClient(), mgr.GetScheme(), &config)
+		exitOnError(mtlsController.SetupWithManager(mgr),
+			"unable to create controller", "controller", "RayClusterMTLS")
+	}
+
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
-		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
+		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr, &config),
 			"unable to create webhook", "webhook", "RayCluster")
 	}
 	// +kubebuilder:scaffold:builder
