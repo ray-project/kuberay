@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,8 +24,8 @@ func longString(t *testing.T) string {
 
 // Clip the above string using utils.CheckName
 // to a string of length 50.
-func shortString(t *testing.T) string {
-	result := utils.CheckName(longString(t))
+func shortString(ctx context.Context, t *testing.T) string {
+	result := utils.CheckName(ctx, longString(t))
 	// Confirm length.
 	assert.Len(t, result, 50)
 	return result

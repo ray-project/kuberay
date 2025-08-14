@@ -158,7 +158,7 @@ func CheckRouteName(ctx context.Context, s string, n string) string {
 	}
 
 	// Pass through CheckName for remaining string validations
-	return CheckName(s)
+	return CheckName(ctx, s)
 }
 
 // PodName returns the value that should be used for a Pod's Name or GenerateName
@@ -181,13 +181,14 @@ func PodName(prefix string, nodeType rayv1.RayNodeType, isGenerateName bool) str
 }
 
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
-func CheckName(s string) string {
+func CheckName(ctx context.Context, s string) string {
+	log := ctrl.LoggerFrom(ctx)
 	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
 
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
+		log.Info("pod name is too long, we will shorten it by offset", "nameLength", len(s), "offset", offset)
 		s = s[offset:]
 	}
 
@@ -198,7 +199,6 @@ func CheckName(s string) string {
 
 	// cannot start with a punctuation
 	if unicode.IsPunct(rune(s[0])) {
-		fmt.Println(s)
 		s = "r" + s[1:]
 	}
 
@@ -206,24 +206,24 @@ func CheckName(s string) string {
 }
 
 // TrimJobName uses CheckLabel to trim Kubernetes job to constrains
-func TrimJobName(jobName string) string {
-	return CheckLabel(jobName)
+func TrimJobName(ctx context.Context, jobName string) string {
+	return CheckLabel(ctx, jobName)
 }
 
 // CheckLabel makes sure the label value does not start with a punctuation and the total length is < 63 char
-func CheckLabel(s string) string {
+func CheckLabel(ctx context.Context, s string) string {
+	log := ctrl.LoggerFrom(ctx)
 	maxLength := 63
 
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("label value is too long: len = %v, we will shorten it by offset = %v\n", len(s), offset)
+		log.Info("label value is too long, we will shorten it by offset", "labelLength", len(s), "offset", offset)
 		s = s[offset:]
 	}
 
 	// cannot start with a punctuation
 	if unicode.IsPunct(rune(s[0])) {
-		fmt.Println(s)
 		s = "r" + s[1:]
 	}
 
