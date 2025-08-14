@@ -186,6 +186,8 @@ head:
   #     - name: edns0
   topologySpreadConstraints: []
 
+  # https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/configuring-autoscaling.html#set-the-raystartparams-and-the-resource-limits-for-the-ray-container
+  rayStartParams: {}
 
 worker:
   # If you want to disable the default workergroup
