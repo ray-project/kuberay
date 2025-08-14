@@ -29,7 +29,7 @@ helm repo update
 
 # Install python 3.11 and pip
 apt-get update
-apt-get install -y python3 python3-pip python3-venv python3-dev build-essential
+apt-get install -y python3.11 python3-pip python3-venv python3-dev build-essential
 
 # Install requirements
 pip install --break-system-packages ray[default]==2.46.0
