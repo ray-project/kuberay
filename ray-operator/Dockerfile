@@ -21,7 +21,7 @@ COPY pkg/webhooks pkg/webhooks
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
 
-FROM gcr.io/distroless/base-debian12@sha256:c5b9513e6812340fcf9fb7edfe8487f0bc02fd734f64d522074a8ba89ce9e9d2
+FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
