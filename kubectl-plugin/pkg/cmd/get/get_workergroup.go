@@ -46,6 +46,8 @@ type workerGroup struct {
 	cluster         string
 	readyReplicas   int32
 	desiredReplicas int32
+	minReplicas     int32
+	maxReplicas     int32
 }
 
 var getWorkerGroupsExample = templates.Examples(`
@@ -223,6 +225,16 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 
 		workerGroupResources := calculateDesiredResourcesForWorkerGroup(ewgs.spec)
 
+		var minReplicas int32 = 0
+		if ewgs.spec.MinReplicas != nil {
+			minReplicas = *ewgs.spec.MinReplicas
+		}
+
+		var maxReplicas int32 = 0
+		if ewgs.spec.MaxReplicas != nil {
+			maxReplicas = *ewgs.spec.MaxReplicas
+		}
+
 		workerGroups = append(workerGroups, workerGroup{
 			namespace:       ewgs.namespace,
 			name:            ewgs.spec.GroupName,
@@ -233,6 +245,8 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 			totalTPU:        workerGroupResources[corev1.ResourceName(util.ResourceGoogleTPU)],
 			totalMemory:     *workerGroupResources.Memory(),
 			cluster:         ewgs.cluster,
+			minReplicas:     minReplicas,
+			maxReplicas:     maxReplicas,
 		})
 	}
 
@@ -283,9 +297,17 @@ func printWorkerGroups(workerGroups []workerGroup, allNamespaces bool, output io
 			row.Cells = append(row.Cells, wg.namespace)
 		}
 
+		replicaString := ""
+		// checking if the minReplicas or maxReplicas exists if they dont, we dont print
+		if wg.minReplicas == 0 && wg.maxReplicas == 0 {
+			replicaString = fmt.Sprintf("%d/%d", wg.readyReplicas, wg.desiredReplicas)
+		} else {
+			replicaString = fmt.Sprintf("%d/%d (%d-%d)", wg.readyReplicas, wg.desiredReplicas, wg.minReplicas, wg.maxReplicas)
+		}
+
 		row.Cells = append(row.Cells, []interface{}{
 			wg.name,
-			fmt.Sprintf("%d/%d", wg.readyReplicas, wg.desiredReplicas),
+			replicaString,
 			wg.totalCPU.String(),
 			wg.totalGPU.String(),
 			wg.totalTPU.String(),
