@@ -2,11 +2,13 @@ package apiserversdk
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	petnames "github.com/dustinkirkland/golang-petname"
 	"github.com/stretchr/testify/require"
@@ -61,7 +63,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 
 func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndTestingContext, error) {
 	testingContext := &End2EndTestingContext{
-		namespaceName: petnames.Generate(2, "-"),
+		namespaceName: fmt.Sprintf("%s-%d", petnames.Generate(2, "-"), time.Now().UnixNano()),
 		clusterName:   petnames.Name(),
 	}
 	for _, o := range options {
