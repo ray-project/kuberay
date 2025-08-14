@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,10 +60,9 @@ func TestMetricRayJobInfo(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, label := range tc.expectedMetrics {
 				assert.Contains(t, body, label)
 			}
@@ -74,12 +72,9 @@ func TestMetricRayJobInfo(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
-
+			assert.Equal(t, http.StatusOK, statusCode)
 			assert.NotContains(t, body2, tc.expectedMetrics[0])
 			for _, label := range tc.expectedMetrics[1:] {
 				assert.Contains(t, body2, label)
@@ -106,10 +101,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	manager.DeleteRayJobMetrics("job1", "ns1")
 
 	// Verify metrics
-	req, recorder, handler := support.CreateAndExecuteMetricsRequest(t, reg)
+	body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-	assert.Equal(t, http.StatusOK, recorder.Code)
-	body := recorder.Body.String()
+	assert.Equal(t, http.StatusOK, statusCode)
 	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
 	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
 	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
@@ -118,11 +112,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	manager.DeleteRayJobMetrics("", "ns1")
 
 	// Verify metrics again
-	recorder2 := httptest.NewRecorder()
-	handler.ServeHTTP(recorder2, req)
+	body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-	assert.Equal(t, http.StatusOK, recorder2.Code)
-	body2 := recorder2.Body.String()
+	assert.Equal(t, http.StatusOK, statusCode)
 	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
 	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
 	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
@@ -131,11 +123,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	manager.DeleteRayJobMetrics("", "")
 
 	// Verify no metrics were deleted
-	recorder3 := httptest.NewRecorder()
-	handler.ServeHTTP(recorder3, req)
+	body3, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-	assert.Equal(t, http.StatusOK, recorder3.Code)
-	body3 := recorder3.Body.String()
+	assert.Equal(t, http.StatusOK, statusCode)
 	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
 	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
 	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
@@ -144,11 +134,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	manager.DeleteRayJobMetrics("ns2", "job2")
 
 	// Verify no metrics were deleted
-	recorder4 := httptest.NewRecorder()
-	handler.ServeHTTP(recorder4, req)
+	body4, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-	assert.Equal(t, http.StatusOK, recorder4.Code)
-	body4 := recorder4.Body.String()
+	assert.Equal(t, http.StatusOK, statusCode)
 	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
 	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
 	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
@@ -204,10 +192,9 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, label := range tc.expectedMetrics {
 				assert.Contains(t, body, label)
 			}
@@ -217,11 +204,9 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 
 			assert.NotContains(t, body2, tc.expectedMetrics[0])
 			for _, label := range tc.expectedMetrics[1:] {

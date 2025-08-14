@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -60,10 +59,9 @@ func TestRayServiceInfo(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, info := range tc.expectedInfo {
 				assert.Contains(t, body, info)
 			}
@@ -73,11 +71,9 @@ func TestRayServiceInfo(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 
 			assert.NotContains(t, body2, tc.expectedInfo[0])
 			for _, info := range tc.expectedInfo[1:] {
@@ -182,10 +178,9 @@ func TestRayServiceCondition(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, rr, handler := support.CreateAndExecuteMetricsRequest(t, reg)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, info := range tc.expectedInfo {
 				assert.Contains(t, body, info)
 			}
@@ -195,11 +190,9 @@ func TestRayServiceCondition(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 
 			assert.NotContains(t, body2, tc.expectedInfo[0])
 			for _, info := range tc.expectedInfo[1:] {

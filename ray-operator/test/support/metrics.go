@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CreateAndExecuteMetricsRequest is a test helper that creates an HTTP GET request to the /metrics endpoint,
-// executes it against a Prometheus handler using the provided registry, and returns the request, response recorder, and handler.
-func CreateAndExecuteMetricsRequest(t *testing.T, reg *prometheus.Registry) (*http.Request, *httptest.ResponseRecorder, http.Handler) {
+// GetMetricsResponseAndCode simulates an HTTP GET request to the /metrics endpoint,
+// processes it using a Prometheus handler built from the provided registry,
+// and returns the resulting response body as a string along with the HTTP status code.
+func GetMetricsResponseAndCode(t *testing.T, reg *prometheus.Registry) (string, int) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
 	require.NoError(t, err)
@@ -21,5 +22,5 @@ func CreateAndExecuteMetricsRequest(t *testing.T, reg *prometheus.Registry) (*ht
 	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	handler.ServeHTTP(rr, req)
 
-	return req, rr, handler
+	return rr.Body.String(), rr.Code
 }
