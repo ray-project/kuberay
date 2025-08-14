@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 
@@ -29,11 +30,11 @@ func main() {
 
 	address := os.Getenv("RAY_DASHBOARD_ADDRESS")
 	if address == "" {
-		panic("Missing RAY_DASHBOARD_ADDRESS")
+		exitOnError(fmt.Errorf("missing RAY_DASHBOARD_ADDRESS"))
 	}
 	submissionId := os.Getenv("RAY_JOB_SUBMISSION_ID")
 	if submissionId == "" {
-		panic("Missing RAY_JOB_SUBMISSION_ID")
+		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID"))
 	}
 
 	req := utils.RayJobRequest{
@@ -44,18 +45,26 @@ func main() {
 	}
 	if len(runtimeEnvJson) > 0 {
 		if err := json.Unmarshal([]byte(runtimeEnvJson), &req.RuntimeEnv); err != nil {
-			panic(err)
+			exitOnError(err)
 		}
 	}
 	if len(metadataJson) > 0 {
 		if err := json.Unmarshal([]byte(metadataJson), &req.Metadata); err != nil {
-			panic(err)
+			exitOnError(err)
 		}
 	}
 	if len(entrypointResources) > 0 {
 		if err := json.Unmarshal([]byte(entrypointResources), &req.Resources); err != nil {
-			panic(err)
+			exitOnError(err)
 		}
 	}
-	rayjobsubmitter.Submit(address, req, os.Stdout)
+	err := rayjobsubmitter.Submit(address, req, os.Stdout)
+	exitOnError(err)
+}
+
+func exitOnError(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: ", err)
+		os.Exit(1)
+	}
 }

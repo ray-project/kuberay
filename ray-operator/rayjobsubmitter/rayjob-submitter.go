@@ -46,42 +46,48 @@ func submitJobReq(address string, request utils.RayJobRequest) (jobId string, er
 	return request.SubmissionId, nil
 }
 
-func jobSubmissionURL(address string) string {
+func jobSubmissionURL(address string) (string, error) {
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + address
 	}
 	address, err := url.JoinPath(address, "/api/jobs/") // the tailing "/" is required.
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return address
+	return address, nil
 }
 
-func logTailingURL(address, submissionId string) string {
+func logTailingURL(address, submissionId string) (string, error) {
 	address = strings.Replace(address, "http", "ws", 1)
 	address, err := url.JoinPath(address, submissionId, "/logs/tail")
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return address
+	return address, nil
 }
 
-func Submit(address string, req utils.RayJobRequest, out io.Writer) {
+func Submit(address string, req utils.RayJobRequest, out io.Writer) error {
 	_, _ = fmt.Fprintf(out, "INFO -- Job submission server address: %s\n", address)
 
-	address = jobSubmissionURL(address)
+	address, err := jobSubmissionURL(address)
+	if err != nil {
+		return err
+	}
 	submissionId, err := submitJobReq(address, req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	_, _ = fmt.Fprintf(out, "SUCC -- Job '%s' submitted successfully\n", submissionId)
 	_, _ = fmt.Fprintf(out, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
 
-	wsAddr := logTailingURL(address, submissionId)
+	wsAddr, err := logTailingURL(address, submissionId)
+	if err != nil {
+		return err
+	}
 	c, _, err := websocket.Dial(context.Background(), wsAddr, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer func() { _ = c.CloseNow() }()
 	for {
@@ -89,9 +95,9 @@ func Submit(address string, req utils.RayJobRequest, out io.Writer) {
 		if err != nil {
 			if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
 				_, _ = fmt.Fprintf(out, "SUCC -- Job '%s' succeeded\n", submissionId)
-				return
+				return nil
 			}
-			panic(err)
+			return err
 		}
 		_, _ = out.Write(msg)
 	}
