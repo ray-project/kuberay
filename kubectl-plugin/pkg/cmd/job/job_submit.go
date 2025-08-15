@@ -479,7 +479,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			return fmt.Errorf("Timed out waiting for port forwarding")
 		}
 		options.address = dashboardAddr
-		fmt.Printf("Portforwarding started on %s\n", options.address)
+		fmt.Printf("Port forwarding started on %s\n", options.address)
 	} else {
 		fmt.Printf("Using address %s (no port-forwarding)\n", options.address)
 	}
