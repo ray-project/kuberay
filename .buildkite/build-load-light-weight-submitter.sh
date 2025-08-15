@@ -9,6 +9,6 @@
 if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     echo "Skipping light weight submitter build for ray release automation for now"
 else
-    IMG=kuberay/submitter:nightly make docker-image &&
+    IMG=kuberay/submitter:nightly make docker-image-rayjobsubmitter &&
     kind load docker-image kuberay/submitter:nightly
 fi
