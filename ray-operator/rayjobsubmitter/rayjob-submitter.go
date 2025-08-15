@@ -18,8 +18,8 @@ import (
 
 const (
 	logTailingEndpoint    = "/logs/tail"
-	jobSubmissionEndpoint = "/api/jobs/"    // the tailing "/" is required.
-	jobSubmissionTimeout  = 2 * time.Second // Same timeout as the HttpMode of RayJobController.
+	jobSubmissionEndpoint = "/api/jobs/" // the tailing "/" is required.
+	jobSubmissionTimeout  = 10 * time.Second
 )
 
 func submitJobReq(address string, request utils.RayJobRequest) (jobId string, err error) {
