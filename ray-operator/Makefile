@@ -80,6 +80,10 @@ test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
 test-e2e-upgrade: manifests fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-rayjobsubmitter: WHAT ?= ./test/e2erayjobsubmitter
+test-e2e-rayjobsubmitter: manifests fmt vet ## Run e2e tests.
+	go test -timeout 30m -v $(WHAT) -count=1
+
 test-sampleyaml: WHAT ?= ./test/sampleyaml
 test-sampleyaml: manifests fmt vet
 	go test -timeout 30m -v $(WHAT)
@@ -116,6 +120,8 @@ docker-push: ## Push image with the manager.
 
 docker-multi-arch-image: # Build and push multi arch image, amd64 and arm64 currently
 	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64/v8 -t ${IMG} .
+docker-image-rayjobsubmitter:
+	${ENGINE} build -t ${IMG} --target submitter .
 
 ##@ Deployment
 
