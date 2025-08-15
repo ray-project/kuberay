@@ -468,6 +468,8 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			if err != nil {
 				err = fmt.Errorf("Error occurred when waiting for port forwarding: %w", err)
 				fmt.Println(err)
+				currTime = time.Now()
+				continue
 			}
 			if rayDashboardResponse.StatusCode >= 200 && rayDashboardResponse.StatusCode < 300 {
 				portForwardReady = true
