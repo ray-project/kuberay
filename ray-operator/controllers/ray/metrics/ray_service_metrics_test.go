@@ -3,11 +3,9 @@ package metrics
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 func TestRayServiceInfo(t *testing.T) {
@@ -60,14 +59,9 @@ func TestRayServiceInfo(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, info := range tc.expectedInfo {
 				assert.Contains(t, body, info)
 			}
@@ -77,11 +71,9 @@ func TestRayServiceInfo(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 
 			assert.NotContains(t, body2, tc.expectedInfo[0])
 			for _, info := range tc.expectedInfo[1:] {
@@ -186,14 +178,9 @@ func TestRayServiceCondition(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			reg.MustRegister(manager)
 
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
-			handler.ServeHTTP(rr, req)
+			body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr.Code)
-			body := rr.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 			for _, info := range tc.expectedInfo {
 				assert.Contains(t, body, info)
 			}
@@ -203,11 +190,9 @@ func TestRayServiceCondition(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			rr2 := httptest.NewRecorder()
-			handler.ServeHTTP(rr2, req)
+			body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
-			assert.Equal(t, http.StatusOK, rr2.Code)
-			body2 := rr2.Body.String()
+			assert.Equal(t, http.StatusOK, statusCode)
 
 			assert.NotContains(t, body2, tc.expectedInfo[0])
 			for _, info := range tc.expectedInfo[1:] {

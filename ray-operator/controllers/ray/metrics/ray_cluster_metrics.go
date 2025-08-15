@@ -89,6 +89,14 @@ func (r *RayClusterMetricsManager) ObserveRayClusterProvisionedDuration(name, na
 	r.rayClusterProvisionedDurationSeconds.WithLabelValues(name, namespace).Set(duration)
 }
 
+// DeleteRayClusterMetrics removes metrics that belongs to the specified RayCluster.
+// NOTE: Uses Delete() as metric has only "name" and "namespace" labels.
+// If more labels are added, switch to DeletePartialMatch(), otherwise it may not clean up all metrics correctly.
+func (r *RayClusterMetricsManager) DeleteRayClusterMetrics(name, namespace string) {
+	numCleanedUpMetrics := r.rayClusterProvisionedDurationSeconds.Delete(prometheus.Labels{"name": name, "namespace": namespace})
+	r.log.Info("Cleaned up expired RayCluster metric", "name", name, "namespace", namespace, "numCleanedUpMetrics", numCleanedUpMetrics)
+}
+
 func (r *RayClusterMetricsManager) collectRayClusterInfo(cluster *rayv1.RayCluster, ch chan<- prometheus.Metric) {
 	ownerKind := "None"
 	if v, ok := cluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok {
