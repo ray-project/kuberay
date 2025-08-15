@@ -392,27 +392,27 @@ func TestCheckIfNeedSubmitServeApplications(t *testing.T) {
 
 	// Test 1: The cached Serve config is empty, and the new Serve config is not empty.
 	// This happens when the RayCluster is new, and the serve application has not been created yet.
-	shouldCreate, _ := checkIfNeedSubmitServeApplications("", serveConfigV2_1, emptyServeApplications)
+	shouldCreate := checkIfNeedSubmitServeApplications("", serveConfigV2_1, emptyServeApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 2: The cached Serve config and the new Serve config are the same.
 	// This happens when the serve application is already created, and users do not update the serve config.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, serveApplications)
+	shouldCreate = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, serveApplications)
 	assert.False(t, shouldCreate)
 
 	// Test 3: The cached Serve config and the new Serve config are different.
 	// This happens when the serve application is already created, and users update the serve config.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_2, serveApplications)
+	shouldCreate = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_2, serveApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 4: Both the cached Serve config and the new Serve config are the same, but the RayService CR status is empty.
 	// This happens when the head Pod crashed and GCS FT was not enabled
-	shouldCreate, _ = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, emptyServeApplications)
+	shouldCreate = checkIfNeedSubmitServeApplications(serveConfigV2_1, serveConfigV2_1, emptyServeApplications)
 	assert.True(t, shouldCreate)
 
 	// Test 5: The cached Serve config is empty, but the new Serve config is not empty.
 	// This happens when KubeRay operator crashes and restarts. Submit the request for safety.
-	shouldCreate, _ = checkIfNeedSubmitServeApplications("", serveConfigV2_1, serveApplications)
+	shouldCreate = checkIfNeedSubmitServeApplications("", serveConfigV2_1, serveApplications)
 	assert.True(t, shouldCreate)
 }
 
