@@ -182,7 +182,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	cmd.Flags().StringToStringVar(&options.headNodeSelectors, "head-node-selectors", nil, "Node selectors to apply to the head pod in the cluster (e.g. --head-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", nil, "Node selectors to apply to all worker pods in the cluster (e.g. --worker-node-selectors topology.kubernetes.io/zone=us-east-1c)")
 	cmd.Flags().Int32Var(&options.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "TTL seconds after finished.")
-	cmd.Flags().Float64Var(&options.clusterTimeout, "cluster-timeout", 120.0, "Timeout in seconds for waiting for the RayCluster to be ready")
+	cmd.Flags().Float64Var(&options.clusterTimeout, "cluster-timeout", 3600.0, "Timeout in seconds for waiting for the RayCluster to be ready")
 
 	return cmd
 }
