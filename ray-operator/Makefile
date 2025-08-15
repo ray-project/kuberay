@@ -82,7 +82,7 @@ test-e2e-upgrade: manifests fmt vet ## Run e2e tests.
 
 test-e2e-rayjobsubmitter: WHAT ?= ./test/e2erayjobsubmitter
 test-e2e-rayjobsubmitter: manifests fmt vet ## Run e2e tests.
-	go test -timeout 30m -v $(WHAT) -count=1
+	go test -timeout 30m -v $(WHAT)
 
 test-sampleyaml: WHAT ?= ./test/sampleyaml
 test-sampleyaml: manifests fmt vet
