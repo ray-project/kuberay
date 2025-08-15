@@ -466,7 +466,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			time.Sleep(2 * time.Second)
 			rayDashboardResponse, err := httpClient.Do(portforwardCheckRequest)
 			if err != nil {
-				err = fmt.Errorf("Error occurred when waiting for portforwarding: %w", err)
+				err = fmt.Errorf("Error occurred when waiting for port forwarding: %w", err)
 				fmt.Println(err)
 			}
 			if rayDashboardResponse.StatusCode >= 200 && rayDashboardResponse.StatusCode < 300 {
