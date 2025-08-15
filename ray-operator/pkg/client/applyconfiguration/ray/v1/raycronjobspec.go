@@ -2,17 +2,11 @@
 
 package v1
 
-import (
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-)
-
 // RayCronJobSpecApplyConfiguration represents a declarative configuration of the RayCronJobSpec type for use
 // with apply.
 type RayCronJobSpecApplyConfiguration struct {
-	Schedule          *string                           `json:"schedule,omitempty"`
-	ConcurrencyPolicy *rayv1.ConcurrencyPolicy          `json:"concurrencyPolicy,omitempty"`
-	Suspend           *bool                             `json:"suspend,omitempty"`
-	RayJobTemplate    *RayJobTemplateApplyConfiguration `json:"rayJobTemplate,omitempty"`
+	Schedule       *string                           `json:"schedule,omitempty"`
+	RayJobTemplate *RayJobTemplateApplyConfiguration `json:"rayJobTemplate,omitempty"`
 }
 
 // RayCronJobSpecApplyConfiguration constructs a declarative configuration of the RayCronJobSpec type for use with
@@ -26,22 +20,6 @@ func RayCronJobSpec() *RayCronJobSpecApplyConfiguration {
 // If called multiple times, the Schedule field is set to the value of the last call.
 func (b *RayCronJobSpecApplyConfiguration) WithSchedule(value string) *RayCronJobSpecApplyConfiguration {
 	b.Schedule = &value
-	return b
-}
-
-// WithConcurrencyPolicy sets the ConcurrencyPolicy field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ConcurrencyPolicy field is set to the value of the last call.
-func (b *RayCronJobSpecApplyConfiguration) WithConcurrencyPolicy(value rayv1.ConcurrencyPolicy) *RayCronJobSpecApplyConfiguration {
-	b.ConcurrencyPolicy = &value
-	return b
-}
-
-// WithSuspend sets the Suspend field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Suspend field is set to the value of the last call.
-func (b *RayCronJobSpecApplyConfiguration) WithSuspend(value bool) *RayCronJobSpecApplyConfiguration {
-	b.Suspend = &value
 	return b
 }
 

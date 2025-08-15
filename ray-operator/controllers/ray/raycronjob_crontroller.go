@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -10,11 +11,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	ref "k8s.io/client-go/tools/reference"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -22,12 +22,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
+type MissedSchedulesType int
+
 const (
-	ScheduleBuffer = 100 * time.Millisecond
+	noneMissed MissedSchedulesType = iota
+	fewMissed
+	manyMissed
 )
 
 type RayCronJobReconciler struct {
@@ -36,23 +39,17 @@ type RayCronJobReconciler struct {
 	Recorder record.EventRecorder
 
 	dashboardClientFunc func() utils.RayDashboardClientInterface
-	options             RayCronJobReconcilerOptions
 
 	now func() time.Time
 }
 
-type RayCronJobReconcilerOptions struct {
-	RayCronJobMetricsManager *metrics.RayCronJobMetricsManager
-}
-
-func NewRayCronJobReconciler(_ context.Context, mgr manager.Manager, options RayCronJobReconcilerOptions, provider utils.ClientProvider) *RayCronJobReconciler {
+func NewRayCronJobReconciler(_ context.Context, mgr manager.Manager, provider utils.ClientProvider) *RayCronJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayCronJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("raycronjob-controller"),
 		dashboardClientFunc: dashboardClientFunc,
-		options:             options,
 		now:                 time.Now,
 	}
 }
@@ -64,11 +61,6 @@ func NewRayCronJobReconciler(_ context.Context, mgr manager.Manager, options Ray
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch;create
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
@@ -101,46 +93,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if err := utils.ValidateRayCronJobSpec(rayCronJob); err != nil {
-		logger.Error(err, "The RayJob spec is invalid")
-		r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
-			"The RayJob spec is invalid %s/%s: %v", rayCronJob.Namespace, rayCronJob.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	newActiveJobs := []corev1.ObjectReference{}
-	for _, activeJobRef := range rayCronJob.Status.Active {
-		activeJob := &rayv1.RayJob{}
-		err := r.Client.Get(ctx, types.NamespacedName{Name: activeJobRef.Name, Namespace: activeJobRef.Namespace}, activeJob)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				// Job was deleted externally. Remove it from the active list.
-				logger.Info("Active RayJob not found, assuming it was deleted", "jobName", activeJobRef.Name)
-				continue
-			}
-			logger.Error(err, "Error getting active job", "jobName", activeJobRef.Name)
-			return ctrl.Result{}, err
-		}
-
-		// Check if the job is finished (succeeded or failed)
-		if activeJob.Status.JobStatus == rayv1.JobStatusSucceeded || activeJob.Status.JobStatus == rayv1.JobStatusFailed {
-			logger.Info("Active RayJob has finished", "jobName", activeJobRef.Name, "status", activeJob.Status.JobStatus)
-		} else {
-			// If the job is still running, keep it in the new active list.
-			newActiveJobs = append(newActiveJobs, activeJobRef)
-		}
-
-	}
-	rayCronJob.Status.Active = newActiveJobs
-
-	// oldRayCronJob := rayCronJob.DeepCopy()
-	// If suspend is true then we dont do any logic and wait for next request
-	if rayCronJob.Spec.Suspend != nil && *rayCronJob.Spec.Suspend {
-		logger.Info("Not starting job because the cron is suspended")
-		return ctrl.Result{}, err
-	}
-
-	sched, err := cron.ParseStandard(utils.FormatSchedule(rayCronJob, r.Recorder))
+	sched, err := cron.ParseStandard(formatSchedule(rayCronJob, r.Recorder))
 	if err != nil {
 		// this is likely a user error in defining the spec value
 		// we should log the error and not reconcile this cronjob until an update to spec
@@ -149,7 +102,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	scheduledTime, err := utils.NextScheduleTime(logger, rayCronJob, r.now(), sched, r.Recorder)
+	scheduledTime, err := nextScheduleTime(logger, rayCronJob, r.now(), sched, r.Recorder)
 	if err != nil {
 		// this is likely a user error in defining the spec value
 		// we should log the error and not reconcile this cronjob until an update to spec
@@ -158,52 +111,42 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	t1 := utils.LastScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
-	if t1 <= ScheduleBuffer {
+	t1 := lastScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
+	if scheduledTime != nil && (*scheduledTime).Before(r.now()) {
 		logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "Previous LastScheduleTime", rayCronJob.Status.LastScheduleTime)
 	} else {
 		logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now())
-		return ctrl.Result{RequeueAfter: utils.NextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)}, nil
+		return ctrl.Result{RequeueAfter: nextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)}, nil
 	}
 
-	if rayCronJob.Spec.ConcurrencyPolicy == rayv1.ForbidConcurrent && len(rayCronJob.Status.Active) > 0 {
-		// Regardless which source of information we use for the set of active jobs,
-		// there is some risk that we won't see an active job when there is one.
-		// (because we haven't seen the status update to the SJ or the created pod).
-		// So it is theoretically possible to have concurrency with Forbid.
-		// As long the as the invocations are "far enough apart in time", this usually won't happen.
-		//
-		// TODO: for Forbid, we could use the same name for every execution, as a lock.
-		// With replace, we could use a name that is deterministic per execution time.
-		// But that would mean that you could not inspect prior successes or failures of Forbid jobs.
-		logger.Info("Not starting job because prior execution is still running and concurrency policy is Forbid", "cronjob")
-		r.Recorder.Eventf(rayCronJob, corev1.EventTypeNormal, "JobAlreadyActive", "Not starting job because prior execution is running and concurrency policy is Forbid")
-		t := utils.NextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
-		return ctrl.Result{RequeueAfter: t}, nil
+	var childRayJobs rayv1.RayJobList
+	if err := r.List(ctx, &childRayJobs, client.InNamespace(rayCronJob.Namespace)); err != nil {
+		logger.Error(err, "Unable to list child RayJobs")
+		return ctrl.Result{}, err
 	}
 
-	if rayCronJob.Spec.ConcurrencyPolicy == rayv1.ReplaceConcurrent {
-		for _, j := range rayCronJob.Status.Active {
-			logger.Info("Deleting job that was still running at next scheduled start time")
-			job := &rayv1.RayJob{}
-			err := r.Client.Get(ctx, types.NamespacedName{Name: j.Name, Namespace: j.Namespace}, job)
-			if err != nil {
-				// If the job is already gone, just log it and continue.
-				r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, "FailedGet", "Error getting active job %s: %v", j.Name, err)
-				return ctrl.Result{}, fmt.Errorf("error getting active job %s: %w", j.Name, err)
-			}
-
-			if !r.deleteJob(ctx, logger, rayCronJob, j, r.Recorder) {
-				return ctrl.Result{}, fmt.Errorf("could not replace job %s/%s", job.Namespace, job.Name)
+	rayJobIsActive := false
+	for i := range childRayJobs.Items {
+		job := &childRayJobs.Items[i]
+		// Check if the job is controlled by the current RayCronJob by comparing UIDs.
+		if controllerRef := metav1.GetControllerOf(job); controllerRef != nil && controllerRef.UID == rayCronJob.UID {
+			if !rayv1.IsJobTerminal(job.Status.JobStatus) {
+				rayJobIsActive = true
+				break
 			}
 		}
 	}
 
-	jobReq, err := utils.GetRayJobFromTemplate2(rayCronJob, *scheduledTime)
-	if err != nil {
-		logger.Error(err, "Unable to make Job from template", "cronjob")
-		return ctrl.Result{}, err
+	if rayJobIsActive {
+		logger.Info("Not starting job because a prior execution is still running", "cronjob", rayCronJob.Name)
+		r.Recorder.Eventf(rayCronJob, corev1.EventTypeNormal, "JobAlreadyActive", "Not starting job because a prior execution is still running")
+		// Requeue for the next scheduled time.
+		t := nextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
+		return ctrl.Result{RequeueAfter: t}, nil
 	}
+
+	jobReq := getRayJobFromTemplate(rayCronJob, *scheduledTime)
+
 	err = r.Client.Create(ctx, jobReq)
 	if err != nil {
 		// If the job already exists, it's possible this controller created it before crashing.
@@ -227,12 +170,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		r.Recorder.Eventf(rayCronJob, corev1.EventTypeNormal, "SuccessfulCreate", "Created RayJob %s")
 	}
 
-	jobRef, err := ref.GetReference(r.Scheme, jobReq)
-	if err != nil {
-		logger.Error(err, "Unable to get object reference for new RayJob", "jobName", jobReq.Name)
-		return ctrl.Result{}, err
-	}
-	rayCronJob.Status.Active = append(rayCronJob.Status.Active, *jobRef)
 	rayCronJob.Status.LastScheduleTime = &metav1.Time{Time: *scheduledTime}
 
 	if err := r.Status().Update(ctx, rayCronJob); err != nil {
@@ -240,36 +177,8 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	t := utils.NextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
+	t := nextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
 	return ctrl.Result{RequeueAfter: t}, nil
-}
-
-// The receiver (r *RayCronJobReconciler) attaches this function to the struct, making it a method.
-func (r *RayCronJobReconciler) deleteJob(ctx context.Context, logger klog.Logger, cj *rayv1.RayCronJob, jobref corev1.ObjectReference, recorder record.EventRecorder) bool {
-	// Create a job object to delete. We only need the name and namespace.
-	jobToDelete := &rayv1.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobref.Name,
-			Namespace: jobref.Namespace,
-		},
-	}
-
-	// Use the reconciler's client to delete the job.
-	if err := r.Client.Delete(ctx, jobToDelete); err != nil {
-		// If the job is already gone, don't treat it as an error.
-		if errors.IsNotFound(err) {
-			return true
-		}
-		recorder.Eventf(cj, corev1.EventTypeWarning, "FailedDelete", "Error deleting job %s: %v", jobref.Name, err)
-		logger.Error(err, "Error deleting job", "job", klog.KObj(jobToDelete))
-		return false
-	}
-
-	// Remove the job's reference from the active list in the CronJob's status.
-	utils.DeleteFromActiveList(cj, jobref.UID)
-	recorder.Eventf(cj, corev1.EventTypeNormal, "SuccessfulDelete", "Deleted job %s", jobref.Name)
-
-	return true
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -288,4 +197,185 @@ func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			},
 		}).
 		Complete(r)
+}
+
+func mostRecentScheduleTime(rj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule) (time.Time, *time.Time, MissedSchedulesType, error) {
+	earliestTime := rj.ObjectMeta.CreationTimestamp.Time
+	missedSchedules := noneMissed
+	if rj.Status.LastScheduleTime != nil {
+		earliestTime = rj.Status.LastScheduleTime.Time
+	}
+
+	t1 := schedule.Next(earliestTime)
+	t2 := schedule.Next(t1)
+
+	if now.Before(t1) {
+		return earliestTime, nil, missedSchedules, nil
+	}
+	if now.Before(t2) {
+		return earliestTime, &t1, missedSchedules, nil
+	}
+
+	// It is possible for cron.ParseStandard("59 23 31 2 *") to return an invalid schedule
+	// minute - 59, hour - 23, dom - 31, month - 2, and dow is optional, clearly 31 is invalid
+	// In this case the timeBetweenTwoSchedules will be 0, and we error out the invalid schedule
+	timeBetweenTwoSchedules := int64(t2.Sub(t1).Round(time.Second).Seconds())
+	if timeBetweenTwoSchedules < 1 {
+		return earliestTime, nil, missedSchedules, fmt.Errorf("time difference between two schedules is less than 1 second")
+	}
+	// this logic used for calculating number of missed schedules does a rough
+	// approximation, by calculating a diff between two schedules (t1 and t2),
+	// and counting how many of these will fit in between last schedule and now
+	timeElapsed := int64(now.Sub(t1).Seconds())
+	numberOfMissedSchedules := (timeElapsed / timeBetweenTwoSchedules) + 1
+
+	var mostRecentTime time.Time
+	// to get the most recent time accurate for regular schedules and the ones
+	// specified with @every form, we first need to calculate the potential earliest
+	// time by multiplying the initial number of missed schedules by its interval,
+	// this is critical to ensure @every starts at the correct time, this explains
+	// the numberOfMissedSchedules-1, the additional -1 serves there to go back
+	// in time one more time unit, and let the cron library calculate a proper
+	// schedule, for case where the schedule is not consistent, for example
+	// something like  30 6-16/4 * * 1-5
+	potentialEarliest := t1.Add(time.Duration((numberOfMissedSchedules-1-1)*timeBetweenTwoSchedules) * time.Second)
+	for t := schedule.Next(potentialEarliest); !t.After(now); t = schedule.Next(t) {
+		mostRecentTime = t
+	}
+
+	switch {
+	case numberOfMissedSchedules > 100:
+		missedSchedules = manyMissed
+	// inform about few missed, still
+	case numberOfMissedSchedules > 0:
+		missedSchedules = fewMissed
+	}
+
+	if mostRecentTime.IsZero() {
+		return earliestTime, nil, missedSchedules, nil
+	}
+	return earliestTime, &mostRecentTime, missedSchedules, nil
+}
+
+func formatSchedule(rj *rayv1.RayCronJob, recorder record.EventRecorder) string {
+	if strings.Contains(rj.Spec.Schedule, "TZ") {
+		if recorder != nil {
+			recorder.Eventf(rj, corev1.EventTypeWarning, "UnsupportedSchedule", "CRON_TZ or TZ used in schedule %q is not officially supported, see https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/ for more details", rj.Spec.Schedule)
+		}
+
+		return rj.Spec.Schedule
+	}
+
+	return rj.Spec.Schedule
+}
+
+// nextScheduleTimeDuration returns the time duration to requeue a cron schedule based on
+// the schedule and last schedule time.
+func nextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule) time.Duration {
+	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
+	if err != nil {
+		// we still have to requeue at some point, so aim for the next scheduling slot from now
+		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point, so aim for the next scheduling slot from now", "Error", err)
+		mostRecentTime = &now
+	} else if mostRecentTime == nil {
+		logger.Info("mostRecentTime doesnt exist")
+		if missedSchedules == noneMissed {
+			// no missed schedules since earliestTime
+			mostRecentTime = &earliestTime
+		} else {
+			// if there are missed schedules since earliestTime, always use now
+			mostRecentTime = &now
+		}
+	}
+	logger.Info("Successfully calculated earliestTime and mostRecentTime", "mostRecentTime", mostRecentTime, "Current Time", now, "Next time to aim for", schedule.Next(*mostRecentTime))
+	t := schedule.Next(*mostRecentTime).Sub(now)
+	return t
+}
+
+// The LastScheduleTimeDuration function returns the last previous cron time.
+// It calculates the most recent time a schedule should have executed based
+// on the RayJob's creation time (or its last scheduled status) and the current time 'now'.
+func lastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule) time.Duration {
+	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
+	if err != nil {
+		// We still have to requeue at some point, so aim for the next scheduling slot from now
+		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point", "Error", err)
+		mostRecentTime = &now
+	} else if mostRecentTime == nil {
+		logger.Info("mostRecentTime doesnt exist")
+		if missedSchedules == noneMissed {
+			// No missed schedules since earliestTime
+			mostRecentTime = &earliestTime
+		} else {
+			// If there are missed schedules since earliestTime, always use now
+			mostRecentTime = &now
+		}
+	}
+	return now.Sub(*mostRecentTime)
+}
+
+// nextScheduleTime returns the time.Time of the next schedule after the last scheduled
+// and before now, or nil if no unmet schedule times, and an error.
+// If there are too many (>100) unstarted times, it will also record a warning.
+func nextScheduleTime(logger logr.Logger, cj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule, recorder record.EventRecorder) (*time.Time, error) {
+	_, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(cj, now, schedule)
+
+	if mostRecentTime == nil || mostRecentTime.After(now) {
+		return nil, err
+	}
+
+	if missedSchedules == manyMissed {
+		recorder.Eventf(cj, corev1.EventTypeWarning, "TooManyMissedTimes", "too many missed start times. Set or decrease .spec.startingDeadlineSeconds or check clock skew")
+		logger.Info("too many missed times")
+	}
+
+	return mostRecentTime, err
+}
+
+// getJobFromTemplate2 makes a Job from a CronJob. It converts the unix time into minutes from
+// epoch time and concatenates that to the job name, because the cronjob_controller v2 has the lowest
+// granularity of 1 minute for scheduling job.
+func getRayJobFromTemplate(cj *rayv1.RayCronJob, scheduledTime time.Time) *rayv1.RayJob {
+	labels := copyLabels(&cj.Spec.RayJobTemplate)
+	annotations := copyAnnotations(&cj.Spec.RayJobTemplate)
+	// We want job names for a given nominal start time to have a deterministic name to avoid the same job being created twice
+	name := getJobName(cj, scheduledTime)
+
+	job := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:            labels,
+			Annotations:       annotations,
+			Name:              name,
+			CreationTimestamp: metav1.Time{Time: scheduledTime},
+			OwnerReferences:   []metav1.OwnerReference{*metav1.NewControllerRef(cj, rayv1.SchemeGroupVersion.WithKind("RayCronJob"))},
+		},
+	}
+	cj.Spec.RayJobTemplate.Spec.DeepCopyInto(&job.Spec)
+	job.Namespace = cj.Namespace
+	return job
+}
+
+func getJobName(cj *rayv1.RayCronJob, scheduledTime time.Time) string {
+	return fmt.Sprintf("%s-%s-%d", "rayjob", cj.Name, getTimeHashInMinutes(scheduledTime))
+}
+
+func copyLabels(template *rayv1.RayJobTemplate) labels.Set {
+	l := make(labels.Set)
+	for k, v := range template.Labels {
+		l[k] = v
+	}
+	return l
+}
+
+func copyAnnotations(template *rayv1.RayJobTemplate) labels.Set {
+	a := make(labels.Set)
+	for k, v := range template.Annotations {
+		a[k] = v
+	}
+	return a
+}
+
+// getTimeHashInMinutes returns Unix Epoch Time in minutes
+func getTimeHashInMinutes(scheduledTime time.Time) int64 {
+	return scheduledTime.Unix() / 60
 }

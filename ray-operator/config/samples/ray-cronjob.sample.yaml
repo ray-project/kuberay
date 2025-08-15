@@ -6,9 +6,6 @@ spec:
   # Run this job every 5 minutes
   schedule: "*/5 * * * *"
 
-  # If a job is already running, cancel it and start a new one.
-  concurrencyPolicy: Replace
-
   # This is the template for the RayJob that will be created on schedule.
   rayJobTemplate:
     spec:
