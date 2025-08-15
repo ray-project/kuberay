@@ -9,10 +9,17 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+)
+
+const (
+	logTailingEndpoint    = "/logs/tail"
+	jobSubmissionEndpoint = "/api/jobs/"    // the tailing "/" is required.
+	jobSubmissionTimeout  = 2 * time.Second // Same timeout as the HttpMode of RayJobController.
 )
 
 func submitJobReq(address string, request utils.RayJobRequest) (jobId string, err error) {
@@ -20,8 +27,10 @@ func submitJobReq(address string, request utils.RayJobRequest) (jobId string, er
 	if err != nil {
 		return "", err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), jobSubmissionTimeout)
+	defer cancel()
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, address, bytes.NewBuffer(rayJobJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, address, bytes.NewBuffer(rayJobJson))
 	if err != nil {
 		return "", err
 	}
@@ -33,7 +42,10 @@ func submitJobReq(address string, request utils.RayJobRequest) (jobId string, er
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 
 	if strings.Contains(string(body), "Please use a different submission_id") {
 		return request.SubmissionId, nil
@@ -50,7 +62,7 @@ func jobSubmissionURL(address string) (string, error) {
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + address
 	}
-	address, err := url.JoinPath(address, "/api/jobs/") // the tailing "/" is required.
+	address, err := url.JoinPath(address, jobSubmissionEndpoint)
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +71,7 @@ func jobSubmissionURL(address string) (string, error) {
 
 func logTailingURL(address, submissionId string) (string, error) {
 	address = strings.Replace(address, "http", "ws", 1)
-	address, err := url.JoinPath(address, submissionId, "/logs/tail")
+	address, err := url.JoinPath(address, submissionId, logTailingEndpoint)
 	if err != nil {
 		return "", err
 	}
