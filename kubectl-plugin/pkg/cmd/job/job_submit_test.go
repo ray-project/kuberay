@@ -218,33 +218,9 @@ func TestRayJobSubmit_AddressValidation(t *testing.T) {
 			expectError: "--address was provided but is empty",
 		},
 		{
-			name:        "invalid scheme: error",
-			address:     "ftp://example.com",
-			flagChanged: true,
-			expectError: `--address must be a valid http(s) URL, got "ftp://example.com"`,
-		},
-		{
-			name:        "missing scheme: error",
-			address:     "example.com",
-			flagChanged: true,
-			expectError: `--address must be a valid http(s) URL, got "example.com"`,
-		},
-		{
-			name:        "http without host: error",
-			address:     "http://",
-			flagChanged: true,
-			expectError: `--address must be a valid http(s) URL, got "http://"`,
-		},
-		{
 			name:        "valid https address: OK",
 			address:     "https://ingress.example.com",
 			flagChanged: true,
-		},
-		{
-			name:             "valid https with trailing slash: normalized",
-			address:          "https://ingress.example.com/",
-			flagChanged:      true,
-			expectNormalized: "https://ingress.example.com",
 		},
 	}
 

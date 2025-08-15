@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,7 +35,7 @@ import (
 const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
-	portforwardtimeout = 60.0
+	portForwardTimeout = 60.0
 )
 
 type SubmitJobOptions struct {
@@ -315,11 +314,6 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 		if strings.TrimSpace(options.address) == "" {
 			return fmt.Errorf("--address was provided but is empty")
 		}
-		u, err := url.Parse(options.address)
-		if err != nil || u.Scheme == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("--address must be a valid http(s) URL, got %q", options.address)
-		}
-		options.address = strings.TrimRight(options.address, "/")
 	}
 	return nil
 }
@@ -446,19 +440,19 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		portForwardCmd.SetArgs([]string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)})
 
 		// create new context for port-forwarding so we can cancel the context to stop the port forwarding only
-		portforwardctx, cancel := context.WithCancel(ctx)
+		portForwardCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		go func() {
-			fmt.Printf("Port Forwarding service %s\n", svcName)
-			if err := portForwardCmd.ExecuteContext(portforwardctx); err != nil {
+			fmt.Printf("Port forwarding service %s\n", svcName)
+			if err := portForwardCmd.ExecuteContext(portForwardCtx); err != nil {
 				log.Fatalf("Error occurred while port-forwarding Ray dashboard: %v", err)
 			}
 		}()
 
 		// Wait for port forward to be ready
-		var portforwardReady bool
-		portforwardWaitStartTime := time.Now()
-		currTime = portforwardWaitStartTime
+		var portForwardReady bool
+		portForwardWaitStartTime := time.Now()
+		currTime = portForwardWaitStartTime
 
 		portforwardCheckRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr, nil)
 		if err != nil {
@@ -467,8 +461,8 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		httpClient := http.Client{
 			Timeout: 5 * time.Second,
 		}
-		fmt.Printf("Waiting for portforwarding...")
-		for !portforwardReady && currTime.Sub(portforwardWaitStartTime).Seconds() <= portforwardtimeout {
+		fmt.Printf("Waiting for port forwarding...")
+		for !portForwardReady && currTime.Sub(portForwardWaitStartTime).Seconds() <= portForwardTimeout {
 			time.Sleep(2 * time.Second)
 			rayDashboardResponse, err := httpClient.Do(portforwardCheckRequest)
 			if err != nil {
@@ -476,12 +470,12 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				fmt.Println(err)
 			}
 			if rayDashboardResponse.StatusCode >= 200 && rayDashboardResponse.StatusCode < 300 {
-				portforwardReady = true
+				portForwardReady = true
 			}
 			rayDashboardResponse.Body.Close()
 			currTime = time.Now()
 		}
-		if !portforwardReady {
+		if !portForwardReady {
 			return fmt.Errorf("Timed out waiting for port forwarding")
 		}
 		options.address = dashboardAddr
