@@ -179,8 +179,8 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, fmt.Errorf("retry timeout exceeded context deadline")
 		}
 
-		if ok := apiserversdkutil.SleepWithContextCancel(ctx, sleepDuration); !ok {
-			return resp, fmt.Errorf("retry canceled during backoff: %w", ctx.Err())
+		if err = apiserversdkutil.Sleep(ctx, sleepDuration); err != nil {
+			return resp, fmt.Errorf("retry canceled during backoff: %w", err)
 		}
 	}
 	return resp, err

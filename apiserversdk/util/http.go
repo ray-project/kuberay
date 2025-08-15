@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-func SleepWithContextCancel(ctx context.Context, sleepDuration time.Duration) bool {
+func Sleep(ctx context.Context, sleepDuration time.Duration) error {
 	select {
 	case <-time.After(sleepDuration):
 	case <-ctx.Done():
-		return false
+		return ctx.Err()
 	}
-	return true
+	return nil
 }
 
 func CheckContextDeadline(ctx context.Context, sleepDuration time.Duration) bool {

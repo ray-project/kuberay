@@ -726,8 +726,8 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			return nil, lastStatus, fmt.Errorf("retry timeout exceeded context deadline")
 		}
 
-		if ok := apiserversdkutil.SleepWithContextCancel(ctx, sleep); !ok {
-			return nil, lastStatus, fmt.Errorf("retry canceled during backoff: %w", ctx.Err())
+		if err = apiserversdkutil.Sleep(ctx, sleep); err != nil {
+			return nil, lastStatus, fmt.Errorf("retry canceled during backoff: %w", err)
 		}
 
 	}
