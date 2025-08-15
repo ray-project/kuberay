@@ -218,7 +218,6 @@ jobs:
     - name: Set up Docker
       uses: docker/setup-docker-action@v4
 
-
     - name: Log in to Quay.io
       uses: docker/login-action@v2
       with:
@@ -238,3 +237,81 @@ jobs:
         labels: |
           GIT_COMMIT=${{ steps.vars.outputs.sha_short }}
         provenance: false
+
+release_submitter_image:
+    env:
+      working-directory: ./ray-operator
+    name: Release Submitter Docker Images
+    runs-on: ubuntu-22.04
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: v1.24
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+    - name: Get revision SHA
+      id: vars
+      run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    - name: Get dependencies
+      run: go mod download
+      working-directory: ${{env.working-directory}}
+
+    - name: Set up Docker
+      uses: docker/setup-docker-action@v4
+
+    - name: Build Docker Image - Submitter
+      run: |
+        IMG=kuberay/submitter:${{ steps.vars.outputs.sha_short }} make docker-image-rayjobsubmitter
+      working-directory: ${{env.working-directory}}
+
+    - name: Log in to Quay.io
+      uses: docker/login-action@v2
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+    - name: Build linux/amd64 submitter go binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: amd64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjobsubmitter/cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Build linux/arm64 submitter binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: arm64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjobsubmitter/cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Build MultiArch Image
+      uses: docker/build-push-action@v5
+      env:
+        PUSH: true
+        REPO_ORG: kuberay
+        REPO_NAME: submitter
+      with:
+        platforms: linux/amd64,linux/arm64
+        context: ${{env.working-directory}}
+        file: ${{env.working-directory}}/Dockerfile.submitter.buildx
+        push: ${{env.PUSH}}
+        provenance: false
+        tags: |
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}
