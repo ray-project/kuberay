@@ -116,6 +116,11 @@ operatorCommand: /manager
 # -- If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true
 
+# -- The maximum number of reconcile operations that can be performed simultaneously.
+# This setting controls the concurrency of the controller reconciliation loops.
+# Higher values can improve throughput in clusters with many resources, but may increase resource consumption.
+reconcileConcurrency: 1
+
 # -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
 

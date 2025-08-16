@@ -108,6 +108,13 @@ spec:
             {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
             {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
+            {{- if hasKey .Values "reconcileConcurrency" -}}
+            {{- $rc := toString .Values.reconcileConcurrency }}
+            {{- if not (regexMatch "^[1-9][0-9]*$" $rc) }}
+            {{- fail (printf "values.reconcileConcurrency must be a positive integer, got %q" $rc) }}
+            {{- end }}
+            {{- $argList = append $argList (printf "--reconcile-concurrency=%v" .Values.reconcileConcurrency) -}}
+            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
