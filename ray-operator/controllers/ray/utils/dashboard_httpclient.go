@@ -167,7 +167,7 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+ServeDetailsPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ type RayJobLogsResponse struct {
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 }
 
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
 	}
