@@ -131,6 +131,7 @@ rules:
   - ""
   resources:
   - events
+  - pods/resize
   - pods/status
   - services
   verbs:
