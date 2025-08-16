@@ -8,22 +8,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	apiserverutil "github.com/ray-project/kuberay/apiserversdk/util"
+	apiserversdkutil "github.com/ray-project/kuberay/apiserversdk/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
-
-type RetryConfig struct {
-	MaxRetry       int
-	BackoffFactor  float64
-	InitBackoff    time.Duration
-	MaxBackoff     time.Duration
-	OverallTimeout time.Duration
-}
 
 type KuberayAPIServerClient struct {
 	httpClient  *http.Client
@@ -36,7 +27,7 @@ type KuberayAPIServerClient struct {
 	// Store http request handling function for unit test purpose.
 	executeHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
-	retryCfg           RetryConfig
+	retryCfg           apiserversdkutil.RetryConfig
 }
 
 type KuberayAPIServerClientError struct {
@@ -57,7 +48,7 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, retryCfg RetryConfig) *KuberayAPIServerClient {
+func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, retryCfg apiserversdkutil.RetryConfig) *KuberayAPIServerClient {
 	client := &KuberayAPIServerClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
@@ -704,7 +695,7 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			break
 		}
 
-		if apiserverutil.IsSuccessfulStatusCode(statusCode) {
+		if apiserversdkutil.IsSuccessfulStatusCode(statusCode) {
 			return bodyBytes, nil, nil
 		}
 
@@ -721,21 +712,22 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 			HTTPStatusCode: statusCode,
 		}
 
-		if !apiserverutil.IsRetryableHTTPStatusCodes(statusCode) {
+		if !apiserversdkutil.IsRetryableHTTPStatusCodes(statusCode) {
 			break
 		}
 
 		// Backoff before retry
-		sleep := apiserverutil.GetRetryBackoff(attempt,
+		sleep := apiserversdkutil.GetRetryBackoff(attempt,
 			krc.retryCfg.InitBackoff,
 			krc.retryCfg.BackoffFactor,
 			krc.retryCfg.MaxBackoff)
 
-		select {
-		case <-time.After(sleep):
-			// continue to the next retry after backoff
-		case <-ctx.Done():
-			return nil, lastStatus, fmt.Errorf("overall timeout reached: %w", ctx.Err())
+		if ok := apiserversdkutil.CheckContextDeadline(ctx, sleep); !ok {
+			return nil, lastStatus, fmt.Errorf("retry timeout exceeded context deadline")
+		}
+
+		if err = apiserversdkutil.Sleep(ctx, sleep); err != nil {
+			return nil, lastStatus, fmt.Errorf("retry canceled during backoff: %w", err)
 		}
 
 	}

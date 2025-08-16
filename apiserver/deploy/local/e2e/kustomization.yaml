@@ -7,6 +7,7 @@ images:
 - name: kuberay/apiserver
   newName: quay.io/kuberay/apiserver
   newTag: latest
+# Replace NodePort with ClusterIP as we do not need to receive requests from outside the Kubernetes cluster
 patches:
 - patch: |-
     - op: replace
@@ -28,7 +29,6 @@ patches:
     kind: Deployment
     name: kuberay-apiserver
     version: v1
-# Replace NodePort with ClusterIP as we do not need to receive requests from outside the Kubernetes cluster
 - patch: |-
     - op: replace
       path: /spec/type
