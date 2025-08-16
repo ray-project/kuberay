@@ -267,3 +267,11 @@ tests:
             - key: key2
               operator: Exists
               effect: NoSchedule
+
+  - it: Should use custom reconcile concurrency when set
+    set:
+      reconcileConcurrency: 5
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--reconcile-concurrency=5"
