@@ -8,7 +8,6 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/rayjobsubmitter"
 )
 
@@ -37,7 +36,7 @@ func main() {
 		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID"))
 	}
 
-	req := utils.RayJobRequest{
+	req := rayjobsubmitter.RayJobRequest{
 		Entrypoint:   strings.Join(flag.Args(), " "),
 		SubmissionId: submissionId,
 		NumCpus:      entrypointNumCpus,

@@ -21,7 +21,8 @@ COPY rayjobsubmitter/ rayjobsubmitter/
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -tags strictfipsruntime -a -o submitter ./rayjobsubmitter/cmd/main.go
+# Build the submitter binary with -ldflags="-w -s" to reduce the size of the binary.
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s"  -trimpath -a -o submitter ./rayjobsubmitter/cmd/main.go
 
 FROM scratch as submitter
 WORKDIR /

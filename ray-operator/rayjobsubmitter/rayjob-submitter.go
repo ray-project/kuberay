@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 const (
@@ -22,7 +20,21 @@ const (
 	jobSubmissionTimeout  = 10 * time.Second
 )
 
-func submitJobReq(address string, request utils.RayJobRequest) (jobId string, err error) {
+// RayJobRequest is the request body for submitting a Ray job.
+// It is used to submit a Ray job to the Ray job submission server.
+// To reduce the size of the binary, we don't include the utils package in the rayjobsubmitter package.
+// The RayJobRequest struct should be the same as the RayJobRequest struct in the ray-operator/controllers/ray/utils/dashboard_httpclient.go file.
+type RayJobRequest struct {
+	RuntimeEnv   map[string]interface{} `json:"runtime_env,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	Resources    map[string]float32     `json:"entrypoint_resources,omitempty"`
+	Entrypoint   string                 `json:"entrypoint"`
+	SubmissionId string                 `json:"submission_id,omitempty"`
+	NumCpus      float32                `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus      float32                `json:"entrypoint_num_gpus,omitempty"`
+}
+
+func submitJobReq(address string, request RayJobRequest) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return "", err
@@ -104,7 +116,7 @@ func logJob(address, submissionId string, out io.Writer) error {
 	}
 }
 
-func Submit(address string, req utils.RayJobRequest, out io.Writer) error {
+func Submit(address string, req RayJobRequest, out io.Writer) error {
 	fmt.Fprintf(out, "INFO -- Job submission server address: %s\n", address)
 
 	address, err := jobSubmissionURL(address)
