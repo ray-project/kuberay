@@ -148,7 +148,10 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -178,7 +181,10 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
@@ -341,7 +347,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
@@ -407,7 +416,10 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
