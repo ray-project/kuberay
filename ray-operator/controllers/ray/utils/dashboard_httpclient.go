@@ -150,7 +150,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read response when updating deployments: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
@@ -183,7 +183,7 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting serve details: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -275,7 +275,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job info: %w", err)
 	}
 
 	var jobInfo RayJobInfo
@@ -305,7 +305,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when listing jobs: %w", err)
 	}
 
 	var jobInfo []RayJobInfo
@@ -349,7 +349,7 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read response when submitting job: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -388,7 +388,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job log: %w", err)
 	}
 
 	var jobLog RayJobLogsResponse
@@ -418,7 +418,7 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read response when stopping job: %w", err)
 	}
 
 	var jobStopResp RayJobStopResponse
