@@ -24,7 +24,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main
 # Build the submitter binary with -ldflags="-w -s" to reduce the size of the binary.
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s"  -trimpath -a -o submitter ./rayjobsubmitter/cmd/main.go
 
-FROM scratch as submitter
+FROM scratch AS submitter
 WORKDIR /
 COPY --from=builder /workspace/submitter .
 USER 65532:65532
