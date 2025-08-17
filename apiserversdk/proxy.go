@@ -102,7 +102,7 @@ type retryRoundTripper struct {
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
 	retryCfg := apiserversdkutil.RetryConfig{
 		MaxRetry:       apiserversdkutil.HTTPClientDefaultMaxRetry,
-		BackoffFactor:  apiserversdkutil.HTTPClientDefaultBackoffBase,
+		BackoffFactor:  apiserversdkutil.HTTPClientDefaultBackoffFactor,
 		InitBackoff:    apiserversdkutil.HTTPClientDefaultInitBackoff,
 		MaxBackoff:     apiserversdkutil.HTTPClientDefaultMaxBackoff,
 		OverallTimeout: apiserversdkutil.HTTPClientDefaultOverallTimeout,

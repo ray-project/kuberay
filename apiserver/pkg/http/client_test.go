@@ -55,7 +55,7 @@ func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 func TestUnmarshalHttpResponseOK(t *testing.T) {
 	retryCfg := util.RetryConfig{
 		MaxRetry:       util.HTTPClientDefaultMaxRetry,
-		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+		BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
 		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
@@ -91,7 +91,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 func TestUnmarshalHttpResponseFails(t *testing.T) {
 	retryCfg := util.RetryConfig{
 		MaxRetry:       util.HTTPClientDefaultMaxRetry,
-		BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+		BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
 		InitBackoff:    util.HTTPClientDefaultInitBackoff,
 		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
@@ -209,7 +209,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 
 			retryCfg := util.RetryConfig{
 				MaxRetry:       tt.maxRetry,
-				BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+				BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
 				InitBackoff:    util.HTTPClientDefaultInitBackoff,
 				MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 				OverallTimeout: util.HTTPClientDefaultOverallTimeout,
@@ -263,7 +263,7 @@ func TestAPIServerClientBackoff(t *testing.T) {
 
 	retryCfg := util.RetryConfig{
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
-		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		BackoffFactor: util.HTTPClientDefaultBackoffFactor,
 		// Set short backoff time
 		InitBackoff:    1 * time.Millisecond,
 		MaxBackoff:     50 * time.Millisecond,
@@ -305,7 +305,7 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 
 	retryCfg := util.RetryConfig{
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
-		BackoffFactor: util.HTTPClientDefaultBackoffBase,
+		BackoffFactor: util.HTTPClientDefaultBackoffFactor,
 		InitBackoff:   1 * time.Millisecond,
 		MaxBackoff:    50 * time.Millisecond,
 		// Set short overall timeout so that the timeout error will be raised

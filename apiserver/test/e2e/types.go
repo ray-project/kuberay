@@ -97,7 +97,7 @@ func withHttpClient() contextOption {
 
 		retryCfg := util.RetryConfig{
 			MaxRetry:       util.HTTPClientDefaultMaxRetry,
-			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+			BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
 			InitBackoff:    util.HTTPClientDefaultInitBackoff,
 			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
