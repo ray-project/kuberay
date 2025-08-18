@@ -92,7 +92,7 @@ GOBINDATA_VERSION ?= v4.0.2
 .PHONY: gofumpt
 gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
 $(GOFUMPT): $(REPO_ROOT_BIN)
-	-s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
+	test -s $(GOFUMPT) || GOBIN=$(REPO_ROOT_BIN) go install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci_lint locally if necessary.
