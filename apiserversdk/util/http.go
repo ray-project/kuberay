@@ -27,10 +27,7 @@ func CheckContextDeadline(ctx context.Context, sleepDuration time.Duration) bool
 }
 
 func GetRetryBackoff(attempt int, initBackoff time.Duration, backoffFactor float64, maxBackoff time.Duration) time.Duration {
-	sleepDuration := initBackoff * time.Duration(math.Pow(backoffFactor, float64(attempt)))
-	if sleepDuration > maxBackoff {
-		sleepDuration = maxBackoff
-	}
+	sleepDuration := min(initBackoff*time.Duration(math.Pow(backoffFactor, float64(attempt))), maxBackoff)
 	return sleepDuration
 }
 
