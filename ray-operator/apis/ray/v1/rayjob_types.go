@@ -82,6 +82,7 @@ const (
 	K8sJobMode      JobSubmissionMode = "K8sJobMode"      // Submit job via Kubernetes Job
 	HTTPMode        JobSubmissionMode = "HTTPMode"        // Submit job via HTTP request
 	InteractiveMode JobSubmissionMode = "InteractiveMode" // Don't submit job in KubeRay. Instead, wait for user to submit job and provide the job submission ID.
+	SidecarMode     JobSubmissionMode = "SidecarMode"     // Submit job inside the Ray head Pod via a sidecar container, then tail logs
 )
 
 type DeletionPolicyType string
@@ -174,6 +175,7 @@ type RayJobSpec struct {
 	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
 	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
 	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
+	// In "SidecarMode", the operator injects a submitter container into the Ray head Pod which submits the job and tails logs.
 	// +kubebuilder:default:=K8sJobMode
 	// +optional
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`

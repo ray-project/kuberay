@@ -219,6 +219,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Info("RayCluster is created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
 		}
 
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			logger.Info("RayCluster is created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
+		}
+
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
 		// Try to get the Ray job id from rayJob.Spec.JobId
@@ -299,11 +303,45 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			isJobTerminal = isJobTerminal && finished
 		}
 
+		// If in SidecarMode, refine terminal condition by checking the sidecar container terminated.
+		var sidecarTerminated bool
+		var sidecarExitCode *int32
+		var sidecarReason, sidecarMessage string
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			headPodName := rayClusterInstance.Status.Head.PodName
+			if headPodName != "" {
+				headPod := &corev1.Pod{}
+				if err := r.Client.Get(ctx, client.ObjectKey{Namespace: rayClusterInstance.Namespace, Name: headPodName}, headPod); err == nil {
+					for _, cs := range headPod.Status.ContainerStatuses {
+						if cs.Name == utils.SubmitterContainerName && cs.State.Terminated != nil {
+							sidecarTerminated = true
+							ec := cs.State.Terminated.ExitCode
+							sidecarExitCode = &ec
+							sidecarReason = cs.State.Terminated.Reason
+							sidecarMessage = cs.State.Terminated.Message
+							break
+						}
+					}
+				}
+			}
+			isJobTerminal = isJobTerminal && sidecarTerminated
+		}
+
 		if isJobTerminal {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 			if jobInfo.JobStatus == rayv1.JobStatusFailed {
 				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 				reason = rayv1.AppFailed
+			}
+			// If sidecar exited non-zero, mark deployment failed as submission failure.
+			if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && sidecarTerminated && sidecarExitCode != nil && *sidecarExitCode != 0 {
+				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+				reason = rayv1.SubmissionFailed
+				if sidecarMessage != "" {
+					rayJobInstance.Status.Message = fmt.Sprintf("Sidecar exited(code=%d) %s: %s", *sidecarExitCode, sidecarReason, sidecarMessage)
+				} else {
+					rayJobInstance.Status.Message = fmt.Sprintf("Sidecar exited(code=%d) %s", *sidecarExitCode, sidecarReason)
+				}
 			}
 		}
 
@@ -652,7 +690,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
+	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		return true, nil
 	}
 	var isJobDeleted bool
@@ -892,6 +930,29 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, rayCluster, r.Scheme); err != nil {
 		return nil, err
+	}
+
+	// Inject sidecar submitter into the head Pod for SidecarMode
+	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		sidecar := common.GetDefaultSubmitterContainer(rayCluster)
+		// Build command to submit and tail logs
+		cmd, err := common.GetSidecarJobCommand(rayJobInstance)
+		if err != nil {
+			return nil, err
+		}
+		sidecar.Command = utils.GetContainerCommand([]string{"e"})
+		sidecar.Args = []string{strings.Join(cmd, " ")}
+		// Real-time logs + submission ID + local dashboard reachability
+		sidecar.Env = append(sidecar.Env,
+			corev1.EnvVar{Name: PythonUnbufferedEnvVarName, Value: "1"},
+			corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId},
+			corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: "127.0.0.1:8265"},
+		)
+		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
+			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
+		// Ensure the head Pod doesn't restart after sidecar termination
+		// For more details, see https://github.com/ray-project/kuberay/issues/3928#issuecomment-3187164736
+		rayCluster.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
 	return rayCluster, nil
