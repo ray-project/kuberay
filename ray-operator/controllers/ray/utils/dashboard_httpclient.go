@@ -258,9 +258,7 @@ type RayJobLogsResponse struct {
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
-	logger := ctrl.LoggerFrom(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
-	logger.Info("@@@ GetJobInfo", "dashboardURL:", r.dashboardURL, "JobPath:", JobPath, "jobId:", jobId)
 	if err != nil {
 		return nil, err
 	}
