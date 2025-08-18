@@ -3,6 +3,8 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+
+	"k8s.io/klog/v2"
 )
 
 // TemplateReference represents a compute template reference found in the request
@@ -48,6 +50,8 @@ func ExtractComputeTemplateReferences(requestBody []byte, namespace string) ([]T
 	for i := range templates {
 		templates[i].Namespace = namespace
 	}
+
+	klog.Infoln("Templates: ", templates)
 
 	return templates, nil
 }

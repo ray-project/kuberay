@@ -46,6 +46,12 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	mux.Handle("GET /api/v1/namespaces/{namespace}/events", withFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
+
+	// Compute Template middleware
+	ctMiddleware := apiserverutil.NewComputeTemplateMiddleware(k8sClient)
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayclusters", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayclusters/{name}", ctMiddleware(handler))
+
 	requireKubeRayServiceHandler := requireKubeRayService(handler, k8sClient)
 	// Allow accessing KubeRay dashboards and job submissions.
 	// Note: We also register "/proxy" to avoid the trailing slash redirection
