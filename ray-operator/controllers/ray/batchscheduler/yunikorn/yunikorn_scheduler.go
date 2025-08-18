@@ -2,6 +2,7 @@ package yunikorn
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,7 +38,11 @@ func (y *YuniKornScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object client.Object) error {
+	_, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
@@ -59,9 +64,17 @@ func (y *YuniKornScheduler) populatePodLabels(ctx context.Context, app *rayv1.Ra
 	}
 }
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pods
+// AddMetadataToChildResource adds essential labels and annotations to the Ray pods
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, parent client.Object, groupName string, child client.Object) {
+	app, ok := parent.(*rayv1.RayCluster)
+	if !ok {
+		return // currently only RayCluster is supported
+	}
+	pod, ok := child.(*corev1.Pod)
+	if !ok {
+		return // currently only Pod is supported
+	}
 	// the applicationID and queue name must be provided in the labels
 	y.populatePodLabels(ctx, app, pod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
 	y.populatePodLabels(ctx, app, pod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
