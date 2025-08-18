@@ -14,12 +14,12 @@ import (
 
 func TestValidateBatchSchedulerConfig(t *testing.T) {
 	type args struct {
-		logger logr.Logger
 		config Configuration
+		logger logr.Logger
 	}
 	tests := []struct {
-		name    string
 		args    args
+		name    string
 		wantErr bool
 	}{
 		{

@@ -23,10 +23,10 @@ func TestGetSchedulerFactory(t *testing.T) {
 		rayConfigs v1alpha1.Configuration
 	}
 	tests := []struct {
+		args           args
 		want           reflect.Type
 		name           string
 		expectedErrMsg string
-		args           args
 	}{
 		{
 			name: "enableBatchScheduler=false, batchScheduler=''",
