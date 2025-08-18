@@ -174,7 +174,6 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 		sleepDuration := apiserversdkutil.GetRetryBackoff(attempt, rrt.retryCfg.InitBackoff, rrt.retryCfg.BackoffFactor, rrt.retryCfg.MaxBackoff)
 
-		// TODO: merge common utils for apiserver v1 and v2
 		if ok := apiserversdkutil.CheckContextDeadline(ctx, sleepDuration); !ok {
 			return resp, fmt.Errorf("retry timeout exceeded context deadline")
 		}
