@@ -67,6 +67,61 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 	return taskGroups
 }
 
+func newTaskGroupsFromRayJob(app *v1.RayJob) *TaskGroups {
+	taskGroups := newTaskGroups()
+
+	// head group
+	headGroupSpec := app.Spec.RayClusterSpec.HeadGroupSpec
+	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RayNodeHeadGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(headPodMinResource),
+			NodeSelector: headGroupSpec.Template.Spec.NodeSelector,
+			Tolerations:  headGroupSpec.Template.Spec.Tolerations,
+			Affinity:     headGroupSpec.Template.Spec.Affinity,
+		})
+
+	// worker groups
+	for _, workerGroupSpec := range app.Spec.RayClusterSpec.WorkerGroupSpecs {
+		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
+		minWorkers := workerGroupSpec.MinReplicas
+		taskGroups.addTaskGroup(
+			TaskGroup{
+				Name:         workerGroupSpec.GroupName,
+				MinMember:    *minWorkers,
+				MinResource:  utils.ConvertResourceListToMapString(workerMinResource),
+				NodeSelector: workerGroupSpec.Template.Spec.NodeSelector,
+				Tolerations:  workerGroupSpec.Template.Spec.Tolerations,
+				Affinity:     workerGroupSpec.Template.Spec.Affinity,
+			})
+	}
+
+	var submitterGroupSpec corev1.PodSpec
+	if app.Spec.SubmitterPodTemplate != nil {
+		submitterGroupSpec = app.Spec.SubmitterPodTemplate.Spec
+	} else {
+		// Use default submitter template when SubmitterPodTemplate is nil
+		// defaultTemplate := common.GetDefaultSubmitterTemplate()
+		// submitterGroupSpec = defaultTemplate.Spec
+
+		return nil
+	}
+
+	submitterPodMinResource := utils.CalculatePodResource(submitterGroupSpec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RayNodeSubmitterGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(submitterPodMinResource),
+			NodeSelector: submitterGroupSpec.NodeSelector,
+			Tolerations:  submitterGroupSpec.Tolerations,
+			Affinity:     submitterGroupSpec.Affinity,
+		})
+	return taskGroups
+}
+
 func (t *TaskGroups) size() int {
 	return len(t.Groups)
 }

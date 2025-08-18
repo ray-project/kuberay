@@ -7,6 +7,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // BatchScheduler manages submitting RayCluster pods to a third-party scheduler.
@@ -22,6 +24,10 @@ type BatchScheduler interface {
 	// AddMetadataToChildResource enriches child resource with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResource(ctx context.Context, parent client.Object, groupName string, child client.Object)
+
+	// AddMetadataToChildResourceFromRayJob enriches child resource with metadata necessary to tie it to the scheduler.
+	// For example, setting labels for queues / priority, and setting schedulerName.
+	AddMetadataToChildResourceFromRayJob(ctx context.Context, rayjob *rayv1.RayJob, raycluster *rayv1.RayCluster)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -39,6 +45,10 @@ type BatchSchedulerFactory interface {
 }
 
 type DefaultBatchScheduler struct{}
+
+// AddMetadataToChildResourceFromRayJob implements BatchScheduler.
+func (d *DefaultBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster) {
+}
 
 type DefaultBatchSchedulerFactory struct{}
 
