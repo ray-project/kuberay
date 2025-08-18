@@ -1,10 +1,11 @@
 package main
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -14,10 +15,10 @@ import (
 
 func Test_decodeConfig(t *testing.T) {
 	testcases := []struct {
+		expectedConfig configapi.Configuration
 		name           string
 		configData     string
 		errContains    string
-		expectedConfig configapi.Configuration
 		expectErr      bool
 	}{
 		{
@@ -34,6 +35,8 @@ kind: Configuration
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
 			},
 			expectErr: false,
 		},
@@ -55,6 +58,8 @@ reconcileConcurrency: 1
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
 			},
 			expectErr: false,
 		},
@@ -94,6 +99,8 @@ workerSidecarContainers:
 						Image: "fluent/fluent-bit:1.9.6",
 					},
 				},
+				QPS:   ptr.To(configapi.DefaultQPS),
+				Burst: ptr.To(configapi.DefaultBurst),
 			},
 			expectErr: false,
 		},
@@ -116,6 +123,8 @@ unknownfield: 1
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
 			},
 			expectErr: false,
 		},
@@ -137,6 +146,8 @@ reconcileConcurrency: true
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 0,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
 			},
 			expectErr:   true,
 			errContains: "json: cannot unmarshal bool into Go struct field Configuration.reconcileConcurrency of type int",
@@ -154,6 +165,30 @@ reconcileConcurrency: true
 				MetricsAddr:          ":8080",
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
+			},
+			expectErr:   true,
+			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,
+		},
+		{
+			name: "set QPS and Burst",
+			configData: `apiVersion: config.ray.io/v1beta1
+kind: Configuration
+qps: 150
+burst: 300
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: ptr.To(true),
+				ReconcileConcurrency: 1,
+				QPS:                  ptr.To((150.0)),
+				Burst:                ptr.To(300),
 			},
 			expectErr:   true,
 			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,
@@ -181,10 +216,20 @@ reconcileConcurrency: true
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			if !reflect.DeepEqual(config, testcase.expectedConfig) {
-				t.Logf("actual config: %v", config)
-				t.Logf("expected config: %v", testcase.expectedConfig)
-				t.Error("unexpected config")
+			if diff := cmp.Diff(config, testcase.expectedConfig, cmpopts.IgnoreFields(configapi.Configuration{}, "QPS", "Burst")); diff != "" {
+				t.Errorf("unexpected diff: %s", diff)
+			}
+
+			if config.QPS == nil {
+				t.Errorf("unexpected nil QPS")
+			}
+
+			if config.Burst == nil {
+				t.Errorf("unexpected nil QPS")
+			}
+
+			if *config.QPS != *testcase.expectedConfig.QPS || *config.Burst != *testcase.expectedConfig.Burst {
+				t.Errorf("unexpected QPS or Burst values: %v/%v, %v/%v", *config.QPS, *testcase.expectedConfig.QPS, *config.Burst, *testcase.expectedConfig.Burst)
 			}
 		})
 	}
