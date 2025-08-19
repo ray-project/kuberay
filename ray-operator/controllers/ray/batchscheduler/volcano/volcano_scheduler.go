@@ -153,7 +153,7 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	pod.Spec.SchedulerName = v.Name()
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster) {
+func (v *VolcanoBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ *corev1.PodTemplateSpec) {
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {

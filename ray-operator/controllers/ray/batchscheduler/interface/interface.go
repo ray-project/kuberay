@@ -3,6 +3,7 @@ package schedulerinterface
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -27,7 +28,7 @@ type BatchScheduler interface {
 
 	// AddMetadataToChildResourceFromRayJob enriches child resource with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToChildResourceFromRayJob(ctx context.Context, rayjob *rayv1.RayJob, raycluster *rayv1.RayCluster)
+	AddMetadataToChildResourceFromRayJob(ctx context.Context, rayjob *rayv1.RayJob, raycluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -47,7 +48,7 @@ type BatchSchedulerFactory interface {
 type DefaultBatchScheduler struct{}
 
 // AddMetadataToChildResourceFromRayJob implements BatchScheduler.
-func (d *DefaultBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster) {
+func (d *DefaultBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ *corev1.PodTemplateSpec) {
 }
 
 type DefaultBatchSchedulerFactory struct{}

@@ -111,7 +111,7 @@ func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, parent cli
 	pod.Spec.SchedulerName = k.Name()
 }
 
-func (k *KubeScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster) {
+func (k *KubeScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ *corev1.PodTemplateSpec) {
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {

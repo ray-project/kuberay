@@ -560,7 +560,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 			if err != nil {
 				return err
 			}
-			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
+			return r.createNewK8sJob(ctx, rayJobInstance, rayClusterInstance, submitterTemplate)
 		}
 		return err
 	}
@@ -619,11 +619,19 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	submitterBackoffLimit := ptr.To[int32](2)
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
+	}
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToChildResourceFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
+			logger.Info("Check if rayjob have submitter pod template with task groups annotation in rayjob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+		} else {
+			return err
+		}
 	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -866,8 +874,11 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 			if r.options.BatchSchedulerManager != nil {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-					scheduler.AddMetadataToChildResourceFromRayJob(ctx, rayJobInstance, rayClusterInstance)
-					rayJobInstance.Spec.SubmitterPodTemplate.Annotations["123"] = "123"
+					submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
+					if err != nil {
+						return nil, err
+					}
+					scheduler.AddMetadataToChildResourceFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
 					if err := r.Update(ctx, rayJobInstance); err != nil {
 						return nil, err
 					}
