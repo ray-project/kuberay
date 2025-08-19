@@ -68,6 +68,7 @@ func (y *YuniKornScheduler) populatePodLabelsFromRayCluster(_ context.Context, a
 	}
 }
 
+// populateRayClusterLabelsFromRayJob is a helper function that copies RayJob's label to the given RayCluster based on the label key
 func (y *YuniKornScheduler) populateRayClusterLabelsFromRayJob(_ context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, sourceKey string, targetKey string) {
 	if value, exist := rayJob.Labels[sourceKey]; exist {
 		y.logger.Info("Updating RayCluster label based on RayJob labels",
@@ -76,6 +77,8 @@ func (y *YuniKornScheduler) populateRayClusterLabelsFromRayJob(_ context.Context
 	}
 }
 
+// populateSubmitterPodTemplateLabelsFromRayJob adds essential labels and annotations to the Ray pods
+// the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
 func (y *YuniKornScheduler) populateSubmitterPodTemplateLabelsFromRayJob(_ context.Context, rayJob *rayv1.RayJob, submitterTemplate *corev1.PodTemplateSpec, sourceKey string, targetKey string) {
 	if value, exist := rayJob.Labels[sourceKey]; exist {
 		y.logger.Info("Updating submitter pod template label based on RayJob labels",
@@ -112,6 +115,7 @@ func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayJob(ctx context.Con
 	}
 	y.populateSubmitterPodTemplateLabelsFromRayJob(ctx, rayJob, submitterTemplate, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
 	y.populateSubmitterPodTemplateLabelsFromRayJob(ctx, rayJob, submitterTemplate, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	submitterTemplate.Spec.SchedulerName = y.Name()
 
 	// when gang scheduling is enabled, extra annotations need to be added to all pods
 	if y.isGangSchedulingEnabled(rayJob) {
@@ -121,6 +125,7 @@ func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayJob(ctx context.Con
 			return
 		}
 		y.populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(ctx, rayJob, rayCluster, submitterTemplate)
+		submitterTemplate.Annotations[YuniKornTaskGroupNameAnnotationName] = utils.RayNodeSubmitterGroupLabelValue
 		y.logger.Info("Gang Scheduling enabled for RayJob")
 		y.logger.Info("Gang Scheduling enabled for submitter pod template")
 	}

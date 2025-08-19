@@ -101,7 +101,7 @@ func newTaskGroupsFromRayJob(app *v1.RayJob, submitterTemplate *corev1.PodTempla
 
 	var submitterGroupSpec corev1.PodSpec
 	if submitterTemplate == nil {
-		return nil, fmt.Errorf("Submitter template should not be nil when creating task groups from RayJob")
+		return nil, fmt.Errorf("submitter template should not be nil when creating task groups from RayJob")
 	}
 	submitterGroupSpec = submitterTemplate.Spec
 

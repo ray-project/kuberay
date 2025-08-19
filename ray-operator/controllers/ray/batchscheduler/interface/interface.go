@@ -18,7 +18,7 @@ type BatchScheduler interface {
 	// https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
 	Name() string
 
-	// DoBatchSchedulingOnSubmission handles submitting the RayCluster/RayJob/RayService to the batch scheduler on creation / update
+	// DoBatchSchedulingOnSubmission handles submitting the RayCluster/RayJob to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
 	DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error
 
