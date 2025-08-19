@@ -62,8 +62,8 @@ func TestPopulatePodLabels(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			rayCluster := createRayClusterWithLabels(testCase.clusterName, testCase.clusterNameSpace, testCase.clusterLabel)
 			rayPod := createPod(testCase.podName, testCase.clusterNameSpace)
-			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-			yk.populatePodLabels(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, testCase.job), testCase.expectJobLabelResult)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, testCase.queue), testCase.expectQueueLabelResult)
 		})

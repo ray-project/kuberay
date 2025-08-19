@@ -133,21 +133,13 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, parent client.Object, groupName string, child client.Object) {
-	app, ok := parent.(*rayv1.RayCluster)
-	if !ok {
-		return // currently only RayCluster is supported
-	}
-	pod, ok := child.(*corev1.Pod)
-	if !ok {
-		return // currently only Pod is supported
-	}
-	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
+func (v *VolcanoBatchScheduler) AddMetadataToChildResourceFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(rayCluster)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
-	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+	if queue, ok := rayCluster.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
 	}
-	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
+	if priorityClassName, ok := rayCluster.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 	pod.Spec.SchedulerName = v.Name()
