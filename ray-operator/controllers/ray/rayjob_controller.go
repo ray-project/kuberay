@@ -644,6 +644,55 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 	return submitterTemplate, nil
 }
 
+// getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
+func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	var submitterContainer corev1.Container
+
+	// Set the default value for the optional field SubmitterContainer if not provided.
+	if rayJobInstance.Spec.SubmitterContainer == nil {
+		submitterContainer = common.GetDefaultSubmitterContainer(rayClusterInstance)
+		logger.Info("default submitter container is used")
+	} else {
+		submitterContainer = *rayJobInstance.Spec.SubmitterContainer.DeepCopy()
+		logger.Info("user-provided submitter template is used; the first container is assumed to be the submitter")
+	}
+
+	// If the command in the submitter container manifest isn't set, use the default command.
+	if len(submitterContainer.Command) == 0 {
+		sidecarJobCommand, err := common.GetSidecarJobCommand(rayJobInstance)
+		if err != nil {
+			return corev1.Container{}, err
+		}
+		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
+		submitterContainer.Command = utils.GetContainerCommand([]string{"e"})
+		submitterContainer.Args = []string{strings.Join(sidecarJobCommand, " ")}
+		logger.Info("No command is specified in the user-provided manifest. Default command is used", "command", sidecarJobCommand)
+	} else {
+		logger.Info("User-provided command is used", "command", submitterContainer.Command)
+	}
+
+	// Set PYTHONUNBUFFERED=1 for real-time logging
+	submitterContainer.Env = append(submitterContainer.Env, corev1.EnvVar{
+		Name:  PythonUnbufferedEnvVarName,
+		Value: "1",
+	})
+
+	// Users can use `RAY_DASHBOARD_ADDRESS` to specify the dashboard address and `RAY_JOB_SUBMISSION_ID` to specify the job id to avoid
+	// double submission in the `ray job submit` command. For example:
+	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
+	submitterContainer.Env = append(submitterContainer.Env, corev1.EnvVar{
+		Name:  utils.RAY_DASHBOARD_ADDRESS,
+		Value: rayJobInstance.Status.DashboardURL,
+	})
+	submitterContainer.Env = append(submitterContainer.Env, corev1.EnvVar{
+		Name:  utils.RAY_JOB_SUBMISSION_ID,
+		Value: rayJobInstance.Status.JobId,
+	})
+
+	return submitterContainer, nil
+}
+
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
 func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
@@ -887,7 +936,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 
 			logger.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
-			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(ctx, rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -911,7 +960,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	return rayClusterInstance, nil
 }
 
-func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
 	for key, value := range rayJobInstance.Labels {
 		labels[key] = value
@@ -935,20 +984,10 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 
 	// Inject sidecar submitter into the head Pod for SidecarMode
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		sidecar := common.GetDefaultSubmitterContainer(rayCluster)
-		// Build command to submit and tail logs
-		cmd, err := common.GetSidecarJobCommand(rayJobInstance)
+		sidecar, err := getSubmitterContainer(ctx, rayJobInstance, rayCluster)
 		if err != nil {
 			return nil, err
 		}
-		sidecar.Command = utils.GetContainerCommand([]string{"e"})
-		sidecar.Args = []string{strings.Join(cmd, " ")}
-		// Real-time logs + submission ID + local dashboard reachability
-		sidecar.Env = append(sidecar.Env,
-			corev1.EnvVar{Name: PythonUnbufferedEnvVarName, Value: "1"},
-			corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId},
-			corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: "127.0.0.1:8265"},
-		)
 		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
 			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
 		// Ensure the head Pod doesn't restart after sidecar termination

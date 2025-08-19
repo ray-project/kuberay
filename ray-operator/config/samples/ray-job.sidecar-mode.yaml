@@ -96,28 +96,30 @@ spec:
               requests:
                 cpu: "200m"
 
-# submitterContainer:
-#   spec:
-#     restartPolicy: Never
-#     containers:
-#     - name: my-custom-rayjob-submitter-container
-#       image: rayproject/ray:2.46.0
-# If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
-# Specifying Command is not recommended.
-# command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
-
-# SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
-# If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
-# submitterPodTemplate:
-#   spec:
-#     restartPolicy: Never
-#     containers:
-#     - name: my-custom-rayjob-submitter-pod
-#       image: rayproject/ray:2.46.0
-# If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
-# Specifying Command is not recommended.
-# command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
-
+  # SubmitterContainer is the template for the container that will run the `ray job submit` command against the RayCluster.
+  # If SubmitterContainer is specified, the first container is assumed to be the submitter container.
+  # submitterContainer:
+  #   name: ray-job-submitter
+  #   image: rayproject/ray:2.46.0
+  #   command: ["/bin/bash", "-ce", "--"]
+  #   args:
+  #     - |
+  #       until ray job list --address http://127.0.0.1:8265 >/dev/null 2>&1; do
+  #         echo "Waiting for Ray dashboard at http://127.0.0.1:8265 ..."
+  #         sleep 2
+  #       done
+  #       if ! ray job status --address http://127.0.0.1:8265 $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1; then
+  #         ray job submit \
+  #           --address http://127.0.0.1:8265 \
+  #           --no-wait \
+  #           --runtime-env-json '{"env_vars":{"counter_name":"test_counter"},"pip":["requests==2.26.0","pendulum==2.1.2"]}' \
+  #           --submission-id $RAY_JOB_SUBMISSION_ID \
+  #           -- python /home/ray/samples/sample_code.py
+  #       fi
+  #       ray job logs --address http://127.0.0.1:8265 --follow $RAY_JOB_SUBMISSION_ID
+  # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
+  # Specifying Command is not recommended.
+  # command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
 
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
