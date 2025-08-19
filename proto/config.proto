@@ -121,7 +121,7 @@ message ComputeTemplate {
   // Required. Number of cpus
   uint32 cpu = 3 [(google.api.field_behavior) = REQUIRED];
   // Required. Number of memory
-  uint32 memory = 4 [(google.api.field_behavior) = REQUIRED];
+  float memory = 4 [(google.api.field_behavior) = REQUIRED];
   // Optional. Number of gpus
   uint32 gpu = 5;
   // Optional. The detail gpu accelerator type
