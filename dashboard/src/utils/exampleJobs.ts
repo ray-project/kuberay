@@ -1,4 +1,4 @@
-let jobs = [
+const jobs = [
   {
     name: "	Embedding all of Roblox's data",
     namespace: "ray-system",

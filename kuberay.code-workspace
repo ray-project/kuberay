@@ -14,7 +14,16 @@
 		},
 		{
 			"path": "proto"
-		}
+		},
+		{
+			"path": "dashboard"
+		},
 	],
-	"settings": {}
+	"settings": {
+		"eslint.workingDirectories": [
+			{
+				"directory": "./dashboard"
+			}
+		]
+	}
 }

@@ -7,12 +7,12 @@ import NextLink from "next/link";
 import { useEffect } from "react";
 
 export default function JobsPage() {
-  const { firstVisit, setFirstVisit} = useFirstVisit();
+  const { firstVisit, setFirstVisit } = useFirstVisit();
   useEffect(() => {
     if (firstVisit) {
       setFirstVisit(false);
     }
-  }, [])
+  }, [firstVisit, setFirstVisit])
   return (
     <>
       <Box

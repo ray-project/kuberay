@@ -29,7 +29,7 @@ const HomePage = () => {
     if (firstVisit) {
       router.push("/jobs");
     }
-  }, [])
+  }, [firstVisit, router])
 
   return (
     <>

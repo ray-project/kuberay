@@ -15,7 +15,7 @@ export default function ClustersPage() {
     if (firstVisit) {
       setFirstVisit(false);
     }
-  }, [])
+  }, [firstVisit, setFirstVisit])
   return (
     <>
       <Box

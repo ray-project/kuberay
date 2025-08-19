@@ -41,6 +41,6 @@ export const ResourceQuotaAlert: React.FC<ResourceQuotaAlertProps> = ({
         );
       }
     }
-  }, [jobs]);
+  }, [jobs, showedAlert, snackBar]);
   return null;
 };

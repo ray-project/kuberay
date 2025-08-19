@@ -6,7 +6,7 @@ import React from "react";
 
 // ClearableSelect is a single select component that offers a clear button
 export default function ClearableSelect<
-  OptionValue extends {},
+  OptionValue extends object,
   D extends React.ElementType = "button"
 >(props: SelectProps<OptionValue, false, D>) {
   const action: SelectStaticProps["action"] = React.useRef(null);
