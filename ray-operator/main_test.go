@@ -15,10 +15,10 @@ import (
 
 func Test_decodeConfig(t *testing.T) {
 	testcases := []struct {
-		expectedConfig configapi.Configuration
 		name           string
 		configData     string
 		errContains    string
+		expectedConfig configapi.Configuration
 		expectErr      bool
 	}{
 		{

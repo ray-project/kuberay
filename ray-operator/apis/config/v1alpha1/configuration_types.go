@@ -12,25 +12,26 @@ import (
 
 // Configuration is the Schema for Ray operator config.
 type Configuration struct {
-	metav1.TypeMeta `json:",inline"`
+	// Burst allows temporary exceeding of QPS limit for handling request spikes.
+	// Default: 200
+	Burst *int `json:"burst,omitempty"`
 
-	// MetricsAddr is the address the metrics endpoint binds to.
-	MetricsAddr string `json:"metricsAddr,omitempty"`
-
-	// ProbeAddr is the address the probe endpoint binds to.
-	ProbeAddr string `json:"probeAddr,omitempty"`
+	// QPS controls the maximum requests per second to the Kubernetes API server.
+	// Default: 100.0
+	QPS *float64 `json:"qps,omitempty"`
 
 	// EnableLeaderElection enables leader election. Enabling this will ensure
 	// there is only one active instance of the operator.
 	EnableLeaderElection *bool `json:"enableLeaderElection,omitempty"`
 
-	// LeaderElectionNamespace is the namespace where the leader election
-	// resources live. Defaults to the pod namesapce if not set.
-	LeaderElectionNamespace string `json:"leaderElectionNamespace,omitempty"`
+	metav1.TypeMeta `json:",inline"`
 
-	// WatchNamespace specifies a list of namespaces to watch for custom resources, separated by commas.
-	// If empty, all namespaces will be watched.
-	WatchNamespace string `json:"watchNamespace,omitempty"`
+	// LogStdoutEncoder is the encoder to use when logging to stdout. Valid values are "json" and "console".
+	// Defaults to `json` if empty.
+	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
+
+	// ProbeAddr is the address the probe endpoint binds to.
+	ProbeAddr string `json:"probeAddr,omitempty"`
 
 	// LogFile is a path to a local file for synchronizing logs.
 	LogFile string `json:"logFile,omitempty"`
@@ -39,21 +40,28 @@ type Configuration struct {
 	// Defaults to `json` if empty.
 	LogFileEncoder string `json:"logFileEncoder,omitempty"`
 
-	// LogFileEncoder is the encoder to use when logging to a file. Valid values are "json" and "console".
-	// Defaults to `json` if empty.
-	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
+	// LeaderElectionNamespace is the namespace where the leader election
+	// resources live. Defaults to the pod namesapce if not set.
+	LeaderElectionNamespace string `json:"leaderElectionNamespace,omitempty"`
 
 	// BatchScheduler enables the batch scheduler integration with a specific scheduler
 	// based on the given name, currently, supported values are volcano, yunikorn, kai-scheduler.
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
-	// HeadSidecarContainers includes specification for a sidecar container
-	// to inject into every Head pod.
-	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
+	// MetricsAddr is the address the metrics endpoint binds to.
+	MetricsAddr string `json:"metricsAddr,omitempty"`
+
+	// WatchNamespace specifies a list of namespaces to watch for custom resources, separated by commas.
+	// If empty, all namespaces will be watched.
+	WatchNamespace string `json:"watchNamespace,omitempty"`
 
 	// WorkerSidecarContainers includes specification for a sidecar container
 	// to inject into every Worker pod.
 	WorkerSidecarContainers []corev1.Container `json:"workerSidecarContainers,omitempty"`
+
+	// HeadSidecarContainers includes specification for a sidecar container
+	// to inject into every Head pod.
+	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
 
 	// ReconcileConcurrency is the max concurrency for each reconciler.
 	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
@@ -73,10 +81,6 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
-
-	QPS *float64 `json:"qps,omitempty"`
-
-	Burst *int `json:"burst,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
