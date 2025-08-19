@@ -9,7 +9,7 @@ spec:
   submissionMode: "SidecarMode"
   entrypoint: python /home/ray/samples/sample_code.py
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
-  shutdownAfterJobFinishes: true
+  # shutdownAfterJobFinishes: false
 
   # ttlSecondsAfterFinished specifies the number of seconds after which the RayCluster will be deleted after the RayJob finishes.
   # ttlSecondsAfterFinished: 10
