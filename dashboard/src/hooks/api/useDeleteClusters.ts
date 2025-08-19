@@ -31,20 +31,20 @@ export const useDeleteClusters = () => {
       await mutate(
         `/namespaces/${namespace}/clusters`,
         Promise.all(
-          clusters.map((clusterName) => _deleteCluster(namespace, clusterName))
+          clusters.map((clusterName) => _deleteCluster(namespace, clusterName)),
         ),
-        { populateCache: false }
+        { populateCache: false },
       );
       snackBar.showSnackBar(
         `${clusters.length} cluster${clusters.length > 1 ? "s" : ""} deleted`,
         `Deleted ${clusters.join(", ")}`,
-        "success"
+        "success",
       );
     } catch (err) {
       snackBar.showSnackBar(
         "Failed to delete clusters",
         "Error: " + err,
-        "danger"
+        "danger",
       );
     }
     setDeleting(false);

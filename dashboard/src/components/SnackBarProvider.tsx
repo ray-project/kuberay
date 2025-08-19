@@ -12,7 +12,7 @@ type SnackBarContextActions = {
   showSnackBar: (
     title: string,
     message: React.ReactNode,
-    type: SnackBarTypes
+    type: SnackBarTypes,
   ) => void;
 };
 
@@ -33,7 +33,7 @@ const SnackBarProvider: React.FC<SnackBarContextProviderProps> = ({
   const showSnackBar = (
     title: string,
     message: React.ReactNode,
-    type: SnackBarTypes
+    type: SnackBarTypes,
   ) => {
     setMessage(message);
     setTitle(title);
@@ -43,7 +43,7 @@ const SnackBarProvider: React.FC<SnackBarContextProviderProps> = ({
 
   const handleClose = (
     event: Event | React.SyntheticEvent<any, Event> | null,
-    reason: SnackbarCloseReason
+    reason: SnackbarCloseReason,
   ) => {
     // Don't allow click away if it's a danger message
     if (reason === "clickaway" && type === "danger") {

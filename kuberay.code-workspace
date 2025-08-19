@@ -19,11 +19,5 @@
 			"path": "dashboard"
 		},
 	],
-	"settings": {
-		"eslint.workingDirectories": [
-			{
-				"directory": "./dashboard"
-			}
-		]
-	}
+	"settings": {}
 }

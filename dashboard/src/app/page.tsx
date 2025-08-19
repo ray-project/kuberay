@@ -29,7 +29,7 @@ const HomePage = () => {
     if (firstVisit) {
       router.push("/jobs");
     }
-  }, [firstVisit, router])
+  }, [firstVisit, router]);
 
   return (
     <>
@@ -136,18 +136,10 @@ const HomePage = () => {
             </Link>
           </Box>
           <Box display="flex" gap={3} my={2}>
-            <Link
-              color="neutral"
-              borderRadius="sm"
-              target="_blank"
-            >
+            <Link color="neutral" borderRadius="sm" target="_blank">
               Ray API Walkthrough
             </Link>
-            <Link
-              color="neutral"
-              borderRadius="sm"
-              target="_blank"
-            >
+            <Link color="neutral" borderRadius="sm" target="_blank">
               Multimodal Batch API Walkthrough
             </Link>
           </Box>

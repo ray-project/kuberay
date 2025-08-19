@@ -12,7 +12,7 @@ export default function JobsPage() {
     if (firstVisit) {
       setFirstVisit(false);
     }
-  }, [firstVisit, setFirstVisit])
+  }, [firstVisit, setFirstVisit]);
   return (
     <>
       <Box
