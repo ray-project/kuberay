@@ -1,11 +1,10 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -216,20 +215,10 @@ burst: 300
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			if diff := cmp.Diff(config, testcase.expectedConfig, cmpopts.IgnoreFields(configapi.Configuration{}, "QPS", "Burst")); diff != "" {
-				t.Errorf("unexpected diff: %s", diff)
-			}
-
-			if config.QPS == nil {
-				t.Errorf("unexpected nil QPS")
-			}
-
-			if config.Burst == nil {
-				t.Errorf("unexpected nil QPS")
-			}
-
-			if *config.QPS != *testcase.expectedConfig.QPS || *config.Burst != *testcase.expectedConfig.Burst {
-				t.Errorf("unexpected QPS or Burst values: %v/%v, %v/%v", *config.QPS, *testcase.expectedConfig.QPS, *config.Burst, *testcase.expectedConfig.Burst)
+			if !reflect.DeepEqual(config, testcase.expectedConfig) {
+				t.Logf("actual config: %v", config)
+				t.Logf("expected config: %v", testcase.expectedConfig)
+				t.Error("unexpected config")
 			}
 		})
 	}
