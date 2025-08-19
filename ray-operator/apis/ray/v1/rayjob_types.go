@@ -137,6 +137,11 @@ type RayJobSpec struct {
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
 	// +optional
 	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	// SubmitterContainer is the container that will run `ray job submit` in the SidecarMode.
+	// It's restart policy is always Never.
+	// For more details, see https://github.com/ray-project/kuberay/issues/3928#issuecomment-3187164736
+	// +optional
+	SubmitterContainer *corev1.Container `json:"submitterContainer,omitempty"`
 	// Metadata is data to store along with this job.
 	// +optional
 	Metadata map[string]string `json:"metadata,omitempty"`

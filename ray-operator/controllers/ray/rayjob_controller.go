@@ -689,10 +689,11 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	logger := ctrl.LoggerFrom(ctx)
 	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		return true, nil
 	}
+
+	logger := ctrl.LoggerFrom(ctx)
 	var isJobDeleted bool
 
 	// Since the name of the Kubernetes Job is the same as the RayJob, we need to delete the Kubernetes Job

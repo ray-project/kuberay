@@ -4,6 +4,7 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	apicorev1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
@@ -14,6 +15,7 @@ type RayJobSpecApplyConfiguration struct {
 	BackoffLimit             *int32                                    `json:"backoffLimit,omitempty"`
 	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
 	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	SubmitterContainer       *apicorev1.Container                      `json:"submitterContainer,omitempty"`
 	Metadata                 map[string]string                         `json:"metadata,omitempty"`
 	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
 	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
@@ -66,6 +68,14 @@ func (b *RayJobSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecA
 // If called multiple times, the SubmitterPodTemplate field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
 	b.SubmitterPodTemplate = value
+	return b
+}
+
+// WithSubmitterContainer sets the SubmitterContainer field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmitterContainer field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSubmitterContainer(value apicorev1.Container) *RayJobSpecApplyConfiguration {
+	b.SubmitterContainer = &value
 	return b
 }
 

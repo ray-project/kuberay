@@ -454,6 +454,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(corev1.PodTemplateSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.SubmitterContainer != nil {
+		in, out := &in.SubmitterContainer, &out.SubmitterContainer
+		*out = new(corev1.Container)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Metadata != nil {
 		in, out := &in.Metadata, &out.Metadata
 		*out = make(map[string]string, len(*in))

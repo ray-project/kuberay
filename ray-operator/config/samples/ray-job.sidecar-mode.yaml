@@ -96,17 +96,27 @@ spec:
               requests:
                 cpu: "200m"
 
-  # SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
-  # If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
-  # submitterPodTemplate:
-  #   spec:
-  #     restartPolicy: Never
-  #     containers:
-  #     - name: my-custom-rayjob-submitter-pod
-  #       image: rayproject/ray:2.46.0
-  #       # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
-  #       # Specifying Command is not recommended.
-  #       # command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
+# submitterContainer:
+#   spec:
+#     restartPolicy: Never
+#     containers:
+#     - name: my-custom-rayjob-submitter-container
+#       image: rayproject/ray:2.46.0
+# If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
+# Specifying Command is not recommended.
+# command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
+
+# SubmitterPodTemplate is the template for the pod that will run the `ray job submit` command against the RayCluster.
+# If SubmitterPodTemplate is specified, the first container is assumed to be the submitter container.
+# submitterPodTemplate:
+#   spec:
+#     restartPolicy: Never
+#     containers:
+#     - name: my-custom-rayjob-submitter-pod
+#       image: rayproject/ray:2.46.0
+# If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
+# Specifying Command is not recommended.
+# command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
 
 
 ######################Ray code sample#################################
