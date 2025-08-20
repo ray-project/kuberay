@@ -219,10 +219,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Info("RayCluster is created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
 		}
 
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-			logger.Info("RayCluster is created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
-		}
-
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
 		// Try to get the Ray job id from rayJob.Spec.JobId
