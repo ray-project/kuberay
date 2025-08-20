@@ -32,9 +32,17 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			}
 			defer r.Body.Close()
 
-			// Convert request body to api.ClusterSpec
-			clusterSpec, err := convertRequestBodyToClusterSpec(bodyBytes)
-			klog.Infoln("Cluster Spec extracted: ", clusterSpec)
+			// Convert request body to Golang Map object
+			requestMap, err := convertRequestBodyToMap(bodyBytes)
+			if err != nil {
+				http.Error(w, "Failed to convert request body to Golang map object", http.StatusBadRequest)
+				return
+			}
+			klog.Infoln("Request Map: ", requestMap)
+
+			// Convert Map to ClusterSpec
+			clusterSpec, err := extractClusterSpec(requestMap)
+			klog.Infof("Cluster Spec extracted: %v\n", clusterSpec)
 			if err != nil {
 				klog.Errorf("Failed to convert request body to ClusterSpec: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -46,32 +54,35 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			resourceManager := manager.NewResourceManager(&clientManager)
 
 			// Use PopulateComputeTemplate to extract and fetch compute templates
-			computeTemplates, err := resourceManager.PopulateComputeTemplate(context.Background(), clusterSpec, namespace)
+			computeTemplateMap, err := resourceManager.PopulateComputeTemplate(context.Background(), clusterSpec, namespace)
 			if err != nil {
 				klog.Errorf("Failed to populate compute templates: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			// TODO: modify the resources based on the ClusterTemplate
+			klog.Infoln("Compute Templates: ", computeTemplateMap)
 
-			klog.Infof("Successfully extracted and fetched compute templates: %v", computeTemplates)
-
-			// Restore request body and continue
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-// convertRequestBodyToClusterSpec converts YAML/JSON request body to api.ClusterSpec
-func convertRequestBodyToClusterSpec(requestBody []byte) (*api.ClusterSpec, error) {
-	// Extract the spec section
-	var kubeObj map[string]interface{}
-	if err := yaml.Unmarshal(requestBody, &kubeObj); err != nil {
+// Convert the request body to map
+func convertRequestBodyToMap(requestBody []byte) (map[string]any, error) {
+	var requestMap map[string]interface{}
+	if err := yaml.Unmarshal(requestBody, &requestMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal Kubernetes object: %w", err)
 	}
-	specData, ok := kubeObj["spec"]
+
+	return requestMap, nil
+}
+
+// Convert request map into api.ClusterSpec
+func extractClusterSpec(requestMap map[string]any) (*api.ClusterSpec, error) {
+	// Extract the spec section
+	specData, ok := requestMap["spec"]
 	if !ok {
 		return nil, fmt.Errorf("no spec found in request body")
 	}
