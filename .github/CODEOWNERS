@@ -5,7 +5,8 @@
 # see https://git-scm.com/docs/gitignore#_pattern_format.
 
 # ==== CRD ====
-/ray-operator/apis/ @kevin85421
+# For API changes, please make sure the stake holders are aware of the changes.
+/ray-operator/apis/ @kevin85421 @andrewsykim @rueian
 
 # ==== Ray operator ====
 /ray-operator/controllers/ray/ @kevin85421 @andrewsykim @rueian @MortalHappiness
