@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -16,7 +16,88 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-func TestPopulatePodLabels(t *testing.T) {
+func TestIsGangSchedulingEnabled(t *testing.T) {
+	yk := &YuniKornScheduler{}
+
+	// Test RayCluster
+	appID := "job-1-01234"
+	queue := "root.default"
+	rayCluster1 := createRayClusterWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test1",
+		map[string]string{
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
+			utils.RayClusterGangSchedulingEnabled: "true",
+		},
+	)
+
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster1))
+
+	rayCluster2 := createRayClusterWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test2",
+		map[string]string{
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
+			utils.RayClusterGangSchedulingEnabled: "",
+		},
+	)
+
+	assert.True(t, yk.isGangSchedulingEnabled(rayCluster2))
+
+	rayCluster3 := createRayClusterWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test3",
+		map[string]string{
+			RayApplicationIDLabelName:    appID,
+			RayApplicationQueueLabelName: queue,
+		},
+	)
+
+	assert.False(t, yk.isGangSchedulingEnabled(rayCluster3))
+
+	// Test RayJob
+	rayJob1 := createRayJobWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test1",
+		nil,
+		map[string]string{
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
+			utils.RayClusterGangSchedulingEnabled: "true",
+		},
+	)
+
+	assert.True(t, yk.isGangSchedulingEnabled(rayJob1))
+
+	rayJob2 := createRayJobWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test2",
+		nil,
+		map[string]string{
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
+			utils.RayClusterGangSchedulingEnabled: "",
+		},
+	)
+
+	assert.True(t, yk.isGangSchedulingEnabled(rayJob2))
+
+	rayJob3 := createRayJobWithLabels(
+		"ray-cluster-with-gang-scheduling",
+		"test3",
+		nil,
+		map[string]string{
+			RayApplicationIDLabelName:    appID,
+			RayApplicationQueueLabelName: queue,
+		},
+	)
+
+	assert.False(t, yk.isGangSchedulingEnabled(rayJob3))
+}
+
+func TestPopulatePodLabelsFromRayCluster(t *testing.T) {
 	yk := &YuniKornScheduler{}
 	ctx := context.Background()
 
@@ -38,8 +119,8 @@ func TestPopulatePodLabels(t *testing.T) {
 			clusterName:      "ray-cluster-with-labels",
 			clusterNameSpace: "test",
 			clusterLabel: map[string]string{
-				RayClusterApplicationIDLabelName: "job-1-01234",
-				RayClusterQueueLabelName:         "root.default",
+				RayApplicationIDLabelName:    "job-1-01234",
+				RayApplicationQueueLabelName: "root.default",
 			},
 			podName:                "my-pod-1",
 			expectJobLabelResult:   true,
@@ -62,69 +143,73 @@ func TestPopulatePodLabels(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			rayCluster := createRayClusterWithLabels(testCase.clusterName, testCase.clusterNameSpace, testCase.clusterLabel)
 			rayPod := createPod(testCase.podName, testCase.clusterNameSpace)
-			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+			yk.populatePodLabelsFromRayCluster(ctx, rayCluster, rayPod, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodApplicationIDLabelName, testCase.job), testCase.expectJobLabelResult)
 			assert.Equal(t, podLabelsContains(rayPod, YuniKornPodQueueLabelName, testCase.queue), testCase.expectQueueLabelResult)
 		})
 	}
 }
 
-func TestIsGangSchedulingEnabled(t *testing.T) {
-	yk := &YuniKornScheduler{}
-
-	job1 := "job-1-01234"
-	queue1 := "root.default"
-	rayCluster1 := createRayClusterWithLabels(
-		"ray-cluster-with-gang-scheduling",
-		"test1",
-		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
-			utils.RayClusterGangSchedulingEnabled: "true",
-		},
-	)
-
-	assert.True(t, yk.isGangSchedulingEnabled(rayCluster1))
-
-	rayCluster2 := createRayClusterWithLabels(
-		"ray-cluster-with-gang-scheduling",
-		"test2",
-		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
-			utils.RayClusterGangSchedulingEnabled: "",
-		},
-	)
-
-	assert.True(t, yk.isGangSchedulingEnabled(rayCluster2))
-
-	rayCluster3 := createRayClusterWithLabels(
-		"ray-cluster-with-gang-scheduling",
-		"test3",
-		map[string]string{
-			RayClusterApplicationIDLabelName: job1,
-			RayClusterQueueLabelName:         queue1,
-		},
-	)
-
-	assert.False(t, yk.isGangSchedulingEnabled(rayCluster3))
-}
-
-func TestPopulateGangSchedulingAnnotations(t *testing.T) {
+func TestPopulateRayClusterLabelsFromRayJob(t *testing.T) {
 	yk := &YuniKornScheduler{}
 	ctx := context.Background()
 
-	job1 := "job-1-01234"
-	queue1 := "root.default"
+	testCases := []struct {
+		RayJobLabel            map[string]string
+		name                   string
+		RayJobName             string
+		RayJobNamespace        string
+		expectJobLabelResult   bool
+		expectQueueLabelResult bool
+	}{
+		{
+			name:            "Ray Job CR has labels defined",
+			RayJobName:      "ray-job-1",
+			RayJobNamespace: "test",
+			RayJobLabel: map[string]string{
+				RayApplicationIDLabelName:    "job-1-01234",
+				RayApplicationQueueLabelName: "root.default",
+			},
+			expectJobLabelResult:   true,
+			expectQueueLabelResult: true,
+		},
+		{
+			name:                   "Ray Job CR has nothing. In this case, the pod will not be populated with the required labels",
+			RayJobName:             "ray-job-2",
+			RayJobNamespace:        "test1",
+			RayJobLabel:            nil,
+			expectJobLabelResult:   false,
+			expectQueueLabelResult: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			rayJob := createRayJobWithLabels(testCase.RayJobName, testCase.RayJobNamespace, nil, testCase.RayJobLabel)
+			rayCluster := createRayClusterWithLabels(testCase.name, testCase.RayJobNamespace, map[string]string{})
+			yk.populateRayClusterLabelsFromRayJob(ctx, rayJob, rayCluster, RayApplicationIDLabelName, RayApplicationIDLabelName)
+			yk.populateRayClusterLabelsFromRayJob(ctx, rayJob, rayCluster, RayApplicationQueueLabelName, RayApplicationQueueLabelName)
+			assert.Equal(t, rayCluster.Labels[RayApplicationIDLabelName], testCase.RayJobLabel[RayApplicationIDLabelName])
+			assert.Equal(t, rayCluster.Labels[RayApplicationQueueLabelName], testCase.RayJobLabel[RayApplicationQueueLabelName])
+		})
+	}
+}
+
+func TestPopulateTaskGroupsAnnotationToPod(t *testing.T) {
+	yk := &YuniKornScheduler{}
+	ctx := context.Background()
+
+	appID := "job-1-01234"
+	queue := "root.default"
 
 	// test the case when gang-scheduling is enabled
 	rayClusterWithGangScheduling := createRayClusterWithLabels(
 		"ray-cluster-with-gang-scheduling",
-		"test3",
+		"test-namespace",
 		map[string]string{
-			RayClusterApplicationIDLabelName:      job1,
-			RayClusterQueueLabelName:              queue1,
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
 			utils.RayClusterGangSchedulingEnabled: "true",
 		},
 	)
@@ -132,9 +217,9 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	// head pod:
 	//   cpu: 5
 	//   memory: 5Gi
-	addHeadPodSpec(rayClusterWithGangScheduling, v1.ResourceList{
-		v1.ResourceCPU:    resource.MustParse("5"),
-		v1.ResourceMemory: resource.MustParse("5Gi"),
+	addHeadPodSpec(rayClusterWithGangScheduling, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("5"),
+		corev1.ResourceMemory: resource.MustParse("5Gi"),
 	})
 
 	// worker pod:
@@ -142,10 +227,10 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	//   memory: 10Gi
 	//   nvidia.com/gpu: 1
 	addWorkerPodSpec(rayClusterWithGangScheduling,
-		"worker-group-1", 1, 1, 2, v1.ResourceList{
-			v1.ResourceCPU:    resource.MustParse("2"),
-			v1.ResourceMemory: resource.MustParse("10Gi"),
-			"nvidia.com/gpu":  resource.MustParse("1"),
+		"worker-group-1", 1, 1, 2, corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("10Gi"),
+			"nvidia.com/gpu":      resource.MustParse("1"),
 		})
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
@@ -154,7 +239,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 
 	kk, err := getTaskGroupsFromAnnotation(rayPod)
 	require.NoError(t, err)
-	assert.Len(t, kk, 2)
+	assert.Len(t, kk, 2) // 1 head group, 1 worker group
 	// verify the annotation value
 	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
 	assert.NotEmpty(t, taskGroupsSpec)
@@ -167,16 +252,116 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	headGroup := taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)
 	assert.NotNil(t, headGroup)
 	assert.Equal(t, int32(1), headGroup.MinMember)
-	assert.Equal(t, resource.MustParse("5"), headGroup.MinResource[v1.ResourceCPU.String()])
-	assert.Equal(t, resource.MustParse("5Gi"), headGroup.MinResource[v1.ResourceMemory.String()])
+	assert.Equal(t, resource.MustParse("5"), headGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("5Gi"), headGroup.MinResource[corev1.ResourceMemory.String()])
 
 	// verify the correctness of worker group
 	workerGroup := taskGroups.getTaskGroup("worker-group-1")
 	assert.NotNil(t, workerGroup)
 	assert.Equal(t, int32(1), workerGroup.MinMember)
-	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[v1.ResourceCPU.String()])
-	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[v1.ResourceMemory.String()])
+	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[corev1.ResourceMemory.String()])
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
+}
+
+func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *testing.T) {
+	yk := &YuniKornScheduler{}
+	ctx := context.Background()
+
+	appID := "job-1-01234"
+	queue := "root.default"
+
+	rayCluster := createRayClusterWithLabels(
+		"ray-job-with-gang-scheduling",
+		"test-namespace",
+		map[string]string{},
+	)
+
+	addHeadPodSpec(rayCluster, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("5"),
+		corev1.ResourceMemory: resource.MustParse("5Gi"),
+	})
+
+	addWorkerPodSpec(rayCluster, "worker-group-1", 1, 1, 2, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("2"),
+		corev1.ResourceMemory: resource.MustParse("10Gi"),
+	})
+
+	rayJobWithGangScheduling := createRayJobWithLabels(
+		"ray-job-with-gang-scheduling",
+		"test-namespace",
+		rayCluster.Spec.DeepCopy(),
+		map[string]string{
+			RayApplicationIDLabelName:             appID,
+			RayApplicationQueueLabelName:          queue,
+			utils.RayClusterGangSchedulingEnabled: "true",
+		},
+	)
+
+	submitterPodTemplate := createSubmitterPodTemplate()
+	rayJobWithGangScheduling.Spec.SubmitterPodTemplate = submitterPodTemplate
+
+	yk.populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(ctx, rayJobWithGangScheduling, rayCluster, submitterPodTemplate)
+
+	// verify the correctness of rayCluster
+	kk, err := getTaskGroupsFromRayCluster(rayCluster)
+	require.NoError(t, err)
+	assert.Len(t, kk, 3) // 1 head group, 1 worker group, 1 submitter group
+	// verify the annotation value
+	taskGroupsSpec := rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]
+	assert.NotEmpty(t, taskGroupsSpec)
+	taskGroups := newTaskGroups()
+	err = taskGroups.unmarshalFrom(taskGroupsSpec)
+	require.NoError(t, err)
+	assert.Len(t, taskGroups.Groups, 3)
+
+	headGroup := taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)
+	assert.NotNil(t, headGroup)
+	assert.Equal(t, int32(1), headGroup.MinMember)
+	assert.Equal(t, resource.MustParse("5"), headGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("5Gi"), headGroup.MinResource[corev1.ResourceMemory.String()])
+
+	workerGroup := taskGroups.getTaskGroup("worker-group-1")
+	assert.NotNil(t, workerGroup)
+	assert.Equal(t, int32(1), workerGroup.MinMember)
+	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[corev1.ResourceMemory.String()])
+
+	submitterGroup := taskGroups.getTaskGroup(utils.RayNodeSubmitterGroupLabelValue)
+	assert.NotNil(t, submitterGroup)
+	assert.Equal(t, int32(1), submitterGroup.MinMember)
+	assert.Equal(t, resource.MustParse("1"), submitterGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("1Gi"), submitterGroup.MinResource[corev1.ResourceMemory.String()])
+
+	// verify the correctness of submitter pod template
+	kk, err = getTaskGroupsFromPodTemplate(submitterPodTemplate)
+	require.NoError(t, err)
+	assert.Len(t, kk, 3) // 1 head group, 1 worker group, 1 submitter group
+	// verify the annotation value
+	taskGroupsSpec = submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName]
+	assert.NotEmpty(t, taskGroupsSpec)
+	taskGroups = newTaskGroups()
+	err = taskGroups.unmarshalFrom(taskGroupsSpec)
+	require.NoError(t, err)
+	assert.Len(t, taskGroups.Groups, 3)
+
+	headGroup = taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)
+	assert.NotNil(t, headGroup)
+	assert.Equal(t, int32(1), headGroup.MinMember)
+	assert.Equal(t, resource.MustParse("5"), headGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("5Gi"), headGroup.MinResource[corev1.ResourceMemory.String()])
+
+	workerGroup = taskGroups.getTaskGroup("worker-group-1")
+	assert.NotNil(t, workerGroup)
+	assert.Equal(t, int32(1), workerGroup.MinMember)
+	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[corev1.ResourceMemory.String()])
+
+	submitterGroup = taskGroups.getTaskGroup(utils.RayNodeSubmitterGroupLabelValue)
+	assert.NotNil(t, submitterGroup)
+	assert.Equal(t, int32(1), submitterGroup.MinMember)
+	assert.Equal(t, resource.MustParse("1"), submitterGroup.MinResource[corev1.ResourceCPU.String()])
+	assert.Equal(t, resource.MustParse("1Gi"), submitterGroup.MinResource[corev1.ResourceMemory.String()])
 }
 
 func createRayClusterWithLabels(name string, namespace string, labels map[string]string) *rayv1.RayCluster {
@@ -191,13 +376,28 @@ func createRayClusterWithLabels(name string, namespace string, labels map[string
 	return rayCluster
 }
 
-func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
+func createRayJobWithLabels(name string, namespace string, rayClusterSpec *rayv1.RayClusterSpec, labels map[string]string) *rayv1.RayJob {
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: rayClusterSpec,
+		},
+	}
+
+	return rayJob
+}
+
+func addHeadPodSpec(app *rayv1.RayCluster, resource corev1.ResourceList) {
 	// app.Spec.HeadGroupSpec.Template.Spec.Containers
-	headContainers := []v1.Container{
+	headContainers := []corev1.Container{
 		{
 			Name:  "head-pod",
 			Image: "ray.io/ray-head:latest",
-			Resources: v1.ResourceRequirements{
+			Resources: corev1.ResourceRequirements{
 				Limits:   nil,
 				Requests: resource,
 			},
@@ -208,13 +408,13 @@ func addHeadPodSpec(app *rayv1.RayCluster, resource v1.ResourceList) {
 }
 
 func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
-	replicas int32, minReplicas int32, maxReplicas int32, resources v1.ResourceList,
+	replicas int32, minReplicas int32, maxReplicas int32, resources corev1.ResourceList,
 ) {
-	workerContainers := []v1.Container{
+	workerContainers := []corev1.Container{
 		{
 			Name:  "worker-pod",
 			Image: "ray.io/ray-head:latest",
-			Resources: v1.ResourceRequirements{
+			Resources: corev1.ResourceRequirements{
 				Limits:   nil,
 				Requests: resources,
 			},
@@ -226,16 +426,16 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 		Replicas:    &replicas,
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
-		Template: v1.PodTemplateSpec{
-			Spec: v1.PodSpec{
+		Template: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
 				Containers: workerContainers,
 			},
 		},
 	})
 }
 
-func createPod(name string, namespace string) *v1.Pod {
-	return &v1.Pod{
+func createPod(name string, namespace string) *corev1.Pod {
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Namespace:   namespace,
@@ -245,7 +445,7 @@ func createPod(name string, namespace string) *v1.Pod {
 	}
 }
 
-func podLabelsContains(pod *v1.Pod, key string, value string) bool {
+func podLabelsContains(pod *corev1.Pod, key string, value string) bool {
 	if pod == nil {
 		return false
 	}
@@ -262,7 +462,7 @@ func podLabelsContains(pod *v1.Pod, key string, value string) bool {
 	return false
 }
 
-func getTaskGroupsFromAnnotation(pod *v1.Pod) ([]TaskGroup, error) {
+func getTaskGroupsFromAnnotation(pod *corev1.Pod) ([]TaskGroup, error) {
 	taskGroupInfo, exist := pod.Annotations[YuniKornTaskGroupsAnnotationName]
 	if !exist {
 		return nil, fmt.Errorf("not found")
@@ -293,4 +493,91 @@ func getTaskGroupsFromAnnotation(pod *v1.Pod) ([]TaskGroup, error) {
 		}
 	}
 	return taskGroups, nil
+}
+
+func getTaskGroupsFromRayCluster(rayCluster *rayv1.RayCluster) ([]TaskGroup, error) {
+	taskGroupInfo, exist := rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]
+	if !exist {
+		return nil, fmt.Errorf("not found")
+	}
+
+	taskGroups := []TaskGroup{}
+	err := json.Unmarshal([]byte(taskGroupInfo), &taskGroups)
+	if err != nil {
+		return nil, err
+	}
+	// json.Unmarshal won't return error if name or MinMember is empty, but will return error if MinResource is empty or error format.
+	for _, taskGroup := range taskGroups {
+		if taskGroup.Name == "" {
+			return nil, fmt.Errorf("can't get taskGroup Name from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinResource == nil {
+			return nil, fmt.Errorf("can't get taskGroup MinResource from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinMember == int32(0) {
+			return nil, fmt.Errorf("can't get taskGroup MinMember from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinMember < int32(0) {
+			return nil, fmt.Errorf("minMember cannot be negative, %s",
+				taskGroupInfo)
+		}
+	}
+	return taskGroups, nil
+}
+
+func getTaskGroupsFromPodTemplate(podTemplate *corev1.PodTemplateSpec) ([]TaskGroup, error) {
+	taskGroupInfo, exist := podTemplate.Annotations[YuniKornTaskGroupsAnnotationName]
+	if !exist {
+		return nil, fmt.Errorf("not found")
+	}
+
+	taskGroups := []TaskGroup{}
+	err := json.Unmarshal([]byte(taskGroupInfo), &taskGroups)
+	if err != nil {
+		return nil, err
+	}
+	// json.Unmarshal won't return error if name or MinMember is empty, but will return error if MinResource is empty or error format.
+	for _, taskGroup := range taskGroups {
+		if taskGroup.Name == "" {
+			return nil, fmt.Errorf("can't get taskGroup Name from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinResource == nil {
+			return nil, fmt.Errorf("can't get taskGroup MinResource from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinMember == int32(0) {
+			return nil, fmt.Errorf("can't get taskGroup MinMember from pod annotation, %s",
+				taskGroupInfo)
+		}
+		if taskGroup.MinMember < int32(0) {
+			return nil, fmt.Errorf("minMember cannot be negative, %s",
+				taskGroupInfo)
+		}
+	}
+	return taskGroups, nil
+}
+
+func createSubmitterPodTemplate() *corev1.PodTemplateSpec {
+	return &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "ray-job-submitter",
+					// Use the image of the Ray head to be defensive against version mismatch issues
+					Image: "ray.io/ray-head:latest",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+					},
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyNever,
+		},
+	}
 }
