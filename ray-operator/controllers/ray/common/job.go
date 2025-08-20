@@ -135,7 +135,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--entrypoint-resources", strconv.Quote(entrypointResources))
 	}
 
-	// "--" separates entrypoint from Ray Job CLI command args.
+	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
 	cmd = append(cmd, "--", entrypoint, ";", "fi", ";")
 	cmd = append(cmd, jobFollowCommand...)
 
