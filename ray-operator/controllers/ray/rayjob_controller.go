@@ -245,6 +245,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			if shouldUpdate := r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+				break
+			}
+		}
+
 		job := &batchv1.Job{}
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
@@ -990,6 +996,49 @@ func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJo
 			return true
 		}
 	}
+	return false
+}
+
+func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	rayClusterInstance, err := r.getOrCreateRayClusterInstance(ctx, rayJob)
+	if err != nil {
+		logger.Error(err, "Failed to get RayCluster instance for checking sidecar container status")
+		return false
+	}
+
+	headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
+	if err != nil {
+		logger.Error(err, "Failed to get Ray head pod for checking sidecar container status")
+		return false
+	}
+
+	if headPod == nil {
+		logger.Info("Ray head pod not found, skipping sidecar container status check")
+		return false
+	}
+
+	// Check container statuses for any error conditions
+	for _, containerStatus := range headPod.Status.ContainerStatuses {
+		// Check for terminated containers with error exit codes
+		if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
+			logger.Info("Found container terminated with error",
+				"container", containerStatus.Name,
+				"exitCode", containerStatus.State.Terminated.ExitCode,
+				"reason", containerStatus.State.Terminated.Reason)
+
+			// Update RayJob status to Failed
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+
+			rayJob.Status.Reason = rayv1.SubmissionFailed
+			rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
+				containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
+
+			return true
+		}
+	}
+
 	return false
 }
 
