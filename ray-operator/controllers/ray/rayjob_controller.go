@@ -588,7 +588,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(rayClusterInstance)
-	logger.Info("default submitter container is used")
+	logger.Info("default job submitter container is used")
 
 	if err := configureSubmitterContainer(ctx, &submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
@@ -674,7 +674,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	// In HTTPMode and SidecarMode, there's no submitter Job to delete.
+	// In HTTPMode and SidecarMode, there's no submitter job pod to delete.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		return true, nil
 	}
