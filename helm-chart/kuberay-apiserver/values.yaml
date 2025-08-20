@@ -7,8 +7,11 @@ replicaCount: 1
 name: kuberay-apiserver
 
 image:
+  # -- Image repository.
   repository: quay.io/kuberay/apiserver
+  # -- Image tag.
   tag: nightly
+  # -- Image pull policy.
   pullPolicy: IfNotPresent
 
 # Uncomment allowOrigin to enable CORS
@@ -16,23 +19,20 @@ image:
 cors:
   # allowOrigin: "*"
 
-labels:
+# -- Extra labels.
+labels: {}
   # key1: value1
   # key2: value2
 
-annotations:
+# -- Extra annotations.
+annotations: {}
   # key1: value1
   # key2: value2
-
-## Install Default RBAC roles and bindings
-rbac:
-  create: true
-  apiVersion: v1
 
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Specifies whether a service account should be created.
   create: true
-  # The name of the service account to use.
+  # -- The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: kuberay-apiserver
 
@@ -44,6 +44,7 @@ containerPort:
   containerPort: 8887
   protocol: TCP
 
+# -- Resource requests and limits for containers.
 resources:
   limits:
     cpu: 500m
@@ -66,8 +67,9 @@ tolerations: []
 
 # Only one service type needs to be picked
 service:
-# ClusterIP service
+  # -- Service type.
   type: ClusterIP
+  # -- Service port.
   ports:
   - name: http
     protocol: TCP
@@ -84,27 +86,33 @@ service:
 ingress:
   enabled: false
   annotations: {}
+  # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+  # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
   className: ""
   tls: []
 
+# openshift routes
 route:
   enabled: false
   annotations: {}
 
+# -- Install Default RBAC roles and bindings
 rbacEnable: true
 
-# the chart can be installed by users with permissions to a single namespace only
+# -- The chart can be installed by users with permissions to a single namespace only
 singleNamespaceInstall: false
 
-# If set to true, API server v2 would be served on the same port as the API server v1.
+# -- If set to true, APIServer v2 would be served on the same port as the APIServer v1.
 enableAPIServerV2: true
 
 # security definition. Comment it out if security is not required
 security:
+  # -- security proxy image.
   proxy:
     repository: quay.io/kuberay/security-proxy
     tag: nightly
     pullPolicy: IfNotPresent
+  # -- security proxy environment variables.
   env:
     HTTP_LOCAL_PORT: 8988
     GRPC_LOCAL_PORT: 8987

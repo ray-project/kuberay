@@ -3134,6 +3134,9 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 
 func TestSumGPUs(t *testing.T) {
 	nvidiaGPUResourceName := corev1.ResourceName("nvidia.com/gpu")
+	nvidiaMIG1g10gbResourceName := corev1.ResourceName("nvidia.com/mig-1g.10gb")
+	nvidiaMIG2g20gbResourceName := corev1.ResourceName("nvidia.com/mig-2g.20gb")
+	nvidiaMIG3g40gbResourceName := corev1.ResourceName("nvidia.com/mig-3g.40gb")
 	googleTPUResourceName := corev1.ResourceName("google.com/tpu")
 
 	tests := []struct {
@@ -3162,10 +3165,23 @@ func TestSumGPUs(t *testing.T) {
 			input: map[corev1.ResourceName]resource.Quantity{
 				corev1.ResourceCPU:                 resource.MustParse("1"),
 				nvidiaGPUResourceName:              resource.MustParse("3"),
+				nvidiaMIG1g10gbResourceName:        resource.MustParse("2"),
 				corev1.ResourceName("foo.bar/gpu"): resource.MustParse("2"),
 				googleTPUResourceName:              resource.MustParse("1"),
 			},
-			expected: resource.MustParse("5"),
+			expected: resource.MustParse("7"),
+		},
+		{
+			name: "multiple MIG types specified",
+			input: map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU:          resource.MustParse("1"),
+				nvidiaGPUResourceName:       resource.MustParse("1"),
+				nvidiaMIG1g10gbResourceName: resource.MustParse("2"),
+				nvidiaMIG2g20gbResourceName: resource.MustParse("3"),
+				nvidiaMIG3g40gbResourceName: resource.MustParse("4"),
+				googleTPUResourceName:       resource.MustParse("1"),
+			},
+			expected: resource.MustParse("10"),
 		},
 	}
 

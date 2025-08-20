@@ -148,7 +148,10 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response when updating deployments: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -167,7 +170,7 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+ServeDetailsPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +181,10 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response when getting serve details: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
@@ -252,7 +258,7 @@ type RayJobLogsResponse struct {
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +275,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job info: %w", err)
 	}
 
 	var jobInfo RayJobInfo
@@ -282,7 +288,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 }
 
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +305,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when listing jobs: %w", err)
 	}
 
 	var jobInfo []RayJobInfo
@@ -341,7 +347,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response when submitting job: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
@@ -379,7 +388,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job log: %w", err)
 	}
 
 	var jobLog RayJobLogsResponse
@@ -407,7 +416,10 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response when stopping job: %w", err)
+	}
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {

@@ -1,6 +1,6 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
+exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/|^dashboard/\.yarn/releases/yarn-.*\.cjs$
 
 default_language_version:
   golang: 1.24.0
@@ -89,6 +89,7 @@ repos:
           # Make the tool search for charts only under the `helm-chart` directory
           - --chart-search-root=helm-chart
           - --chart-to-generate=helm-chart/kuberay-operator
+          - --chart-to-generate=helm-chart/kuberay-apiserver
           - --chart-to-generate=helm-chart/ray-cluster
           - --template-files=README.md.gotmpl
           - --sort-values-order=file

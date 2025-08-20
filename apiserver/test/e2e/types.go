@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"runtime"
@@ -22,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	"github.com/ray-project/kuberay/apiserversdk/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -75,7 +76,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 
 func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndTestingContext, error) {
 	testingContext := &End2EndTestingContext{
-		namespaceName:       petnames.Generate(2, "-"),
+		namespaceName:       fmt.Sprintf("%s-%d", petnames.Generate(2, "-"), time.Now().UnixNano()),
 		computeTemplateName: petnames.Name(),
 		clusterName:         petnames.Name(),
 		configMapName:       petnames.Generate(2, "-"),

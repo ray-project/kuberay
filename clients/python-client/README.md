@@ -1,6 +1,6 @@
 # Overview
 
-This python client library provide APIs to handle `raycluster` from your python application.
+This python client library provide APIs to handle `raycluster` and `rayjobs` from your python application.
 
 ## Prerequisites
 
@@ -70,17 +70,43 @@ if succeeded:
 
 ### cluster_api
 
-Finally, the `cluster_api` is the one you always use to implement your cluster change in k8s. You can
+The `cluster_api` is the one you always use to implement your cluster change in k8s. You can
 use it with raw `JSON` if you wish. The `director/cluster_builder/cluster_utils` are just tools to
 shield the user from using raw `JSON`.
+
+### job_api
+
+Finally, the `job_api` can be used to submit RayJobs to a pre-existing RayCluster.
+
+#### Submitting to Existing Cluster
+
+```python
+from python_client import kuberay_job_api, kuberay_cluster_api, constants
+
+job_body = {
+    "apiVersion": "ray.io/v1",
+    "kind": "RayJob",
+    "metadata": {...},
+    "spec": {
+        "clusterSelector": {
+            "ray.io/cluster": "ray-cluster-name",
+        },
+        "entrypoint": 'python -c training_script.py',
+        "submissionMode": "K8sJobMode",
+    },
+}
+
+kuberay_job_api.submit_job(
+    job=job_body,
+    k8s_namespace=namespace,
+)
+```
 
 ## Code Organization
 
 ```text
 clients/
 └── python-client
-    ├── LICENSE
-    ├── README.md
     ├── examples
     │   ├── complete-example.py
     │   ├── use-builder.py
@@ -88,21 +114,25 @@ clients/
     │   ├── use-raw-config_map_with-api.py
     │   ├── use-raw-with-api.py
     │   └── use-utils.py
+    ├── LICENSE
+    ├── poetry.lock
     ├── pyproject.toml
     ├── python_client
     │   ├── __init__.py
     │   ├── constants.py
     │   ├── kuberay_cluster_api.py
+    │   ├── kuberay_job_api.py
     │   └── utils
     │       ├── __init__.py
     │       ├── kuberay_cluster_builder.py
     │       └── kuberay_cluster_utils.py
     ├── python_client_test
     │   ├── README.md
-    │   ├── test_api.py
+    │   ├── test_cluster_api.py
     │   ├── test_director.py
+    │   ├── test_job_api.py
     │   └── test_utils.py
-    └── setup.cfg
+    └── README.md
 ```
 
 ## For developers

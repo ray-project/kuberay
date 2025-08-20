@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
 
-	"github.com/ray-project/kuberay/apiserver/pkg/util"
+	"github.com/ray-project/kuberay/apiserversdk/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 )
 
