@@ -66,7 +66,7 @@ repos:
         additional_dependencies:
           - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
       - id: eslint
-        name: ESLint TypeScript/JS check
+        name: ESLint TypeScript/JavaScript check
         entry: ./scripts/dashboard-lint.sh
         language: node
         require_serial: true
