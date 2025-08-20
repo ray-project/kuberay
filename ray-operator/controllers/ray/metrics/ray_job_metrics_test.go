@@ -140,7 +140,6 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
 	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
 	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
-
 }
 
 func TestMetricRayJobDeploymentStatus(t *testing.T) {
