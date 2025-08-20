@@ -25,6 +25,7 @@ type RayCronJobSpec struct {
 
 // CronJobStatus represents the current state of a cron job.
 type RayCronJobStatus struct {
+	// +optional
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
 
@@ -36,10 +37,10 @@ type RayCronJobStatus struct {
 // RayCronJob represents the configuration of a single ray cron job.
 // It will currently schedule and run one ray job at the correct time based on a cron string
 type RayCronJob struct {
+	Status            RayCronJobStatus `json:"status,omitempty"`
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RayCronJobSpec   `json:"spec,omitempty"`
-	Status            RayCronJobStatus `json:"status,omitempty"`
+	Spec              RayCronJobSpec `json:"spec,omitempty"`
 }
 
 //+kubebuilder:object:root=true
