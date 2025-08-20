@@ -170,6 +170,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
 	}
 
+	// SidecarMode does not support SubmitterPodTemplate.
+	// In SidecarMode, the operator automatically injects a submitter container
+	// into the Ray head Pod, so users should not specify SubmitterPodTemplate.
+	if rayJob.Spec.SubmissionMode == rayv1.SidecarMode && rayJob.Spec.SubmitterPodTemplate != nil {
+		return fmt.Errorf("SubmitterPodTemplate is incompatible with SidecarMode. In SidecarMode, the operator automatically injects a submitter container into the Ray head Pod")
+	}
+
 	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err
