@@ -1007,8 +1007,7 @@ func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx cont
 			// Update RayJob status to Failed
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 
-			// if containerStatus.Name contains "submitter", set reason to SubmissionFailed
-			if strings.Contains(containerStatus.Name, "submitter") {
+			if strings.Contains(containerStatus.Name, utils.SubmitterContainerName) {
 				rayJob.Status.Reason = rayv1.SubmissionFailed
 			} else {
 				rayJob.Status.Reason = rayv1.AppFailed
