@@ -30,13 +30,13 @@ func TestRayCronJobReconciler_Reconcile(t *testing.T) {
 	mockNow := time.Date(2023, 1, 1, 0, 5, 0, 0, time.UTC)
 
 	tests := []struct {
+		rayCronJob       *rayv1.RayCronJob
+		validate         func(*testing.T, *RayCronJobReconciler, *rayv1.RayCronJob)
 		name             string
 		existingObjects  []runtime.Object
-		rayCronJob       *rayv1.RayCronJob
 		expectedJobCount int
 		expectError      bool
 		expectedRequeue  bool
-		validate         func(*testing.T, *RayCronJobReconciler, *rayv1.RayCronJob)
 	}{
 		{
 			name: "Successful Reconciliation - Create new Job",
@@ -143,9 +143,9 @@ func TestRayCronJobReconciler_Reconcile(t *testing.T) {
 			result, err := reconciler.Reconcile(context.TODO(), req)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, tt.expectedRequeue, result.RequeueAfter > 0)
