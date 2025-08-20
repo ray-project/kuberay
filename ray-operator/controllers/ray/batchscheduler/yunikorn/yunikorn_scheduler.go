@@ -2,7 +2,6 @@ package yunikorn
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -41,13 +40,7 @@ func (y *YuniKornScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object client.Object) error {
-	switch obj := object.(type) {
-	case *rayv1.RayCluster, *rayv1.RayJob:
-		// Supported types
-	default:
-		return fmt.Errorf("currently only RayCluster and RayJob are supported, got %T", obj)
-	}
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
@@ -59,9 +52,9 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, obj
 // Currently we use this function to translate labels "yunikorn.apache.org/app-id" and "yunikorn.apache.org/queue"
 // to legacy labels "applicationId" and "queue", this is for the better compatibilities to support older yunikorn
 // versions.
-func (y *YuniKornScheduler) populatePodLabelsFromRayCluster(_ context.Context, app *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
+func (y *YuniKornScheduler) populatePodLabelsFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
 	// check labels
-	if value, exist := app.Labels[sourceKey]; exist {
+	if value, exist := rayCluster.Labels[sourceKey]; exist {
 		y.logger.Info("Updating pod label based on RayCluster labels",
 			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
 		pod.Labels[targetKey] = value
@@ -144,14 +137,14 @@ func (y *YuniKornScheduler) isGangSchedulingEnabled(obj client.Object) bool {
 	}
 }
 
-func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(_ context.Context, app *rayv1.RayCluster, pod *corev1.Pod) {
+func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(_ context.Context, rayCluster *rayv1.RayCluster, pod *corev1.Pod) {
 	var taskGroupsAnnotationValue string
 	var err error
-	if app.Annotations[YuniKornTaskGroupsAnnotationName] != "" {
-		taskGroupsAnnotationValue = app.Annotations[YuniKornTaskGroupsAnnotationName]
+	if rayCluster.Annotations[YuniKornTaskGroupsAnnotationName] != "" {
+		taskGroupsAnnotationValue = rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]
 		y.logger.Info("using existing task groups annotation from RayCluster", "value", taskGroupsAnnotationValue)
 	} else {
-		taskGroups := newTaskGroupsFromApp(app)
+		taskGroups := newTaskGroupsFromRayCluster(rayCluster)
 		taskGroupsAnnotationValue, err = taskGroups.marshal()
 		if err != nil {
 			y.logger.Error(err, "failed to add gang scheduling related annotations to pod, "+

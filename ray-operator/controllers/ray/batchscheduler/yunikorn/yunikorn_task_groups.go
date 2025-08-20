@@ -34,11 +34,11 @@ func newTaskGroups() *TaskGroups {
 	}
 }
 
-func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
+func newTaskGroupsFromRayCluster(rayCluster *v1.RayCluster) *TaskGroups {
 	taskGroups := newTaskGroups()
 
 	// head group
-	headGroupSpec := app.Spec.HeadGroupSpec
+	headGroupSpec := rayCluster.Spec.HeadGroupSpec
 	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
 	taskGroups.addTaskGroup(
 		TaskGroup{
@@ -51,7 +51,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 		})
 
 	// worker groups
-	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
+	for _, workerGroupSpec := range rayCluster.Spec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
 		minWorkers := workerGroupSpec.MinReplicas
 		taskGroups.addTaskGroup(
@@ -68,11 +68,11 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 	return taskGroups
 }
 
-func newTaskGroupsFromRayJob(app *v1.RayJob, submitterTemplate *corev1.PodTemplateSpec) (*TaskGroups, error) {
+func newTaskGroupsFromRayJob(rayJob *v1.RayJob, submitterTemplate *corev1.PodTemplateSpec) (*TaskGroups, error) {
 	taskGroups := newTaskGroups()
 
 	// head group
-	headGroupSpec := app.Spec.RayClusterSpec.HeadGroupSpec
+	headGroupSpec := rayJob.Spec.RayClusterSpec.HeadGroupSpec
 	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
 	taskGroups.addTaskGroup(
 		TaskGroup{
@@ -85,7 +85,7 @@ func newTaskGroupsFromRayJob(app *v1.RayJob, submitterTemplate *corev1.PodTempla
 		})
 
 	// worker groups
-	for _, workerGroupSpec := range app.Spec.RayClusterSpec.WorkerGroupSpecs {
+	for _, workerGroupSpec := range rayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
 		minWorkers := workerGroupSpec.MinReplicas
 		taskGroups.addTaskGroup(

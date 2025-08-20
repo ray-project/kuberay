@@ -391,8 +391,7 @@ func createRayJobWithLabels(name string, namespace string, rayClusterSpec *rayv1
 	return rayJob
 }
 
-func addHeadPodSpec(app *rayv1.RayCluster, resource corev1.ResourceList) {
-	// app.Spec.HeadGroupSpec.Template.Spec.Containers
+func addHeadPodSpec(rayCluster *rayv1.RayCluster, resource corev1.ResourceList) {
 	headContainers := []corev1.Container{
 		{
 			Name:  "head-pod",
@@ -404,10 +403,10 @@ func addHeadPodSpec(app *rayv1.RayCluster, resource corev1.ResourceList) {
 		},
 	}
 
-	app.Spec.HeadGroupSpec.Template.Spec.Containers = headContainers
+	rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = headContainers
 }
 
-func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
+func addWorkerPodSpec(rayCluster *rayv1.RayCluster, workerGroupName string,
 	replicas int32, minReplicas int32, maxReplicas int32, resources corev1.ResourceList,
 ) {
 	workerContainers := []corev1.Container{
@@ -421,7 +420,7 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 		},
 	}
 
-	app.Spec.WorkerGroupSpecs = append(app.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+	rayCluster.Spec.WorkerGroupSpecs = append(rayCluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
 		GroupName:   workerGroupName,
 		Replicas:    &replicas,
 		MinReplicas: &minReplicas,

@@ -9,7 +9,6 @@ package kaischeduler
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -37,13 +36,7 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object client.Object) error {
-	_, ok := object.(*rayv1.RayCluster)
-	if !ok {
-		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
-	}
-	// yunikorn doesn't require any resources to be created upfront
-	// this is a no-opt for this implementation
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
 	return nil
 }
 
