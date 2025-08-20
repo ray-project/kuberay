@@ -203,7 +203,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if rayJobInstance.Spec.SubmissionMode == rayv1.InteractiveMode {
-			logger.Info("SubmissionMode is InteractiveMode and the RayCluster is created. Transition the status from `Initializing` to `Waiting`.")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusWaiting
 			break
 		}
@@ -212,11 +211,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if err := r.createK8sJobIfNeed(ctx, rayJobInstance, rayClusterInstance); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			logger.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
-		}
-
-		if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
-			logger.Info("RayCluster is created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode, "RayCluster", rayJobInstance.Status.RayClusterName)
 		}
 
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
