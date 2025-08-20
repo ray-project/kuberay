@@ -137,11 +137,11 @@ func GetSidecarJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 }
 
 // BuildJobSubmitCommand builds the job submit command based on submission mode.
-func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, mode rayv1.JobSubmissionMode) ([]string, error) {
+func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
 	var waitLoop []string
 
-	switch mode {
+	switch submissionMode {
 	case rayv1.SidecarMode:
 		// Sidecar submitter talks to the local head Pod dashboard.
 		address = "http://127.0.0.1:8265"
@@ -157,7 +157,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, mode rayv1.JobSubmissio
 			address = "http://" + address
 		}
 	default:
-		return nil, fmt.Errorf("unsupported submission mode for job submit command: %s", mode)
+		return nil, fmt.Errorf("unsupported submission mode for job submit command: %s", submissionMode)
 	}
 
 	metadata := rayJobInstance.Spec.Metadata
