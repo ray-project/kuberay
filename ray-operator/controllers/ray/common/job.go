@@ -78,6 +78,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		return nil, fmt.Errorf("unsupported submission mode for job submit command: %s", submissionMode)
 	}
 
+	var cmd []string
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
 	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
@@ -96,7 +97,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address, "--no-wait"}
 
-	cmd := append([]string{}, waitLoop...)
+	cmd = append(cmd, waitLoop...)
 	cmd = append(cmd, "if", "!")
 	cmd = append(cmd, jobStatusCommand...)
 	cmd = append(cmd, ";", "then")
