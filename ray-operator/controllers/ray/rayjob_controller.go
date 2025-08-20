@@ -303,45 +303,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			isJobTerminal = isJobTerminal && finished
 		}
 
-		// If in SidecarMode, refine terminal condition by checking the sidecar container terminated.
-		var sidecarTerminated bool
-		var sidecarExitCode *int32
-		var sidecarReason, sidecarMessage string
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-			headPodName := rayClusterInstance.Status.Head.PodName
-			if headPodName != "" {
-				headPod := &corev1.Pod{}
-				if err := r.Client.Get(ctx, client.ObjectKey{Namespace: rayClusterInstance.Namespace, Name: headPodName}, headPod); err == nil {
-					for _, cs := range headPod.Status.ContainerStatuses {
-						if cs.Name == utils.SubmitterContainerName && cs.State.Terminated != nil {
-							sidecarTerminated = true
-							ec := cs.State.Terminated.ExitCode
-							sidecarExitCode = &ec
-							sidecarReason = cs.State.Terminated.Reason
-							sidecarMessage = cs.State.Terminated.Message
-							break
-						}
-					}
-				}
-			}
-			isJobTerminal = isJobTerminal && sidecarTerminated
-		}
-
 		if isJobTerminal {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 			if jobInfo.JobStatus == rayv1.JobStatusFailed {
 				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 				reason = rayv1.AppFailed
-			}
-			// If sidecar exited non-zero, mark deployment failed as submission failure.
-			if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && sidecarTerminated && sidecarExitCode != nil && *sidecarExitCode != 0 {
-				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				reason = rayv1.SubmissionFailed
-				if sidecarMessage != "" {
-					rayJobInstance.Status.Message = fmt.Sprintf("Sidecar exited(code=%d) %s: %s", *sidecarExitCode, sidecarReason, sidecarMessage)
-				} else {
-					rayJobInstance.Status.Message = fmt.Sprintf("Sidecar exited(code=%d) %s", *sidecarExitCode, sidecarReason)
-				}
 			}
 		}
 
@@ -726,6 +692,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
+	// In HTTPMode and SidecarMode, there's no submitter Job to delete.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		return true, nil
 	}
