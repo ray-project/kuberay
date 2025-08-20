@@ -209,7 +209,6 @@ _Appears in:_
 
 
 RayCronJob represents the configuration of a single ray cron job.
-It will currently schedule and run one ray job at the correct time based on a cron string
 
 
 

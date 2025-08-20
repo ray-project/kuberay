@@ -35,7 +35,6 @@ type RayCronJobStatus struct {
 // +kubebuilder:storageversion
 // +genclient
 // RayCronJob represents the configuration of a single ray cron job.
-// It will currently schedule and run one ray job at the correct time based on a cron string
 type RayCronJob struct {
 	Status            RayCronJobStatus `json:"status,omitempty"`
 	metav1.TypeMeta   `json:",inline"`
