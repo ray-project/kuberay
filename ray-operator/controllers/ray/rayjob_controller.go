@@ -1031,7 +1031,12 @@ func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx cont
 			// Update RayJob status to Failed
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 
-			rayJob.Status.Reason = rayv1.SubmissionFailed
+			// if containerStatus.Name contains "submitter", set reason to SubmissionFailed
+			if strings.Contains(containerStatus.Name, "submitter") {
+				rayJob.Status.Reason = rayv1.SubmissionFailed
+			} else {
+				rayJob.Status.Reason = rayv1.AppFailed
+			}
 			rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
 				containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
 

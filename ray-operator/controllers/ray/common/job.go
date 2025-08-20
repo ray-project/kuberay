@@ -181,11 +181,6 @@ func GetSidecarJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
-	// // add http:// if needed
-	// if !strings.HasPrefix(address, "http://") {
-	// 	address = "http://" + address
-	// }
-
 	// Wait until dashboard is reachable before proceeding.
 	waitLoop := []string{
 		"until", "ray", "job", "list", "--address", address, ">/dev/null", "2>&1", ";",
