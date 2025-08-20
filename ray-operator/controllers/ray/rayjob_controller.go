@@ -183,6 +183,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		// Handle case when job submitter container failed to start
 		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			if shouldUpdate := r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 				break
