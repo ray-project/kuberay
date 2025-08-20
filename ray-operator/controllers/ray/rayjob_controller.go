@@ -583,7 +583,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 
 	// If the command in the submitter pod template isn't set, use the default command.
 	if len(submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command) == 0 {
-		k8sJobCommand, err := common.GetK8sJobCommand(rayJobInstance)
+		k8sJobCommand, err := common.BuildJobSubmitCommand(rayJobInstance, rayv1.K8sJobMode)
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err
 		}
@@ -623,7 +623,7 @@ func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, ra
 	logger.Info("default submitter container is used")
 
 	// If the command in the submitter container manifest isn't set, use the default command.
-	sidecarJobCommand, err := common.GetSidecarJobCommand(rayJobInstance)
+	sidecarJobCommand, err := common.BuildJobSubmitCommand(rayJobInstance, rayv1.SidecarMode)
 	if err != nil {
 		return corev1.Container{}, err
 	}
