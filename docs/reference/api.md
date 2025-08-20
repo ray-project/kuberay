@@ -208,7 +208,8 @@ _Appears in:_
 
 
 
-CronJob represents the configuration of a single cron job.
+RayCronJob represents the configuration of a single ray cron job.
+It will currently schedule and run one ray job at the correct time based on a cron string
 
 
 
@@ -226,7 +227,7 @@ CronJob represents the configuration of a single cron job.
 
 
 
-CronJobSpec describes how the job execution will look like and when it will actually run.
+RayCronJobSpec describes how the job execution will look like and when it will actually run.
 
 
 

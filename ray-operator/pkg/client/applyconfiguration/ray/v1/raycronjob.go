@@ -11,10 +11,10 @@ import (
 // RayCronJobApplyConfiguration represents a declarative configuration of the RayCronJob type for use
 // with apply.
 type RayCronJobApplyConfiguration struct {
-	Status                               *RayCronJobStatusApplyConfiguration `json:"status,omitempty"`
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *RayCronJobSpecApplyConfiguration `json:"spec,omitempty"`
+	Spec                                 *RayCronJobSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                               *RayCronJobStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // RayCronJob constructs a declarative configuration of the RayCronJob type for use with
@@ -25,14 +25,6 @@ func RayCronJob(name, namespace string) *RayCronJobApplyConfiguration {
 	b.WithNamespace(namespace)
 	b.WithKind("RayCronJob")
 	b.WithAPIVersion("ray.io/v1")
-	return b
-}
-
-// WithStatus sets the Status field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Status field is set to the value of the last call.
-func (b *RayCronJobApplyConfiguration) WithStatus(value *RayCronJobStatusApplyConfiguration) *RayCronJobApplyConfiguration {
-	b.Status = value
 	return b
 }
 
@@ -199,6 +191,14 @@ func (b *RayCronJobApplyConfiguration) ensureObjectMetaApplyConfigurationExists(
 // If called multiple times, the Spec field is set to the value of the last call.
 func (b *RayCronJobApplyConfiguration) WithSpec(value *RayCronJobSpecApplyConfiguration) *RayCronJobApplyConfiguration {
 	b.Spec = value
+	return b
+}
+
+// WithStatus sets the Status field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Status field is set to the value of the last call.
+func (b *RayCronJobApplyConfiguration) WithStatus(value *RayCronJobStatusApplyConfiguration) *RayCronJobApplyConfiguration {
+	b.Status = value
 	return b
 }
 

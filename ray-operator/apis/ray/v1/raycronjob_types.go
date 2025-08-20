@@ -14,7 +14,7 @@ type RayJobTemplate struct {
 	Spec RayJobSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// CronJobSpec describes how the job execution will look like and when it will actually run.
+// RayCronJobSpec describes how the job execution will look like and when it will actually run.
 type RayCronJobSpec struct {
 	// The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.
 	Schedule string `json:"schedule"`
@@ -33,17 +33,18 @@ type RayCronJobStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +genclient
-// CronJob represents the configuration of a single cron job.
+// RayCronJob represents the configuration of a single ray cron job.
+// It will currently schedule and run one ray job at the correct time based on a cron string
 type RayCronJob struct {
-	Status            RayCronJobStatus `json:"status,omitempty"`
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RayCronJobSpec `json:"spec,omitempty"`
+	Spec              RayCronJobSpec   `json:"spec,omitempty"`
+	Status            RayCronJobStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// CronJobList is a collection of cron jobs.
+// RayCronJobList is a collection of cron jobs.
 type RayCronJobList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
