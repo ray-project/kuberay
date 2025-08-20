@@ -674,7 +674,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 
 // deleteSubmitterJob deletes the submitter Job associated with the RayJob.
 func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
-	// In HTTPMode and SidecarMode, there's no submitter job pod to delete.
+	// In HTTPMode and SidecarMode, there's no job submitter pod to delete.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		return true, nil
 	}
