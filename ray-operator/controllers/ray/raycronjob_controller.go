@@ -78,18 +78,10 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	rayCronJob := &rayv1.RayCronJob{}
 	if err := r.Get(ctx, request.NamespacedName, rayCronJob); err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
 			logger.Info("RayJob resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
-		// Error reading the object - requeue the request.
 		logger.Error(err, "Failed to get RayJob")
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-	if err := utils.ValidateRayCronJobMetadata(rayCronJob.ObjectMeta); err != nil {
-		logger.Error(err, "The RayJob metadata is invalid")
-		r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
-			"The RayJob metadata is invalid %s/%s: %v", rayCronJob.Namespace, rayCronJob.Name, err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
@@ -104,19 +96,18 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	scheduledTime, err := nextScheduleTime(logger, rayCronJob, r.now(), sched, r.Recorder)
 	if err != nil {
-		// this is likely a user error in defining the spec value
-		// we should log the error and not reconcile this cronjob until an update to spec
 		logger.Info("Invalid schedule", "cronjob", "schedule", rayCronJob.Spec.Schedule, "err", err)
 		r.Recorder.Eventf(rayCronJob, corev1.EventTypeWarning, "InvalidSchedule", "invalid schedule: %s : %s", rayCronJob.Spec.Schedule, err)
 		return ctrl.Result{}, nil
 	}
 
-	t1 := lastScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
+	// simple check for if we are at or pass the schedule time to run a ray job
 	if scheduledTime != nil && !(*scheduledTime).After(r.now()) {
-		logger.Info("The current time is within the buffer window of a cron tick", "NextScheduleTimeDuration", t1, "Previous LastScheduleTime", rayCronJob.Status.LastScheduleTime)
+		logger.Info("We are at the time to attempt to start a ray job!", "scheduledTime", scheduledTime, "Previous LastScheduleTime", rayCronJob.Status.LastScheduleTime, "currentTime", r.now())
 	} else {
-		logger.Info("Waiting until the next reconcile to determine schedule", "nextScheduleDuration", t1, "currentTime", time.Now())
-		return ctrl.Result{RequeueAfter: nextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)}, nil
+		t := nextScheduleTimeDuration(logger, rayCronJob, r.now(), sched)
+		logger.Info("Waiting until the next reconcile to determine schedule", "time till next schedule", t, "currentTime", r.now())
+		return ctrl.Result{RequeueAfter: t}, nil
 	}
 
 	var childRayJobs rayv1.RayJobList
@@ -290,28 +281,6 @@ func nextScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayCronJob, now time
 	logger.Info("Successfully calculated earliestTime and mostRecentTime", "mostRecentTime", mostRecentTime, "Current Time", now, "Next time to aim for", schedule.Next(*mostRecentTime))
 	t := schedule.Next(*mostRecentTime).Sub(now)
 	return t
-}
-
-// The LastScheduleTimeDuration function returns the last previous cron time.
-// It calculates the most recent time a schedule should have executed based
-// on the RayJob's creation time (or its last scheduled status) and the current time 'now'.
-func lastScheduleTimeDuration(logger logr.Logger, rj *rayv1.RayCronJob, now time.Time, schedule cron.Schedule) time.Duration {
-	earliestTime, mostRecentTime, missedSchedules, err := mostRecentScheduleTime(rj, now, schedule)
-	if err != nil {
-		// We still have to requeue at some point, so aim for the next scheduling slot from now
-		logger.Info("Error in mostRecentScheduleTime, we still have to requeue at some point", "Error", err)
-		mostRecentTime = &now
-	} else if mostRecentTime == nil {
-		logger.Info("mostRecentTime doesnt exist")
-		if missedSchedules == noneMissed {
-			// No missed schedules since earliestTime
-			mostRecentTime = &earliestTime
-		} else {
-			// If there are missed schedules since earliestTime, always use now
-			mostRecentTime = &now
-		}
-	}
-	return now.Sub(*mostRecentTime)
 }
 
 // nextScheduleTime returns the time.Time of the next schedule after the last scheduled
