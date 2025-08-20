@@ -183,6 +183,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			if shouldUpdate := r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+				break
+			}
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
