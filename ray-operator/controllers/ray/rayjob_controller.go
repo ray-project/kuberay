@@ -882,7 +882,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 					if err := r.Update(ctx, rayJobInstance); err != nil {
 						return nil, err
 					}
-					logger.Info("Check if rayjob have submitter pod template with task groups annotation in rayjob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+					logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
 				} else {
 					return nil, err
 				}
