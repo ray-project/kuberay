@@ -19,23 +19,15 @@ import (
 )
 
 type CreateWorkerGroupOptions struct {
-	cmdFactory          cmdutil.Factory
-	ioStreams           *genericclioptions.IOStreams
-	namespace           string
-	clusterName         string
-	groupName           string
-	rayStartParams      map[string]string
-	workerNodeSelectors map[string]string
-	rayVersion          string
-	image               string
-	workerCPU           string
-	workerGPU           string
-	workerTPU           string
-	workerMemory        string
-	workerReplicas      int32
-	numOfHosts          int32
-	workerMinReplicas   int32
-	workerMaxReplicas   int32
+	rayStartParams map[string]string
+	clusterName    string
+	groupName      string
+	image          string
+	workerTPU      string
+	util.KubectlPluginCommonOptions
+	numOfHosts        int32
+	workerMinReplicas int32
+	workerMaxReplicas int32
 }
 
 var (
@@ -60,8 +52,10 @@ var (
 
 func NewCreateWorkerGroupOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateWorkerGroupOptions {
 	return &CreateWorkerGroupOptions{
-		cmdFactory: cmdFactory,
-		ioStreams:  &streams,
+		KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+			CmdFactory: cmdFactory,
+			IoStreams:  &streams,
+		},
 	}
 }
 
@@ -91,18 +85,18 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 
 	cmd.Flags().StringVarP(&options.clusterName, "ray-cluster", "c", "", "Ray cluster to add a worker group to")
 	cobra.CheckErr(cmd.MarkFlagRequired("ray-cluster"))
-	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
-	cmd.Flags().Int32Var(&options.workerReplicas, "worker-replicas", 1, "desired replicas")
+	cmd.Flags().StringVar(&options.RayVersion, "ray-version", util.RayVersion, "Ray version to use")
+	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.RayVersion), "container image to use")
+	cmd.Flags().Int32Var(&options.WorkerReplicas, "worker-replicas", 1, "desired replicas")
 	cmd.Flags().Int32Var(&options.numOfHosts, "num-of-hosts", 1, "number of hosts in the worker group per replica")
 	cmd.Flags().Int32Var(&options.workerMinReplicas, "worker-min-replicas", 1, "minimum number of replicas")
 	cmd.Flags().Int32Var(&options.workerMaxReplicas, "worker-max-replicas", 10, "maximum number of replicas")
-	cmd.Flags().StringVar(&options.workerCPU, "worker-cpu", "2", "number of CPUs in each replica")
-	cmd.Flags().StringVar(&options.workerGPU, "worker-gpu", "0", "number of GPUs in each replica")
+	cmd.Flags().StringVar(&options.WorkerCPU, "worker-cpu", "2", "number of CPUs in each replica")
+	cmd.Flags().StringVar(&options.WorkerGPU, "worker-gpu", "0", "number of GPUs in each replica")
 	cmd.Flags().StringVar(&options.workerTPU, "worker-tpu", "0", "number of TPUs in each replica")
-	cmd.Flags().StringVar(&options.workerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
+	cmd.Flags().StringVar(&options.WorkerMemory, "worker-memory", "4Gi", "amount of memory in each replica")
 	cmd.Flags().StringToStringVar(&options.rayStartParams, "worker-ray-start-params", make(map[string]string), "a map of arguments to the Ray workers' 'ray start' entrypoint, e.g. '--worker-ray-start-params metrics-export-port=8080,num-cpus=2'")
-	cmd.Flags().StringToStringVar(&options.workerNodeSelectors, "worker-node-selectors", make(map[string]string), "Node selectors to apply to all worker pods in this worker group (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
+	cmd.Flags().StringToStringVar(&options.WorkerNodeSelectors, "worker-node-selectors", make(map[string]string), "Node selectors to apply to all worker pods in this worker group (e.g. --worker-node-selectors cloud.google.com/gke-accelerator=nvidia-l4,cloud.google.com/gke-nodepool=my-node-pool)")
 
 	return cmd
 }
@@ -112,10 +106,10 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
-	options.namespace = namespace
+	options.Namespace = namespace
 
-	if options.namespace == "" {
-		options.namespace = "default"
+	if options.Namespace == "" {
+		options.Namespace = "default"
 	}
 
 	if options.rayStartParams == nil {
@@ -128,14 +122,14 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 	options.groupName = args[0]
 
 	if options.image == "" {
-		options.image = fmt.Sprintf("rayproject/ray:%s", options.rayVersion)
+		options.image = fmt.Sprintf("rayproject/ray:%s", options.RayVersion)
 	}
 
 	return nil
 }
 
 func (options *CreateWorkerGroupOptions) Validate() error {
-	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
+	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.WorkerNodeSelectors); err != nil {
 		return fmt.Errorf("%w", err)
 	}
 	return nil
@@ -147,7 +141,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	rayCluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.clusterName, metav1.GetOptions{})
+	rayCluster, err := k8sClient.RayClient().RayV1().RayClusters(options.Namespace).Get(ctx, options.clusterName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting Ray cluster: %w", err)
 	}
@@ -156,7 +150,7 @@ func (options *CreateWorkerGroupOptions) Run(ctx context.Context, factory cmduti
 
 	newRayCluster.Spec.WorkerGroupSpecs = append(newRayCluster.Spec.WorkerGroupSpecs, createWorkerGroupSpec(options))
 
-	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(options.namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{FieldManager: util.FieldManager})
+	newRayCluster, err = k8sClient.RayClient().RayV1().RayClusters(options.Namespace).Update(ctx, newRayCluster, metav1.UpdateOptions{FieldManager: util.FieldManager})
 	if err != nil {
 		return fmt.Errorf("error updating Ray cluster with new worker group: %w", err)
 	}
@@ -174,21 +168,21 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 					Image: options.image,
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse(options.workerCPU),
-							corev1.ResourceMemory: resource.MustParse(options.workerMemory),
+							corev1.ResourceCPU:    resource.MustParse(options.WorkerCPU),
+							corev1.ResourceMemory: resource.MustParse(options.WorkerMemory),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse(options.workerCPU),
-							corev1.ResourceMemory: resource.MustParse(options.workerMemory),
+							corev1.ResourceCPU:    resource.MustParse(options.WorkerCPU),
+							corev1.ResourceMemory: resource.MustParse(options.WorkerMemory),
 						},
 					},
 				},
 			},
-			NodeSelector: options.workerNodeSelectors,
+			NodeSelector: options.WorkerNodeSelectors,
 		},
 	}
 
-	gpuResource := resource.MustParse(options.workerGPU)
+	gpuResource := resource.MustParse(options.WorkerGPU)
 	if !gpuResource.IsZero() {
 		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
 		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceName(util.ResourceNvidiaGPU)] = gpuResource
@@ -201,7 +195,7 @@ func createWorkerGroupSpec(options *CreateWorkerGroupOptions) rayv1.WorkerGroupS
 	}
 	return rayv1.WorkerGroupSpec{
 		GroupName:      options.groupName,
-		Replicas:       &options.workerReplicas,
+		Replicas:       &options.WorkerReplicas,
 		NumOfHosts:     options.numOfHosts,
 		MinReplicas:    &options.workerMinReplicas,
 		MaxReplicas:    &options.workerMaxReplicas,
