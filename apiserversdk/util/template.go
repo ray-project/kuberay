@@ -43,13 +43,38 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 				return
 			}
 
+			var headGroupMap map[string]interface{}
+			var workerGroupMaps []interface{}
+			if rayClusterSpec, ok := spec["rayClusterSpec"].(map[string]interface{}); ok {
+				// For RayJob, get from spec.rayClusterSpec.headGroupSpec and spec.rayClusterSpec.workerGroupSpecs
+				if headGroup, ok := rayClusterSpec["headGroupSpec"].(map[string]interface{}); ok {
+					headGroupMap = headGroup
+				}
+				if workerGroups, ok := rayClusterSpec["workerGroupSpecs"].([]interface{}); ok {
+					workerGroupMaps = workerGroups
+				}
+			} else if rayClusterConfig, ok := spec["rayClusterConfig"].(map[string]interface{}); ok {
+				// For RayService, get from spec.rayClusterConfig.headGroupSpec and spec.rayClusterConfig.workerGroupSpecs
+				if headGroup, ok := rayClusterConfig["headGroupSpec"].(map[string]interface{}); ok {
+					headGroupMap = headGroup
+				}
+				if workerGroups, ok := rayClusterConfig["workerGroupSpecs"].([]interface{}); ok {
+					workerGroupMaps = workerGroups
+				}
+			} else {
+				// For RayCluster, get from spec.headGroupSpec and spec.workerGroupSpecs
+				if headGroup, ok := spec["headGroupSpec"].(map[string]interface{}); ok {
+					headGroupMap = headGroup
+				}
+				if workerGroups, ok := spec["workerGroupSpecs"].([]interface{}); ok {
+					workerGroupMaps = workerGroups
+				}
+			}
+
 			clientManager := manager.NewClientManager()
 			resourceManager := manager.NewResourceManager(&clientManager)
 
-			// TODO: This is the format for RayCluster, need to modify to apply also RayJob and RayService
-			// For RayCluster, headGroupMap is directly under spec
-			headGroupMap, ok := spec["headGroupSpec"].(map[string]interface{})
-			if ok {
+			if headGroupMap != nil {
 				computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, headGroupMap, namespace)
 				if err != nil {
 					klog.Errorf("Failed to get compute template for head group: %v", err)
@@ -58,25 +83,20 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 				}
 				if computeTemplate != nil {
 					applyComputeTemplateToRequest(computeTemplate, &headGroupMap, "head")
-					klog.Infof("Applied compute template '%s' to headGroupSpecs", computeTemplate.GetName())
 				}
 			}
 
 			// Apply compute templates to worker groups
-			workerGroupSpecs, ok := spec["workerGroupSpecs"].([]interface{})
-			if ok {
-				for i, workerGroupSpec := range workerGroupSpecs {
-					if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
-						computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
-						if err != nil {
-							klog.Errorf("Failed to get compute template for worker group: %v", err)
-							http.Error(w, err.Error(), http.StatusInternalServerError)
-							return
-						}
-						if computeTemplate != nil {
-							applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
-							klog.Infof("Applied compute template '%s' to workerGroupSpecs[%d]", computeTemplate.GetName(), i)
-						}
+			for _, workerGroupSpec := range workerGroupMaps {
+				if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
+					computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
+					if err != nil {
+						klog.Errorf("Failed to get compute template for worker group: %v", err)
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
+					if computeTemplate != nil {
+						applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
 					}
 				}
 			}

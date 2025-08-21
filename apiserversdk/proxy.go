@@ -51,6 +51,10 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	ctMiddleware := apiserverutil.NewComputeTemplateMiddleware(k8sClient)
 	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayclusters", ctMiddleware(handler))
 	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayclusters/{name}", ctMiddleware(handler))
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayjobs", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayjobs/{name}", ctMiddleware(handler))
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayservices", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayservices/{name}", ctMiddleware(handler))
 
 	requireKubeRayServiceHandler := requireKubeRayService(handler, k8sClient)
 	// Allow accessing KubeRay dashboards and job submissions.
