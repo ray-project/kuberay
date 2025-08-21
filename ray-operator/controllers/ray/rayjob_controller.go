@@ -244,8 +244,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		var isK8sJobFinished bool
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
-			shouldUpdate, isK8sJobFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance,
-				rayJobInstance.Spec.SubmissionMode)
+			shouldUpdate, isK8sJobFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance, rayJobInstance.Spec.SubmissionMode)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
