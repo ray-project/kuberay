@@ -241,25 +241,15 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-			if shouldUpdate := r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
-				break
-			}
-		}
-
-		job := &batchv1.Job{}
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-			// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
-			// This is because, beyond this point, it becomes impossible for the submitter to submit any further Ray jobs.
-			// For light-weight mode, we don't transition the status to `Complete` or `Failed` based on the number of failed
-			// requests. Instead, users can use the `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight
-			// mode is not stuck in the `Running` status indefinitely.
-			namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
-			if err := r.Client.Get(ctx, namespacedName, job); err != nil {
-				logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
+		var isK8sJobFinished bool
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			var shouldUpdate bool
+			shouldUpdate, isK8sJobFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance,
+				rayJobInstance.Spec.SubmissionMode)
+			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			if shouldUpdate := checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, job); shouldUpdate {
+			if shouldUpdate {
 				break
 			}
 		}
@@ -301,8 +291,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-			_, finished := utils.IsJobFinished(job)
-			isJobTerminal = isJobTerminal && finished
+			isJobTerminal = isJobTerminal && isK8sJobFinished
 		}
 
 		if isJobTerminal {
@@ -952,6 +941,43 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	logger.Info("Try to transition the status to `Suspending`", "oldStatus", rayJob.Status.JobDeploymentStatus)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspending
 	return true
+}
+
+func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) (shouldUpdate, isK8sJobFinished bool, err error) {
+	switch submissionMode {
+	case rayv1.SidecarMode:
+		shouldUpdate = r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJob)
+		// Sidecar mode doesn't use k8s job, so isK8sJobFinished is always false
+		isK8sJobFinished = false
+		err = nil
+		return
+	case rayv1.K8sJobMode:
+		logger := ctrl.LoggerFrom(ctx)
+		job := &batchv1.Job{}
+		// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
+		// This is because, beyond this point, it becomes impossible for the submitter to submit any further Ray jobs.
+		// For light-weight mode, we don't transition the status to `Complete` or `Failed` based on the number of failed
+		// requests. Instead, users can use the `ActiveDeadlineSeconds` to ensure that the RayJob in the light-weight
+		// mode is not stuck in the `Running` status indefinitely.
+		namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+		if err = r.Client.Get(ctx, namespacedName, job); err != nil {
+			logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
+			shouldUpdate = false
+			isK8sJobFinished = false
+			return
+		}
+		shouldUpdate = checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJob, job)
+		_, isK8sJobFinished = utils.IsJobFinished(job)
+		err = nil
+		return
+	default:
+		logger := ctrl.LoggerFrom(ctx)
+		err = fmt.Errorf("you can only call checkSubmitterAndUpdateStatusIfNeeded when using K8sJobMode and SidecarMode")
+		logger.Error(err, "Invalid submission mode", "submissionMode", submissionMode)
+		shouldUpdate = false
+		isK8sJobFinished = false
+		return
+	}
 }
 
 func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, job *batchv1.Job) bool {
