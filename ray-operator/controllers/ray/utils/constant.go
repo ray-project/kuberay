@@ -206,7 +206,7 @@ const (
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue = "headgroup"
 
-	// SubmitterContainerName is the default name of the application container injected into the head Pod in SidecarMode.
+	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
 	SubmitterContainerName = "ray-job-submitter"
 
 	// KUBERAY_VERSION is the build version of KubeRay.

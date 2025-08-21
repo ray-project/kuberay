@@ -997,25 +997,24 @@ func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx cont
 
 	// Check container statuses for any error conditions
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
-		// Check for terminated containers with error exit codes
-		if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
-			logger.Info("Found container terminated with error",
-				"container", containerStatus.Name,
-				"exitCode", containerStatus.State.Terminated.ExitCode,
-				"reason", containerStatus.State.Terminated.Reason)
+		if containerStatus.Name == utils.SubmitterContainerName {
+			// Check for terminated containers with error exit codes
+			// Based on the document, "ray job submit" will exit with 0 if the job succeeded, or exit with 1 if it failed.
+			// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/cli.html#ray-job-submit
+			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
+				logger.Info("The ray job submit container exited with error",
+					"container", containerStatus.Name,
+					"exitCode", containerStatus.State.Terminated.ExitCode,
+					"reason", containerStatus.State.Terminated.Reason)
 
-			// Update RayJob status to Failed
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-
-			if strings.Contains(containerStatus.Name, utils.SubmitterContainerName) {
+				// Update RayJob status to Failed
+				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 				rayJob.Status.Reason = rayv1.SubmissionFailed
-			} else {
-				rayJob.Status.Reason = rayv1.AppFailed
-			}
-			rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-				containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
+				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
+					containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
 
-			return true
+				return true
+			}
 		}
 	}
 
