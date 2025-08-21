@@ -41,11 +41,6 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			}
 			klog.Infoln("Request Map: ", requestMap)
 
-			// TODO: a function to inject the compute template to the container
-			// 	- for head -> directly apply to the ray-head container
-			//  - For worker -> use the function within the loop, apply to the ray-worker container
-
-			// Type assert each level of the nested map
 			spec, ok := requestMap["spec"].(map[string]interface{})
 			if !ok {
 				klog.Errorf("spec is not a map")
@@ -66,7 +61,7 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 				return
 			}
 			applyComputeTemplateToRequest(computeTemplate, &headGroupMap, "head")
-			klog.Infoln("head group spec after injection: ", headGroupMap)
+			klog.Infof("Applied compute template '%s' to headGroupSpecs", computeTemplate.GetName())
 
 			// Apply compute templates to worker groups
 			workerGroupSpecs, ok := spec["workerGroupSpecs"].([]interface{})
@@ -83,11 +78,12 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 						return
 					}
 					applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
-					klog.Infof("Applied compute template to workerGroupSpecs[%d]", i)
+					klog.Infof("Applied compute template '%s' to workerGroupSpecs[%d]", computeTemplate.GetName(), i)
 				}
 			}
 			klog.Infoln("worker group spec after injection: ", workerGroupSpecs)
 
+			// TODO: make the modified map to bytes and forward
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			next.ServeHTTP(w, r)
 		})
@@ -187,11 +183,47 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 						// Only apply followings if container name is "ray-head" for head group or "ray-worker"
 						// for worker group
 						if containerMap["name"] == fmt.Sprintf("ray-%s", group) {
-							// TODO: keep working from here
-							klog.Infoln("Parsing more resources")
+							if gpu := computeTemplate.GetGpu(); gpu != 0 {
+								accelerator := "nvidia.com/gpu"
+								if len(computeTemplate.GetGpuAccelerator()) != 0 {
+									accelerator = computeTemplate.GetGpuAccelerator()
+								}
+								limits[accelerator] = gpu
+								requests[accelerator] = gpu
+							}
+
+							for k, v := range computeTemplate.GetExtendedResources() {
+								limits[k] = v
+								requests[k] = v
+							}
+
 						}
 					}
 				}
+			}
+
+			if computeTemplate.Tolerations != nil {
+				// Get existing tolerations
+				var tolerations []interface{}
+				if existingTolerations, exists := spec["tolerations"].([]interface{}); exists {
+					tolerations = existingTolerations
+				} else {
+					tolerations = make([]interface{}, 0)
+				}
+
+				// Add new tolerations from compute template
+				for _, t := range computeTemplate.Tolerations {
+					toleration := map[string]interface{}{
+						"key":      t.Key,
+						"operator": t.Operator,
+						"value":    t.Value,
+						"effect":   t.Effect,
+					}
+					tolerations = append(tolerations, toleration)
+				}
+
+				spec["tolerations"] = tolerations
+				klog.Infof("Applied %d tolerations to %s group", len(computeTemplate.Tolerations), group)
 			}
 		}
 	}
