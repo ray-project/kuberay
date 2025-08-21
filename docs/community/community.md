@@ -5,7 +5,7 @@ There are 4 roles in the KubeRay community:
 * **Contributor**: A contributor is a member who contributes to the KubeRay project through code, documentation,
 PR reviews, answering questions, etc.
 * **Triager**: A triager has the permission to triage issues and PRs.
-* **Approver**: An approver can approve PRs but cannot merge them.
+* **Reviewer**: A reviewer can review PRs but cannot merge them.
 * **Committer**: A committer can merge PRs and is responsible for the KubeRay project.
 
 ## Mechanism
@@ -18,9 +18,9 @@ It's helpful to join the KubeRay channel `#kuberay-questions` on the [Ray Slack 
 to get started. You can also read [ray-project/kuberay#1059](https://github.com/ray-project/kuberay/issues/1059)
 for tips on getting involved in the KubeRay community.
 
-In addition, I suggest adding the
+In addition, you can add the
 [Ray / KubeRay OSS community Google calendar](https://calendar.google.com/calendar/u/0?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20)
-to your calendar and joining the bi-weekly KubeRay community meetings.
+to your calendar and join the bi-weekly KubeRay community meetings.
 
 ### Becoming a Triager
 
@@ -28,11 +28,11 @@ A triager helps manage issues and PRs by assigning them to the appropriate peopl
 To become a triager, you should demonstrate a basic understanding of the overall KubeRay project
 so you can determine whether an issue or PR is valid and how to categorize it.
 
-### Becoming an Approver
+### Becoming a Reviewer
 
-To become a KubeRay approver, you should demonstrate a deep understanding of certain features
+To become a KubeRay reviewer, you should demonstrate a deep understanding of certain features
 or components of the KubeRay project.
-An approver should be able to review PRs and provide constructive feedback to help the author
+A reviewer should be able to review PRs and provide constructive feedback to help the author
 improve the PR. Ideally, committers should feel confident merging a PR if you have approved it.
 
 ### Becoming a Committer
