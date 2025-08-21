@@ -628,7 +628,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 			scheduler.AddMetadataToChildResourceFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
-			logger.Info("Check if rayjob have submitter pod template with task groups annotation in rayjob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+			logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
 		} else {
 			return err
 		}
