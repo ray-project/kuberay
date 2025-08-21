@@ -81,10 +81,19 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 					klog.Infof("Applied compute template '%s' to workerGroupSpecs[%d]", computeTemplate.GetName(), i)
 				}
 			}
-			klog.Infoln("worker group spec after injection: ", workerGroupSpecs)
 
-			// TODO: make the modified map to bytes and forward
-			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			// Convert the modified requestMap back to bytes
+			modifiedBodyBytes, err := yaml.Marshal(requestMap)
+			if err != nil {
+				klog.Errorf("Failed to marshal modified request map: %v", err)
+				http.Error(w, "Failed to process request", http.StatusInternalServerError)
+				return
+			}
+
+			// Update Content-Length header to match the new body size
+			r.ContentLength = int64(len(modifiedBodyBytes))
+			r.Header.Set("Content-Length", fmt.Sprintf("%d", len(modifiedBodyBytes)))
+			r.Body = io.NopCloser(bytes.NewReader(modifiedBodyBytes))
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -123,12 +132,6 @@ func getComputeTemplate(ctx context.Context, clusterSpecMap map[string]interface
 // Apply the computeTemplate into the clusterSpec map. The clusterSpec map is the map representation
 // for headGroupSpec or workerGroupSpec
 func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, clusterSpecMap *map[string]interface{}, group string) {
-	// put resources in the cmpute template into the containers' resource field
-	// group: head or worker
-
-	// 1. Add metadata.annotation: buildNodeGroupAnnotations(computeRuntime, spec.Image)
-	// 	-> template.metadata.annotation
-
 	// calculate resources
 	cpu := fmt.Sprint(computeTemplate.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeTemplate.GetMemory(), "Gi")
