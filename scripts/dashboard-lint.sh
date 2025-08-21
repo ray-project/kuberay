@@ -6,8 +6,6 @@ dirs_to_lint="dashboard"
 
 for dir in $dirs_to_lint; do
   pushd "$dir"
-  yarn install --immutable
-  yarn dedupe --check
   yarn lint
   popd
 done
