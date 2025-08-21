@@ -192,15 +192,14 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToRayClusterAndSubmitter
 
 	rayCluster.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
 
+	y.logger.Info("Gang Scheduling enabled for RayCluster")
+
 	if submitterTemplate.Annotations == nil {
 		submitterTemplate.Annotations = make(map[string]string)
 	}
 
-	if submitterTemplate.Annotations[YuniKornTaskGroupsAnnotationName] == "" {
-		submitterTemplate.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
-	}
+	submitterTemplate.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
 
-	y.logger.Info("Gang Scheduling enabled for RayCluster")
 	y.logger.Info("Gang Scheduling enabled for submitter pod template")
 }
 

@@ -879,9 +879,6 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 						return nil, err
 					}
 					scheduler.AddMetadataToChildResourceFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
-					if err := r.Update(ctx, rayJobInstance); err != nil {
-						return nil, err
-					}
 					logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
 				} else {
 					return nil, err
