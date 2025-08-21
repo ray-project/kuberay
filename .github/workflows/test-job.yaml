@@ -21,6 +21,7 @@ jobs:
         with:
           node-version: lts/*
           cache: yarn
+          cache-dependency-path: dashboard/yarn.lock
       - name: Check Yarn lock consistency
         run: |
           cd dashboard
