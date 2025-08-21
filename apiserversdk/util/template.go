@@ -21,8 +21,6 @@ import (
 func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			klog.Infoln("Get in to compute template middleware")
-
 			namespace := r.PathValue("namespace")
 
 			// Read request body
@@ -39,46 +37,47 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 				http.Error(w, "Failed to convert request body to Golang map object", http.StatusBadRequest)
 				return
 			}
-			klog.Infoln("Request Map: ", requestMap)
-
 			spec, ok := requestMap["spec"].(map[string]interface{})
 			if !ok {
 				klog.Errorf("spec is not a map")
 				return
 			}
 
+			clientManager := manager.NewClientManager()
+			resourceManager := manager.NewResourceManager(&clientManager)
+
 			// TODO: This is the format for RayCluster, need to modify to apply also RayJob and RayService
 			// For RayCluster, headGroupMap is directly under spec
 			headGroupMap, ok := spec["headGroupSpec"].(map[string]interface{})
-			if !ok {
-				klog.Errorf("headGroupSpec is not a map")
-				return
+			if ok {
+				computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, headGroupMap, namespace)
+				if err != nil {
+					klog.Errorf("Failed to get compute template for head group: %v", err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if computeTemplate != nil {
+					applyComputeTemplateToRequest(computeTemplate, &headGroupMap, "head")
+					klog.Infof("Applied compute template '%s' to headGroupSpecs", computeTemplate.GetName())
+				}
 			}
-			computeTemplate, err := getComputeTemplate(context.Background(), headGroupMap, namespace)
-			if err != nil {
-				klog.Errorf("Failed to get compute template for head group: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			applyComputeTemplateToRequest(computeTemplate, &headGroupMap, "head")
-			klog.Infof("Applied compute template '%s' to headGroupSpecs", computeTemplate.GetName())
 
 			// Apply compute templates to worker groups
 			workerGroupSpecs, ok := spec["workerGroupSpecs"].([]interface{})
-			if !ok {
-				klog.Errorf("Cannot convert workerGroupSpecs to a map")
-				return
-			}
-			for i, workerGroupSpec := range workerGroupSpecs {
-				if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
-					computeTemplate, err := getComputeTemplate(context.Background(), workerGroupMap, namespace)
-					if err != nil {
-						klog.Errorf("Failed to get compute template for worker group: %v", err)
-						http.Error(w, err.Error(), http.StatusInternalServerError)
-						return
+			if ok {
+				for i, workerGroupSpec := range workerGroupSpecs {
+					if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
+						computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
+						if err != nil {
+							klog.Errorf("Failed to get compute template for worker group: %v", err)
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						if computeTemplate != nil {
+							applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
+							klog.Infof("Applied compute template '%s' to workerGroupSpecs[%d]", computeTemplate.GetName(), i)
+						}
 					}
-					applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
-					klog.Infof("Applied compute template '%s' to workerGroupSpecs[%d]", computeTemplate.GetName(), i)
 				}
 			}
 
@@ -110,15 +109,12 @@ func convertRequestBodyToMap(requestBody []byte) (map[string]any, error) {
 }
 
 // Get the compute template by extracting the name from request and query the compute template
-func getComputeTemplate(ctx context.Context, clusterSpecMap map[string]interface{}, nameSpace string) (*api.ComputeTemplate, error) {
+func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceManager, clusterSpecMap map[string]interface{}, nameSpace string) (*api.ComputeTemplate, error) {
 	name, ok := clusterSpecMap["computeTemplate"].(string)
 	if !ok {
 		// No compute template name found, directly return
 		return nil, nil
 	}
-
-	clientManager := manager.NewClientManager()
-	resourceManager := manager.NewResourceManager(&clientManager)
 
 	configMap, err := resourceManager.GetComputeTemplate(ctx, name, nameSpace)
 	if err != nil {
@@ -154,7 +150,7 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 		// apply resources to containers
 		if spec, ok := template["spec"].(map[string]interface{}); ok {
 			if containers, ok := spec["containers"].([]interface{}); ok {
-				for i, container := range containers {
+				for _, container := range containers {
 					if containerMap, ok := container.(map[string]interface{}); ok {
 						// Get or create resources section for this container
 						resources, exists := containerMap["resources"].(map[string]interface{})
@@ -180,8 +176,6 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 						}
 						requests["cpu"] = cpu
 						requests["memory"] = memory
-
-						klog.Infof("Applied resources to container[%d] in %s group: CPU=%s, Memory=%s", i, group, cpu, memory)
 
 						// Only apply followings if container name is "ray-head" for head group or "ray-worker"
 						// for worker group
@@ -226,7 +220,6 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 				}
 
 				spec["tolerations"] = tolerations
-				klog.Infof("Applied %d tolerations to %s group", len(computeTemplate.Tolerations), group)
 			}
 		}
 	}
