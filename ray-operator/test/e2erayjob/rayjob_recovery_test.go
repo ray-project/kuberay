@@ -1,4 +1,4 @@
-package e2e
+package e2erayjob
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ func TestRayJobRecovery(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := newConfigMap(namespace.Name, files(test, "long_running_counter.py"))
+	jobsAC := NewConfigMap(namespace.Name, Files(test, "long_running_counter.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -30,14 +30,14 @@ func TestRayJobRecovery(t *testing.T) {
 	test.T().Run("RayJob should recover after pod deletion", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(newRayClusterSpec(mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running_counter.py").
 				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
 `).
 				WithShutdownAfterJobFinishes(true).
-				WithSubmitterPodTemplate(jobSubmitterPodTemplateApplyConfiguration()))
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())

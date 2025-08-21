@@ -70,12 +70,16 @@ logging:
 #  4. Use PodGroup
 #       batchScheduler:
 #         name: scheduler-plugins
-#
+
+#  5. Use Kai Scheduler
+#       batchScheduler:
+#         name: kai-scheduler
+
 batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano", "yunikorn" or "scheduler-plugins", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn", "kai-scheduler" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
@@ -111,6 +115,11 @@ operatorCommand: /manager
 
 # -- If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true
+
+# -- The maximum number of reconcile operations that can be performed simultaneously.
+# This setting controls the concurrency of the controller reconciliation loops.
+# Higher values can improve throughput in clusters with many resources, but may increase resource consumption.
+reconcileConcurrency: 1
 
 # -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
