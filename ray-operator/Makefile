@@ -108,7 +108,7 @@ build: fmt vet ## Build manager binary.
 # For detail, see https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#issue-5-fail-to-create-update-serve-applications
 # 	go run ./main.go -enable-leader-election=false
 build-rayjobsubmitter:
-	go build -a -o bin/submitter ./rayjobsubmitter/cmd/main.go
+	go build -o bin/submitter ./rayjobsubmitter/cmd/main.go
 
 docker-image: ## Build image only
 	${ENGINE} build -t ${IMG} .
