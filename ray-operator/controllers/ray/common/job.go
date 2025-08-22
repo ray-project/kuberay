@@ -94,13 +94,18 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	//   then ray job submit --address http://$RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID --no-wait -- ... ;
 	//   fi ; ray job logs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
 	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
-	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address, "--no-wait"}
+	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
 	cmd = append(cmd, waitLoop...)
-	cmd = append(cmd, "if", "!")
-	cmd = append(cmd, jobStatusCommand...)
-	cmd = append(cmd, ";", "then")
+	// In Sidecar mode, we only support RayJob level retry, which means that the submitter job being retried on an existing cluster won't happen
+	// so we won't have to check if the job has been submitted.
+	if submissionMode == rayv1.K8sJobMode {
+		// Only check job status in K8s mode to handle duplicated submission gracefully
+		cmd = append(cmd, "if", "!")
+		cmd = append(cmd, jobStatusCommand...)
+		cmd = append(cmd, ";", "then")
+	}
 	cmd = append(cmd, jobSubmitCommand...)
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
@@ -136,7 +141,11 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	cmd = append(cmd, "--", entrypoint, ";", "fi", ";")
+	cmd = append(cmd, "--", entrypoint, ";")
+	if submissionMode == rayv1.K8sJobMode {
+		cmd = append(cmd, "fi", ";")
+	}
+
 	cmd = append(cmd, jobFollowCommand...)
 
 	return cmd, nil
