@@ -19,7 +19,7 @@ export const useListJobs = (refreshInterval: number = 5000) => {
     fetcher,
     {
       refreshInterval,
-    }
+    },
   );
 
   return {

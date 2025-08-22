@@ -35,10 +35,10 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
 
 function getComparator<Key extends keyof any>(
   order: Order,
-  orderBy: Key
+  orderBy: Key,
 ): (
   a: { [key in Key]: number | string },
-  b: { [key in Key]: number | string }
+  b: { [key in Key]: number | string },
 ) => number {
   return order === "desc"
     ? (a, b) => descendingComparator(a, b, orderBy)
@@ -47,7 +47,7 @@ function getComparator<Key extends keyof any>(
 
 // T is the data format for each row, S is the sortable keys
 export const FrontendTable = <T extends { name: string }>(
-  props: IFrontendTableProps<T>
+  props: IFrontendTableProps<T>,
 ) => {
   const {
     data,
@@ -62,7 +62,7 @@ export const FrontendTable = <T extends { name: string }>(
   } = props;
   const [order, setOrder] = React.useState<Order>("desc");
   const [orderBy, setOrderBy] = React.useState<keyof T & string>(
-    defaultOrderBy
+    defaultOrderBy,
   );
   const [selected, setSelected] = React.useState<readonly string[]>([]);
   const [page, setPage] = React.useState(1);
@@ -92,7 +92,7 @@ export const FrontendTable = <T extends { name: string }>(
 
   const handleRequestSort = (
     event: React.MouseEvent<unknown>,
-    property: keyof T & string
+    property: keyof T & string,
   ) => {
     const isAsc = orderBy === property && order === "asc";
     setOrder(isAsc ? "desc" : "asc");
@@ -124,7 +124,7 @@ export const FrontendTable = <T extends { name: string }>(
     } else if (selectedIndex > 0) {
       newSelected = newSelected.concat(
         selected.slice(0, selectedIndex),
-        selected.slice(selectedIndex + 1)
+        selected.slice(selectedIndex + 1),
       );
     }
 
@@ -137,7 +137,7 @@ export const FrontendTable = <T extends { name: string }>(
   };
 
   const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLSelectElement>
+    event: React.ChangeEvent<HTMLSelectElement>,
   ) => {
     setRowsPerPage(parseInt(event.target.value.toString(), 10));
     setPage(1);
