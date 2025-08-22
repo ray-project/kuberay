@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	. "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 )
 
 const (

@@ -34,6 +34,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utilstype "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -270,8 +271,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -495,8 +496,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -660,8 +661,8 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("RayJobs's JobDeploymentStatus transitions from Running -> Retrying -> New -> Initializing", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
 				//nolint:unparam // this is a mock and the function signature cannot change
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) {
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) {
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -755,8 +756,8 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("RayJobs's JobDeploymentStatus transitions from Running -> Complete (attempt 2)", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
 				//nolint:unparam // this is a mock and the function signature cannot change
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) {
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) {
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -982,8 +983,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -1121,8 +1122,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -1260,8 +1261,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -1416,8 +1417,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -1561,8 +1562,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 
@@ -1677,8 +1678,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 
@@ -1804,8 +1805,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Succeeded" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
@@ -1965,8 +1966,8 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
 				// Update fake dashboard client to return job info with "Failed" status.
-				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
-					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				getJobInfo := func(context.Context, string) (*utilstype.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utilstype.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
 				}
 				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
 				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)

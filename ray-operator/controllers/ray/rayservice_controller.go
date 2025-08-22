@@ -32,6 +32,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utilstype "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -773,7 +774,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard.
 func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface) (bool, map[string]rayv1.AppStatus, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	var serveAppStatuses map[string]*utils.ServeApplicationStatus
+	var serveAppStatuses map[string]*utilstype.ServeApplicationStatus
 	var err error
 	if serveAppStatuses, err = dashboardClient.GetMultiApplicationStatus(ctx); err != nil {
 		err = fmt.Errorf(

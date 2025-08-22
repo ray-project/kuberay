@@ -19,6 +19,7 @@ import (
 
 	api "github.com/ray-project/kuberay/proto/go_client"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utilstype "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 )
 
 type RayJobSubmissionServiceServerOptions struct {
@@ -54,7 +55,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 	if err := rayDashboardClient.InitClient(ctx, *url, nil); err != nil {
 		return nil, err
 	}
-	request := &utils.RayJobRequest{Entrypoint: req.Jobsubmission.Entrypoint}
+	request := &utilstype.RayJobRequest{Entrypoint: req.Jobsubmission.Entrypoint}
 	if req.Jobsubmission.SubmissionId != "" {
 		request.SubmissionId = req.Jobsubmission.SubmissionId
 	}
@@ -221,7 +222,7 @@ func (s *RayJobSubmissionServiceServer) getRayClusterURL(ctx context.Context, re
 }
 
 // Internal method to convert RayJobInfo to JobSubmissionInfo
-func convertNodeInfo(info *utils.RayJobInfo) *api.JobSubmissionInfo {
+func convertNodeInfo(info *utilstype.RayJobInfo) *api.JobSubmissionInfo {
 	jsi := api.JobSubmissionInfo{
 		Entrypoint:   info.Entrypoint,
 		JobId:        info.JobId,
