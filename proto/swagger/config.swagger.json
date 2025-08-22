@@ -387,8 +387,8 @@
           ]
         },
         "memory": {
-          "type": "integer",
-          "format": "int64",
+          "type": "number",
+          "format": "float",
           "title": "Required. Number of memory",
           "required": [
             "memory"

@@ -643,7 +643,7 @@ func TestFromKubeToAPIComputeTemplates(t *testing.T) {
 
 	template := templates[0]
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
-	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.InDelta(t, float32(8), template.Memory, 1e-6, "Memory mismatch")
 	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
 	assert.Equal(t, "", template.GpuAccelerator, "GPU accelerator mismatch")
 }
@@ -666,7 +666,7 @@ func TestPopulateTemplate(t *testing.T) {
 	}
 
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
-	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
+	assert.InDelta(t, float32(8), template.Memory, 1e-6, "Memory mismatch")
 	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
 	assert.Equal(
 		t,

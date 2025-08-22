@@ -179,7 +179,7 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
-	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
+	memory := fmt.Sprintf("%.2fGi", computeRuntime.GetMemory())
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
@@ -433,7 +433,7 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
-	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), "Gi")
+	memory := fmt.Sprintf("%.2fGi", computeRuntime.GetMemory())
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
@@ -853,7 +853,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		"name":               runtime.Name,
 		"namespace":          runtime.Namespace,
 		"cpu":                strconv.FormatUint(uint64(runtime.Cpu), 10),
-		"memory":             strconv.FormatUint(uint64(runtime.Memory), 10),
+		"memory":             strconv.FormatFloat(float64(runtime.Memory), 'f', -1, 32),
 		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
 		"gpu_accelerator":    runtime.GpuAccelerator,
 		"extended_resources": string(extendedResourcesJSON),
