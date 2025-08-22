@@ -24,7 +24,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	utilstype "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -589,7 +589,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
 	fakeDashboardClient := utils.FakeRayDashboardClient{}
 	status := generateServeStatus(deploymentStatus, appStatus)
-	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utilstype.ServeApplicationStatus{appName: &status})
+	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utiltypes.ServeApplicationStatus{appName: &status})
 	return &fakeDashboardClient
 }
 

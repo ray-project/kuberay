@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	utilstype "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
 )
 
 var (
@@ -32,12 +32,12 @@ type RayDashboardClientInterface interface {
 	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
-	GetServeDetails(ctx context.Context) (*utilstype.ServeDetails, error)
-	GetMultiApplicationStatus(context.Context) (map[string]*utilstype.ServeApplicationStatus, error)
-	GetJobInfo(ctx context.Context, jobId string) (*utilstype.RayJobInfo, error)
-	ListJobs(ctx context.Context) (*[]utilstype.RayJobInfo, error)
+	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
+	GetMultiApplicationStatus(context.Context) (map[string]*utiltypes.ServeApplicationStatus, error)
+	GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error)
+	ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
-	SubmitJobReq(ctx context.Context, request *utilstype.RayJobRequest, name *string) (string, error)
+	SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest, name *string) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
@@ -159,7 +159,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	return nil
 }
 
-func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*utilstype.ServeApplicationStatus, error) {
+func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*utiltypes.ServeApplicationStatus, error) {
 	serveDetails, err := r.GetServeDetails(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get serve details: %w", err)
@@ -169,7 +169,7 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 }
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
-func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utilstype.ServeDetails, error) {
+func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
 	if err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utilstype.Se
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
 	}
 
-	var serveDetails utilstype.ServeDetails
+	var serveDetails utiltypes.ServeDetails
 	if err = json.Unmarshal(body, &serveDetails); err != nil {
 		return nil, fmt.Errorf("GetServeDetails failed. Failed to unmarshal bytes: %s", string(body))
 	}
@@ -198,13 +198,13 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utilstype.Se
 	return &serveDetails, nil
 }
 
-func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *utilstype.ServeDetails) (map[string]*utilstype.ServeApplicationStatus, error) {
+func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *utiltypes.ServeDetails) (map[string]*utiltypes.ServeApplicationStatus, error) {
 	detailsJson, err := json.Marshal(serveDetails.Applications)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to marshal serve details: %v", serveDetails.Applications)
 	}
 
-	applicationStatuses := map[string]*utilstype.ServeApplicationStatus{}
+	applicationStatuses := map[string]*utiltypes.ServeApplicationStatus{}
 	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
 		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
 	}
@@ -214,7 +214,7 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
-func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utilstype.RayJobInfo, error) {
+func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
@@ -235,7 +235,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 		return nil, fmt.Errorf("failed to read response when getting job info: %w", err)
 	}
 
-	var jobInfo utilstype.RayJobInfo
+	var jobInfo utiltypes.RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
@@ -244,7 +244,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 	return &jobInfo, nil
 }
 
-func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utilstype.RayJobInfo, error) {
+func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utilstype.RayJobI
 		return nil, fmt.Errorf("failed to read response when listing jobs: %w", err)
 	}
 
-	var jobInfo []utilstype.RayJobInfo
+	var jobInfo []utiltypes.RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
@@ -282,7 +282,7 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	return r.SubmitJobReq(ctx, request, &rayJob.Name)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utilstype.RayJobRequest, name *string) (jobId string, err error) {
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest, name *string) (jobId string, err error) {
 	log := ctrl.LoggerFrom(ctx)
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
@@ -313,7 +313,7 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utilstyp
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
 	}
 
-	var jobResp utilstype.RayJobResponse
+	var jobResp utiltypes.RayJobResponse
 	if err = json.Unmarshal(body, &jobResp); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return "", fmt.Errorf("SubmitJob fail: %s", string(body))
@@ -348,7 +348,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 		return nil, fmt.Errorf("failed to read response when getting job log: %w", err)
 	}
 
-	var jobLog utilstype.RayJobLogsResponse
+	var jobLog utiltypes.RayJobLogsResponse
 	if err = json.Unmarshal(body, &jobLog); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
 		return nil, fmt.Errorf("GetJobLog fail: %s", string(body))
@@ -378,7 +378,7 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 		return fmt.Errorf("failed to read response when stopping job: %w", err)
 	}
 
-	var jobStopResp utilstype.RayJobStopResponse
+	var jobStopResp utiltypes.RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
 		return err
 	}
@@ -415,8 +415,8 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	return nil
 }
 
-func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utilstype.RayJobRequest, error) {
-	req := &utilstype.RayJobRequest{
+func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utiltypes.RayJobRequest, error) {
+	req := &utiltypes.RayJobRequest{
 		Entrypoint:   rayJob.Spec.Entrypoint,
 		SubmissionId: rayJob.Status.JobId,
 		Metadata:     rayJob.Spec.Metadata,
@@ -438,8 +438,8 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utilstype.RayJobRequest, error) 
 	return req, nil
 }
 
-func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utilstype.RuntimeEnvType, error) {
-	var runtimeEnv utilstype.RuntimeEnvType
+func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utiltypes.RuntimeEnvType, error) {
+	var runtimeEnv utiltypes.RuntimeEnvType
 	if err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}
