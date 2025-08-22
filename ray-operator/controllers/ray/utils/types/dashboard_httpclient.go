@@ -1,4 +1,4 @@
-package utiltypes
+package types
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"

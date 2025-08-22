@@ -34,7 +34,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
+	types "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -406,7 +406,7 @@ var _ = Context("RayService env tests", func() {
 
 				// Update the fake Ray dashboard client to return serve application statuses with the new serve application.
 				healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
-				fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*utiltypes.ServeApplicationStatus{newServeAppName: &healthyStatus})
+				fakeRayDashboardClient.SetMultiApplicationStatuses(map[string]*types.ServeApplicationStatus{newServeAppName: &healthyStatus})
 			})
 
 			It("New serve application should be shown in the RayService status", func() {

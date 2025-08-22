@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 type FakeRayDashboardClient struct {

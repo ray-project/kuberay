@@ -15,7 +15,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/utils-type"
+	types "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 func getResourceFunc(ctx context.Context, key client.ObjectKey, obj client.Object) func() error {
@@ -134,15 +134,15 @@ func prepareFakeRayDashboardClient() *utils.FakeRayDashboardClient {
 	client := &utils.FakeRayDashboardClient{}
 
 	healthyStatus := generateServeStatus(rayv1.DeploymentStatusEnum.HEALTHY, rayv1.ApplicationStatusEnum.RUNNING)
-	client.SetMultiApplicationStatuses(map[string]*utiltypes.ServeApplicationStatus{"app": &healthyStatus})
+	client.SetMultiApplicationStatuses(map[string]*types.ServeApplicationStatus{"app": &healthyStatus})
 
 	return client
 }
 
-func generateServeStatus(deploymentStatus string, applicationStatus string) utiltypes.ServeApplicationStatus {
-	return utiltypes.ServeApplicationStatus{
+func generateServeStatus(deploymentStatus string, applicationStatus string) types.ServeApplicationStatus {
+	return types.ServeApplicationStatus{
 		Status: applicationStatus,
-		Deployments: map[string]utiltypes.ServeDeploymentStatus{
+		Deployments: map[string]types.ServeDeploymentStatus{
 			"shallow": {
 				Name:    "shallow",
 				Status:  deploymentStatus,
