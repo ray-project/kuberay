@@ -170,7 +170,7 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(_ context.Context,
 func (y *YuniKornScheduler) populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(_ context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec) {
 	taskGroups, err := newTaskGroupsFromRayJob(rayJob, submitterTemplate)
 	if err != nil {
-		y.logger.Error(err, "failed to create task groups from RayJob", "rayJob", rayJob.Name, "namespace", rayJob.Namespace)
+		y.logger.Error(err, "failed to create task groups from RayJob", "RayJob", rayJob.Name, "namespace", rayJob.Namespace)
 		return
 	}
 	taskGroupsAnnotationValue, err := taskGroups.marshal()
