@@ -20,11 +20,11 @@ func main() {
 		entrypointNumGpus   float32
 	)
 
-	flag.StringVar(&runtimeEnvJson, "runtime-env-json", "", "")
-	flag.StringVar(&metadataJson, "metadata-json", "", "")
-	flag.StringVar(&entrypointResources, "entrypoint-resources", "", "")
-	flag.Float32Var(&entrypointNumCpus, "entrypoint-num-cpus", 0.0, "")
-	flag.Float32Var(&entrypointNumGpus, "entrypoint-num-gpus", 0.0, "")
+	flag.StringVar(&runtimeEnvJson, "runtime-env-json", "", "JSON-serialized runtime_env dictionary.")
+	flag.StringVar(&metadataJson, "metadata-json", "", "JSON-serialized dictionary of metadata to attach to the job.")
+	flag.StringVar(&entrypointResources, "entrypoint-resources", "", "a JSON-serialized dictionary mapping resource name to resource quantity describing resources to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
+	flag.Float32Var(&entrypointNumCpus, "entrypoint-num-cpus", 0.0, "the quantity of CPU cores to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
+	flag.Float32Var(&entrypointNumGpus, "entrypoint-num-gpus", 0.0, "the quantity of GPU cores to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
 	flag.Parse()
 
 	address := os.Getenv("RAY_DASHBOARD_ADDRESS")
