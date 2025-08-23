@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 const (
@@ -92,7 +93,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobResponse{
+				body := &utiltypes.RayJobResponse{
 					JobId: expectJobId,
 				}
 				bodyBytes, _ := json.Marshal(body)
@@ -100,7 +101,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+expectJobId,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
@@ -134,7 +135,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: true,
 				}
 				bodyBytes, _ := json.Marshal(body)
@@ -151,7 +152,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		defer httpmock.DeactivateAndReset()
 		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: false,
 				}
 				bodyBytes, _ := json.Marshal(body)
@@ -159,7 +160,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 			})
 		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
