@@ -1,9 +1,11 @@
 package e2erayjobsubmitter
 
 import (
+	"io"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -52,9 +54,29 @@ func TestRayJobSubmitter(t *testing.T) {
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 
-		// And the RayJob deployment status is updated accordingly
+		// Check the RayJob deployment status is updated accordingly
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Get and verify submitter pod logs
+		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name=successful-rayjob"))(g)
+		g.Expect(submitterPods).NotTo(BeEmpty(), "Expected to find at least one submitter pod with label job-name=successful-rayjob")
+
+		submitterPod := submitterPods[0]
+		stream, err := test.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(submitterPod.Name, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
+		g.Expect(err).NotTo(HaveOccurred())
+		defer stream.Close()
+
+		logBytes, err := io.ReadAll(stream)
+		g.Expect(err).NotTo(HaveOccurred())
+		logContent := string(logBytes)
+
+		// Verify the logs contain expected content
+		g.Expect(logContent).To(ContainSubstring("test_counter got 1"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 2"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 3"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 4"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 5"))
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
@@ -83,6 +105,9 @@ func TestRayJobSubmitter(t *testing.T) {
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.SubmissionFailed)))
+
+		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name=failed-rayjob"))(g)
+		g.Expect(submitterPods).To(HaveLen(3), "Expected to find exactly three submitter pods with label job-name=failed-rayjob")
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
