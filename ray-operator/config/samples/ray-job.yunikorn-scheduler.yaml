@@ -1,10 +1,10 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: rayjob-yunikorn-scheduler-0
+  name: rayjob-yunikorn-0
   labels:
     ray.io/gang-scheduling-enabled: "true"
-    yunikorn.apache.org/app-id: test-yunikorn-job-0
+    yunikorn.apache.org/app-id: rayjob-yunikorn-0
     yunikorn.apache.org/queue: root.test
 spec:
   # submissionMode specifies how RayJob submits the Ray job to the RayCluster.
