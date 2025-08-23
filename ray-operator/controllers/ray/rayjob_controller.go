@@ -137,7 +137,19 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Error(err, "The RayJob metadata is invalid")
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
 			"The RayJob metadata is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+
+		// Mark as failed for validation errors
+		rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+		rayJobInstance.Status.Reason = rayv1.ValidationFailed
+		rayJobInstance.Status.Message = fmt.Sprintf("Metadata validation failed: %v", err)
+
+		if updateErr := r.Status().Update(ctx, rayJobInstance); updateErr != nil {
+			logger.Error(updateErr, "Failed to update RayJob status after validation failure")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, updateErr
+		}
+
+		return ctrl.Result{}, nil
 	}
 
 	if err := utils.ValidateRayJobSpec(rayJobInstance); err != nil {
