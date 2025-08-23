@@ -199,3 +199,49 @@ func TestPopulateVolumes(t *testing.T) {
 		}
 	}
 }
+
+func TestGetVolumeHostPathType(t *testing.T) {
+	// Test case 1: HostPath type is nil
+	vol1 := corev1.Volume{
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/tmp",
+				Type: nil,
+			},
+		},
+	}
+	result1 := GetVolumeHostPathType(&vol1)
+	if result1 != api.Volume_FILE {
+		t.Errorf("Expected FILE type, got %v", result1)
+	}
+
+	// Test case 2: HostPath type is HostPathFile
+	typeFile := corev1.HostPathFile
+	vol2 := corev1.Volume{
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/tmp",
+				Type: &typeFile,
+			},
+		},
+	}
+	result2 := GetVolumeHostPathType(&vol2)
+	if result2 != api.Volume_FILE {
+		t.Errorf("Expected FILE type, got %v", result2)
+	}
+
+	// Test case 3: HostPath type is HostPathDirectory
+	typeDir := corev1.HostPathDirectory
+	vol3 := corev1.Volume{
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/tmp",
+				Type: &typeDir,
+			},
+		},
+	}
+	result3 := GetVolumeHostPathType(&vol3)
+	if result3 != api.Volume_DIRECTORY {
+		t.Errorf("Expected DIRECTORY type, got %v", result3)
+	}
+}
