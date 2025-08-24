@@ -16,13 +16,13 @@ COPY controllers/ controllers/
 COPY pkg/features pkg/features
 COPY pkg/utils pkg/utils
 COPY pkg/webhooks pkg/webhooks
-COPY rayjobsubmitter/ rayjobsubmitter/
+COPY rayjob-submitter/ rayjob-submitter/
 
 # Build
 USER root
 RUN CGO_ENABLED=1 GOOS=linux go build -tags strictfipsruntime -a -o manager main.go
 # Build the submitter binary with -ldflags="-w -s" to reduce the size of the binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -a -o submitter ./rayjobsubmitter/cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -a -o submitter ./rayjob-submitter/cmd/main.go
 
 FROM scratch AS submitter
 WORKDIR /

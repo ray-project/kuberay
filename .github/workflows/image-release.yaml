@@ -278,7 +278,7 @@ jobs:
 
       - name: Build Docker Image - Submitter
         run: |
-          IMG=kuberay/submitter:${{ steps.vars.outputs.sha_short }} make docker-image-rayjobsubmitter
+          IMG=kuberay/submitter:${{ steps.vars.outputs.sha_short }} make docker-image-rayjob-submitter
         working-directory: ${{env.working-directory}}
 
       - name: Log in to Quay.io
@@ -294,7 +294,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
         run: |
-          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjobsubmitter/cmd/main.go
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjob-submitter/cmd/main.go
         working-directory: ${{env.working-directory}}
 
       - name: Build linux/arm64 submitter binary
@@ -303,7 +303,7 @@ jobs:
           GOOS: linux
           GOARCH: arm64
         run: |
-          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjobsubmitter/cmd/main.go
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjob-submitter/cmd/main.go
         working-directory: ${{env.working-directory}}
 
       - name: Set up Docker Buildx

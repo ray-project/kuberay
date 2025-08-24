@@ -80,8 +80,8 @@ test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
 test-e2e-upgrade: manifests fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
-test-e2e-rayjobsubmitter: WHAT ?= ./test/e2erayjobsubmitter
-test-e2e-rayjobsubmitter: manifests fmt vet ## Run e2e tests.
+test-e2e-rayjob-submitter: WHAT ?= ./test/e2erayjobsubmitter
+test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e tests.
 	go test -timeout 30m -v $(WHAT)
 
 test-sampleyaml: WHAT ?= ./test/sampleyaml
@@ -107,8 +107,8 @@ build: fmt vet ## Build manager binary.
 # KubeRay sends HTTP requests to the Ray head using ${HEAD_SVC_FQDN}:52365 which is not reachable from outside of a K8s cluster.
 # For detail, see https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#issue-5-fail-to-create-update-serve-applications
 # 	go run ./main.go -enable-leader-election=false
-build-rayjobsubmitter:
-	go build -o bin/submitter ./rayjobsubmitter/cmd/main.go
+build-rayjob-submitter:
+	go build -o bin/submitter ./rayjob-submitter/cmd/main.go
 
 docker-image: ## Build image only
 	${ENGINE} build -t ${IMG} .
@@ -121,7 +121,7 @@ docker-push: ## Push image with the manager.
 docker-multi-arch-image: # Build and push multi arch image, amd64 and arm64 currently
 	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64/v8 -t ${IMG} .
 
-docker-image-rayjobsubmitter:
+docker-image-rayjob-submitter:
 	${ENGINE} build -t ${IMG} --target submitter .
 
 ##@ Deployment

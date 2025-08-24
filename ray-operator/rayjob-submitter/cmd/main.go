@@ -8,7 +8,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/ray-project/kuberay/ray-operator/rayjobsubmitter"
+	rayjobsubmitter "github.com/ray-project/kuberay/ray-operator/rayjob-submitter"
 )
 
 func main() {
