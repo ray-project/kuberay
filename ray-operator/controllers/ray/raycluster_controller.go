@@ -663,14 +663,54 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 
+		// Check if RayTpuMulithostIndexing feature is enabled
+		multihostIndexingEnabled := features.Enabled(features.RayMulithostIndexing) && worker.NumOfHosts > 1
+		var workerGrpReplicaMap map[string][]corev1.Pod
+
+		// Map current existing pods by label
+		if multihostIndexingEnabled {
+			workerGrpReplicaMap = make(map[string][]corev1.Pod)
+			for _, pod := range workerPods.Items {
+				if value, ok := pod.GetLabels()[utils.RayWorkerReplicaIndexKey]; ok {
+					podList := workerGrpReplicaMap[value]
+					workerGrpReplicaMap[value] = append(podList, pod)
+				}
+			}
+		}
+
 		// Delete unhealthy worker Pods.
 		deletedWorkers := make(map[string]struct{})
 		deleted := struct{}{}
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
+			// This check will see if the pod was already deleted
+			if _, ok := deletedWorkers[workerPod.Name]; ok && shouldDelete {
+				continue
+			}
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
-			if shouldDelete {
+			// Atomic replica group delete if RayMulithostIndexing is enabled and numOfHost > 1
+			if multihostIndexingEnabled && shouldDelete {
+				numDeletedUnhealthyWorkerPods += int(worker.NumOfHosts)
+				// find all worker pods with the same replica group
+				replicaGrpName := workerPod.Labels[utils.RayWorkerReplicaIndexKey]
+				replicaGrpPodListToDelete := workerGrpReplicaMap[replicaGrpName]
+				// delete all pods within the group replica
+				for _, replicaGrpPod := range replicaGrpPodListToDelete {
+					deletedWorkers[replicaGrpPod.Name] = deleted
+					if err := r.Delete(ctx, &replicaGrpPod); err != nil {
+						r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod),
+							"Failed deleting worker Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v, %v",
+							replicaGrpPod.Namespace, replicaGrpPod.Name, replicaGrpPod.Status.Phase, replicaGrpPod.Spec.RestartPolicy, getRayContainerStateTerminated(replicaGrpPod), err)
+						return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
+					}
+					r.rayClusterScaleExpectation.ExpectScalePod(replicaGrpPod.Namespace, instance.Name, worker.GroupName, replicaGrpPod.Name, expectations.Delete)
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+						"Deleted worker Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
+						replicaGrpPod.Namespace, replicaGrpPod.Name, replicaGrpPod.Status.Phase, replicaGrpPod.Spec.RestartPolicy, getRayContainerStateTerminated(replicaGrpPod))
+				}
+				delete(workerGrpReplicaMap, replicaGrpName)
+			} else if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
 				deletedWorkers[workerPod.Name] = deleted
 				if err := r.Delete(ctx, &workerPod); err != nil {
@@ -733,11 +773,35 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if diff > 0 {
 			// pods need to be added
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
-			// create all workers of this group
-			for i := 0; i < diff; i++ {
-				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
-				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
-					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+
+			// Worker creation path for multi-host indexing
+			if multihostIndexingEnabled {
+				// Check if the number of missing workers are groups of NumOfHost. This case should not occur as pods will be deleted in replica groups
+				if diff%int(worker.NumOfHosts) != 0 {
+					logger.Info("Uneven number of pods were found for multi-host worker groups",
+						"worker group", worker.GroupName,
+					)
+					return fmt.Errorf("%d pods were found, was expecting multiple of %d for group %s. This could be caused by worker being deleted before the RayMultihostIndexing feature was enabled, ", len(headPods.Items), worker.NumOfHosts, worker.GroupName)
+				}
+				// Create the missing NumOfHost in groups.
+				replicasGrpsToCreate := diff / int(worker.NumOfHosts)
+				for i := 0; i < replicasGrpsToCreate; i++ {
+					replicaGrpName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
+					for j := 0; j < int(worker.NumOfHosts); j++ {
+						logger.Info("reconciledPods", "creating worker for group", worker.GroupName, "replica group index", i, "host index", j, "total", diff)
+						if err := r.createWorkerPodWithIndex(ctx, *instance, *worker.DeepCopy(), replicaGrpName, j); err != nil {
+							return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+						}
+					}
+				}
+			} else {
+				// Original pathing
+				// create all workers of this group
+				for i := 0; i < diff; i++ {
+					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
+					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
+						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+					}
 				}
 			}
 		} else if diff == 0 {
@@ -765,18 +829,43 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
 				randomlyRemovedWorkers := -diff
 				logger.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
-				for i := 0; i < randomlyRemovedWorkers; i++ {
-					randomPodToDelete := runningPods.Items[i]
-					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
-					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
-						if !errors.IsNotFound(err) {
-							r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), "Failed deleting Pod %s/%s, %v", randomPodToDelete.Namespace, randomPodToDelete.Name, err)
-							return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
+				if multihostIndexingEnabled {
+					// randomlyRemovedWorkers have to be a multiple of numOfHosts so we will delete replica groups together
+					numOfReplicaGrpToDelete := randomlyRemovedWorkers % int(worker.NumOfHosts)
+					numOfReplicaGrpDeleted := 0
+					for _, replicaGrpPodListToDelete := range workerGrpReplicaMap {
+						if numOfReplicaGrpDeleted >= numOfReplicaGrpToDelete {
+							break
 						}
-						logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+						for _, replicaGrpPod := range replicaGrpPodListToDelete {
+							if err := r.Delete(ctx, &replicaGrpPod); err != nil {
+								r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod),
+									"Failed deleting worker Pod %s/%s, %v",
+									replicaGrpPod.Namespace, replicaGrpPod.Name, err)
+								return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
+							}
+							r.rayClusterScaleExpectation.ExpectScalePod(replicaGrpPod.Namespace, instance.Name, worker.GroupName, replicaGrpPod.Name, expectations.Delete)
+							r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+								"Deleted worker Pod %s/%s",
+								replicaGrpPod.Namespace, replicaGrpPod.Name)
+						}
+						numOfReplicaGrpDeleted++
 					}
-					r.rayClusterScaleExpectation.ExpectScalePod(randomPodToDelete.Namespace, instance.Name, worker.GroupName, randomPodToDelete.Name, expectations.Delete)
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
+				} else {
+					// Original pathing withput multihostIndexingEnabled
+					for i := 0; i < randomlyRemovedWorkers; i++ {
+						randomPodToDelete := runningPods.Items[i]
+						logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
+						if err := r.Delete(ctx, &randomPodToDelete); err != nil {
+							if !errors.IsNotFound(err) {
+								r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), "Failed deleting Pod %s/%s, %v", randomPodToDelete.Namespace, randomPodToDelete.Name, err)
+								return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
+							}
+							logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
+						}
+						r.rayClusterScaleExpectation.ExpectScalePod(randomPodToDelete.Namespace, instance.Name, worker.GroupName, randomPodToDelete.Name, expectations.Delete)
+						r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
+					}
 				}
 			} else {
 				logger.Info("Random Pod deletion is disabled for the cluster. The only decision-maker for Pod deletions is Autoscaler.")
@@ -949,7 +1038,31 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	logger := ctrl.LoggerFrom(ctx)
 
 	// build the pod then create it
-	pod := r.buildWorkerPod(ctx, instance, worker)
+	pod := r.buildWorkerPod(ctx, instance, worker, "", 0)
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
+		} else {
+			return err
+		}
+	}
+
+	replica := pod
+	if err := r.Create(ctx, &replica); err != nil {
+		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
+		return err
+	}
+	r.rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
+	logger.Info("Created worker Pod for RayCluster", "name", replica.Name)
+	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
+	return nil
+}
+
+func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, replicaGrpName string, hostIndex int) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// build the pod then create it
+	pod := r.buildWorkerPod(ctx, instance, worker, replicaGrpName, hostIndex)
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
@@ -998,7 +1111,7 @@ func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
 }
 
 // Build worker instance pods.
-func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
+func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, replicaGrpName string, hostIndex int) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
@@ -1006,7 +1119,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
-	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
+	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort, replicaGrpName, hostIndex)
 	if len(r.options.WorkerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
