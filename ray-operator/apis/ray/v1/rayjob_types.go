@@ -176,8 +176,6 @@ type RayJobSpec struct {
 	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
 	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
 	// In "SidecarMode", the KubeRay operator injects a container into the Ray head Pod that acts as the job submitter to submit the Ray job.
-	// If SidecarMode is enabled, retries are managed at the Ray job level using a backoff limit.
-	// A retry is triggered if the Ray job fails or if the submitter container fails to submit the Ray job.
 	// +kubebuilder:default:=K8sJobMode
 	// +optional
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`

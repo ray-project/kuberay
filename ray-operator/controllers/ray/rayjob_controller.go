@@ -235,10 +235,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		var isK8sJobFinished bool
+		var isSubmitterFinished bool
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
-			shouldUpdate, isK8sJobFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance, rayJobInstance.Spec.SubmissionMode)
+			shouldUpdate, isSubmitterFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance, rayJobInstance.Spec.SubmissionMode)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
@@ -284,7 +284,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-			isJobTerminal = isJobTerminal && isK8sJobFinished
+			isJobTerminal = isJobTerminal && isSubmitterFinished
 		}
 
 		if isJobTerminal {
@@ -568,9 +568,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
 func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
-	logger := ctrl.LoggerFrom(ctx)
 	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(rayClusterInstance)
-	logger.Info("default job submitter container is used")
 
 	if err := configureSubmitterContainer(ctx, &submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
@@ -901,7 +899,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, ray
 		return nil, err
 	}
 
-	// Inject sidecar submitter into the head Pod for SidecarMode
+	// Inject a submitter container into the head Pod in SidecarMode.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		sidecar, err := getSubmitterContainer(ctx, rayJobInstance, rayCluster)
 		if err != nil {
@@ -936,16 +934,37 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	return true
 }
 
-func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) (shouldUpdate, isK8sJobFinished bool, err error) {
+func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) (shouldUpdate, isSubmitterFinished bool, err error) {
+	logger := ctrl.LoggerFrom(ctx)
+	shouldUpdate = false
+	isSubmitterFinished = false
+
 	switch submissionMode {
 	case rayv1.SidecarMode:
-		shouldUpdate = r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJob)
-		// Sidecar mode doesn't use k8s job, so isK8sJobFinished is always false
-		isK8sJobFinished = false
-		err = nil
+		var rayClusterInstance *rayv1.RayCluster
+		var headPod *corev1.Pod
+
+		rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJob)
+		if err != nil {
+			logger.Error(err, "Failed to get RayCluster instance for checking sidecar container status")
+			return
+		}
+
+		headPod, err = common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
+		if err != nil {
+			logger.Error(err, "Failed to get Ray head pod for checking sidecar container status")
+			return
+		}
+
+		if headPod == nil {
+			logger.Info("Ray head pod not found, skipping sidecar container status check")
+			return
+		}
+
+		shouldUpdate = r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJob, headPod)
+		// Sidecar mode doesn't use isSubmitterFinished currently, so isSubmitterFinished is always false
 		return
 	case rayv1.K8sJobMode:
-		logger := ctrl.LoggerFrom(ctx)
 		job := &batchv1.Job{}
 		// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
 		// This is because, beyond this point, it becomes impossible for the submitter to submit any further Ray jobs.
@@ -955,21 +974,16 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
 		if err = r.Client.Get(ctx, namespacedName, job); err != nil {
 			logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
-			shouldUpdate = false
-			isK8sJobFinished = false
 			return
 		}
 		shouldUpdate = checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJob, job)
-		_, isK8sJobFinished = utils.IsJobFinished(job)
-		err = nil
+		_, isSubmitterFinished = utils.IsJobFinished(job)
 		return
 	default:
-		logger := ctrl.LoggerFrom(ctx)
-		err = fmt.Errorf("you can only call checkSubmitterAndUpdateStatusIfNeeded when using K8sJobMode and SidecarMode")
-		logger.Error(err, "Invalid submission mode", "submissionMode", submissionMode)
-		shouldUpdate = false
-		isK8sJobFinished = false
-		return
+		// This means that the KubeRay logic is wrong, and it's better to panic as a system error than to allow the operator to
+		// continue reconciling in a wrong state as an application error.
+		// https://github.com/ray-project/kuberay/pull/3971#discussion_r2292808734
+		panic("You can only call checkSubmitterAndUpdateStatusIfNeeded when using K8sJobMode and SidecarMode.")
 	}
 }
 
@@ -994,25 +1008,8 @@ func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJo
 	return false
 }
 
-func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
 	logger := ctrl.LoggerFrom(ctx)
-
-	rayClusterInstance, err := r.getOrCreateRayClusterInstance(ctx, rayJob)
-	if err != nil {
-		logger.Error(err, "Failed to get RayCluster instance for checking sidecar container status")
-		return false
-	}
-
-	headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
-	if err != nil {
-		logger.Error(err, "Failed to get Ray head pod for checking sidecar container status")
-		return false
-	}
-
-	if headPod == nil {
-		logger.Info("Ray head pod not found, skipping sidecar container status check")
-		return false
-	}
 
 	// Check container statuses for any error conditions
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
@@ -1034,6 +1031,7 @@ func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx cont
 
 				return true
 			}
+			break
 		}
 	}
 

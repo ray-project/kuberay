@@ -8,8 +8,6 @@ spec:
   # The alternative value is "HTTPMode", indicating that KubeRay will submit the Ray job by sending an HTTP request to the RayCluster.
   # In SidecarMode:
   # - In "SidecarMode", the KubeRay operator injects a container into the Ray head Pod that acts as the job submitter to submit the Ray job.
-  # - If SidecarMode is enabled, retries are managed at the Ray job level using a backoff limit.
-  # - A retry is triggered if the Ray job fails or if the submitter container fails to submit the Ray job.
   submissionMode: "SidecarMode"
   entrypoint: python /home/ray/samples/sample_code.py
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
