@@ -86,15 +86,17 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
+	// In K8sJobMode, we need to avoid submitting the job twice, since the job submitter might retry.
 	// `ray job submit` alone doesn't handle duplicated submission gracefully. See https://github.com/ray-project/kuberay/issues/2154.
 	// In order to deal with that, we use `ray job status` first to check if the jobId has been submitted.
 	// If the jobId has been submitted, we use `ray job logs` to follow the logs.
 	// Otherwise, we submit the job with `ray job submit --no-wait` + `ray job logs`. The full shell command looks like this:
 	//   if ! ray job status --address http://$RAY_ADDRESS $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1 ;
 	//   then ray job submit --address http://$RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID --no-wait -- ... ;
-	//   fi ; ray job logs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
+	//   fi ; ray job loray-operator/controllers/ray/rayjob_controller.gogs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
+	// In Sidecar mode, the sidecar container's restart policy is set to Never, so duplicated submission won't happen.
 	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
-	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address, "--no-wait"}
+	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
 	cmd = append(cmd, waitLoop...)
@@ -106,7 +108,12 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, jobStatusCommand...)
 		cmd = append(cmd, ";", "then")
 	}
+
 	cmd = append(cmd, jobSubmitCommand...)
+
+	if submissionMode == rayv1.K8sJobMode {
+		cmd = append(cmd, "--no-wait")
+	}
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
 	if err != nil {
@@ -144,9 +151,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	cmd = append(cmd, "--", entrypoint, ";")
 	if submissionMode == rayv1.K8sJobMode {
 		cmd = append(cmd, "fi", ";")
+		cmd = append(cmd, jobFollowCommand...)
 	}
-
-	cmd = append(cmd, jobFollowCommand...)
 
 	return cmd, nil
 }
