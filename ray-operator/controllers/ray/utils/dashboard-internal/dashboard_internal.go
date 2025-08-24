@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -178,13 +177,12 @@ func (r *RayDashboardInternalClient) SubmitJob(ctx context.Context, rayJob *rayv
 }
 
 func (r *RayDashboardInternalClient) SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest, name *string) (jobId string, err error) {
-	log := ctrl.LoggerFrom(ctx)
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
 	}
 	if name != nil {
-		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
+		fmt.Printf("Submit a ray job: %s, jobInfo: %s\n", *name, string(rayJobJson))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+utiltypes.JobPath, bytes.NewBuffer(rayJobJson))
@@ -212,9 +210,6 @@ func (r *RayDashboardInternalClient) SubmitJobReq(ctx context.Context, request *
 
 // Get Job Log
 func (r *RayDashboardInternalClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Get ray job log", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+utiltypes.JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
@@ -246,8 +241,7 @@ func (r *RayDashboardInternalClient) GetJobLog(ctx context.Context, jobName stri
 }
 
 func (r *RayDashboardInternalClient) StopJob(ctx context.Context, jobName string) (err error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Stop a ray job", "rayJob", jobName)
+	fmt.Printf("Stop a ray job: %s\n", jobName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+utiltypes.JobPath+jobName+"/stop", nil)
 	if err != nil {
@@ -282,8 +276,7 @@ func (r *RayDashboardInternalClient) StopJob(ctx context.Context, jobName string
 }
 
 func (r *RayDashboardInternalClient) DeleteJob(ctx context.Context, jobName string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Delete a ray job", "rayJob", jobName)
+	fmt.Printf("Delete a ray job: %s\n", jobName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+utiltypes.JobPath+jobName, nil)
 	if err != nil {
