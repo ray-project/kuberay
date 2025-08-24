@@ -27,6 +27,10 @@ const (
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 
+	// Labels for feature RayMultihostIndexing
+	RayWorkerReplicaIndexKey = "ray.io/worker-group-replica-id"
+	RayHostIndexKey          = "ray.io/host-index"
+
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
 
