@@ -12,6 +12,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	dashboardinternal "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboard-internal"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -65,7 +66,9 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
-		rayDashboardClient := &utils.RayDashboardClient{}
+		rayDashboardClient := &utils.RayDashboardClient{
+			RayDashboardInternalClient: &dashboardinternal.RayDashboardInternalClient{},
+		}
 		pod, err := GetHeadPod(t, rayCluster)
 		g.Expect(err).ToNot(HaveOccurred())
 
