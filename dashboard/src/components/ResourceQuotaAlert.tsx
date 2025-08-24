@@ -27,20 +27,18 @@ export const ResourceQuotaAlert: React.FC<ResourceQuotaAlertProps> = ({
   React.useEffect(() => {
     if (!showedAlert) {
       const resourceQuotaExceeded = jobs.some((job) =>
-        job.message?.includes("exceeded quota")
+        job.message?.includes("exceeded quota"),
       );
       if (resourceQuotaExceeded) {
         setShowedAlert(true);
         // Show alert
         snackBar.showSnackBar(
           "Resource quota exceeded",
-          <>
-            Your job is pending due to a resource quota error.
-          </>,
-          "danger"
+          <>Your job is pending due to a resource quota error.</>,
+          "danger",
         );
       }
     }
-  }, [jobs]);
+  }, [jobs, showedAlert, snackBar]);
   return null;
 };

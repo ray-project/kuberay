@@ -1,6 +1,41 @@
 # KubeRay Community Governance
 
-## Becoming a Committer
+There are 4 roles in the KubeRay community:
+
+* **Contributor**: A contributor is a member who contributes to the KubeRay project through code, documentation,
+PR reviews, answering questions, etc.
+* **Triager**: A triager has the permission to triage issues and PRs.
+* **Reviewer**: A reviewer can review PRs but cannot merge them.
+* **Committer**: A committer can merge PRs and is responsible for the KubeRay project.
+
+## Mechanism
+
+### Becoming a Contributor
+
+To become a KubeRay contributor, you can contribute to KubeRay through code, documentation, PR reviews,
+answering questions, and more.
+It's helpful to join the KubeRay channel `#kuberay-questions` on the [Ray Slack workspace](https://github.com/ray-project/ray?tab=readme-ov-file#getting-involved)
+to get started. You can also read [ray-project/kuberay#1059](https://github.com/ray-project/kuberay/issues/1059)
+for tips on getting involved in the KubeRay community.
+
+In addition, you can add the
+[Ray / KubeRay OSS community Google calendar](https://calendar.google.com/calendar/u/0?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20)
+to your calendar and join the bi-weekly KubeRay community meetings.
+
+### Becoming a Triager
+
+A triager helps manage issues and PRs by assigning them to the appropriate people and adding labels to categorize them.
+To become a triager, you should demonstrate a basic understanding of the overall KubeRay project
+so you can determine whether an issue or PR is valid and how to categorize it.
+
+### Becoming a Reviewer
+
+To become a KubeRay reviewer, you should demonstrate a deep understanding of certain features
+or components of the KubeRay project.
+A reviewer should be able to review PRs and provide constructive feedback to help the author
+improve the PR. Ideally, committers should feel confident merging a PR if you have approved it.
+
+### Becoming a Committer
 
 Nothing in this document is guaranteed, but it provides a clear path for contributors toward becoming committers.
 
@@ -40,3 +75,12 @@ committer, but all of them will be considered together.
   * Help KubeRay releases ensure high-quality and stable KubeRay releases.
 * **Understand user pain points and propose new projects:**
   * Chat with users to understand their pain points and propose new projects or documents to unlock new use cases.
+
+## Contributors
+
+### Committers
+
+* @kevin85421
+* @andrewsykim
+* @rueian
+* @MortalHappiness

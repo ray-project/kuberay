@@ -10,7 +10,7 @@ async function _createJob(
   namespace: string,
   jobName: string,
   dockerImage: string,
-  entrypoint: string
+  entrypoint: string,
 ) {
   // curl -X 'POST' \
   //     'http://kuberay-apiserver-service.default.svc.cluster.local:8888/apis/v1/namespaces/kubeflow-ml/jobs' \
@@ -130,7 +130,7 @@ export const useCreateJob = () => {
   const createJob = async (
     jobName: string,
     dockerImage: string,
-    entrypoint: string
+    entrypoint: string,
   ) => {
     setCreating(true);
     try {
@@ -140,12 +140,12 @@ export const useCreateJob = () => {
       await mutate(
         `/namespaces/${namespace}/jobs`,
         _createJob(namespace, jobName, dockerImage, entrypoint),
-        { populateCache: false }
+        { populateCache: false },
       );
       snackBar.showSnackBar(
         "Success",
         `Job ${jobName} created successfully`,
-        "success"
+        "success",
       );
       setCreating(false);
       router.push("/jobs");
@@ -153,7 +153,7 @@ export const useCreateJob = () => {
       snackBar.showSnackBar(
         `Failed to create job ${jobName}.`,
         `Error: ${err}`,
-        "danger"
+        "danger",
       );
       setCreating(false);
     }

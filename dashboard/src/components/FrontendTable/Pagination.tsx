@@ -43,7 +43,7 @@ export const Pagination = (props: PaginationProps) => {
   }
 
   // force TS to recognize that last item must be number
-  let lastPage = paginationRange[
+  const lastPage = paginationRange[
     paginationRange.length - 1
   ] as unknown as number;
   return (
