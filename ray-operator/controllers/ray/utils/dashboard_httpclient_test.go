@@ -11,6 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	dashboardinternal "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboard-internal"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 const (
@@ -58,14 +60,14 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	})
 
 	It("Test ConvertRayJobToReq", func() {
-		rayJobRequest, err := ConvertRayJobToReq(rayJob)
+		rayJobRequest, err := dashboardinternal.ConvertRayJobToReq(rayJob)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rayJobRequest.RuntimeEnv).To(HaveLen(4))
 		Expect(rayJobRequest.RuntimeEnv["working_dir"]).To(Equal("./"))
 	})
 
 	It("Test ConvertRayJobToReq with EntrypointResources", func() {
-		rayJobRequest, err := ConvertRayJobToReq(&rayv1.RayJob{
+		rayJobRequest, err := dashboardinternal.ConvertRayJobToReq(&rayv1.RayJob{
 			Spec: rayv1.RayJobSpec{
 				EntrypointResources: `{"r1": 0.1, "r2": 0.2}`,
 				EntrypointNumCpus:   1.1,
@@ -79,7 +81,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	})
 
 	It("Test ConvertRayJobToReq with invalid EntrypointResources", func() {
-		_, err := ConvertRayJobToReq(&rayv1.RayJob{
+		_, err := dashboardinternal.ConvertRayJobToReq(&rayv1.RayJob{
 			Spec: rayv1.RayJobSpec{
 				EntrypointResources: `{"r1": "string"}`,
 			},
@@ -90,17 +92,17 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	It("Test submitting/getting rayJob", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath,
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobResponse{
+				body := &utiltypes.RayJobResponse{
 					JobId: expectJobId,
 				}
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+expectJobId,
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath+expectJobId,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
@@ -108,7 +110,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+errorJobId,
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath+errorJobId,
 			func(_ *http.Request) (*http.Response, error) {
 				// return a string in the body
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
@@ -132,9 +134,9 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	It("Test stop job", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: true,
 				}
 				bodyBytes, _ := json.Marshal(body)
@@ -149,17 +151,17 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		// StopJob only returns an error when JobStatus is not in terminated states (STOPPED / SUCCEEDED / FAILED)
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: false,
 				}
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.GetDashboardURL()+utiltypes.JobPath+"stop-job-1",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,

@@ -6,6 +6,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 //+kubebuilder:object:root=true
@@ -75,7 +76,7 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
+func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utiltypes.RayDashboardClientInterface {
 	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 }
 

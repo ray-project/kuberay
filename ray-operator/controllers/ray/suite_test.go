@@ -35,6 +35,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -51,8 +52,8 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func() utils.RayDashboardClientInterface {
-	return func() utils.RayDashboardClientInterface {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func() utiltypes.RayDashboardClientInterface {
+	return func() utiltypes.RayDashboardClientInterface {
 		return fakeRayDashboardClient
 	}
 }

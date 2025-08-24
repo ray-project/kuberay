@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	dashboardinternal "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboard-internal"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -190,7 +191,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
-	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
+	if _, err := dashboardinternal.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
 		return err
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {

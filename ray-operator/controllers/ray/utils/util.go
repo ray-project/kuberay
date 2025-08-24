@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 const (
@@ -637,7 +638,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetDashboardClient(mgr manager.Manager) func() utiltypes.RayDashboardClientInterface
 	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }
 

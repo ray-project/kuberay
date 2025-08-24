@@ -24,6 +24,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -366,7 +367,7 @@ func TestGetAndCheckServeStatus(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var dashboardClient utils.RayDashboardClientInterface
+			var dashboardClient utiltypes.RayDashboardClientInterface
 			if len(tc.rayServiceStatus) != 0 {
 				dashboardClient = initFakeDashboardClient(serveAppName, tc.rayServiceStatus[DeploymentStatus], tc.rayServiceStatus[ApplicationStatus])
 			} else {
@@ -585,10 +586,10 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	assert.Len(t, pendingCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 }
 
-func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utils.RayDashboardClientInterface {
+func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) utiltypes.RayDashboardClientInterface {
 	fakeDashboardClient := utils.FakeRayDashboardClient{}
 	status := generateServeStatus(deploymentStatus, appStatus)
-	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utils.ServeApplicationStatus{appName: &status})
+	fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utiltypes.ServeApplicationStatus{appName: &status})
 	return &fakeDashboardClient
 }
 

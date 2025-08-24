@@ -27,6 +27,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -42,7 +43,7 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	dashboardClientFunc func() utils.RayDashboardClientInterface
+	dashboardClientFunc func() utiltypes.RayDashboardClientInterface
 	options             RayJobReconcilerOptions
 }
 
