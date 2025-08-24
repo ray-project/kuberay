@@ -20,7 +20,7 @@ export const useListClusters = (refreshInterval: number = 5000) => {
     fetcher,
     {
       refreshInterval,
-    }
+    },
   );
 
   return {

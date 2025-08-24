@@ -2,12 +2,10 @@ package e2erayservice
 
 import (
 	"bytes"
-	"embed"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -17,16 +15,6 @@ import (
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
-
-//go:embed *.py
-var _files embed.FS
-
-func ReadFile(t Test, fileName string) []byte {
-	t.T().Helper()
-	file, err := _files.ReadFile(fileName)
-	require.NoError(t.T(), err)
-	return file
-}
 
 type option[T any] func(t *T) *T
 

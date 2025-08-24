@@ -105,6 +105,7 @@ helm uninstall raycluster
 | head.args | list | `[]` |  |
 | head.headService | object | `{}` |  |
 | head.topologySpreadConstraints | list | `[]` |  |
+| head.rayStartParams | object | `{}` |  |
 | worker.groupName | string | `"workergroup"` | The name of the workergroup |
 | worker.replicas | int | `1` | The number of replicas for the worker pod |
 | worker.minReplicas | int | `1` | The minimum number of replicas for the worker pod |
@@ -133,6 +134,7 @@ helm uninstall raycluster
 | worker.command | list | `[]` |  |
 | worker.args | list | `[]` |  |
 | worker.topologySpreadConstraints | list | `[]` |  |
+| worker.rayStartParams | object | `{}` |  |
 | additionalWorkerGroups.smallGroup.disabled | bool | `true` |  |
 | additionalWorkerGroups.smallGroup.replicas | int | `0` | The number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.minReplicas | int | `0` | The minimum number of replicas for the additional worker pod |
@@ -160,4 +162,5 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.command | list | `[]` |  |
 | additionalWorkerGroups.smallGroup.args | list | `[]` |  |
 | additionalWorkerGroups.smallGroup.topologySpreadConstraints | list | `[]` |  |
+| additionalWorkerGroups.smallGroup.rayStartParams | object | `{}` |  |
 | service.type | string | `"ClusterIP"` |  |
