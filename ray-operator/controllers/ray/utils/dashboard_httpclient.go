@@ -8,13 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	fmtErrors "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -60,49 +57,6 @@ type RayDashboardClient struct {
 	mgr ctrl.Manager
 	BaseDashboardClient
 	useKubernetesProxy bool
-}
-
-// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
-// and the port with the given port name (defaultPortName).
-func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	headSvc := &corev1.Service{}
-	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-	if err != nil {
-		log.Error(err, "Failed to generate head service name", "RayCluster name", rayCluster.Name, "RayCluster spec", rayCluster.Spec)
-		return "", err
-	}
-
-	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
-		if errors.IsNotFound(err) {
-			log.Error(err, "Head service is not found", "head service name", headSvcName, "namespace", rayCluster.Namespace)
-		}
-		return "", err
-	}
-
-	log.Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
-	servicePorts := headSvc.Spec.Ports
-	port := int32(-1)
-
-	for _, servicePort := range servicePorts {
-		if servicePort.Name == defaultPortName {
-			port = servicePort.Port
-			break
-		}
-	}
-
-	if port == int32(-1) {
-		return "", fmtErrors.Errorf("%s port is not found", defaultPortName)
-	}
-
-	domainName := GetClusterDomainName()
-	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
-		headSvc.Name,
-		headSvc.Namespace,
-		domainName,
-		port)
-	log.Info("FetchHeadServiceURL", "head service URL", headServiceURL)
-	return headServiceURL, nil
 }
 
 func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {

@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -716,4 +717,40 @@ func GetContainerCommand(additionalOptions []string) []string {
 // GetEnableDeterministicHeadName returns true if deterministic head pod name is enabled.
 func IsDeterministicHeadPodNameEnabled() bool {
 	return strings.ToLower(os.Getenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)) == "true"
+}
+
+// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
+// and the port with the given port name (defaultPortName).
+func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
+	headSvc := &corev1.Service{}
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+	if err != nil {
+		return "", err
+	}
+
+	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+		return "", err
+	}
+
+	servicePorts := headSvc.Spec.Ports
+	port := int32(-1)
+
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == defaultPortName {
+			port = servicePort.Port
+			break
+		}
+	}
+
+	if port == int32(-1) {
+		return "", fmt.Errorf("%s port is not found", defaultPortName)
+	}
+
+	domainName := GetClusterDomainName()
+	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
+		headSvc.Name,
+		headSvc.Namespace,
+		domainName,
+		port)
+	return headServiceURL, nil
 }
