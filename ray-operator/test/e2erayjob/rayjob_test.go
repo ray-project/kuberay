@@ -2,7 +2,6 @@ package e2erayjob
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -224,9 +223,9 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller will not do anything with the CR.
-		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 5*time.Second).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
+		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to Failed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 	})
 
 	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
