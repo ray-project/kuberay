@@ -1,0 +1,48 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-mtls-sample
+spec:
+  rayVersion: '2.8.0'
+  headGroupSpec:
+    serviceType: ClusterIP
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.8.0
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          env:
+          - name: RAY_DISABLE_DOCKER_CPU_WARNING
+            value: "1"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+  workerGroupSpecs:
+  - groupName: small-group
+    replicas: 1
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.8.0
+          env:
+          - name: RAY_DISABLE_DOCKER_CPU_WARNING
+            value: "1"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"

@@ -22,6 +22,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -91,7 +92,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = SetupRayClusterWebhookWithManager(mgr)
+	err = SetupRayClusterWebhookWithManager(mgr, &configapi.Configuration{})
 	Expect(err).NotTo(HaveOccurred())
 	err = SetupRayJobWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
