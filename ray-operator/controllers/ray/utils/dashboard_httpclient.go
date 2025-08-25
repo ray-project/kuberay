@@ -264,7 +264,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 }
 
 func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (jobId string, err error) {
-	request, err := ConvertRayJobToReq(rayJob)
+	request, err := convertRayJobToReq(rayJob)
 	if err != nil {
 		return "", err
 	}
@@ -389,4 +389,27 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	defer resp.Body.Close()
 
 	return nil
+}
+
+func convertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
+	req := &RayJobRequest{
+		Entrypoint:   rayJob.Spec.Entrypoint,
+		SubmissionId: rayJob.Status.JobId,
+		Metadata:     rayJob.Spec.Metadata,
+	}
+	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
+		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
+		if err != nil {
+			return nil, err
+		}
+		req.RuntimeEnv = runtimeEnv
+	}
+	req.NumCpus = rayJob.Spec.EntrypointNumCpus
+	req.NumGpus = rayJob.Spec.EntrypointNumGpus
+	if rayJob.Spec.EntrypointResources != "" {
+		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
+			return nil, err
+		}
+	}
+	return req, nil
 }

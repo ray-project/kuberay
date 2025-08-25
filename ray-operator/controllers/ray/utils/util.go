@@ -756,29 +756,6 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
-	req := &RayJobRequest{
-		Entrypoint:   rayJob.Spec.Entrypoint,
-		SubmissionId: rayJob.Status.JobId,
-		Metadata:     rayJob.Spec.Metadata,
-	}
-	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
-		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
-		if err != nil {
-			return nil, err
-		}
-		req.RuntimeEnv = runtimeEnv
-	}
-	req.NumCpus = rayJob.Spec.EntrypointNumCpus
-	req.NumGpus = rayJob.Spec.EntrypointNumGpus
-	if rayJob.Spec.EntrypointResources != "" {
-		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
-			return nil, err
-		}
-	}
-	return req, nil
-}
-
 func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
 	var runtimeEnv RuntimeEnvType
 	if err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv); err != nil {

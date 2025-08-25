@@ -57,15 +57,15 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	It("Test ConvertRayJobToReq", func() {
-		rayJobRequest, err := ConvertRayJobToReq(rayJob)
+	It("Test convertRayJobToReq", func() {
+		rayJobRequest, err := convertRayJobToReq(rayJob)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rayJobRequest.RuntimeEnv).To(HaveLen(4))
 		Expect(rayJobRequest.RuntimeEnv["working_dir"]).To(Equal("./"))
 	})
 
-	It("Test ConvertRayJobToReq with EntrypointResources", func() {
-		rayJobRequest, err := ConvertRayJobToReq(&rayv1.RayJob{
+	It("Test convertRayJobToReq with EntrypointResources", func() {
+		rayJobRequest, err := convertRayJobToReq(&rayv1.RayJob{
 			Spec: rayv1.RayJobSpec{
 				EntrypointResources: `{"r1": 0.1, "r2": 0.2}`,
 				EntrypointNumCpus:   1.1,
@@ -78,8 +78,8 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(rayJobRequest.Resources).To(Equal(map[string]float32{"r1": 0.1, "r2": 0.2}))
 	})
 
-	It("Test ConvertRayJobToReq with invalid EntrypointResources", func() {
-		_, err := ConvertRayJobToReq(&rayv1.RayJob{
+	It("Test convertRayJobToReq with invalid EntrypointResources", func() {
+		_, err := convertRayJobToReq(&rayv1.RayJob{
 			Spec: rayv1.RayJobSpec{
 				EntrypointResources: `{"r1": "string"}`,
 			},
