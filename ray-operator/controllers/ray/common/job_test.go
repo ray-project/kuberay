@@ -71,7 +71,7 @@ func TestGetMetadataJson(t *testing.T) {
 	assert.JSONEq(t, expected, metadataJson)
 }
 
-func TestGetK8sJobCommand(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	expected := []string{
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
@@ -88,12 +88,12 @@ func TestGetK8sJobCommand(t *testing.T) {
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := GetK8sJobCommand(testRayJob)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
 
-func TestGetK8sJobCommandWithYAML(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
 	rayJobWithYAML := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: `
@@ -126,7 +126,7 @@ pip: ["python-multipart==0.0.6"]
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := GetK8sJobCommand(rayJobWithYAML)
+	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode)
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
