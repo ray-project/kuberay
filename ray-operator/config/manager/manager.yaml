@@ -80,4 +80,9 @@ spec:
           # environment variable is not set, requeue after the default value (300).
           # - name: RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV
           #   value: "300"
+          # Required for NetworkPolicy feature when operator is NOT deployed in 'ray-system' namespace
+          # - name: POD_NAMESPACE
+          #   valueFrom:
+          #     fieldRef:
+          #       fieldPath: metadata.namespace
       terminationGracePeriodSeconds: 10
