@@ -12,14 +12,15 @@ import (
 type FakeRayDashboardClient struct {
 	multiAppStatuses map[string]*ServeApplicationStatus
 	GetJobInfoMock   atomic.Pointer[func(context.Context, string) (*RayJobInfo, error)]
-	BaseDashboardClient
-	serveDetails ServeDetails
+	client           *http.Client
+	dashboardURL     string
+	serveDetails     ServeDetails
 }
 
 var _ RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(_ context.Context, url string, _ *rayv1.RayCluster) error {
-	r.client = &http.Client{}
+func (r *FakeRayDashboardClient) InitClient(url string, _ *rayv1.RayCluster, client *http.Client) error {
+	r.client = client
 	r.dashboardURL = "http://" + url
 	return nil
 }

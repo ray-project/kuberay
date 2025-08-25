@@ -54,6 +54,7 @@ type RayServiceReconciler struct {
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
 	dashboardClientFunc          func() utils.RayDashboardClientInterface
 	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
+	mgr                          manager.Manager
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
@@ -66,9 +67,9 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
 		ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
 		RayClusterDeletionTimestamps: cmap.New[time.Time](),
-
-		dashboardClientFunc: dashboardClientFunc,
-		httpProxyClientFunc: httpProxyClientFunc,
+		mgr:                          mgr,
+		dashboardClientFunc:          dashboardClientFunc,
+		httpProxyClientFunc:          httpProxyClientFunc,
 	}
 }
 
@@ -944,7 +945,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	}
 
 	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
+	if err := rayDashboardClient.InitClient(clientURL, rayClusterInstance, r.mgr.GetHTTPClient()); err != nil {
 		return false, serveApplications, err
 	}
 
