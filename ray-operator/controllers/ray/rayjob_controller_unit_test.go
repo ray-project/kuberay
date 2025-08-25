@@ -369,7 +369,7 @@ func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 		Scheme:   scheme.Scheme,
 	}
 
-	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
+	err := reconciler.createNewK8sJob(context.Background(), rayJob, nil, submitterTemplate)
 
 	require.Error(t, err, "Expected error due to simulated job creation failure")
 

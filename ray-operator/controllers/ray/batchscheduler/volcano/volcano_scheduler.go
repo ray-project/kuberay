@@ -46,7 +46,11 @@ func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error {
+	app, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if !utils.IsAutoscalingEnabled(&app.Spec) {
@@ -129,16 +133,19 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
+func (v *VolcanoBatchScheduler) AddMetadataToChildResourceFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(rayCluster)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
-	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+	if queue, ok := rayCluster.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
 	}
-	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
+	if priorityClassName, ok := rayCluster.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
 		pod.Spec.PriorityClassName = priorityClassName
 	}
 	pod.Spec.SchedulerName = v.Name()
+}
+
+func (v *VolcanoBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ *corev1.PodTemplateSpec) {
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {

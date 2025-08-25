@@ -204,7 +204,8 @@ const (
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
-	RayNodeHeadGroupLabelValue = "headgroup"
+	RayNodeHeadGroupLabelValue      = "headgroup"
+	RayNodeSubmitterGroupLabelValue = "submittergroup"
 
 	// KUBERAY_VERSION is the build version of KubeRay.
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable

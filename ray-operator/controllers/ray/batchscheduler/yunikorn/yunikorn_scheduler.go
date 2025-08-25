@@ -3,6 +3,7 @@ package yunikorn
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -19,13 +20,15 @@ const (
 	SchedulerName                       string = "yunikorn"
 	YuniKornPodApplicationIDLabelName   string = "applicationId"
 	YuniKornPodQueueLabelName           string = "queue"
-	RayClusterApplicationIDLabelName    string = "yunikorn.apache.org/app-id"
-	RayClusterQueueLabelName            string = "yunikorn.apache.org/queue"
+	RayApplicationIDLabelName           string = "yunikorn.apache.org/app-id"
+	RayApplicationQueueLabelName        string = "yunikorn.apache.org/queue"
 	YuniKornTaskGroupNameAnnotationName string = "yunikorn.apache.org/task-group-name"
 	YuniKornTaskGroupsAnnotationName    string = "yunikorn.apache.org/task-groups"
 )
 
-type YuniKornScheduler struct{}
+type YuniKornScheduler struct {
+	logger logr.Logger
+}
 
 type YuniKornSchedulerFactory struct{}
 
@@ -37,7 +40,7 @@ func (y *YuniKornScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
@@ -45,32 +48,50 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *
 
 // populatePodLabels is a helper function that copies RayCluster's label to the given pod based on the label key
 // TODO: remove the legacy labels, i.e "applicationId" and "queue", directly populate labels
-// RayClusterApplicationIDLabelName to RayClusterQueueLabelName to pod labels.
+// RayApplicationIDLabelName to RayApplicationQueueLabelName to pod labels.
 // Currently we use this function to translate labels "yunikorn.apache.org/app-id" and "yunikorn.apache.org/queue"
 // to legacy labels "applicationId" and "queue", this is for the better compatibilities to support older yunikorn
 // versions.
-func (y *YuniKornScheduler) populatePodLabels(ctx context.Context, app *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
-	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
+func (y *YuniKornScheduler) populatePodLabelsFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, pod *corev1.Pod, sourceKey string, targetKey string) {
 	// check labels
-	if value, exist := app.Labels[sourceKey]; exist {
-		logger.Info("Updating pod label based on RayCluster labels",
+	if value, exist := rayCluster.Labels[sourceKey]; exist {
+		y.logger.Info("Updating pod label based on RayCluster labels",
 			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
 		pod.Labels[targetKey] = value
 	}
 }
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pods
+// populateRayClusterLabelsFromRayJob is a helper function that copies RayJob's label to the given RayCluster based on the label key
+func (y *YuniKornScheduler) populateRayClusterLabelsFromRayJob(_ context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, sourceKey string, targetKey string) {
+	if value, exist := rayJob.Labels[sourceKey]; exist {
+		y.logger.Info("Updating RayCluster label based on RayJob labels",
+			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
+		rayCluster.Labels[targetKey] = value
+	}
+}
+
+// populateSubmitterPodTemplateLabelsFromRayJob adds essential labels and annotations to the Ray pods
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (y *YuniKornScheduler) populateSubmitterPodTemplateLabelsFromRayJob(_ context.Context, rayJob *rayv1.RayJob, submitterTemplate *corev1.PodTemplateSpec, sourceKey string, targetKey string) {
+	if value, exist := rayJob.Labels[sourceKey]; exist {
+		y.logger.Info("Updating submitter pod template label based on RayJob labels",
+			"sourceKey", sourceKey, "targetKey", targetKey, "value", value)
+		submitterTemplate.Labels[targetKey] = value
+	}
+}
+
+// AddMetadataToChildResourceFromRayCluster adds essential labels and annotations to the Ray pods
+// the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
+func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	// the applicationID and queue name must be provided in the labels
-	y.populatePodLabels(ctx, app, pod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	y.populatePodLabels(ctx, app, pod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
+	y.populatePodLabelsFromRayCluster(ctx, rayCluster, pod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	y.populatePodLabelsFromRayCluster(ctx, rayCluster, pod, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
 	pod.Spec.SchedulerName = y.Name()
 
 	// when gang scheduling is enabled, extra annotations need to be added to all pods
-	if y.isGangSchedulingEnabled(app) {
+	if y.isGangSchedulingEnabled(rayCluster) {
 		// populate the taskGroups info to each pod
-		y.populateTaskGroupsAnnotationToPod(ctx, app, pod)
+		y.populateTaskGroupsAnnotationToPod(ctx, rayCluster, pod)
 
 		// set the task group name based on the head or worker group name
 		// the group name for the head and each of the worker group should be different
@@ -78,36 +99,114 @@ func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.Ray
 	}
 }
 
-func (y *YuniKornScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
-	_, exist := app.Labels[utils.RayClusterGangSchedulingEnabled]
-	return exist
+func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec) {
+	// the applicationID and queue name must be provided in the labels
+	y.populateRayClusterLabelsFromRayJob(ctx, rayJob, rayCluster, RayApplicationIDLabelName, RayApplicationIDLabelName)
+	y.populateRayClusterLabelsFromRayJob(ctx, rayJob, rayCluster, RayApplicationQueueLabelName, RayApplicationQueueLabelName)
+	if submitterTemplate.Labels == nil {
+		submitterTemplate.Labels = make(map[string]string)
+	}
+	y.populateSubmitterPodTemplateLabelsFromRayJob(ctx, rayJob, submitterTemplate, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
+	y.populateSubmitterPodTemplateLabelsFromRayJob(ctx, rayJob, submitterTemplate, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
+	submitterTemplate.Spec.SchedulerName = y.Name()
+
+	// when gang scheduling is enabled, extra annotations need to be added to all pods
+	if y.isGangSchedulingEnabled(rayJob) {
+		// populate the taskGroups info to RayCluster and submitter pod template
+		if rayJob.Spec.RayClusterSpec == nil {
+			y.logger.Info("RayJob does not have RayClusterSpec, skip adding task groups annotation to RayCluster and submitter pod template")
+			return
+		}
+		y.populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(ctx, rayJob, rayCluster, submitterTemplate)
+		submitterTemplate.Annotations[YuniKornTaskGroupNameAnnotationName] = utils.RayNodeSubmitterGroupLabelValue
+		y.logger.Info("Gang Scheduling enabled for RayJob")
+		y.logger.Info("Gang Scheduling enabled for submitter pod template")
+	}
 }
 
-func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(ctx context.Context, app *rayv1.RayCluster, pod *corev1.Pod) {
-	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
-	taskGroups := newTaskGroupsFromApp(app)
-	taskGroupsAnnotationValue, err := taskGroups.marshal()
-	if err != nil {
-		logger.Error(err, "failed to add gang scheduling related annotations to pod, "+
-			"gang scheduling will not be enabled for this workload",
-			"name", pod.Name, "namespace", pod.Namespace)
-		return
+func (y *YuniKornScheduler) isGangSchedulingEnabled(obj client.Object) bool {
+	switch obj := obj.(type) {
+	case *rayv1.RayCluster:
+		_, exist := obj.Labels[utils.RayClusterGangSchedulingEnabled]
+		return exist
+	case *rayv1.RayJob:
+		_, exist := obj.Labels[utils.RayClusterGangSchedulingEnabled]
+		return exist
+	default:
+		return false
 	}
+}
 
-	logger.Info("add task groups info to pod's annotation",
-		"key", YuniKornTaskGroupsAnnotationName,
-		"value", taskGroupsAnnotationValue,
-		"numOfTaskGroups", taskGroups.size())
+func (y *YuniKornScheduler) populateTaskGroupsAnnotationToPod(_ context.Context, rayCluster *rayv1.RayCluster, pod *corev1.Pod) {
+	var taskGroupsAnnotationValue string
+	var err error
+	if rayCluster.Annotations[YuniKornTaskGroupsAnnotationName] != "" {
+		taskGroupsAnnotationValue = rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]
+		y.logger.Info("using existing task groups annotation from RayCluster", "value", taskGroupsAnnotationValue)
+	} else {
+		taskGroups := newTaskGroupsFromRayCluster(rayCluster)
+		taskGroupsAnnotationValue, err = taskGroups.marshal()
+		if err != nil {
+			y.logger.Error(err, "failed to add gang scheduling related annotations to pod, "+
+				"gang scheduling will not be enabled for this workload",
+				"name", pod.Name, "namespace", pod.Namespace)
+			return
+		}
+
+		y.logger.Info("add task groups info to pod's annotation",
+			"key", YuniKornTaskGroupsAnnotationName,
+			"value", taskGroupsAnnotationValue,
+			"numOfTaskGroups", taskGroups.size())
+
+	}
 	if pod.Annotations == nil {
 		pod.Annotations = make(map[string]string)
 	}
-	pod.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
 
-	logger.Info("Gang Scheduling enabled for RayCluster")
+	pod.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
+	y.logger.Info("Gang Scheduling enabled for RayCluster")
 }
 
-func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
-	return &YuniKornScheduler{}, nil
+func (y *YuniKornScheduler) populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(_ context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec) {
+	taskGroups, err := newTaskGroupsFromRayJob(rayJob, submitterTemplate)
+	if err != nil {
+		y.logger.Error(err, "failed to create task groups from RayJob", "RayJob", rayJob.Name, "namespace", rayJob.Namespace)
+		return
+	}
+	taskGroupsAnnotationValue, err := taskGroups.marshal()
+	if err != nil {
+		y.logger.Error(err, "failed to add gang scheduling related annotations to RayCluster, "+
+			"gang scheduling will not be enabled for this workload",
+			"name", rayCluster.Name, "namespace", rayCluster.Namespace)
+		return
+	}
+
+	y.logger.Info("add task groups info to pod's annotation",
+		"key", YuniKornTaskGroupsAnnotationName,
+		"value", taskGroupsAnnotationValue,
+		"numOfTaskGroups", taskGroups.size())
+
+	if rayCluster.Annotations == nil {
+		rayCluster.Annotations = make(map[string]string)
+	}
+
+	rayCluster.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
+
+	y.logger.Info("Gang Scheduling enabled for RayCluster")
+
+	if submitterTemplate.Annotations == nil {
+		submitterTemplate.Annotations = make(map[string]string)
+	}
+
+	submitterTemplate.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
+
+	y.logger.Info("Gang Scheduling enabled for submitter pod template")
+}
+
+func (yf *YuniKornSchedulerFactory) New(ctx context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
+	return &YuniKornScheduler{
+		logger: ctrl.LoggerFrom(ctx).WithName(SchedulerName),
+	}, nil
 }
 
 func (yf *YuniKornSchedulerFactory) AddToScheme(_ *runtime.Scheme) {
