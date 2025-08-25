@@ -39,9 +39,9 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-
+	Scheme              *runtime.Scheme
+	Recorder            record.EventRecorder
+	mgr                 manager.Manager
 	dashboardClientFunc func() utils.RayDashboardClientInterface
 	options             RayJobReconcilerOptions
 }
@@ -52,12 +52,12 @@ type RayJobReconcilerOptions struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
-		dashboardClientFunc: dashboardClientFunc,
+		mgr:                 mgr,
+		dashboardClientFunc: provider.GetDashboardClient(mgr),
 		options:             options,
 	}
 }
@@ -116,7 +116,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			rayDashboardClient := r.dashboardClientFunc()
-			if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+			if err := rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance, r.mgr.GetHTTPClient()); err != nil {
 				logger.Error(err, "Failed to initialize dashboard client")
 			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
@@ -261,7 +261,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of ray jobs
 		rayDashboardClient := r.dashboardClientFunc()
-		if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+		if err := rayDashboardClient.InitClient(rayJobInstance.Status.DashboardURL, rayClusterInstance, r.mgr.GetHTTPClient()); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 

@@ -53,7 +53,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		}
 
 		rayDashboardClient = &RayDashboardClient{}
-		err := rayDashboardClient.InitClient(context.Background(), "127.0.0.1:8090", nil)
+		err := rayDashboardClient.InitClient("127.0.0.1:8090", nil, &http.Client{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 

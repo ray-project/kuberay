@@ -10,8 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -25,7 +23,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
+	InitClient(url string, rayCluster *rayv1.RayCluster, client *http.Client) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -39,42 +37,36 @@ type RayDashboardClientInterface interface {
 	DeleteJob(ctx context.Context, jobName string) error
 }
 
-type BaseDashboardClient struct {
-	client       *http.Client
-	dashboardURL string
-}
-
-func GetRayDashboardClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func() RayDashboardClientInterface {
+func GetRayDashboardClientFunc(host string, useKubernetesProxy bool) func() RayDashboardClientInterface {
 	return func() RayDashboardClientInterface {
 		return &RayDashboardClient{
-			mgr:                mgr,
+			host:               host,
 			useKubernetesProxy: useKubernetesProxy,
+			client:             &http.Client{},
+			dashboardURL:       "",
 		}
 	}
 }
 
 type RayDashboardClient struct {
-	mgr ctrl.Manager
-	BaseDashboardClient
+	host               string
+	client             *http.Client
+	dashboardURL       string
 	useKubernetesProxy bool
 }
 
-func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
-	log := ctrl.LoggerFrom(ctx)
-
+func (r *RayDashboardClient) InitClient(url string, rayCluster *rayv1.RayCluster, client *http.Client) error {
 	if r.useKubernetesProxy {
 		var err error
 		headSvcName := rayCluster.Status.Head.ServiceName
 		if headSvcName == "" {
-			log.Info("RayCluster is missing .status.head.serviceName, calling GenerateHeadServiceName instead...", "RayCluster name", rayCluster.Name, "namespace", rayCluster.Namespace)
 			headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
 			if err != nil {
 				return err
 			}
 		}
-
-		r.client = r.mgr.GetHTTPClient()
-		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
+		r.client = client
+		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.host, rayCluster.Namespace, headSvcName)
 		return nil
 	}
 
@@ -279,14 +271,10 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	return r.SubmitJobReq(ctx, request, &rayJob.Name)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (jobId string, err error) {
-	log := ctrl.LoggerFrom(ctx)
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, _ *string) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
-	}
-	if name != nil {
-		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
@@ -321,9 +309,6 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 // Get Job Log
 func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Get ray job log", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
@@ -355,9 +340,6 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Stop a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
@@ -394,9 +376,6 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 }
 
 func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Delete a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
 	if err != nil {
 		return err
@@ -410,35 +389,4 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	defer resp.Body.Close()
 
 	return nil
-}
-
-func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
-	req := &RayJobRequest{
-		Entrypoint:   rayJob.Spec.Entrypoint,
-		SubmissionId: rayJob.Status.JobId,
-		Metadata:     rayJob.Spec.Metadata,
-	}
-	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
-		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
-		if err != nil {
-			return nil, err
-		}
-		req.RuntimeEnv = runtimeEnv
-	}
-	req.NumCpus = rayJob.Spec.EntrypointNumCpus
-	req.NumGpus = rayJob.Spec.EntrypointNumGpus
-	if rayJob.Spec.EntrypointResources != "" {
-		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
-			return nil, err
-		}
-	}
-	return req, nil
-}
-
-func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
-	var runtimeEnv RuntimeEnvType
-	if err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
-	}
-	return runtimeEnv, nil
 }

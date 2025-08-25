@@ -76,7 +76,7 @@ type Configuration struct {
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+	return utils.GetRayDashboardClientFunc(mgr.GetConfig().Host, config.UseKubernetesProxy)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
