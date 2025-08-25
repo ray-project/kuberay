@@ -10,6 +10,8 @@ const (
 	DefaultProbeAddr            = ":8082"
 	DefaultEnableLeaderElection = true
 	DefaultReconcileConcurrency = 1
+	DefaultQPS                  = float64(100)
+	DefaultBurst                = 200
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -35,5 +37,13 @@ func SetDefaults_Configuration(cfg *Configuration) {
 
 	if cfg.ReconcileConcurrency == 0 {
 		cfg.ReconcileConcurrency = DefaultReconcileConcurrency
+	}
+
+	if cfg.QPS == nil {
+		cfg.QPS = ptr.To(DefaultQPS)
+	}
+
+	if cfg.Burst == nil {
+		cfg.Burst = ptr.To(DefaultBurst)
 	}
 }
