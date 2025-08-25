@@ -306,10 +306,10 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 	retryCfg := RetryConfig{
 		MaxRetry:      util.HTTPClientDefaultMaxRetry,
 		BackoffFactor: util.HTTPClientDefaultBackoffBase,
-		InitBackoff:   1 * time.Millisecond,
-		MaxBackoff:    50 * time.Millisecond,
+		InitBackoff:   50 * time.Millisecond,
+		MaxBackoff:    2500 * time.Millisecond,
 		// Set short overall timeout so that the timeout error will be raised
-		OverallTimeout: 1 * time.Millisecond,
+		OverallTimeout: 50 * time.Millisecond,
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)

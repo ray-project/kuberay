@@ -734,6 +734,9 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		select {
 		case <-time.After(sleep):
 			// continue to the next retry after backoff
+			if err := ctx.Err(); err != nil && errors.Is(err, context.DeadlineExceeded) {
+				return nil, lastStatus, fmt.Errorf("overall timeout reached simultaneously with waking up: %w", ctx.Err())
+			}
 		case <-ctx.Done():
 			return nil, lastStatus, fmt.Errorf("overall timeout reached: %w", ctx.Err())
 		}
