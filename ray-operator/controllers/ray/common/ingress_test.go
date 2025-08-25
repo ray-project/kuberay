@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -107,4 +108,48 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	for _, path := range paths {
 		assert.Equal(t, headSvcName, path.Backend.Service.Name)
 	}
+
+	const hostValue = "test-host-{{ .ClusterName }}"
+	instanceWithIngressAnnotations := *instanceWithIngressEnabled
+	instanceWithIngressAnnotations.Annotations[IngressHostKey] = hostValue
+	ingress, err = BuildIngressForHeadService(context.Background(), instanceWithIngressAnnotations)
+	require.NoError(t, err)
+
+	// proper hostname set
+	require.Len(t, ingress.Spec.Rules, 1)
+	assert.Equal(t, "test-host-"+instanceWithIngressEnabled.GetName(), ingress.Spec.Rules[0].Host)
+
+	const pathValue = "/test-path-{{ .ClusterName }}"
+	instanceWithIngressAnnotations = *instanceWithIngressEnabled
+	instanceWithIngressAnnotations.Annotations[IngressPathKey] = pathValue
+	ingress, err = BuildIngressForHeadService(context.Background(), instanceWithIngressAnnotations)
+	require.NoError(t, err)
+
+	// proper path set
+	require.Len(t, ingress.Spec.Rules, 1)
+	require.Len(t, ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths, 1)
+	assert.Equal(t, "/test-path-"+instanceWithIngressEnabled.GetName(),
+		ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths[0].Path)
+
+	const pathTypeValue = networkingv1.PathTypeImplementationSpecific
+	instanceWithIngressAnnotations = *instanceWithIngressEnabled
+	instanceWithIngressAnnotations.Annotations[IngressPathTypeKey] = string(pathTypeValue)
+	ingress, err = BuildIngressForHeadService(context.Background(), instanceWithIngressAnnotations)
+	require.NoError(t, err)
+
+	// proper path type set
+	require.Len(t, ingress.Spec.Rules, 1)
+	require.Len(t, ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths, 1)
+	assert.Equal(t, pathTypeValue, *ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths[0].PathType)
+
+	// defaults when there is a template error
+	instanceWithIngressAnnotations = *instanceWithIngressEnabled
+	instanceWithIngressAnnotations.Annotations[IngressPathKey] = "{{}"
+	ingress, err = BuildIngressForHeadService(context.Background(), instanceWithIngressAnnotations)
+	require.NoError(t, err)
+
+	require.Len(t, ingress.Spec.Rules, 1)
+	require.Len(t, ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths, 1)
+	assert.Equal(t, "/"+instanceWithIngressEnabled.GetName()+"/(.*)",
+		ingress.Spec.Rules[0].IngressRuleValue.HTTP.Paths[0].Path)
 }

@@ -1,7 +1,9 @@
 package common
 
 import (
+	"bytes"
 	"context"
+	"text/template"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +13,13 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-const IngressClassAnnotationKey = "kubernetes.io/ingress.class"
+const (
+	IngressClassAnnotationKey = "kubernetes.io/ingress.class"
+
+	IngressHostKey     = "raycluster.ray.io/ingress.host"
+	IngressPathKey     = "raycluster.ray.io/ingress.path"
+	IngressPathTypeKey = "raycluster.ray.io/ingress.path-type"
+)
 
 // BuildIngressForHeadService Builds the ingress for head service dashboard.
 // This is used to expose dashboard for external traffic.
@@ -40,6 +48,19 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	pathType := networkingv1.PathTypeExact
+	if pathTypeAnnotation, ok := annotation[IngressPathTypeKey]; ok {
+		pathType = networkingv1.PathType(pathTypeAnnotation)
+	}
+	host, path, err := renderAnnotations(annotation, ingressAnnotationVars{
+		ClusterName: cluster.Name,
+	})
+	if err != nil {
+		log.Info("Ingress host and path annotation cannot be set.", "clusterNamespace", cluster.Namespace,
+			"clusterName", cluster.Name, "error", err)
+		host = ""
+		path = "/" + cluster.Name + "/(.*)"
+	}
+
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := int32(utils.DefaultDashboardPort)
 	if port, ok := servicePorts["dashboard"]; ok {
@@ -52,7 +73,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 	paths := []networkingv1.HTTPIngressPath{
 		{
-			Path:     "/" + cluster.Name + "/(.*)",
+			Path:     path,
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
@@ -75,6 +96,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		Spec: networkingv1.IngressSpec{
 			Rules: []networkingv1.IngressRule{
 				{
+					Host: host,
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
 							Paths: paths,
@@ -94,4 +116,45 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	return ingress, nil
+}
+
+type ingressAnnotationVars struct {
+	ClusterName string
+}
+
+func renderAnnotations(annotations map[string]string, variables ingressAnnotationVars) (host, path string, _ error) {
+	if hostAnnot, ok := annotations[IngressHostKey]; ok {
+		newHost, err := render(hostAnnot, variables)
+		if err != nil {
+			return "", "", err
+		}
+
+		host = newHost
+	}
+
+	if pathAnnot, ok := annotations[IngressPathKey]; ok {
+		newPath, err := render(pathAnnot, variables)
+		if err != nil {
+			return "", "", err
+		}
+
+		path = newPath
+	}
+
+	return
+}
+
+func render(tmpl string, variables ingressAnnotationVars) (string, error) {
+	t, err := template.New("ingress").Parse(tmpl)
+	if err != nil {
+		return "", err
+	}
+
+	result := bytes.Buffer{}
+	err = t.Execute(&result, variables)
+	if err != nil {
+		return "", err
+	}
+
+	return result.String(), nil
 }
