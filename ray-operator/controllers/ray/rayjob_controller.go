@@ -48,6 +48,7 @@ type RayJobReconciler struct {
 
 type RayJobReconcilerOptions struct {
 	RayJobMetricsManager *metrics.RayJobMetricsManager
+	UseKubernetesProxy   bool
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
