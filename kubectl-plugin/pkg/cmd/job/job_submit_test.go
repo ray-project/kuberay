@@ -13,6 +13,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -24,11 +25,11 @@ func TestRayJobSubmitComplete(t *testing.T) {
 	fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
 
 	cmd := &cobra.Command{}
-	cmd.Flags().StringVarP(&fakeSubmitJobOptions.namespace, "namespace", "n", "", "")
+	cmd.Flags().StringVarP(&fakeSubmitJobOptions.Namespace, "namespace", "n", "", "")
 
 	err := fakeSubmitJobOptions.Complete(cmd)
 	require.NoError(t, err)
-	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
+	assert.Equal(t, "default", fakeSubmitJobOptions.Namespace)
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 }
 
@@ -131,8 +132,10 @@ spec:
 			require.NoError(t, err)
 
 			opts := &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					CmdFactory: cmdFactory,
+					IoStreams:  &testStreams,
+				},
 				fileName:   rayJobYamlPath,
 				workingDir: "Fake/File/Path",
 			}
@@ -179,8 +182,10 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 	for _, tc := range test {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := &SubmitJobOptions{
-				cmdFactory:              cmdFactory,
-				ioStreams:               &testStreams,
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					CmdFactory: cmdFactory,
+					IoStreams:  &testStreams,
+				},
 				rayjobName:              tc.rayjobName,
 				workingDir:              "Fake/File/Path",
 				ttlSecondsAfterFinished: tc.ttlSecondsAfterFinished,
@@ -336,8 +341,10 @@ spec:
 			require.NoError(t, err)
 
 			opts := &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
+				KubectlPluginCommonOptions: util.KubectlPluginCommonOptions{
+					CmdFactory: cmdFactory,
+					IoStreams:  &testStreams,
+				},
 				fileName:   rayJobYamlPath,
 				workingDir: "Fake/File/Path",
 			}
