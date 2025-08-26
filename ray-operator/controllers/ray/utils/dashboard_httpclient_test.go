@@ -54,6 +54,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 		rayDashboardClient = &RayDashboardClient{}
 		rayDashboardClient.dashboardURL = "http://127.0.0.1:8090"
+		rayDashboardClient.client = &http.Client{}
 	})
 
 	It("Test ConvertRayJobToReq", func() {
