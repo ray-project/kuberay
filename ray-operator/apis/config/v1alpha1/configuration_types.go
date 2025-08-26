@@ -75,8 +75,8 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func() utils.RayDashboardClientInterface {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+func (config Configuration) GetDashboardClient(mgr manager.Manager) (func() utils.RayDashboardClientInterface, bool) {
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy), config.UseKubernetesProxy
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
