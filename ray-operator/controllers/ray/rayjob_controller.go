@@ -137,34 +137,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
 	// Perform all validations and directly fail the RayJob if any of the validation fails
-	validationRules := []struct {
-		validate func() error
-		errType  utils.K8sEventType
-		message  string
-	}{
-		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata, "The RayJob metadata is invalid"},
-		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec, "The RayJob spec is invalid"},
-		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus, "The RayJob status is invalid"},
-	}
-
-	for _, validation := range validationRules {
-		if err := validation.validate(); err != nil {
-			logger.Error(err, validation.message)
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
-				"%s %s/%s: %v", validation.message, rayJobInstance.Namespace, rayJobInstance.Name, err)
-
-			rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			rayJobInstance.Status.Reason = rayv1.ValidationFailed
-			rayJobInstance.Status.Message = fmt.Sprintf("%s: %v", validation.message, err)
-
-			if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
-				logger.Info("Failed to update RayJob status", "error", err)
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-
-			return ctrl.Result{}, nil
-		}
+	if passed, result, err := r.validateRayJobAndUpdateStatusIfNeeded(ctx, rayJobInstance, originalRayJobInstance); !passed || err != nil {
+		return result, err
 	}
 
 	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
@@ -473,6 +447,41 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+func (r *RayJobReconciler) validateRayJobAndUpdateStatusIfNeeded(ctx context.Context, rayJobInstance, originalRayJobInstance *rayv1.RayJob) (bool, ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	validationRules := []struct {
+		validate func() error
+		errType  utils.K8sEventType
+		message  string
+	}{
+		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata, "The RayJob metadata is invalid"},
+		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec, "The RayJob spec is invalid"},
+		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus, "The RayJob status is invalid"},
+	}
+
+	for _, validation := range validationRules {
+		if err := validation.validate(); err != nil {
+			logger.Error(err, validation.message)
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
+				"%s %s/%s: %v", validation.message, rayJobInstance.Namespace, rayJobInstance.Name, err)
+
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+			rayJobInstance.Status.Reason = rayv1.ValidationFailed
+			rayJobInstance.Status.Message = fmt.Sprintf("%s: %v", validation.message, err)
+
+			if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
+				logger.Info("Failed to update RayJob status", "error", err)
+				return false, ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+
+			return false, ctrl.Result{}, nil
+		}
+	}
+
+	return true, ctrl.Result{}, nil
 }
 
 func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
