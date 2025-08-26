@@ -616,6 +616,18 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 	return "", false
 }
 
+func IsSubmitterContainerFinished(pod *corev1.Pod) bool {
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.Name == SubmitterContainerName {
+			if containerStatus.State.Terminated != nil {
+				return true
+			}
+			break
+		}
+	}
+	return false
+}
+
 func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	for _, env := range envVars {
 		if env.Name == envName {

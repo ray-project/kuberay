@@ -238,7 +238,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		var isSubmitterFinished bool
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
-			shouldUpdate, isSubmitterFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance, rayJobInstance.Spec.SubmissionMode)
+			shouldUpdate, isSubmitterFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
@@ -283,7 +283,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			isJobTerminal = isJobTerminal && isSubmitterFinished
 		}
 
@@ -934,12 +934,12 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	return true
 }
 
-func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) (shouldUpdate, isSubmitterFinished bool, err error) {
+func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate, isSubmitterFinished bool, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
 	isSubmitterFinished = false
 
-	switch submissionMode {
+	switch rayJob.Spec.SubmissionMode {
 	case rayv1.SidecarMode:
 		var rayClusterInstance *rayv1.RayCluster
 		var headPod *corev1.Pod
@@ -961,8 +961,8 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			return
 		}
 
-		shouldUpdate = r.checkSidecarContainerAndUpdateStatusIfNeeded(ctx, rayJob, headPod)
-		// Sidecar mode doesn't use isSubmitterFinished currently, so isSubmitterFinished is always false
+		shouldUpdate = checkSidecarContainerAndUpdateStatusIfNeeded(rayJob, headPod)
+		isSubmitterFinished = utils.IsSubmitterContainerFinished(headPod)
 		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
@@ -1008,26 +1008,23 @@ func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJo
 	return false
 }
 
-func (r *RayJobReconciler) checkSidecarContainerAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
-	logger := ctrl.LoggerFrom(ctx)
-
-	// Check container statuses for any error conditions
+func checkSidecarContainerAndUpdateStatusIfNeeded(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			// Check for terminated containers with error exit codes
 			// Based on the document, "ray job submit" will exit with 0 if the job succeeded, or exit with 1 if it failed.
 			// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/cli.html#ray-job-submit
 			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
-				logger.Info("The ray job submit container exited with error",
-					"container", containerStatus.Name,
-					"exitCode", containerStatus.State.Terminated.ExitCode,
-					"reason", containerStatus.State.Terminated.Reason)
-
 				// Update RayJob status to Failed
 				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-					containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
+
+				if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+					rayJob.Status.Reason = rayv1.AppFailed
+				} else {
+					rayJob.Status.Reason = rayv1.SubmissionFailed
+					rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
+						containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
+				}
 
 				return true
 			}
