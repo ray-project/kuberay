@@ -51,8 +51,8 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func() utils.RayDashboardClientInterface {
-	return func() utils.RayDashboardClientInterface {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) utils.RayDashboardClientInterface {
+	return func(_ *rayv1.RayCluster, _ string) utils.RayDashboardClientInterface {
 		return fakeRayDashboardClient
 	}
 }

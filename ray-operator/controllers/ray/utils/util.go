@@ -6,10 +6,12 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -639,7 +641,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) RayDashboardClientInterface
 	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }
 
@@ -762,4 +764,22 @@ func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (RuntimeEnvType, error) {
 		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}
 	return runtimeEnv, nil
+}
+
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) RayDashboardClientInterface {
+	return func(rayCluster *rayv1.RayCluster, url string) RayDashboardClientInterface {
+		if useKubernetesProxy {
+			return &RayDashboardClient{
+				client:       mgr.GetHTTPClient(),
+				dashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, rayCluster.Status.Head.ServiceName),
+			}
+		}
+
+		return &RayDashboardClient{
+			client: &http.Client{
+				Timeout: 2 * time.Second,
+			},
+			dashboardURL: "http://" + url,
+		}
+	}
 }

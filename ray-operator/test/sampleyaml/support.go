@@ -65,7 +65,6 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
-		rayDashboardClient := &utils.RayDashboardClient{}
 		pod, err := GetHeadPod(t, rayCluster)
 		g.Expect(err).ToNot(HaveOccurred())
 
@@ -76,8 +75,8 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		g.Expect(err).ToNot(HaveOccurred())
 		url := fmt.Sprintf("127.0.0.1:%d", localPort)
-
-		err = rayDashboardClient.InitClient(t.Ctx(), url, rayCluster)
+		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(nil, false)
+		rayDashboardClient := rayDashboardClientFunc(rayCluster, url)
 		g.Expect(err).ToNot(HaveOccurred())
 		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())
 		g.Expect(err).ToNot(HaveOccurred())

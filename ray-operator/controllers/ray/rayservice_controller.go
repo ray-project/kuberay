@@ -52,7 +52,7 @@ type RayServiceReconciler struct {
 	// Cache value is map of RayCluster name to Serve application config.
 	ServeConfigs                 *lru.Cache
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
-	dashboardClientFunc          func() utils.RayDashboardClientInterface
+	dashboardClientFunc          func(rayCluster *rayv1.RayCluster, url string) utils.RayDashboardClientInterface
 	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
 }
 
@@ -943,10 +943,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return false, serveApplications, err
 	}
 
-	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
-		return false, serveApplications, err
-	}
+	rayDashboardClient := r.dashboardClientFunc(rayClusterInstance, clientURL)
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
 	isReady, serveApplications, err := getAndCheckServeStatus(ctx, rayDashboardClient)

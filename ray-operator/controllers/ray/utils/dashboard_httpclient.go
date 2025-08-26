@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -24,7 +22,6 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -32,57 +29,15 @@ type RayDashboardClientInterface interface {
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
-	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (string, error)
+	SubmitJobReq(ctx context.Context, request *RayJobRequest) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
 }
 
-type BaseDashboardClient struct {
+type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
-}
-
-func GetRayDashboardClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func() RayDashboardClientInterface {
-	return func() RayDashboardClientInterface {
-		return &RayDashboardClient{
-			mgr:                mgr,
-			useKubernetesProxy: useKubernetesProxy,
-		}
-	}
-}
-
-type RayDashboardClient struct {
-	mgr ctrl.Manager
-	BaseDashboardClient
-	useKubernetesProxy bool
-}
-
-func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
-	log := ctrl.LoggerFrom(ctx)
-
-	if r.useKubernetesProxy {
-		var err error
-		headSvcName := rayCluster.Status.Head.ServiceName
-		if headSvcName == "" {
-			log.Info("RayCluster is missing .status.head.serviceName, calling GenerateHeadServiceName instead...", "RayCluster name", rayCluster.Name, "namespace", rayCluster.Namespace)
-			headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-			if err != nil {
-				return err
-			}
-		}
-
-		r.client = r.mgr.GetHTTPClient()
-		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
-		return nil
-	}
-
-	r.client = &http.Client{
-		Timeout: 2 * time.Second,
-	}
-
-	r.dashboardURL = "http://" + url
-	return nil
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -275,17 +230,13 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	if err != nil {
 		return "", err
 	}
-	return r.SubmitJobReq(ctx, request, &rayJob.Name)
+	return r.SubmitJobReq(ctx, request)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (jobId string, err error) {
-	log := ctrl.LoggerFrom(ctx)
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
-	}
-	if name != nil {
-		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
@@ -320,9 +271,6 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 // Get Job Log
 func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Get ray job log", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
@@ -354,9 +302,6 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Stop a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
@@ -393,9 +338,6 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 }
 
 func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Delete a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
 	if err != nil {
 		return err
