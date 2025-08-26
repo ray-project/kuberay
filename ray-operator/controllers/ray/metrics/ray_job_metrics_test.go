@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -31,18 +32,20 @@ func TestMetricRayJobInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-1",
 						Namespace: "ns1",
+						UID:       types.UID("ray-job-1-uid"),
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-2",
 						Namespace: "ns2",
+						UID:       types.UID("ray-job-2-uid"),
 					},
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_job_info{name="ray-job-1",namespace="ns1"} 1`,
-				`kuberay_job_info{name="ray-job-2",namespace="ns2"} 1`,
+				`kuberay_job_info{name="ray-job-1",namespace="ns1",uid="ray-job-1-uid"} 1`,
+				`kuberay_job_info{name="ray-job-2",namespace="ns2",uid="ray-job-2-uid"} 1`,
 			},
 		},
 	}
@@ -105,6 +108,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-1",
 						Namespace: "ns1",
+						UID:       types.UID("ray-job-1-uid"),
 					},
 					Status: rayv1.RayJobStatus{
 						JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
@@ -114,6 +118,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-2",
 						Namespace: "ns2",
+						UID:       types.UID("ray-job-2-uid"),
 					},
 					Status: rayv1.RayJobStatus{
 						JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
@@ -121,8 +126,8 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_job_deployment_status{deployment_status="Running",name="ray-job-1",namespace="ns1"} 1`,
-				`kuberay_job_deployment_status{deployment_status="Failed",name="ray-job-2",namespace="ns2"} 1`,
+				`kuberay_job_deployment_status{deployment_status="Running",name="ray-job-1",namespace="ns1",uid="ray-job-1-uid"} 1`,
+				`kuberay_job_deployment_status{deployment_status="Failed",name="ray-job-2",namespace="ns2",uid="ray-job-2-uid"} 1`,
 			},
 		},
 	}

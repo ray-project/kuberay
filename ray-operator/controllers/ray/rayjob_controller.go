@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -461,18 +462,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
-	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, originalRayJobInstance.Status, rayJobInstance.Status)
+	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, rayJobInstance.UID, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, rayJobUID types.UID, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
 	if rayJobMetricsManager == nil {
 		return
 	}
-	emitRayJobExecutionDuration(rayJobMetricsManager, rayJobName, rayJobNamespace, originalRayJobStatus, rayJobStatus)
+	emitRayJobExecutionDuration(rayJobMetricsManager, rayJobName, rayJobNamespace, rayJobUID, originalRayJobStatus, rayJobStatus)
 }
 
-func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
+func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObserver, rayJobName, rayJobNamespace string, rayJobUID types.UID, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
 	// Emit kuberay_job_execution_duration_seconds when a job transitions from a non-terminal state to either a terminal state or a retrying state (following a failure).
 	if !rayv1.IsJobDeploymentTerminal(originalRayJobStatus.JobDeploymentStatus) && (rayv1.IsJobDeploymentTerminal(rayJobStatus.JobDeploymentStatus) || rayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying) {
 		retryCount := 0
@@ -482,6 +483,7 @@ func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObse
 		rayJobMetricsObserver.ObserveRayJobExecutionDuration(
 			rayJobName,
 			rayJobNamespace,
+			rayJobUID,
 			rayJobStatus.JobDeploymentStatus,
 			retryCount,
 			time.Since(rayJobStatus.StartTime.Time).Seconds(),

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -31,18 +32,20 @@ func TestRayServiceInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-1",
 						Namespace: "default",
+						UID:       types.UID("ray-service-1-uid"),
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-2",
 						Namespace: "default",
+						UID:       types.UID("ray-service-2-uid"),
 					},
 				},
 			},
 			expectedInfo: []string{
-				`kuberay_service_info{name="ray-service-1",namespace="default"} 1`,
-				`kuberay_service_info{name="ray-service-2",namespace="default"} 1`,
+				`kuberay_service_info{name="ray-service-1",namespace="default",uid="ray-service-1-uid"} 1`,
+				`kuberay_service_info{name="ray-service-2",namespace="default",uid="ray-service-2-uid"} 1`,
 			},
 		},
 	}
@@ -104,6 +107,7 @@ func TestRayServiceCondition(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-1",
 						Namespace: "default",
+						UID:       types.UID("ray-service-1-uid"),
 					},
 					Status: rayv1.RayServiceStatuses{
 						Conditions: []metav1.Condition{
@@ -118,6 +122,7 @@ func TestRayServiceCondition(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-2",
 						Namespace: "default",
+						UID:       types.UID("ray-service-2-uid"),
 					},
 					Status: rayv1.RayServiceStatuses{
 						Conditions: []metav1.Condition{
@@ -130,8 +135,8 @@ func TestRayServiceCondition(t *testing.T) {
 				},
 			},
 			expectedInfo: []string{
-				`kuberay_service_condition_ready{condition="true",name="ray-service-1",namespace="default"} 1`,
-				`kuberay_service_condition_ready{condition="false",name="ray-service-2",namespace="default"} 1`,
+				`kuberay_service_condition_ready{condition="true",name="ray-service-1",namespace="default",uid="ray-service-1-uid"} 1`,
+				`kuberay_service_condition_ready{condition="false",name="ray-service-2",namespace="default",uid="ray-service-2-uid"} 1`,
 			},
 		},
 		{
@@ -141,6 +146,7 @@ func TestRayServiceCondition(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-1",
 						Namespace: "default",
+						UID:       types.UID("ray-service-1-uid"),
 					},
 					Status: rayv1.RayServiceStatuses{
 						Conditions: []metav1.Condition{
@@ -155,6 +161,7 @@ func TestRayServiceCondition(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-service-2",
 						Namespace: "default",
+						UID:       types.UID("ray-service-2-uid"),
 					},
 					Status: rayv1.RayServiceStatuses{
 						Conditions: []metav1.Condition{
@@ -167,8 +174,8 @@ func TestRayServiceCondition(t *testing.T) {
 				},
 			},
 			expectedInfo: []string{
-				`kuberay_service_condition_upgrade_in_progress{condition="true",name="ray-service-1",namespace="default"} 1`,
-				`kuberay_service_condition_upgrade_in_progress{condition="false",name="ray-service-2",namespace="default"} 1`,
+				`kuberay_service_condition_upgrade_in_progress{condition="true",name="ray-service-1",namespace="default",uid="ray-service-1-uid"} 1`,
+				`kuberay_service_condition_upgrade_in_progress{condition="false",name="ray-service-2",namespace="default",uid="ray-service-2-uid"} 1`,
 			},
 		},
 	}

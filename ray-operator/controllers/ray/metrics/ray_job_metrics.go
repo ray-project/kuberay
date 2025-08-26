@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -14,7 +15,7 @@ import (
 
 //go:generate mockgen -destination=mocks/ray_job_metrics_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics RayJobMetricsObserver
 type RayJobMetricsObserver interface {
-	ObserveRayJobExecutionDuration(name, namespace string, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64)
+	ObserveRayJobExecutionDuration(name, namespace string, uid types.UID, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64)
 }
 
 // RayJobMetricsManager implements the prometheus.Collector and RayJobMetricsObserver interface to collect ray job metrics.
@@ -34,20 +35,20 @@ func NewRayJobMetricsManager(ctx context.Context, client client.Client) *RayJobM
 				Name: "kuberay_job_execution_duration_seconds",
 				Help: "Duration from when the RayJob CR’s JobDeploymentStatus transitions from Initializing to either the Retrying state or a terminal state, such as Complete or Failed. The Retrying state indicates that the CR previously failed and that spec.backoffLimit is enabled.",
 			},
-			[]string{"name", "namespace", "job_deployment_status", "retry_count"},
+			[]string{"name", "namespace", "uid", "job_deployment_status", "retry_count"},
 		),
 		// rayJobInfo is a gauge metric that indicates the metadata information about RayJob custom resources.
 		rayJobInfo: prometheus.NewDesc(
 			"kuberay_job_info",
 			"Metadata information about RayJob custom resources",
-			[]string{"name", "namespace"},
+			[]string{"name", "namespace", "uid"},
 			nil,
 		),
 		// rayJobDeploymentStatus is a gauge metric that indicates the current deployment status of the RayJob custom resources.
 		rayJobDeploymentStatus: prometheus.NewDesc(
 			"kuberay_job_deployment_status",
 			"The RayJob's current deployment status",
-			[]string{"name", "namespace", "deployment_status"},
+			[]string{"name", "namespace", "uid", "deployment_status"},
 			nil,
 		),
 		client: client,
@@ -80,8 +81,8 @@ func (r *RayJobMetricsManager) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (r *RayJobMetricsManager) ObserveRayJobExecutionDuration(name, namespace string, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64) {
-	r.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, string(jobDeploymentStatus), strconv.Itoa(retryCount)).Set(duration)
+func (r *RayJobMetricsManager) ObserveRayJobExecutionDuration(name, namespace string, uid types.UID, jobDeploymentStatus rayv1.JobDeploymentStatus, retryCount int, duration float64) {
+	r.rayJobExecutionDurationSeconds.WithLabelValues(name, namespace, string(uid), string(jobDeploymentStatus), strconv.Itoa(retryCount)).Set(duration)
 }
 
 func (r *RayJobMetricsManager) collectRayJobInfo(rayJob *rayv1.RayJob, ch chan<- prometheus.Metric) {
@@ -91,6 +92,7 @@ func (r *RayJobMetricsManager) collectRayJobInfo(rayJob *rayv1.RayJob, ch chan<-
 		1,
 		rayJob.Name,
 		rayJob.Namespace,
+		string(rayJob.UID),
 	)
 }
 
@@ -101,6 +103,7 @@ func (r *RayJobMetricsManager) collectRayJobDeploymentStatus(rayJob *rayv1.RayJo
 		1,
 		rayJob.Name,
 		rayJob.Namespace,
+		string(rayJob.UID),
 		string(rayJob.Status.JobDeploymentStatus),
 	)
 }

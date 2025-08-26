@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -31,6 +32,7 @@ func TestRayClusterInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-ray-cluster",
 						Namespace: "default",
+						UID:       types.UID("test-ray-cluster-uid"),
 						Labels: map[string]string{
 							"ray.io/originated-from-crd": "RayJob",
 						},
@@ -40,13 +42,14 @@ func TestRayClusterInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-ray-cluster-2",
 						Namespace: "default",
+						UID:       types.UID("test-ray-cluster-2-uid"),
 						Labels:    map[string]string{},
 					},
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob"} 1`,
-				`kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="None"} 1`,
+				`kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob",uid="test-ray-cluster-uid"} 1`,
+				`kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="None",uid="test-ray-cluster-2-uid"} 1`,
 			},
 		},
 	}
@@ -109,6 +112,7 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "provisioned-cluster",
 						Namespace: "default",
+						UID:       types.UID("provisioned-cluster-uid"),
 					},
 					Status: rayv1.RayClusterStatus{
 						Conditions: []metav1.Condition{
@@ -123,6 +127,7 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "unprovisioned-cluster",
 						Namespace: "default",
+						UID:       types.UID("unprovisioned-cluster-uid"),
 					},
 					Status: rayv1.RayClusterStatus{
 						Conditions: []metav1.Condition{
@@ -135,8 +140,8 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_cluster_condition_provisioned{condition="true",name="provisioned-cluster",namespace="default"} 1`,
-				`kuberay_cluster_condition_provisioned{condition="false",name="unprovisioned-cluster",namespace="default"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="true",name="provisioned-cluster",namespace="default",uid="provisioned-cluster-uid"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="false",name="unprovisioned-cluster",namespace="default",uid="unprovisioned-cluster-uid"} 1`,
 			},
 		},
 	}
