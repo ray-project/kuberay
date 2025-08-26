@@ -54,6 +54,19 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	return pkgutils.ConvertByteSliceToString(metadataBytes), nil
 }
 
+func getDashboardPortFromRayJobSpec(rayJobInstance *rayv1.RayJob) int {
+	for _, container := range rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
+		if container.Name == "ray-head" {
+			for _, port := range container.Ports {
+				if port.Name == utils.DashboardPortName {
+					return int(port.ContainerPort)
+				}
+			}
+		}
+	}
+	return utils.DefaultDashboardPort
+}
+
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
 func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
@@ -62,7 +75,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	case rayv1.SidecarMode:
 		// The sidecar submitter shares the same network namespace as the Ray dashboard,
 		// so it uses 127.0.0.1 to connect to the Ray dashboard.
-		address = "http://127.0.0.1:8265"
+		address = "http://127.0.0.1:" + strconv.Itoa(getDashboardPortFromRayJobSpec(rayJobInstance))
 	case rayv1.K8sJobMode:
 		// Submitter is a separate K8s Job; use cluster dashboard address.
 		address = rayJobInstance.Status.DashboardURL
