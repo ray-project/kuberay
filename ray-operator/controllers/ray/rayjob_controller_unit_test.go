@@ -655,7 +655,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					},
 				},
 			},
-			shouldContain: "The RayJob metadata is invalid",
+			shouldContain: "The RayJob metadata is invalid: RayJob name should be no more than 47 characters",
 		},
 		{
 			name: "spec validation failure - empty containers",
@@ -676,7 +676,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					},
 				},
 			},
-			shouldContain: "The RayJob spec is invalid",
+			shouldContain: "The RayJob spec is invalid: headGroupSpec should have at least one container",
 		},
 		{
 			name: "status validation failure - invalid status combination",
@@ -701,7 +701,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					JobDeploymentStatus: rayv1.JobDeploymentStatusWaiting,
 				},
 			},
-			shouldContain: "The RayJob status is invalid",
+			shouldContain: "The RayJob status is invalid: invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode",
 		},
 	}
 
@@ -743,7 +743,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 			assert.Equal(t, rayv1.JobDeploymentStatusFailed, updatedRayJob.Status.JobDeploymentStatus)
 			assert.Equal(t, rayv1.JobStatusFailed, updatedRayJob.Status.JobStatus)
 			assert.Equal(t, rayv1.ValidationFailed, updatedRayJob.Status.Reason)
-			assert.Contains(t, updatedRayJob.Status.Message, tt.shouldContain)
+			assert.Equal(t, tt.shouldContain, updatedRayJob.Status.Message)
 		})
 	}
 }
