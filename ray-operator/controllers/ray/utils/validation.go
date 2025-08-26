@@ -184,7 +184,11 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
 		if rayJob.Spec.SubmitterPodTemplate != nil {
-			return fmt.Errorf("Currently, SidecarMode doesn’t support SubmitterPodTemplate")
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterPodTemplate")
+		}
+
+		if rayJob.Spec.SubmitterConfig != nil {
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterConfig")
 		}
 
 		if rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
