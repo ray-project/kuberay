@@ -137,26 +137,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
 	// Perform all validations and directly fail the RayJob if any of the validation fails
-	validationErrors := []struct {
-		err     error
-		errType utils.K8sEventType
-		message string
+	validations := []struct {
+		validate func() error
+		errType  utils.K8sEventType
+		message  string
 	}{
-		{utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta), utils.InvalidRayJobMetadata, "The RayJob metadata is invalid"},
-		{utils.ValidateRayJobSpec(rayJobInstance), utils.InvalidRayJobSpec, "The RayJob spec is invalid"},
-		{utils.ValidateRayJobStatus(rayJobInstance), utils.InvalidRayJobStatus, "The RayJob status is invalid"},
+		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata, "The RayJob metadata is invalid"},
+		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec, "The RayJob spec is invalid"},
+		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus, "The RayJob status is invalid"},
 	}
 
-	for _, validation := range validationErrors {
-		if validation.err != nil {
-			logger.Error(validation.err, validation.message)
+	for _, validation := range validations {
+		if err := validation.validate(); err != nil {
+			logger.Error(err, validation.message)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
-				"%s %s/%s: %v", validation.message, rayJobInstance.Namespace, rayJobInstance.Name, validation.err)
+				"%s %s/%s: %v", validation.message, rayJobInstance.Namespace, rayJobInstance.Name, err)
 
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 			rayJobInstance.Status.Reason = rayv1.ValidationFailed
-			rayJobInstance.Status.Message = fmt.Sprintf("%s: %v", validation.message, validation.err)
+			rayJobInstance.Status.Message = fmt.Sprintf("%s: %v", validation.message, err)
 
 			if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 				logger.Info("Failed to update RayJob status", "error", err)
