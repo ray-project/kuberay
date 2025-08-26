@@ -559,7 +559,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 		logger.Info("user-provided submitter template is used; the first container is assumed to be the submitter")
 	}
 
-	if err := configureSubmitterContainer(ctx, &submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayv1.K8sJobMode); err != nil {
+	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayv1.K8sJobMode); err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
 
@@ -567,19 +567,17 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 }
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
-func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
+func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
 	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(rayClusterInstance)
 
-	if err := configureSubmitterContainer(ctx, &submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
+	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
 	}
 
 	return submitterContainer, nil
 }
 
-func configureSubmitterContainer(ctx context.Context, container *corev1.Container, rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) error {
-	logger := ctrl.LoggerFrom(ctx)
-
+func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) error {
 	// If the command in the submitter container manifest isn't set, use the default command.
 	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
 	if err != nil {
@@ -592,9 +590,6 @@ func configureSubmitterContainer(ctx context.Context, container *corev1.Containe
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
 		container.Command = utils.GetContainerCommand([]string{"e"})
 		container.Args = []string{strings.Join(jobCmd, " ")}
-		logger.Info("Default command is used", "submissionMode", submissionMode, "command", jobCmd)
-	} else {
-		logger.Info("User-provided command is used", "command", container.Command)
 	}
 
 	// Set PYTHONUNBUFFERED=1 for real-time logging
@@ -853,7 +848,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 
 			logger.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
-			rayClusterInstance, err = r.constructRayClusterForRayJob(ctx, rayJobInstance, rayClusterNamespacedName.Name)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -877,7 +872,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	return rayClusterInstance, nil
 }
 
-func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
 	for key, value := range rayJobInstance.Labels {
 		labels[key] = value
@@ -901,14 +896,16 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, ray
 
 	// Inject a submitter container into the head Pod in SidecarMode.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		sidecar, err := getSubmitterContainer(ctx, rayJobInstance, rayCluster)
+		sidecar, err := getSubmitterContainer(rayJobInstance, rayCluster)
 		if err != nil {
 			return nil, err
 		}
 		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
 			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
-		// Ensure the head Pod doesn't restart after sidecar termination
-		// For more details, see https://github.com/ray-project/kuberay/issues/3928#issuecomment-3187164736
+		// In K8sJobMode, the submitter Job relies on the K8s Job backoffLimit API to restart if it fails.
+		// This mainly handles WebSocket connection failures caused by transient network issues.
+		// In SidecarMode, however, the submitter container shares the same network namespace as the Ray dashboard,
+		// so restarts are no longer needed.
 		rayCluster.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 

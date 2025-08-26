@@ -54,20 +54,15 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	return pkgutils.ConvertByteSliceToString(metadataBytes), nil
 }
 
-// BuildJobSubmitCommand builds the job submit command based on submission mode.
+// BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
 func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
-	var waitLoop []string
 
 	switch submissionMode {
 	case rayv1.SidecarMode:
-		// Sidecar submitter talks to the local head Pod dashboard.
+		// The sidecar submitter shares the same network namespace as the Ray dashboard,
+		// so it uses 127.0.0.1 to connect to the Ray dashboard.
 		address = "http://127.0.0.1:8265"
-		// Wait until dashboard is reachable before proceeding.
-		waitLoop = []string{
-			"until", "ray", "job", "list", "--address", address, ">/dev/null", "2>&1", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray dashboard at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
-		}
 	case rayv1.K8sJobMode:
 		// Submitter is a separate K8s Job; use cluster dashboard address.
 		address = rayJobInstance.Status.DashboardURL
@@ -99,8 +94,16 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
-	cmd = append(cmd, waitLoop...)
-	// In Sidecar mode, we only support RayJob level retry, which means that the submitter job being retried on an existing cluster won't happen
+	if submissionMode == rayv1.SidecarMode {
+		// Wait until dashboard is reachable before proceeding.
+		waitLoop := []string{
+			"until", "ray", "job", "list", "--address", address, ">/dev/null", "2>&1", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray dashboard at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		}
+		cmd = append(cmd, waitLoop...)
+	}
+
+	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
 	// so we won't have to check if the job has been submitted.
 	if submissionMode == rayv1.K8sJobMode {
 		// Only check job status in K8s mode to handle duplicated submission gracefully
