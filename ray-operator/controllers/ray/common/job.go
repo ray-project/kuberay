@@ -108,10 +108,18 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
 	if submissionMode == rayv1.SidecarMode {
-		// Wait until dashboard is reachable before proceeding.
+		// Wait until Ray Dashboard GCS is healthy before proceeding.
+		// Use the same Ray Dashboard GCS health check command as the readiness probe
+		rayDashboardGCSHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeFailureThreshold,
+			utils.DefaultDashboardPort,
+			utils.RayDashboardGCSHealthPath,
+		)
+
 		waitLoop := []string{
-			"until", "ray", "job", "list", "--address", address, ">/dev/null", "2>&1", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray dashboard at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 		}
 		cmd = append(cmd, waitLoop...)
 	}
