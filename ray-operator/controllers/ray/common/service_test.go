@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -140,6 +142,23 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 
 	// BuildServiceForHeadPod should generate a headless service for a Head Pod by default.
 	assert.Equal(t, corev1.ClusterIPNone, svc.Spec.ClusterIP)
+
+	// If we provide an owning object, the name of the service should be based off the owning object.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	owningRayJob := *testRayJob
+	owningRayJob.SetName("test-ray-job")
+	instanceOwnedWithWrongSvc := *instanceWithWrongSvc
+	err = ctrl.SetControllerReference(&owningRayJob, &instanceOwnedWithWrongSvc, newScheme)
+	require.NoError(t, err)
+
+	svc, err = BuildServiceForHeadPod(context.Background(), instanceOwnedWithWrongSvc, nil, nil)
+	require.NoError(t, err)
+	expectedName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instanceOwnedWithWrongSvc.Spec,
+		owningRayJob.Name)
+	require.NoError(t, err)
+	assert.Equal(t, expectedName, svc.GetName())
 }
 
 // Test that default ports are applied when none are specified. The metrics

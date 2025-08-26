@@ -61,11 +61,15 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 		annotations = make(map[string]string)
 	}
 
-	defaultName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	defaultName := cluster.Name
+	defaultNamespace := cluster.Namespace
+	if controller := metav1.GetControllerOf(&cluster); controller != nil {
+		defaultName = controller.Name
+	}
+	defaultName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, defaultName)
 	if err != nil {
 		return nil, err
 	}
-	defaultNamespace := cluster.Namespace
 	defaultType := cluster.Spec.HeadGroupSpec.ServiceType
 
 	defaultAppProtocol := utils.DefaultServiceAppProtocol
