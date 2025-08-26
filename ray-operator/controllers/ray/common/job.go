@@ -70,12 +70,14 @@ func getDashboardPortFromRayJobSpec(rayJobInstance *rayv1.RayJob) int {
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
 func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
+	port := utils.DefaultDashboardPort
 
 	switch submissionMode {
 	case rayv1.SidecarMode:
 		// The sidecar submitter shares the same network namespace as the Ray dashboard,
 		// so it uses 127.0.0.1 to connect to the Ray dashboard.
-		address = "http://127.0.0.1:" + strconv.Itoa(getDashboardPortFromRayJobSpec(rayJobInstance))
+		port = getDashboardPortFromRayJobSpec(rayJobInstance)
+		address = "http://127.0.0.1:" + strconv.Itoa(port)
 	case rayv1.K8sJobMode:
 		// Submitter is a separate K8s Job; use cluster dashboard address.
 		address = rayJobInstance.Status.DashboardURL
@@ -113,7 +115,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		rayDashboardGCSHealthCommand := fmt.Sprintf(
 			utils.BaseWgetHealthCommand,
 			utils.DefaultReadinessProbeFailureThreshold,
-			utils.DefaultDashboardPort,
+			port,
 			utils.RayDashboardGCSHealthPath,
 		)
 
