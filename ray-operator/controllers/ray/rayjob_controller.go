@@ -137,7 +137,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
 	// Perform all validations and directly fail the RayJob if any of the validation fails
-	validations := []struct {
+	validationRules := []struct {
 		validate func() error
 		errType  utils.K8sEventType
 		message  string
@@ -147,7 +147,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus, "The RayJob status is invalid"},
 	}
 
-	for _, validation := range validations {
+	for _, validation := range validationRules {
 		if err := validation.validate(); err != nil {
 			logger.Error(err, validation.message)
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
