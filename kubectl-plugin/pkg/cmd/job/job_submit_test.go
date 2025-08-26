@@ -202,9 +202,9 @@ func TestRayJobSubmit_AddressValidation(t *testing.T) {
 	test := []struct {
 		name             string
 		address          string
-		flagChanged      bool
 		expectError      string
 		expectNormalized string
+		flagChanged      bool
 	}{
 		{
 			name:        "address flag not set: port-forward mode",
