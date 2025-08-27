@@ -99,7 +99,7 @@ func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayCluster(ctx context
 	}
 }
 
-func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec) {
+func (y *YuniKornScheduler) AddMetadataToChildResourcesFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 	// the applicationID and queue name must be provided in the labels
 	y.populateRayClusterLabelsFromRayJob(ctx, rayJob, rayCluster, RayApplicationIDLabelName, RayApplicationIDLabelName)

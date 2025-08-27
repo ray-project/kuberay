@@ -26,9 +26,9 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResourceFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
-	// AddMetadataToChildResourceFromRayJob enriches child resource with metadata necessary to tie it to the scheduler.
+	// AddMetadataToChildResourcesFromRayJob enriches child resource with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToChildResourceFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec)
+	AddMetadataToChildResourcesFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -64,8 +64,8 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 func (d *DefaultBatchScheduler) AddMetadataToChildResourceFromRayCluster(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-// AddMetadataToChildResourceFromRayJob Add necessary metadata from RayJob to RayCluster and submitter pod template for BatchScheduler
-func (d *DefaultBatchScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
+// AddMetadataToChildResourcesFromRayJob Add necessary metadata from RayJob to RayCluster and submitter pod template for BatchScheduler
+func (d *DefaultBatchScheduler) AddMetadataToChildResourcesFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {
