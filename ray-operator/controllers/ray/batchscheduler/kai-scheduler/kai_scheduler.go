@@ -44,8 +44,7 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 	queue, ok := app.Labels[QueueLabelName]
 	if !ok || queue == "" {
 		logger.Info("Queue label missing from RayCluster; pods will remain pending",
-			"requiredLabel", QueueLabelName,
-			"rayCluster", app.Name)
+			"requiredLabel", QueueLabelName)
 		return
 	}
 	if pod.Labels == nil {
