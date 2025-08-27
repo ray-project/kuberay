@@ -85,7 +85,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 	assert.True(t, yk.isGangSchedulingEnabled(rayJob2))
 
 	rayJob3 := createRayJobWithLabels(
-		"ray-cluster-with-gang-scheduling",
+		"ray-job-with-gang-scheduling",
 		"test3",
 		nil,
 		map[string]string{
