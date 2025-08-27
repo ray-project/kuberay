@@ -518,13 +518,15 @@ func TestAddMetadataToChildResourcesFromRayJob(t *testing.T) {
 
 	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, rayCluster, submitterPodTemplate)
 
-	// We dont need to check rayCluster label and annotation because rayJob controller should populate them when creating RayCluster
+	assert.Equal(t, "job-4", rayCluster.Labels[RayApplicationIDLabelName])
+	assert.Equal(t, "root.default", rayCluster.Labels[RayApplicationQueueLabelName])
+	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"submittergroup","minMember":1}]`, rayCluster.Annotations[YuniKornTaskGroupsAnnotationName])
 
 	assert.Equal(t, utils.RayNodeSubmitterGroupLabelValue, submitterPodTemplate.Annotations[YuniKornTaskGroupNameAnnotationName])
 	assert.Equal(t, "job-4", submitterPodTemplate.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", submitterPodTemplate.Labels[YuniKornPodQueueLabelName])
-	assert.JSONEq(t, "[{\"minResource\":{\"cpu\":\"1\",\"memory\":\"1Gi\"},\"name\":\"headgroup\",\"minMember\":1},{\"minResource\":{\"cpu\":\"1\",\"memory\":\"1Gi\"},\"name\":\"worker-group-1\",\"minMember\":1},{\"minResource\":{\"cpu\":\"1\",\"memory\":\"1Gi\"},\"name\":\"submittergroup\",\"minMember\":1}]", submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName])
 	assert.Equal(t, "yunikorn", submitterPodTemplate.Spec.SchedulerName)
+	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"submittergroup","minMember":1}]`, submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName])
 }
 
 func createRayClusterWithLabels(name string, namespace string, labels map[string]string) *rayv1.RayCluster {
