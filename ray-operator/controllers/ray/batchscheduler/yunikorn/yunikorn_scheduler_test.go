@@ -59,7 +59,7 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 
 	// Test RayJob
 	rayJob1 := createRayJobWithLabels(
-		"ray-cluster-with-gang-scheduling",
+		"ray-job-with-gang-scheduling",
 		"test1",
 		nil,
 		map[string]string{
