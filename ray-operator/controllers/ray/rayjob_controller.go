@@ -183,6 +183,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			initRayHeadSvc(rayJobInstance)
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -598,6 +602,18 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 	})
 
 	return submitterTemplate, nil
+}
+
+func initRayHeadSvc(rayJobInstance *rayv1.RayJob) {
+	if rayJobInstance.Spec.RayClusterSpec == nil {
+		rayJobInstance.Spec.RayClusterSpec = &rayv1.RayClusterSpec{}
+	}
+
+	if rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService == nil {
+		rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService = &corev1.Service{}
+	}
+
+	rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService.Name = rayJobInstance.Name
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
