@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	// api "github.com/ray-project/kuberay/proto/go_client"
+	// api "github.com/ray-project/kuberay/proto/go_client" kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	util "github.com/ray-project/kuberay/apiserversdk/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -37,15 +37,14 @@ type GenericEnd2EndTest[I proto.Message] struct {
 // can be used in executing the tests
 type End2EndTestingContext struct {
 	ctx                    context.Context
-	rayHttpClient          rayv1client.RayV1Interface
-	k8sHttpClient          *kubernetes.Clientset
+	apiServerHttpClient    *http.Client
+	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
+	rayClient              rayv1client.RayV1Interface
 	k8client               *kubernetes.Clientset
 	apiServerBaseURL       string
 	rayImage               string
 	namespaceName          string
 	clusterName            string
-	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
-	apiServerHttpClient    *http.Client
 	currentName            string
 }
 
@@ -61,7 +60,6 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 		withRayImage(),
 		withBaseURL(),
 		withRayHttpClient(),
-		withK8sHttpClient(),
 		withK8sClient(),
 		withContext(),
 		withNamespace(),
@@ -92,20 +90,7 @@ func withRayHttpClient() contextOption {
 		require.NoError(t, err)
 		httpClient := &http.Client{Transport: rt}
 
-		testingContext.rayHttpClient, err = rayv1client.NewForConfigAndClient(kubernetesConfig, httpClient)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-func withK8sHttpClient() contextOption {
-	return func(t *testing.T, testingContext *End2EndTestingContext) error {
-		kubernetesConfig, err := config.GetConfig()
-		require.NoError(t, err)
-
-		testingContext.k8sHttpClient, err = kubernetes.NewForConfig(kubernetesConfig)
+		testingContext.rayClient, err = rayv1client.NewForConfigAndClient(kubernetesConfig, httpClient)
 		if err != nil {
 			return err
 		}
@@ -186,16 +171,12 @@ func (e2etc *End2EndTestingContext) GetCtx() context.Context {
 	return e2etc.ctx
 }
 
-func (e2etc *End2EndTestingContext) GetK8sHttpClient() *kubernetes.Clientset {
-	return e2etc.k8sHttpClient
-}
-
 func (e2etc *End2EndTestingContext) GetRayHttpClient() rayv1client.RayV1Interface {
-	return e2etc.rayHttpClient
+	return e2etc.rayClient
 }
 
 func (e2etc *End2EndTestingContext) GetRayClusterByName(clusterName string) (*rayv1.RayCluster, error) {
-	return e2etc.rayHttpClient.RayClusters(e2etc.namespaceName).Get(e2etc.ctx, clusterName, metav1.GetOptions{})
+	return e2etc.rayClient.RayClusters(e2etc.namespaceName).Get(e2etc.ctx, clusterName, metav1.GetOptions{})
 }
 
 func (e2etc *End2EndTestingContext) GetRayClusterName() string {
@@ -225,14 +206,16 @@ func withAPIServerClient() contextOption {
 		}
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
-
-		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
 		return nil
 	}
 }
 
 func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
 	return e2etc.kuberayAPIServerClient
+}
+
+func (e2etc *End2EndTestingContext) GetK8sClient() *kubernetes.Clientset {
+	return e2etc.k8client
 }
 
 func (e2etc *End2EndTestingContext) GetNextName() string {
@@ -246,26 +229,26 @@ func (e2etc *End2EndTestingContext) DeleteComputeTemplate(_ *testing.T) {
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName string) {
-	err := e2etc.rayHttpClient.RayClusters(e2etc.namespaceName).Delete(e2etc.ctx, clusterName, metav1.DeleteOptions{})
+	err := e2etc.rayClient.RayClusters(e2etc.namespaceName).Delete(e2etc.ctx, clusterName, metav1.DeleteOptions{})
 	require.NoError(t, err, "No error expected when deleting ray cluster")
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, jobName string) {
-	err := e2etc.rayHttpClient.RayJobs(e2etc.namespaceName).Delete(e2etc.ctx, jobName, metav1.DeleteOptions{})
+	err := e2etc.rayClient.RayJobs(e2etc.namespaceName).Delete(e2etc.ctx, jobName, metav1.DeleteOptions{})
 	require.NoError(t, err, "No error expected when deleting ray job")
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName string) {
-	err := e2etc.rayHttpClient.RayServices(e2etc.namespaceName).Delete(e2etc.ctx, serviceName, metav1.DeleteOptions{})
+	err := e2etc.rayClient.RayServices(e2etc.namespaceName).Delete(e2etc.ctx, serviceName, metav1.DeleteOptions{})
 	require.NoError(t, err, "No error expected when deleting ray service")
 }
 
 func (e2etc *End2EndTestingContext) GetRayJobByName(jobName string) (*rayv1.RayJob, error) {
-	return e2etc.rayHttpClient.RayJobs(e2etc.namespaceName).Get(e2etc.ctx, jobName, metav1.GetOptions{})
+	return e2etc.rayClient.RayJobs(e2etc.namespaceName).Get(e2etc.ctx, jobName, metav1.GetOptions{})
 }
 
 func (e2etc *End2EndTestingContext) GetRayServiceByName(serviceName string) (*rayv1.RayService, error) {
-	return e2etc.rayHttpClient.RayServices(e2etc.namespaceName).Get(e2etc.ctx, serviceName, metav1.GetOptions{})
+	return e2etc.rayClient.RayServices(e2etc.namespaceName).Get(e2etc.ctx, serviceName, metav1.GetOptions{})
 }
 
 // SendYAMLRequest sends a YAML request to the apiserver proxy with the specified method, path, and YAML content

@@ -295,9 +295,9 @@ func verifyPodSpecResources(t *testing.T, podSpec *corev1.PodSpec, _, groupType 
 	for i, toleration := range podSpec.Tolerations {
 		expectedToleration := computeTemplate.Tolerations[i]
 		require.Equal(t, expectedToleration.Key, toleration.Key, "Expected toleration key to be ray.io/node-type")
-		require.Equal(t, expectedToleration.Operator, toleration.Operator, "Expected toleration operator to be Equal")
+		require.Equal(t, corev1.TolerationOperator(expectedToleration.Operator), toleration.Operator, "Expected toleration operator to be Equal")
 		require.Equal(t, expectedToleration.Value, toleration.Value, "Expected toleration value to be worker")
-		require.Equal(t, expectedToleration.Effect, toleration.Effect, "Expected toleration effect to be NoSchedule")
+		require.Equal(t, corev1.TaintEffect(expectedToleration.Effect), toleration.Effect, "Expected toleration effect to be NoSchedule")
 
 	}
 }
