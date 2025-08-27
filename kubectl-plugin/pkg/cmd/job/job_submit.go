@@ -88,7 +88,7 @@ type JobInfo struct {
 var (
 	jobSubmitLong = templates.LongDesc(`
 		Submit Ray job to Ray cluster as one would using Ray CLI e.g. 'ray job submit ENTRYPOINT'.
-		If Ray cluster is already setup, use 'kubectl ray session' instead. If '--address' is set, we connect directly 
+		If Ray cluster is already setup, use 'kubectl ray session' instead. If '--address' is set, we connect directly
 		without port-forwarding; if empty, we port-forward to localhost:8265.
 
 		If no RayJob YAML file is specified, the command will create a default RayJob for the user.
