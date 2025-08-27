@@ -1,6 +1,7 @@
 package apiserversdk
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -18,8 +19,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
+	// api "github.com/ray-project/kuberay/proto/go_client"
+	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	util "github.com/ray-project/kuberay/apiserversdk/util"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayv1client "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
 // GenericEnd2EndTest struct allows for reuse in setting up and running tests
@@ -32,14 +36,17 @@ type GenericEnd2EndTest[I proto.Message] struct {
 // End2EndTestingContext provides a common set of values and methods that
 // can be used in executing the tests
 type End2EndTestingContext struct {
-	ctx              context.Context
-	rayHttpClient    rayv1.RayV1Interface
-	k8sHttpClient    *kubernetes.Clientset
-	k8client         *kubernetes.Clientset
-	apiServerBaseURL string
-	rayImage         string
-	namespaceName    string
-	clusterName      string
+	ctx                    context.Context
+	rayHttpClient          rayv1client.RayV1Interface
+	k8sHttpClient          *kubernetes.Clientset
+	k8client               *kubernetes.Clientset
+	apiServerBaseURL       string
+	rayImage               string
+	namespaceName          string
+	clusterName            string
+	kuberayAPIServerClient *kuberayHTTP.KuberayAPIServerClient
+	apiServerHttpClient    *http.Client
+	currentName            string
 }
 
 // contextOption is a functional option that allows for building out an instance
@@ -58,6 +65,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 		withK8sClient(),
 		withContext(),
 		withNamespace(),
+		withAPIServerClient(),
 	)
 }
 
@@ -84,7 +92,7 @@ func withRayHttpClient() contextOption {
 		require.NoError(t, err)
 		httpClient := &http.Client{Transport: rt}
 
-		testingContext.rayHttpClient, err = rayv1.NewForConfigAndClient(kubernetesConfig, httpClient)
+		testingContext.rayHttpClient, err = rayv1client.NewForConfigAndClient(kubernetesConfig, httpClient)
 		if err != nil {
 			return err
 		}
@@ -182,11 +190,11 @@ func (e2etc *End2EndTestingContext) GetK8sHttpClient() *kubernetes.Clientset {
 	return e2etc.k8sHttpClient
 }
 
-func (e2etc *End2EndTestingContext) GetRayHttpClient() rayv1.RayV1Interface {
+func (e2etc *End2EndTestingContext) GetRayHttpClient() rayv1client.RayV1Interface {
 	return e2etc.rayHttpClient
 }
 
-func (e2etc *End2EndTestingContext) GetRayClusterByName(clusterName string) (*rayv1api.RayCluster, error) {
+func (e2etc *End2EndTestingContext) GetRayClusterByName(clusterName string) (*rayv1.RayCluster, error) {
 	return e2etc.rayHttpClient.RayClusters(e2etc.namespaceName).Get(e2etc.ctx, clusterName, metav1.GetOptions{})
 }
 
@@ -200,4 +208,73 @@ func (e2etc *End2EndTestingContext) GetNamespaceName() string {
 
 func (e2etc *End2EndTestingContext) GetRayImage() string {
 	return e2etc.rayImage
+}
+
+func withAPIServerClient() contextOption {
+	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+		testingContext.apiServerHttpClient = &http.Client{
+			Timeout: 30 * time.Second, // Set a reasonable timeout for HTTP requests
+		}
+
+		retryCfg := kuberayHTTP.RetryConfig{
+			MaxRetry:       util.HTTPClientDefaultMaxRetry,
+			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+			InitBackoff:    util.HTTPClientDefaultInitBackoff,
+			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
+		}
+
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+		return nil
+	}
+}
+
+func (e2etc *End2EndTestingContext) GetRayAPIServerClient() *kuberayHTTP.KuberayAPIServerClient {
+	return e2etc.kuberayAPIServerClient
+}
+
+func (e2etc *End2EndTestingContext) GetNextName() string {
+	e2etc.currentName = petnames.Name()
+	return e2etc.currentName
+}
+
+func (e2etc *End2EndTestingContext) DeleteComputeTemplate(_ *testing.T) {
+	// This method is called in cleanup, implementation would depend on API client
+	// For now, we'll leave it as a no-op since cleanup is handled elsewhere
+}
+
+func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName string) {
+	err := e2etc.rayHttpClient.RayClusters(e2etc.namespaceName).Delete(e2etc.ctx, clusterName, metav1.DeleteOptions{})
+	require.NoError(t, err, "No error expected when deleting ray cluster")
+}
+
+func (e2etc *End2EndTestingContext) DeleteRayJobByName(t *testing.T, jobName string) {
+	err := e2etc.rayHttpClient.RayJobs(e2etc.namespaceName).Delete(e2etc.ctx, jobName, metav1.DeleteOptions{})
+	require.NoError(t, err, "No error expected when deleting ray job")
+}
+
+func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName string) {
+	err := e2etc.rayHttpClient.RayServices(e2etc.namespaceName).Delete(e2etc.ctx, serviceName, metav1.DeleteOptions{})
+	require.NoError(t, err, "No error expected when deleting ray service")
+}
+
+func (e2etc *End2EndTestingContext) GetRayJobByName(jobName string) (*rayv1.RayJob, error) {
+	return e2etc.rayHttpClient.RayJobs(e2etc.namespaceName).Get(e2etc.ctx, jobName, metav1.GetOptions{})
+}
+
+func (e2etc *End2EndTestingContext) GetRayServiceByName(serviceName string) (*rayv1.RayService, error) {
+	return e2etc.rayHttpClient.RayServices(e2etc.namespaceName).Get(e2etc.ctx, serviceName, metav1.GetOptions{})
+}
+
+// SendYAMLRequest sends a YAML request to the apiserver proxy with the specified method, path, and YAML content
+func (e2etc *End2EndTestingContext) SendYAMLRequest(method, path, yamlContent string) (*http.Response, error) {
+	url := e2etc.apiServerBaseURL + path
+	req, err := http.NewRequestWithContext(e2etc.ctx, method, url, bytes.NewBufferString(yamlContent))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/yaml")
+	return e2etc.apiServerHttpClient.Do(req)
 }
