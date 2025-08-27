@@ -303,6 +303,7 @@ const (
 	CreatedRayCluster             K8sEventType = "CreatedRayCluster"
 	UpdatedRayCluster             K8sEventType = "UpdatedRayCluster"
 	DeletedRayCluster             K8sEventType = "DeletedRayCluster"
+	FailedToCreateRayJobSvc       K8sEventType = "FailedToCreateRayJobSvc"
 	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"

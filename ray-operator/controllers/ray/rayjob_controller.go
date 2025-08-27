@@ -183,6 +183,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			if err = initRayHeadSvc(rayJobInstance); err != nil {
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayJobSvc),
+					"Failed to create new Kubernetes service for head pod: %v", err)
+			}
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -598,6 +605,25 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 	})
 
 	return submitterTemplate, nil
+}
+
+func initRayHeadSvc(rayJobInstance *rayv1.RayJob) error {
+	if rayJobInstance.Spec.RayClusterSpec == nil {
+		rayJobInstance.Spec.RayClusterSpec = &rayv1.RayClusterSpec{}
+	}
+
+	if rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService == nil {
+		rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService = &corev1.Service{}
+	}
+
+	rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD,
+		*rayJobInstance.Spec.RayClusterSpec, rayJobInstance.Name)
+	if err != nil {
+		return err
+	}
+
+	rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService.Name = rayJobHeadSvcName
+	return nil
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.

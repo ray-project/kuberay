@@ -523,6 +523,10 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "my-head-svc", headSvcName)
 
+	headSvcName, err = GenerateHeadServiceName(RayJobCRD, *clusterSpecWithHeadService.DeepCopy(), "raycluster-sample")
+	require.NoError(t, err)
+	assert.Equal(t, "my-head-svc", headSvcName)
+
 	// [RayService]
 	// Test 3: `HeadService.Name` is empty.
 	headSvcName, err = GenerateHeadServiceName(RayServiceCRD, rayv1.RayClusterSpec{}, "rayservice-sample")
