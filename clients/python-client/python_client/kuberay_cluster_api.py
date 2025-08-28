@@ -8,7 +8,7 @@ import logging
 import time
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from python_client import constants
 
 
@@ -32,9 +32,17 @@ class RayClusterApi:
     # initial config to setup the kube client
     def __init__(self):
         # loading the config
-        self.kube_config: Optional[Any] = config.load_kube_config()
+        try:
+            self.kube_config: Optional[Any] = config.load_kube_config()
+        except config.ConfigException:
+            # No kubeconfig found, try in-cluster config
+            try:
+                self.kube_config: Optional[Any] = config.load_incluster_config()
+            except config.ConfigException:
+                log.error("Failed to load both kubeconfig and in-cluster config")
+                raise
+
         self.api = client.CustomObjectsApi()
-        self.core_v1_api = client.CoreV1Api()
 
     def __del__(self):
         self.api = None
