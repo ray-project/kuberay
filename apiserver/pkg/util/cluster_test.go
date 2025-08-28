@@ -270,6 +270,7 @@ var templateWorker = api.ComputeTemplate{
 			Effect:   "NoExecute",
 		},
 	},
+	MemoryUnit: "Gi",
 }
 
 var expectedToleration = corev1.Toleration{
@@ -747,8 +748,9 @@ func TestBuilWorkerPodTemplate(t *testing.T) {
 
 	assert.Equal(t, resource.MustParse("2"), resources.Limits[corev1.ResourceCPU], "CPU limit doesn't match")
 	assert.Equal(t, resource.MustParse("2"), resources.Requests[corev1.ResourceCPU], "CPU request doesn't match")
-	assert.Equal(t, resource.MustParse("8.00Gi"), resources.Limits[corev1.ResourceMemory], "Memory limit doesn't match")
-	assert.Equal(t, resource.MustParse("8.00Gi"), resources.Requests[corev1.ResourceMemory], "Memory request doesn't match")
+
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Limits[corev1.ResourceMemory], "Memory limit doesn't match")
+	assert.Equal(t, resource.MustParse("8Gi"), resources.Requests[corev1.ResourceMemory], "Memory request doesn't match")
 
 	assert.Equal(t, resource.MustParse("4"), resources.Limits["nvidia.com/gpu"], "GPU limit doesn't match")
 	assert.Equal(t, resource.MustParse("4"), resources.Requests["nvidia.com/gpu"], "GPU request doesn't match")

@@ -387,8 +387,8 @@
           ]
         },
         "memory": {
-          "type": "number",
-          "format": "float",
+          "type": "integer",
+          "format": "int64",
           "title": "Required. Number of memory",
           "required": [
             "memory"
@@ -417,6 +417,10 @@
             "format": "int64"
           },
           "title": "Optional. Name and number of the extended resources"
+        },
+        "memoryUnit": {
+          "type": "string",
+          "title": "Optional. The unit of memory, default is \"Gi\" for memory"
         }
       },
       "title": "ComputeTemplate can be reused by any compute units like worker group, workspace, image build job, etc",

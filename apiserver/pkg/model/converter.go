@@ -404,14 +404,15 @@ func convertEnvVariables(cenv []corev1.EnvVar, header bool) *api.EnvironmentVari
 
 func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTemplate {
 	cpu, _ := strconv.ParseUint(configMap.Data["cpu"], 10, 32)
-	memory, _ := strconv.ParseFloat(configMap.Data["memory"], 32)
+	memory, _ := strconv.ParseUint(configMap.Data["memory"], 10, 32)
 	gpu, _ := strconv.ParseUint(configMap.Data["gpu"], 10, 32)
 
 	runtime := &api.ComputeTemplate{}
 	runtime.Name = configMap.Name
 	runtime.Namespace = configMap.Namespace
 	runtime.Cpu = uint32(cpu)
-	runtime.Memory = float32(memory)
+	runtime.Memory = uint32(memory)
+	runtime.MemoryUnit = configMap.Data["memory_unit"]
 	runtime.Gpu = uint32(gpu)
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 

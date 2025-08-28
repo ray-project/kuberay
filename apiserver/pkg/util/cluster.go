@@ -179,7 +179,8 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
-	memory := fmt.Sprintf("%.2fGi", computeRuntime.GetMemory())
+	memoryUnit := computeRuntime.GetMemoryUnit()
+	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), memoryUnit)
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
@@ -433,7 +434,8 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 	// calculate resources
 	cpu := fmt.Sprint(computeRuntime.GetCpu())
-	memory := fmt.Sprintf("%.2fGi", computeRuntime.GetMemory())
+	memoryUnit := computeRuntime.GetMemoryUnit()
+	memory := fmt.Sprintf("%d%s", computeRuntime.GetMemory(), memoryUnit)
 
 	// build volume and volumeMounts
 	volMounts := buildVolumeMounts(spec.Volumes)
@@ -847,13 +849,25 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal extended resources: %w", err)
 	}
+	memoryUnit := "Gi"
+	if len(runtime.MemoryUnit) > 0 {
+		memoryUnit = runtime.MemoryUnit
+	}
+
+	memory := strconv.FormatUint(uint64(runtime.Memory), 10)
+	quantity := memory + memoryUnit
+
+	if _, err := resource.ParseQuantity(quantity); err != nil {
+		return nil, fmt.Errorf("invalid memory quantity %q: %w", quantity, err)
+	}
 
 	// Create data map
 	dmap := map[string]string{
 		"name":               runtime.Name,
 		"namespace":          runtime.Namespace,
 		"cpu":                strconv.FormatUint(uint64(runtime.Cpu), 10),
-		"memory":             strconv.FormatFloat(float64(runtime.Memory), 'f', -1, 32),
+		"memory":             memory,
+		"memory_unit":        memoryUnit,
 		"gpu":                strconv.FormatUint(uint64(runtime.Gpu), 10),
 		"gpu_accelerator":    runtime.GpuAccelerator,
 		"extended_resources": string(extendedResourcesJSON),

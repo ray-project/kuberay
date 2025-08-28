@@ -121,7 +121,7 @@ message ComputeTemplate {
   // Required. Number of cpus
   uint32 cpu = 3 [(google.api.field_behavior) = REQUIRED];
   // Required. Number of memory
-  float memory = 4 [(google.api.field_behavior) = REQUIRED];
+  uint32 memory = 4 [(google.api.field_behavior) = REQUIRED];
   // Optional. Number of gpus
   uint32 gpu = 5;
   // Optional. The detail gpu accelerator type
@@ -130,6 +130,8 @@ message ComputeTemplate {
   repeated PodToleration tolerations = 7;
   // Optional. Name and number of the extended resources
   map<string, uint32> extended_resources = 8;
+  // Optional. The unit of memory, default is "Gi" for memory
+  string memory_unit = 9;
 }
 
 // This service is not implemented.
