@@ -281,6 +281,8 @@ type RayJobList struct {
 	Items           []RayJob `json:"items"`
 }
 
+type RuntimeEnvType map[string]interface{}
+
 func init() {
 	SchemeBuilder.Register(&RayJob{}, &RayJobList{})
 }

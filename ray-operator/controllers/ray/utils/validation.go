@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -190,7 +191,8 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
-	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
+	var runtimeEnv RuntimeEnvType
+	if err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv); err != nil {
 		return err
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {

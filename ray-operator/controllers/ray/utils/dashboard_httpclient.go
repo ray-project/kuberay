@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -418,8 +419,8 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*RayJobRequest, error) {
 		Metadata:     rayJob.Spec.Metadata,
 	}
 	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
-		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
-		if err != nil {
+		var runtimeEnv RuntimeEnvType
+		if err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv); err != nil {
 			return nil, err
 		}
 		req.RuntimeEnv = runtimeEnv
