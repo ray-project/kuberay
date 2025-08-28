@@ -45,15 +45,16 @@ func IsJobTerminal(status JobStatus) bool {
 type JobDeploymentStatus string
 
 const (
-	JobDeploymentStatusNew          JobDeploymentStatus = ""
-	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
-	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
-	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
-	JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
-	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
-	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
-	JobDeploymentStatusRetrying     JobDeploymentStatus = "Retrying"
-	JobDeploymentStatusWaiting      JobDeploymentStatus = "Waiting"
+	JobDeploymentStatusNew              JobDeploymentStatus = ""
+	JobDeploymentStatusInitializing     JobDeploymentStatus = "Initializing"
+	JobDeploymentStatusRunning          JobDeploymentStatus = "Running"
+	JobDeploymentStatusComplete         JobDeploymentStatus = "Complete"
+	JobDeploymentStatusFailed           JobDeploymentStatus = "Failed"
+	JobDeploymentStatusValidationFailed JobDeploymentStatus = "ValidationFailed"
+	JobDeploymentStatusSuspending       JobDeploymentStatus = "Suspending"
+	JobDeploymentStatusSuspended        JobDeploymentStatus = "Suspended"
+	JobDeploymentStatusRetrying         JobDeploymentStatus = "Retrying"
+	JobDeploymentStatusWaiting          JobDeploymentStatus = "Waiting"
 )
 
 // IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
