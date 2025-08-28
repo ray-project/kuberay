@@ -128,6 +128,57 @@ unknownfield: 1
 			expectErr: false,
 		},
 		{
+			name: "set QPS and Burst",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+qps: 150.5
+burst: 300
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: ptr.To(true),
+				ReconcileConcurrency: 1,
+				QPS:                  ptr.To((150.5)),
+				Burst:                ptr.To(300),
+			},
+			expectErr: false,
+		},
+		{
+			name: "set Burst using float",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+qps: 150
+burst: 300.5
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: ptr.To(true),
+				ReconcileConcurrency: 1,
+				QPS:                  ptr.To((150.0)),
+				Burst:                ptr.To(300),
+			},
+			expectErr:   true,
+			errContains: "json: cannot unmarshal number 300.5 into Go struct field Configuration.burst of type int",
+		},
+		{
 			name: "invalid type for field",
 			configData: `apiVersion: config.ray.io/v1alpha1
 kind: Configuration
@@ -150,47 +201,6 @@ reconcileConcurrency: true
 			},
 			expectErr:   true,
 			errContains: "json: cannot unmarshal bool into Go struct field Configuration.reconcileConcurrency of type int",
-		},
-		{
-			name: "invalid version for config",
-			configData: `apiVersion: config.ray.io/v1beta1
-kind: Configuration
-metricsAddr: ":8080"
-probeAddr: ":8082"
-enableLeaderElection: true
-reconcileConcurrency: true
-`,
-			expectedConfig: configapi.Configuration{
-				MetricsAddr:          ":8080",
-				ProbeAddr:            ":8082",
-				EnableLeaderElection: ptr.To(true),
-				QPS:                  ptr.To(configapi.DefaultQPS),
-				Burst:                ptr.To(configapi.DefaultBurst),
-			},
-			expectErr:   true,
-			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,
-		},
-		{
-			name: "set QPS and Burst",
-			configData: `apiVersion: config.ray.io/v1beta1
-kind: Configuration
-qps: 150
-burst: 300
-`,
-			expectedConfig: configapi.Configuration{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Configuration",
-					APIVersion: "config.ray.io/v1alpha1",
-				},
-				MetricsAddr:          ":8080",
-				ProbeAddr:            ":8082",
-				EnableLeaderElection: ptr.To(true),
-				ReconcileConcurrency: 1,
-				QPS:                  ptr.To((150.0)),
-				Burst:                ptr.To(300),
-			},
-			expectErr:   true,
-			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,
 		},
 	}
 
