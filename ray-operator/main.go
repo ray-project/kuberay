@@ -70,6 +70,8 @@ func main() {
 	var enableBatchScheduler bool
 	var batchScheduler string
 	var enableMetrics bool
+	var qps float64
+	var burst int
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -101,6 +103,8 @@ func main() {
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
+	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
+	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -131,6 +135,8 @@ func main() {
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
+		config.QPS = &qps
+		config.Burst = &burst
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -228,6 +234,8 @@ func main() {
 	setupLog.Info("Setup manager")
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.UserAgent = userAgent
+	restConfig.QPS = float32(*config.QPS)
+	restConfig.Burst = *config.Burst
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
