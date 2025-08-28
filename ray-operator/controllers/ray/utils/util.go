@@ -765,10 +765,13 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			if headSvcName == "" {
 				headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
 				if err != nil {
+					err = fmt.Errorf("failed to construct Ray dashboard client: %w", err)
 					return nil, err
 				}
 			}
 			return &RayDashboardClient{
+				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
+				// configured to communicate with the Kubernetes API server.
 				client:       mgr.GetHTTPClient(),
 				dashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
 			}, nil
