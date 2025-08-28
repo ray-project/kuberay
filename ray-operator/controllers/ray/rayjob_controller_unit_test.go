@@ -746,7 +746,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 			updatedRayJob := &rayv1.RayJob{}
 			err = fakeClient.Get(ctx, req.NamespacedName, updatedRayJob)
 			require.NoError(t, err)
-			assert.Equal(t, rayv1.JobDeploymentStatusFailed, updatedRayJob.Status.JobDeploymentStatus)
+			assert.Equal(t, rayv1.JobDeploymentStatusValidationFailed, updatedRayJob.Status.JobDeploymentStatus)
 			assert.Equal(t, rayv1.JobStatusFailed, updatedRayJob.Status.JobStatus)
 			assert.Equal(t, rayv1.ValidationFailed, updatedRayJob.Status.Reason)
 			assert.Equal(t, fmt.Sprintf("%s: %s", tt.expectedMessage, tt.expectedErrorString), updatedRayJob.Status.Message)

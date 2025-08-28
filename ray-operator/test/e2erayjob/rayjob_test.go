@@ -225,7 +225,7 @@ env_vars:
 
 		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to Failed.
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
 	})
 
 	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
