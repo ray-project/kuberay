@@ -192,6 +192,29 @@ burst: 300
 			expectErr:   true,
 			errContains: `no kind "Configuration" is registered for version "config.ray.io/v1beta1" in scheme`,
 		},
+		{
+			name: "Set ReconcileConcurrency",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 100
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: ptr.To(true),
+				ReconcileConcurrency: 100,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, testcase := range testcases {
