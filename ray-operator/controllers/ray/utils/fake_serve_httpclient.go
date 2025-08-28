@@ -55,7 +55,7 @@ func (r *FakeRayDashboardClient) SubmitJob(_ context.Context, _ *rayv1.RayJob) (
 	return "", nil
 }
 
-func (r *FakeRayDashboardClient) SubmitJobReq(_ context.Context, _ *RayJobRequest) (string, error) {
+func (r *FakeRayDashboardClient) SubmitJobReq(_ context.Context, _ *RayJobRequest, _ *string) (string, error) {
 	return "", nil
 }
 

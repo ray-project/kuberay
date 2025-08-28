@@ -42,7 +42,7 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) utils.RayDashboardClientInterface
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
 }
 
@@ -115,7 +115,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Error(err, "Failed to get RayCluster")
 			}
 
-			rayDashboardClient := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				logger.Error(err, "Failed to get dashboard client for RayJob")
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 				logger.Error(err, "Failed to stop job for RayJob")
 			}
@@ -257,7 +261,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		// Check the current status of ray jobs
-		rayDashboardClient := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+		if err != nil {
+			logger.Error(err, "Failed to get dashboard client for RayJob")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
