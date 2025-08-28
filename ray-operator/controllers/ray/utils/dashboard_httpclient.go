@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -25,7 +24,6 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -39,51 +37,9 @@ type RayDashboardClientInterface interface {
 	DeleteJob(ctx context.Context, jobName string) error
 }
 
-type BaseDashboardClient struct {
+type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
-}
-
-func GetRayDashboardClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func() RayDashboardClientInterface {
-	return func() RayDashboardClientInterface {
-		return &RayDashboardClient{
-			mgr:                mgr,
-			useKubernetesProxy: useKubernetesProxy,
-		}
-	}
-}
-
-type RayDashboardClient struct {
-	mgr ctrl.Manager
-	BaseDashboardClient
-	useKubernetesProxy bool
-}
-
-func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
-	log := ctrl.LoggerFrom(ctx)
-
-	if r.useKubernetesProxy {
-		var err error
-		headSvcName := rayCluster.Status.Head.ServiceName
-		if headSvcName == "" {
-			log.Info("RayCluster is missing .status.head.serviceName, calling GenerateHeadServiceName instead...", "RayCluster name", rayCluster.Name, "namespace", rayCluster.Namespace)
-			headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-			if err != nil {
-				return err
-			}
-		}
-
-		r.client = r.mgr.GetHTTPClient()
-		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
-		return nil
-	}
-
-	r.client = &http.Client{
-		Timeout: 2 * time.Second,
-	}
-
-	r.dashboardURL = "http://" + url
-	return nil
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.

@@ -6,10 +6,12 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -638,7 +640,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }
 
@@ -753,4 +755,30 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 		domainName,
 		port)
 	return headServiceURL, nil
+}
+
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+	return func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+		if useKubernetesProxy {
+			var err error
+			headSvcName := rayCluster.Status.Head.ServiceName
+			if headSvcName == "" {
+				headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return &RayDashboardClient{
+				client:       mgr.GetHTTPClient(),
+				dashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+			}, nil
+		}
+
+		return &RayDashboardClient{
+			client: &http.Client{
+				Timeout: 2 * time.Second,
+			},
+			dashboardURL: "http://" + url,
+		}, nil
+	}
 }

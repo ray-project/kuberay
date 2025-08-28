@@ -53,8 +53,8 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		}
 
 		rayDashboardClient = &RayDashboardClient{}
-		err := rayDashboardClient.InitClient(context.Background(), "127.0.0.1:8090", nil)
-		Expect(err).ToNot(HaveOccurred())
+		rayDashboardClient.dashboardURL = "http://127.0.0.1:8090"
+		rayDashboardClient.client = &http.Client{}
 	})
 
 	It("Test ConvertRayJobToReq", func() {
