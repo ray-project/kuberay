@@ -147,7 +147,7 @@ burst: 300
 				ProbeAddr:            ":8082",
 				EnableLeaderElection: ptr.To(true),
 				ReconcileConcurrency: 1,
-				QPS:                  ptr.To((150.5)),
+				QPS:                  ptr.To(150.5),
 				Burst:                ptr.To(300),
 			},
 			expectErr: false,
