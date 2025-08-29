@@ -141,6 +141,7 @@ var configMapWithoutTolerations = corev1.ConfigMap{
 		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
 		"name":               "head-node-template",
 		"namespace":          "max",
+		"memory_unit":        "Gi",
 	},
 }
 
