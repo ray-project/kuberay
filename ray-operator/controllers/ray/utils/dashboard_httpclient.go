@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -31,7 +30,7 @@ type RayDashboardClientInterface interface {
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
-	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (string, error)
+	SubmitJobReq(ctx context.Context, request *RayJobRequest) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
@@ -72,7 +71,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
 	serveDetails, err := r.GetServeDetails(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get serve details: %w", err)
+		return nil, fmt.Errorf("failed to get serve details: %w", err)
 	}
 
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
@@ -111,12 +110,12 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *ServeDetails) (map[string]*ServeApplicationStatus, error) {
 	detailsJson, err := json.Marshal(serveDetails.Applications)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal serve details: %v", serveDetails.Applications)
+		return nil, fmt.Errorf("failed to marshal serve details: %v", serveDetails.Applications)
 	}
 
 	applicationStatuses := map[string]*ServeApplicationStatus{}
 	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
+		return nil, fmt.Errorf("failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
 	}
 
 	return applicationStatuses, nil
@@ -232,17 +231,13 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	if err != nil {
 		return "", err
 	}
-	return r.SubmitJobReq(ctx, request, &rayJob.Name)
+	return r.SubmitJobReq(ctx, request)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (jobId string, err error) {
-	log := ctrl.LoggerFrom(ctx)
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
-	}
-	if name != nil {
-		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
@@ -277,9 +272,6 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 // Get Job Log
 func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Get ray job log", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
@@ -311,9 +303,6 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Stop a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
@@ -343,16 +332,13 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 		}
 		// StopJob only returns an error when JobStatus is not in terminal states (STOPPED / SUCCEEDED / FAILED)
 		if !rayv1.IsJobTerminal(jobInfo.JobStatus) {
-			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
+			return fmt.Errorf("failed to stop job: %v", jobInfo)
 		}
 	}
 	return nil
 }
 
 func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Delete a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
 	if err != nil {
 		return err
