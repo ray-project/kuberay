@@ -43,6 +43,7 @@ class RayClusterApi:
                 raise
 
         self.api = client.CustomObjectsApi()
+        self.core_v1_api = client.CoreV1Api()
 
     def __del__(self):
         self.api = None
