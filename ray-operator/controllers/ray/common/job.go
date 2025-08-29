@@ -55,16 +55,11 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 }
 
 func getDashboardPortFromRayJobSpec(rayJobInstance *rayv1.RayJob) int {
-	for _, container := range rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
-		if container.Name == "ray-head" {
-			for _, port := range container.Ports {
-				if port.Name == utils.DashboardPortName {
-					return int(port.ContainerPort)
-				}
-			}
-		}
+	containers := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return utils.DefaultDashboardPort
 	}
-	return utils.DefaultDashboardPort
+	return utils.FindContainerPort(&containers[utils.RayContainerIndex], utils.DashboardPortName, utils.DefaultDashboardPort)
 }
 
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
@@ -103,7 +98,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	// Otherwise, we submit the job with `ray job submit --no-wait` + `ray job logs`. The full shell command looks like this:
 	//   if ! ray job status --address http://$RAY_ADDRESS $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1 ;
 	//   then ray job submit --address http://$RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID --no-wait -- ... ;
-	//   fi ; ray job loray-operator/controllers/ray/rayjob_controller.gogs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
+	//   fi ; ray job logs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
 	// In Sidecar mode, the sidecar container's restart policy is set to Never, so duplicated submission won't happen.
 	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
 	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}

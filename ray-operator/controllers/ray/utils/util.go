@@ -616,18 +616,6 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 	return "", false
 }
 
-func IsSubmitterContainerFinished(pod *corev1.Pod) bool {
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if containerStatus.Name == SubmitterContainerName {
-			if containerStatus.State.Terminated != nil {
-				return true
-			}
-			break
-		}
-	}
-	return false
-}
-
 func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	for _, env := range envVars {
 		if env.Name == envName {
@@ -728,4 +716,8 @@ func GetContainerCommand(additionalOptions []string) []string {
 // GetEnableDeterministicHeadName returns true if deterministic head pod name is enabled.
 func IsDeterministicHeadPodNameEnabled() bool {
 	return strings.ToLower(os.Getenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)) == "true"
+}
+
+func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
+	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
 }

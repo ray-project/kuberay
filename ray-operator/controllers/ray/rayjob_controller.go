@@ -283,7 +283,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		if utils.HasSubmitter(rayJobInstance) {
 			isJobTerminal = isJobTerminal && isSubmitterFinished
 		}
 
@@ -935,6 +935,8 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
 	isSubmitterFinished = false
+	var submitterContainerStatus *corev1.ContainerStatus
+	var condition *batchv1.JobCondition
 
 	switch rayJob.Spec.SubmissionMode {
 	case rayv1.SidecarMode:
@@ -958,8 +960,24 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			return
 		}
 
-		shouldUpdate = checkSidecarContainerAndUpdateStatusIfNeeded(rayJob, headPod)
-		isSubmitterFinished = utils.IsSubmitterContainerFinished(headPod)
+		shouldUpdate, submitterContainerStatus = checkSidecarContainerStatus(headPod)
+		if shouldUpdate {
+			logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
+				"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+			// The submitter sidecar container needs to wait for the user code to finish and retrieve its logs.
+			// Therefore, a failed Submitter sidecar container indicates that the submission itself has failed or the user code has thrown an error.
+			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
+			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+				rayJob.Status.Reason = rayv1.AppFailed
+			} else {
+				rayJob.Status.Reason = rayv1.SubmissionFailed
+				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
+					submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
+			}
+		}
+
+		isSubmitterFinished = isSubmitterContainerFinished(headPod)
 		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
@@ -973,7 +991,21 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
 			return
 		}
-		shouldUpdate = checkK8sJobAndUpdateStatusIfNeeded(ctx, rayJob, job)
+		shouldUpdate, condition = checkK8sJobStatus(job)
+		if shouldUpdate {
+			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.",
+				"Submitter K8s Job", job.Name, "Reason", condition.Reason, "Message", condition.Message)
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
+			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
+			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
+			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+				rayJob.Status.Reason = rayv1.AppFailed
+			} else {
+				rayJob.Status.Reason = rayv1.SubmissionFailed
+				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", condition.Reason, condition.Message)
+			}
+		}
 		_, isSubmitterFinished = utils.IsJobFinished(job)
 		return
 	default:
@@ -984,52 +1016,28 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 	}
 }
 
-func checkK8sJobAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, job *batchv1.Job) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	for _, cond := range job.Status.Conditions {
-		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
-			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.", "Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
-			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
-			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", cond.Reason, cond.Message)
-			}
-			return true
+func checkK8sJobStatus(job *batchv1.Job) (bool, *batchv1.JobCondition) {
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+			return true, &condition
 		}
 	}
-	return false
+	return false, nil
 }
 
-func checkSidecarContainerAndUpdateStatusIfNeeded(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
+func checkSidecarContainerStatus(headPod *corev1.Pod) (bool, *corev1.ContainerStatus) {
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			// Check for terminated containers with error exit codes
 			// Based on the document, "ray job submit" will exit with 0 if the job succeeded, or exit with 1 if it failed.
 			// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/cli.html#ray-job-submit
 			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
-				// Update RayJob status to Failed
-				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-
-				if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-					rayJob.Status.Reason = rayv1.AppFailed
-				} else {
-					rayJob.Status.Reason = rayv1.SubmissionFailed
-					rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-						containerStatus.Name, containerStatus.State.Terminated.ExitCode, containerStatus.State.Terminated.Reason)
-				}
-
-				return true
+				return true, &containerStatus
 			}
 			break
 		}
 	}
-
-	return false
+	return false, nil
 }
 
 func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
@@ -1071,6 +1079,18 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 		rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
 		rayJob.Status.Message = "JobDeploymentStatus does not transition to Complete or Failed within the grace period after JobStatus reaches a terminal state."
 		return true
+	}
+	return false
+}
+
+func isSubmitterContainerFinished(pod *corev1.Pod) bool {
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.Name == utils.SubmitterContainerName {
+			if containerStatus.State.Terminated != nil {
+				return true
+			}
+			break
+		}
 	}
 	return false
 }
