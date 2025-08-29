@@ -868,6 +868,15 @@ func createDefaultDenyPolicy(instance *rayv1.RayCluster) *networkingv1.NetworkPo
 								},
 							},
 						},
+						// Allow RayJob submitter pods to access Ray services
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									utils.RayOriginatedFromCRDLabelKey: "RayJob",
+									utils.KubernetesCreatedByLabelKey:  utils.ComponentName,
+								},
+							},
+						},
 					},
 				},
 			},
