@@ -91,7 +91,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
-			logger.Info("RayJob resource not found. Ignoring since object must be deleted")
+			logger.Info("RayJob resource not found.")
+			cleanUpRayJobMetrics(r.options.RayJobMetricsManager, request.Name, request.Namespace)
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -487,6 +488,13 @@ func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObse
 			time.Since(rayJobStatus.StartTime.Time).Seconds(),
 		)
 	}
+}
+
+func cleanUpRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string) {
+	if rayJobMetricsManager == nil {
+		return
+	}
+	rayJobMetricsManager.DeleteRayJobMetrics(rayJobName, rayJobNamespace)
 }
 
 // checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
