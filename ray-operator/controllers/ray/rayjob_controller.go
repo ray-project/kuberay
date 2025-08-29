@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -47,7 +48,8 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsManager *metrics.RayJobMetricsManager
+	RayJobMetricsManager  *metrics.RayJobMetricsManager
+	BatchSchedulerManager *batchscheduler.SchedulerManager
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -182,6 +184,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
+		}
+
+		if r.options.BatchSchedulerManager != nil {
+			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+			} else {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -550,7 +562,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 			if err != nil {
 				return err
 			}
-			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
+			return r.createNewK8sJob(ctx, rayJobInstance, rayClusterInstance, submitterTemplate)
 		}
 		return err
 	}
@@ -609,11 +621,19 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
-func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, submitterTemplate corev1.PodTemplateSpec) error {
+func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submitterTemplate corev1.PodTemplateSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	submitterBackoffLimit := ptr.To[int32](2)
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
+	}
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
+			logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+		} else {
+			return err
+		}
 	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -853,6 +873,18 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
+			}
+			if r.options.BatchSchedulerManager != nil {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
+					if err != nil {
+						return nil, err
+					}
+					scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
+					logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+				} else {
+					return nil, err
+				}
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
