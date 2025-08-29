@@ -10,55 +10,55 @@ spec:
       - jax[tpu]==0.4.33
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
   rayClusterSpec:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray:2.41.0
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-                - containerPort: 8888
-                  name: grpc
-              resources:
-                limits:
-                  cpu: "8"
-                  memory: 40G
-                requests:
-                  cpu: "8"
-                  memory: 40G
+          - name: ray-head
+            image: rayproject/ray:2.46.0-py310
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8888
+              name: grpc
+            resources:
+              limits:
+                cpu: "8"
+                memory: 40G
+              requests:
+                cpu: "8"
+                memory: 40G
     workerGroupSpecs:
-      - replicas: 1
-        minReplicas: 1
-        maxReplicas: 1
-        numOfHosts: 64
-        groupName: tpu-group
-        rayStartParams:
-          resources: '"{\"TPU\": 4}"'
-        template:
-          spec:
-            containers:
-              - name: ray-worker
-                image: rayproject/ray:2.41.0
-                resources:
-                  limits:
-                    cpu: "24"
-                    google.com/tpu: "4"
-                    memory: 200G
-                  requests:
-                    cpu: "24"
-                    google.com/tpu: "4"
-                    memory: 200G
-                env:
-                - name: JAX_PLATFORMS
-                  value: tpu,cpu
-            nodeSelector:
-              cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
-              cloud.google.com/gke-tpu-topology: 16x16
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      numOfHosts: 64
+      groupName: tpu-group
+      rayStartParams:
+        resources: '"{\"TPU\": 4}"'
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.46.0-py310
+            resources:
+              limits:
+                cpu: "24"
+                google.com/tpu: "4"
+                memory: 200G
+              requests:
+                cpu: "24"
+                google.com/tpu: "4"
+                memory: 200G
+            env:
+            - name: JAX_PLATFORMS
+              value: tpu,cpu
+          nodeSelector:
+            cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
+            cloud.google.com/gke-tpu-topology: 16x16

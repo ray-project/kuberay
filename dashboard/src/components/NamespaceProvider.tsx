@@ -17,7 +17,7 @@ const NamespaceProvider: React.FC<NamespaceProviderProps> = ({ children }) => {
     if (window.centraldashboard?.CentralDashboardEventHandler) {
       // @ts-ignore
       window.centraldashboard.CentralDashboardEventHandler.init(function (
-        cdeh: any
+        cdeh: any,
       ) {
         // Binds a callback that gets invoked anytime the Dashboard's
         // namespace is changed

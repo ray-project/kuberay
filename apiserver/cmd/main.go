@@ -18,6 +18,7 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -42,6 +43,7 @@ var (
 	localSwaggerPath   = flag.String("localSwaggerPath", "", "Specify the root directory for `*.swagger.json` the swagger files.")
 	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	enableAPIServerV2  = flag.Bool("enable-api-server-v2", true, "Enable API server V2")
+	corsAllowOrigin    = flag.String("cors-allow-origin", "", "Set the Access-Control-Allow-Origin response header for the HTTP proxy.")
 	healthy            int32
 )
 
@@ -165,8 +167,19 @@ func startHttpProxy() {
 		topMux = http.NewServeMux()
 	}
 
-	// Seems /apis (matches /apis/v1alpha1/clusters) works fine
-	topMux.Handle("/", runtimeMux)
+	if *corsAllowOrigin != "" {
+		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
+		handler := cors.New(cors.Options{
+			AllowedOrigins: []string{*corsAllowOrigin},
+		}).Handler(runtimeMux)
+
+		topMux.Handle("/", handler)
+	} else {
+		klog.Info("Access-Control-Allow-Origin not set, CORS is disabled.")
+		// Seems /apis (matches /apis/v1alpha1/clusters) works fine
+		topMux.Handle("/", runtimeMux)
+	}
+
 	topMux.Handle("/metrics", promhttp.Handler())
 	topMux.HandleFunc("/swagger/", serveSwaggerFile)
 	topMux.HandleFunc("/healthz", serveHealth)

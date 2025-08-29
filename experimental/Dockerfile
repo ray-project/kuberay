@@ -1,9 +1,11 @@
 # Build security proxy
-FROM golang:1.24.2-bullseye AS builder
+FROM golang:1.24.0-bullseye AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.sum ./
+COPY ray-operator/go.mod ray-operator/go.mod
+COPY ray-operator/go.sum ray-operator/go.sum
 
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer

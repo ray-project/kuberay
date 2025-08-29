@@ -1,9 +1,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/
+exclude: _generated.go$|\.svg$|^third_party/|^proto/swagger/|^apiserver/pkg/swagger/datafile.go$|^docs/reference/api.md$|^config/grafana/|^dashboard/\.yarn/releases/yarn-.*\.cjs$
 
 default_language_version:
-  golang: 1.24.2
+  golang: 1.24.0
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -65,6 +65,14 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+      - id: eslint
+        name: ESLint TypeScript/JavaScript check
+        entry: ./scripts/dashboard-lint.sh
+        language: node
+        require_serial: true
+        pass_filenames: true
+        files: .*\.(js|jsx|ts|tsx|cjs|mjs)$
+
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.44.0
@@ -75,6 +83,12 @@ repos:
           - --ignore=.github/pull_request_template.md
           - --disable=MD033
 
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.17.0
+    hooks:
+      - id: yamlfmt
+        files: ^ray-operator/config/samples/
+
   - repo: https://github.com/norwoodj/helm-docs
     rev: v1.14.2
     hooks:
@@ -83,5 +97,7 @@ repos:
           # Make the tool search for charts only under the `helm-chart` directory
           - --chart-search-root=helm-chart
           - --chart-to-generate=helm-chart/kuberay-operator
+          - --chart-to-generate=helm-chart/kuberay-apiserver
+          - --chart-to-generate=helm-chart/ray-cluster
           - --template-files=README.md.gotmpl
           - --sort-values-order=file

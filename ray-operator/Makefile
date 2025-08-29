@@ -105,7 +105,7 @@ build: fmt vet ## Build manager binary.
 # 	go run ./main.go -enable-leader-election=false
 
 docker-image: ## Build image only
-	${ENGINE} build -t ${IMG} -f Dockerfile ..
+	${ENGINE} build -t ${IMG} .
 
 docker-build: build docker-image ## Build image with the manager.
 
@@ -163,7 +163,7 @@ controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessar
 KUSTOMIZE = $(LOCALBIN)/kustomize
 $(KUSTOMIZE): $(LOCALBIN)
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-	test -s $(KUSTOMIZE) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kustomize/kustomize/v5@v5.3.0
+	test -s $(KUSTOMIZE) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/kustomize/kustomize/v5@v5.7.1
 
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)

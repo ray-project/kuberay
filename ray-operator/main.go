@@ -31,6 +31,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -69,6 +70,8 @@ func main() {
 	var enableBatchScheduler bool
 	var batchScheduler string
 	var enableMetrics bool
+	var qps float64
+	var burst int
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -94,12 +97,14 @@ func main() {
 	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
 		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy. Please use --batch-scheduler instead.")
 	flag.StringVar(&batchScheduler, "batch-scheduler", "",
-		"Batch scheduler name, supported values are volcano and yunikorn.")
+		"Batch scheduler name, supported values are volcano, yunikorn, kai-scheduler.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")
 	flag.StringVar(&featureGates, "feature-gates", "", "A set of key=value pairs that describe feature gates. E.g. FeatureOne=true,FeatureTwo=false,...")
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
+	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
+	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -130,6 +135,8 @@ func main() {
 		config.UseKubernetesProxy = useKubernetesProxy
 		config.DeleteRayJobAfterJobFinishes = os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES) == "true"
 		config.EnableMetrics = enableMetrics
+		config.QPS = &qps
+		config.Burst = &burst
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -227,6 +234,8 @@ func main() {
 	setupLog.Info("Setup manager")
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.UserAgent = userAgent
+	restConfig.QPS = float32(*config.QPS)
+	restConfig.Burst = *config.Burst
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -235,6 +244,7 @@ func main() {
 	var rayClusterMetricsManager *metrics.RayClusterMetricsManager
 	var rayJobMetricsManager *metrics.RayJobMetricsManager
 	var rayServiceMetricsManager *metrics.RayServiceMetricsManager
+	var batchSchedulerManager *batchscheduler.SchedulerManager
 	if config.EnableMetrics {
 		mgrClient := mgr.GetClient()
 		rayClusterMetricsManager = metrics.NewRayClusterMetricsManager(ctx, mgrClient)
@@ -246,13 +256,19 @@ func main() {
 			rayServiceMetricsManager,
 		)
 	}
+
+	batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient())
+	exitOnError(err, "unable to create batch scheduler manager")
+	batchSchedulerManager.AddToScheme(mgr.GetScheme())
+
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
+		BatchSchedulerManager:    batchSchedulerManager,
 	}
-	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),

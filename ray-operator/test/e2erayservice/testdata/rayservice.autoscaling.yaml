@@ -26,7 +26,7 @@ spec:
             ray_actor_options:
               num_cpus: 0.5
   rayClusterConfig:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     enableInTreeAutoscaling: true
     autoscalerOptions:
       idleTimeoutSeconds: 60
@@ -37,7 +37,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: rayproject/ray:2.41.0
+              image: rayproject/ray:2.46.0
               resources:
                 requests:
                   cpu: 300m
@@ -59,12 +59,11 @@ spec:
         minReplicas: 0
         maxReplicas: 5
         groupName: small-group
-        rayStartParams: {}
         template:
           spec:
             containers:
               - name: ray-worker
-                image: rayproject/ray:2.41.0
+                image: rayproject/ray:2.46.0
                 resources:
                   requests:
                     cpu: 300m

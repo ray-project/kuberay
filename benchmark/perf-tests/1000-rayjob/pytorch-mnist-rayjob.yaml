@@ -26,7 +26,7 @@ spec:
             requests:
               cpu: "10m"
   rayClusterSpec:
-    rayVersion: '2.9.3'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams:
         disable-usage-stats: 'true'
@@ -51,7 +51,6 @@ spec:
         minReplicas: 1
         maxReplicas: 5
         groupName: worker-group
-        rayStartParams: {}
         template:
           spec:
             containers:

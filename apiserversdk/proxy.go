@@ -1,6 +1,10 @@
 package apiserversdk
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -11,7 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	apiserversdkutil "github.com/ray-project/kuberay/apiserversdk/util"
+	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type MuxConfig struct {
@@ -22,12 +27,14 @@ type MuxConfig struct {
 func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse url %s from config: %w", config.KubernetesConfig.Host, err)
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
-	if proxy.Transport, err = rest.TransportFor(config.KubernetesConfig); err != nil { // rest.TransportFor provides the auth to the K8s API server.
-		return nil, err
+	baseTransport, err := rest.TransportFor(config.KubernetesConfig) // rest.TransportFor provides the auth to the K8s API server.
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transport for config: %w", err)
 	}
+	proxy.Transport = newRetryRoundTripper(baseTransport)
 	var handler http.Handler = proxy
 	if config.Middleware != nil {
 		handler = config.Middleware(proxy)
@@ -71,7 +78,7 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 		}
 		services, err := k8sClient.CoreV1().Services(namespace).List(r.Context(), metav1.ListOptions{
 			FieldSelector: "metadata.name=" + serviceName,
-			LabelSelector: "app.kubernetes.io/name=" + utils.ApplicationName,
+			LabelSelector: "app.kubernetes.io/name=" + rayutil.ApplicationName,
 		})
 		if err != nil {
 			http.Error(w, "failed to list kuberay services", http.StatusInternalServerError)
@@ -83,4 +90,97 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 		}
 		handler.ServeHTTP(w, r)
 	})
+}
+
+// retryRoundTripper is a custom implementation of http.RoundTripper that retries HTTP requests.
+// It verifies retryable HTTP status codes and retries using exponential backoff.
+type retryRoundTripper struct {
+	base     http.RoundTripper
+	retryCfg apiserversdkutil.RetryConfig
+}
+
+func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
+	retryCfg := apiserversdkutil.RetryConfig{
+		MaxRetry:       apiserversdkutil.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  apiserversdkutil.HTTPClientDefaultBackoffFactor,
+		InitBackoff:    apiserversdkutil.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     apiserversdkutil.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: apiserversdkutil.HTTPClientDefaultOverallTimeout,
+	}
+
+	return &retryRoundTripper{
+		base:     base,
+		retryCfg: retryCfg,
+	}
+}
+
+func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, rrt.retryCfg.OverallTimeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
+
+	var bodyBytes []byte
+	var resp *http.Response
+	var err error
+
+	if req.Body != nil {
+		/* Reuse request body in each attempt */
+		bodyBytes, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body for retry support: %w", err)
+		}
+		err = req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to close request body: %w", err)
+		}
+	}
+
+	for attempt := 0; attempt <= rrt.retryCfg.MaxRetry; attempt++ {
+		/* Try up to (rrt.retryCfg.MaxRetry + 1) times: initial attempt + retries */
+
+		if bodyBytes != nil {
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+
+		resp, err = rrt.base.RoundTrip(req)
+		if err != nil {
+			return resp, fmt.Errorf("request to %s %s failed with error: %w", req.Method, req.URL.String(), err)
+		}
+
+		if apiserversdkutil.IsSuccessfulStatusCode(resp.StatusCode) {
+			return resp, nil
+		}
+
+		if !apiserversdkutil.IsRetryableHTTPStatusCodes(resp.StatusCode) {
+			return resp, nil
+		}
+
+		if attempt == rrt.retryCfg.MaxRetry {
+			return resp, nil
+		}
+
+		if resp.Body != nil {
+			/* If not last attempt, drain response body */
+			if _, err = io.Copy(io.Discard, resp.Body); err != nil {
+				return nil, fmt.Errorf("retryRoundTripper internal failure to drain response body: %w", err)
+			}
+			if err = resp.Body.Close(); err != nil {
+				return nil, fmt.Errorf("retryRoundTripper internal failure to close response body: %w", err)
+			}
+		}
+
+		sleepDuration := apiserversdkutil.GetRetryBackoff(attempt, rrt.retryCfg.InitBackoff, rrt.retryCfg.BackoffFactor, rrt.retryCfg.MaxBackoff)
+
+		if ok := apiserversdkutil.CheckContextDeadline(ctx, sleepDuration); !ok {
+			return resp, fmt.Errorf("retry timeout exceeded context deadline")
+		}
+
+		if err = apiserversdkutil.Sleep(ctx, sleepDuration); err != nil {
+			return resp, fmt.Errorf("retry canceled during backoff: %w", err)
+		}
+	}
+	return resp, err
 }

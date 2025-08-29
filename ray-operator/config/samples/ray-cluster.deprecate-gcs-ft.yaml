@@ -10,7 +10,7 @@ metadata:
     # ray.io/external-storage-namespace: "my-raycluster-storage"
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
@@ -25,77 +25,77 @@ spec:
     template:
       spec:
         containers:
-          - name: ray-head
-            image: rayproject/ray:2.41.0
-            resources:
-              limits:
-                cpu: "1"
-              requests:
-                cpu: "1"
-            env:
-              # Ray will read the RAY_REDIS_ADDRESS environment variable to establish
-              # a connection with the Redis server. In this instance, we use the "redis"
-              # Kubernetes ClusterIP service name, also created by this YAML, as the
-              # connection point to the Redis server.
-              - name: RAY_REDIS_ADDRESS
-                value: redis:6379
-              # This environment variable is used in the `rayStartParams` above.
-              - name: REDIS_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: redis-password-secret
-                    key: password
-            ports:
-              - containerPort: 6379
-                name: redis
-              - containerPort: 8265
-                name: dashboard
-              - containerPort: 10001
-                name: client
-            volumeMounts:
-              - mountPath: /tmp/ray
-                name: ray-logs
-              - mountPath: /home/ray/samples
-                name: ray-example-configmap
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "1"
+          env:
+          # Ray will read the RAY_REDIS_ADDRESS environment variable to establish
+          # a connection with the Redis server. In this instance, we use the "redis"
+          # Kubernetes ClusterIP service name, also created by this YAML, as the
+          # connection point to the Redis server.
+          - name: RAY_REDIS_ADDRESS
+            value: redis:6379
+          # This environment variable is used in the `rayStartParams` above.
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: redis-password-secret
+                key: password
+          ports:
+          - containerPort: 6379
+            name: redis
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-logs
-            emptyDir: {}
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: detached_actor.py
-                  path: detached_actor.py
-                - key: increment_counter.py
-                  path: increment_counter.py
+        - name: ray-logs
+          emptyDir: {}
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: detached_actor.py
+              path: detached_actor.py
+            - key: increment_counter.py
+              path: increment_counter.py
   workerGroupSpecs:
-    # the pod replicas in this group typed worker
-    - replicas: 1
-      minReplicas: 1
-      maxReplicas: 10
-      groupName: small-group
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams: {}
-      # Pod template
-      template:
-        spec:
-          containers:
-            - name: ray-worker
-              image: rayproject/ray:2.41.0
-              volumeMounts:
-                - mountPath: /tmp/ray
-                  name: ray-logs
-              resources:
-                limits:
-                  cpu: "1"
-                requests:
-                  cpu: "1"
-          volumes:
-            - name: ray-logs
-              emptyDir: {}
+  # the pod replicas in this group typed worker
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 10
+    groupName: small-group
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams: {}
+    # Pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "1"
+        volumes:
+        - name: ray-logs
+          emptyDir: {}
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -122,8 +122,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: redis
-      port: 6379
+  - name: redis
+    port: 6379
   selector:
     app: redis
 ---
@@ -144,22 +144,22 @@ spec:
         app: redis
     spec:
       containers:
-        - name: redis
-          image: redis:7.4.0
-          command:
-            - "sh"
-            - "-c"
-            - "redis-server /usr/local/etc/redis/redis.conf"
-          ports:
-            - containerPort: 6379
-          volumeMounts:
-            - name: config
-              mountPath: /usr/local/etc/redis/redis.conf
-              subPath: redis.conf
-      volumes:
+      - name: redis
+        image: redis:7.4.0
+        command:
+        - "sh"
+        - "-c"
+        - "redis-server /usr/local/etc/redis/redis.conf"
+        ports:
+        - containerPort: 6379
+        volumeMounts:
         - name: config
-          configMap:
-            name: redis-config
+          mountPath: /usr/local/etc/redis/redis.conf
+          subPath: redis.conf
+      volumes:
+      - name: config
+        configMap:
+          name: redis-config
 ---
 # Redis password
 apiVersion: v1

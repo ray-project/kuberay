@@ -4,7 +4,7 @@ metadata:
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   # If `enableInTreeAutoscaling` is true, the Autoscaler sidecar will be added to the Ray head pod.
   # Ray Autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
@@ -59,7 +59,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -75,18 +75,18 @@ spec:
               cpu: "1"
               memory: "2G"
           volumeMounts:
-            - mountPath: /home/ray/samples
-              name: ray-example-configmap
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: detached_actor.py
-                  path: detached_actor.py
-                - key: terminate_detached_actor.py
-                  path: terminate_detached_actor.py
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: detached_actor.py
+              path: detached_actor.py
+            - key: terminate_detached_actor.py
+              path: terminate_detached_actor.py
   workerGroupSpecs:
   # the Pod replicas in this group typed worker
   - replicas: 0
@@ -108,7 +108,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: "1"

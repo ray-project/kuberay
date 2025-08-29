@@ -20,14 +20,14 @@ All of them return the same value (for our case with a single job deployed):
 {
     "name":"job-test",
     "namespace":"default",
-    "user":"boris",
+    "user":"kuberay",
     "entrypoint":"python /home/ray/samples/sample_code.py",
     "runtimeEnv":"pip:\n  - requests==2.26.0\n  - pendulum==2.1.2\nenv_vars:\n  counter_name: test_counter\n",
     "jobId":"job-test-mbpl7",
     "clusterSpec":{
         "headGroupSpec":{
             "computeTemplate":"default-template",
-            "image":"rayproject/ray:2.6.3-py310",
+            "image":"rayproject/ray:2.46.0-py310",
             "serviceType":"NodePort",
             "rayStartParams":{
                 "dashboard-host":"0.0.0.0",
@@ -47,7 +47,7 @@ All of them return the same value (for our case with a single job deployed):
             {
                 "groupName":"small-wg",
                 "computeTemplate":"default-template",
-                "image":"rayproject/ray:2.6.3-py310",
+                "image":"rayproject/ray:2.46.0-py310",
                 "replicas":1,
                 "minReplicas":5,
                 "maxReplicas":1,

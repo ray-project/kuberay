@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-tls
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   # Note: Uncomment the `enableInTreeAutoscaling` and `autoscalerOptions`
   # if you wish to configure TLS for the autoscaler.
 
@@ -49,26 +49,26 @@ spec:
         labels: {}
       spec:
         initContainers:
-          # Generate head's private key and certificate before `ray start`.
-          - name: ray-head-tls
-            image: rayproject/ray:2.41.0
-            command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
-            volumeMounts:
-              - mountPath: /etc/ca/tls
-                name: ca-tls
-                readOnly: true
-              - mountPath: /etc/ray/tls
-                name: ray-tls
-              - mountPath: /etc/gen/tls
-                name: gen-tls-script
-            env:
-              - name: POD_IP
-                valueFrom:
-                  fieldRef:
-                    fieldPath: status.podIP
+        # Generate head's private key and certificate before `ray start`.
+        - name: ray-head-tls
+          image: rayproject/ray:2.46.0
+          command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
+          volumeMounts:
+          - mountPath: /etc/ca/tls
+            name: ca-tls
+            readOnly: true
+          - mountPath: /etc/ray/tls
+            name: ray-tls
+          - mountPath: /etc/gen/tls
+            name: gen-tls-script
+          env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -77,13 +77,13 @@ spec:
           - containerPort: 10001
             name: client
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
-            - mountPath: /etc/ca/tls
-              name: ca-tls
-              readOnly: true
-            - mountPath: /etc/ray/tls
-              name: ray-tls
+          - mountPath: /tmp/ray
+            name: ray-logs
+          - mountPath: /etc/ca/tls
+            name: ca-tls
+            readOnly: true
+          - mountPath: /etc/ray/tls
+            name: ray-tls
           resources:
             limits:
               cpu: "1"
@@ -92,33 +92,33 @@ spec:
               cpu: "500m"
               memory: "2G"
           env:
-            # Environment variables for Ray TLS authentication.
-            # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
-            - name: RAY_USE_TLS
-              value: "1"
-            - name: RAY_TLS_SERVER_CERT
-              value: "/etc/ray/tls/tls.crt"
-            - name: RAY_TLS_SERVER_KEY
-              value: "/etc/ray/tls/tls.key"
-            - name: RAY_TLS_CA_CERT
-              value: "/etc/ca/tls/ca.crt"
+          # Environment variables for Ray TLS authentication.
+          # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
+          - name: RAY_USE_TLS
+            value: "1"
+          - name: RAY_TLS_SERVER_CERT
+            value: "/etc/ray/tls/tls.crt"
+          - name: RAY_TLS_SERVER_KEY
+            value: "/etc/ray/tls/tls.key"
+          - name: RAY_TLS_CA_CERT
+            value: "/etc/ca/tls/ca.crt"
         volumes:
-          - name: ray-logs
-            emptyDir: {}
-          # Secret `ca-tls` has the information of CA's private key and certificate.
-          - name: ca-tls
-            secret:
-              secretName: ca-tls
-          - name: ray-tls
-            emptyDir: {}
-          # `gencert_head.sh` is a script to generate head Pod's private key and head's certificate.
-          - name: gen-tls-script
-            configMap:
-              name: tls
-              defaultMode: 0777
-              items:
-              - key: gencert_head.sh
-                path: gencert_head.sh
+        - name: ray-logs
+          emptyDir: {}
+        # Secret `ca-tls` has the information of CA's private key and certificate.
+        - name: ca-tls
+          secret:
+            secretName: ca-tls
+        - name: ray-tls
+          emptyDir: {}
+        # `gencert_head.sh` is a script to generate head Pod's private key and head's certificate.
+        - name: gen-tls-script
+          configMap:
+            name: tls
+            defaultMode: 0777
+            items:
+            - key: gencert_head.sh
+              path: gencert_head.sh
   workerGroupSpecs:
   # the pod replicas in this group typed worker
   - replicas: 1
@@ -133,36 +133,36 @@ spec:
     template:
       spec:
         initContainers:
-          # Generate worker's private key and certificate before `ray start`.
-          - name: ray-worker-tls
-            image: rayproject/ray:2.41.0
-            command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
-            volumeMounts:
-              - mountPath: /etc/ca/tls
-                name: ca-tls
-                readOnly: true
-              - mountPath: /etc/ray/tls
-                name: ray-tls
-              - mountPath: /etc/gen/tls
-                name: gen-tls-script
-            env:
-              - name: POD_IP
-                valueFrom:
-                  fieldRef:
-                    fieldPath: status.podIP
+        # Generate worker's private key and certificate before `ray start`.
+        - name: ray-worker-tls
+          image: rayproject/ray:2.46.0
+          command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
+          volumeMounts:
+          - mountPath: /etc/ca/tls
+            name: ca-tls
+            readOnly: true
+          - mountPath: /etc/ray/tls
+            name: ray-tls
+          - mountPath: /etc/gen/tls
+            name: gen-tls-script
+          env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           # use volumeMounts.Optional.
           # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
           volumeMounts:
-            - mountPath: /tmp/ray
-              name: ray-logs
-            - mountPath: /etc/ca/tls
-              name: ca-tls
-              readOnly: true
-            - mountPath: /etc/ray/tls
-              name: ray-tls
+          - mountPath: /tmp/ray
+            name: ray-logs
+          - mountPath: /etc/ca/tls
+            name: ca-tls
+            readOnly: true
+          - mountPath: /etc/ray/tls
+            name: ray-tls
           resources:
             limits:
               cpu: "1"
@@ -171,34 +171,34 @@ spec:
               cpu: "500m"
               memory: "1G"
           env:
-            # Environment variables for Ray TLS authentication.
-            # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
-            - name: RAY_USE_TLS
-              value: "1"
-            - name: RAY_TLS_SERVER_CERT
-              value: "/etc/ray/tls/tls.crt"
-            - name: RAY_TLS_SERVER_KEY
-              value: "/etc/ray/tls/tls.key"
-            - name: RAY_TLS_CA_CERT
-              value: "/etc/ca/tls/ca.crt"
+          # Environment variables for Ray TLS authentication.
+          # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
+          - name: RAY_USE_TLS
+            value: "1"
+          - name: RAY_TLS_SERVER_CERT
+            value: "/etc/ray/tls/tls.crt"
+          - name: RAY_TLS_SERVER_KEY
+            value: "/etc/ray/tls/tls.key"
+          - name: RAY_TLS_CA_CERT
+            value: "/etc/ca/tls/ca.crt"
         volumes:
-          - name: ray-logs
-            emptyDir: {}
-          # Secret `ca-tls` has the information of CA's private key and certificate.
-          - name: ca-tls
-            secret:
-              secretName: ca-tls
-          - name: ray-tls
-            emptyDir: {}
-          # `gencert_worker.sh` is a script to generate worker Pod's private key and worker's certificate.
-          - name: gen-tls-script
-            configMap:
-              name: tls
-              defaultMode: 0777
-              # An array of keys from the ConfigMap to create as files
-              items:
-              - key: gencert_worker.sh
-                path: gencert_worker.sh
+        - name: ray-logs
+          emptyDir: {}
+        # Secret `ca-tls` has the information of CA's private key and certificate.
+        - name: ca-tls
+          secret:
+            secretName: ca-tls
+        - name: ray-tls
+          emptyDir: {}
+        # `gencert_worker.sh` is a script to generate worker Pod's private key and worker's certificate.
+        - name: gen-tls-script
+          configMap:
+            name: tls
+            defaultMode: 0777
+            # An array of keys from the ConfigMap to create as files
+            items:
+            - key: gencert_worker.sh
+              path: gencert_worker.sh
 ---
 apiVersion: v1
 kind: Secret

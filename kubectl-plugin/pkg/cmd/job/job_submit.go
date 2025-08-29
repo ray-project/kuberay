@@ -35,7 +35,7 @@ import (
 const (
 	dashboardAddr      = "http://localhost:8265"
 	clusterTimeout     = 120.0
-	portforwardtimeout = 60.0
+	portForwardTimeout = 60.0
 )
 
 type SubmitJobOptions struct {
@@ -45,6 +45,7 @@ type SubmitJobOptions struct {
 	workerNodeSelectors      map[string]string
 	headNodeSelectors        map[string]string
 	logColor                 string
+	address                  string
 	image                    string
 	fileName                 string
 	workingDir               string
@@ -86,8 +87,9 @@ type JobInfo struct {
 
 var (
 	jobSubmitLong = templates.LongDesc(`
-		Submit Ray job to Ray cluster as one would using Ray CLI e.g. 'ray job submit ENTRYPOINT'. Command supports all options that 'ray job submit' supports, except '--address'.
-		If Ray cluster is already setup, use 'kubectl ray session' instead.
+		Submit Ray job to Ray cluster as one would using Ray CLI e.g. 'ray job submit ENTRYPOINT'.
+		If Ray cluster is already setup, use 'kubectl ray session' instead. If '--address' is set, we connect directly
+		without port-forwarding; if empty, we port-forward to localhost:8265.
 
 		If no RayJob YAML file is specified, the command will create a default RayJob for the user.
 
@@ -148,21 +150,22 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 			return options.Run(cmd.Context(), cmdFactory)
 		},
 	}
-	cmd.Flags().StringVarP(&options.fileName, "filename", "f", options.fileName, "Path and name of the Ray Job YAML file")
-	cmd.Flags().StringVar(&options.submissionID, "submission-id", options.submissionID, "ID to specify for the Ray job. If not provided, one will be generated")
-	cmd.Flags().StringVar(&options.runtimeEnv, "runtime-env", options.runtimeEnv, "Path and name to the runtime env YAML file.")
-	cmd.Flags().StringVar(&options.workingDir, "working-dir", options.workingDir, "Directory containing files that your job will run in")
-	cmd.Flags().StringVar(&options.headers, "headers", options.headers, "Used to pass headers through http/s to Ray Cluster. Must be JSON formatting")
-	cmd.Flags().StringVar(&options.runtimeEnvJson, "runtime-env-json", options.runtimeEnvJson, "JSON-serialized runtime_env dictionary. Precedence over Ray job CR.")
-	cmd.Flags().StringVar(&options.verify, "verify", options.verify, "Boolean indication to verify the server's TLS certificate or a path to a file or directory of trusted certificates.")
-	cmd.Flags().StringVar(&options.entryPointResource, "entrypoint-resources", options.entryPointResource, "JSON-serialized dictionary mapping resource name to resource quantity")
-	cmd.Flags().StringVar(&options.metadataJson, "metadata-json", options.metadataJson, "JSON-serialized dictionary of metadata to attach to the job.")
-	cmd.Flags().StringVar(&options.logStyle, "log-style", options.logStyle, "Specific to 'ray job submit'. Options are 'auto | record | pretty'")
-	cmd.Flags().StringVar(&options.logColor, "log-color", options.logColor, "Specific to 'ray job submit'. Options are 'auto | false | true'")
-	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", options.entryPointCPU, "Number of CPUs reserved for the for the entrypoint command")
-	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", options.entryPointGPU, "Number of GPUs reserved for the for the entrypoint command")
-	cmd.Flags().IntVar(&options.entryPointMemory, "entrypoint-memory", options.entryPointMemory, "Amount of memory reserved for the entrypoint command")
-	cmd.Flags().BoolVar(&options.noWait, "no-wait", options.noWait, "If present, will not stream logs and wait for job to finish")
+	cmd.Flags().StringVarP(&options.fileName, "filename", "f", "", "Path and name of the Ray Job YAML file")
+	cmd.Flags().StringVar(&options.address, "address", "", "Ray Dashboard base URL (e.g., https://ray.example.com). If set, skips port-forwarding.")
+	cmd.Flags().StringVar(&options.submissionID, "submission-id", "", "ID to specify for the Ray job. If not provided, one will be generated")
+	cmd.Flags().StringVar(&options.runtimeEnv, "runtime-env", "", "Path and name to the runtime env YAML file.")
+	cmd.Flags().StringVar(&options.workingDir, "working-dir", "", "Directory containing files that your job will run in")
+	cmd.Flags().StringVar(&options.headers, "headers", "", "Used to pass headers through http/s to Ray Cluster. Must be JSON formatting")
+	cmd.Flags().StringVar(&options.runtimeEnvJson, "runtime-env-json", "", "JSON-serialized runtime_env dictionary. Precedence over Ray job CR.")
+	cmd.Flags().StringVar(&options.verify, "verify", "", "Boolean indication to verify the server's TLS certificate or a path to a file or directory of trusted certificates.")
+	cmd.Flags().StringVar(&options.entryPointResource, "entrypoint-resources", "", "JSON-serialized dictionary mapping resource name to resource quantity")
+	cmd.Flags().StringVar(&options.metadataJson, "metadata-json", "", "JSON-serialized dictionary of metadata to attach to the job.")
+	cmd.Flags().StringVar(&options.logStyle, "log-style", "", "Specific to 'ray job submit'. Options are 'auto | record | pretty'")
+	cmd.Flags().StringVar(&options.logColor, "log-color", "", "Specific to 'ray job submit'. Options are 'auto | false | true'")
+	cmd.Flags().Float32Var(&options.entryPointCPU, "entrypoint-num-cpus", 0, "Number of CPUs reserved for the entrypoint command")
+	cmd.Flags().Float32Var(&options.entryPointGPU, "entrypoint-num-gpus", 0, "Number of GPUs reserved for the entrypoint command")
+	cmd.Flags().IntVar(&options.entryPointMemory, "entrypoint-memory", 0, "Amount of memory reserved for the entrypoint command")
+	cmd.Flags().BoolVar(&options.noWait, "no-wait", false, "If present, will not stream logs and wait for job to finish")
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
@@ -300,11 +303,18 @@ func (options *SubmitJobOptions) Validate(cmd *cobra.Command) error {
 	}
 
 	for name, value := range resourceFields {
-		if err := util.ValidateResourceQuantity(value, name); err != nil {
-			return fmt.Errorf("%w", err)
+		if value != "" || cmd.Flags().Changed(name) {
+			if err := util.ValidateResourceQuantity(value, name); err != nil {
+				return fmt.Errorf("%w", err)
+			}
 		}
 	}
 
+	if cmd.Flags().Changed("address") {
+		if strings.TrimSpace(options.address) == "" {
+			return fmt.Errorf("--address was provided but is empty")
+		}
+	}
 	return nil
 }
 
@@ -419,55 +429,62 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("Timed out waiting for cluster")
 	}
 
-	svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
-	if err != nil {
-		return fmt.Errorf("Failed to find service name: %w", err)
-	}
-
-	// start port forward section
-	portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
-	portForwardCmd.SetArgs([]string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)})
-
-	// create new context for port-forwarding so we can cancel the context to stop the port forwarding only
-	portforwardctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		fmt.Printf("Port Forwarding service %s\n", svcName)
-		if err := portForwardCmd.ExecuteContext(portforwardctx); err != nil {
-			log.Fatalf("Error occurred while port-forwarding Ray dashboard: %v", err)
-		}
-	}()
-
-	// Wait for port forward to be ready
-	var portforwardReady bool
-	portforwardWaitStartTime := time.Now()
-	currTime = portforwardWaitStartTime
-
-	portforwardCheckRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr, nil)
-	if err != nil {
-		return fmt.Errorf("Error occurred when trying to create request to probe cluster endpoint: %w", err)
-	}
-	httpClient := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	fmt.Printf("Waiting for portforwarding...")
-	for !portforwardReady && currTime.Sub(portforwardWaitStartTime).Seconds() <= portforwardtimeout {
-		time.Sleep(2 * time.Second)
-		rayDashboardResponse, err := httpClient.Do(portforwardCheckRequest)
+	if options.address == "" {
+		svcName, err := k8sClients.GetRayHeadSvcName(ctx, options.namespace, util.RayCluster, options.cluster)
 		if err != nil {
-			err = fmt.Errorf("Error occurred when waiting for portforwarding: %w", err)
-			fmt.Println(err)
+			return fmt.Errorf("Failed to find service name: %w", err)
 		}
-		if rayDashboardResponse.StatusCode >= 200 && rayDashboardResponse.StatusCode < 300 {
-			portforwardReady = true
+
+		// start port forward section
+		portForwardCmd := portforward.NewCmdPortForward(factory, *options.ioStreams)
+		portForwardCmd.SetArgs([]string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)})
+
+		// create new context for port-forwarding so we can cancel the context to stop the port forwarding only
+		portForwardCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go func() {
+			fmt.Printf("Port forwarding service %s\n", svcName)
+			if err := portForwardCmd.ExecuteContext(portForwardCtx); err != nil {
+				log.Fatalf("Error occurred while port-forwarding Ray dashboard: %v", err)
+			}
+		}()
+
+		// Wait for port forward to be ready
+		var portForwardReady bool
+		portForwardWaitStartTime := time.Now()
+		currTime = portForwardWaitStartTime
+
+		portforwardCheckRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dashboardAddr, nil)
+		if err != nil {
+			return fmt.Errorf("Error occurred when trying to create request to probe cluster endpoint: %w", err)
 		}
-		rayDashboardResponse.Body.Close()
-		currTime = time.Now()
+		httpClient := http.Client{
+			Timeout: 5 * time.Second,
+		}
+		fmt.Printf("Waiting for port forwarding...")
+		for !portForwardReady && currTime.Sub(portForwardWaitStartTime).Seconds() <= portForwardTimeout {
+			time.Sleep(2 * time.Second)
+			rayDashboardResponse, err := httpClient.Do(portforwardCheckRequest)
+			if err != nil {
+				err = fmt.Errorf("Error occurred when waiting for port forwarding: %w", err)
+				fmt.Println(err)
+				currTime = time.Now()
+				continue
+			}
+			if rayDashboardResponse.StatusCode >= 200 && rayDashboardResponse.StatusCode < 300 {
+				portForwardReady = true
+			}
+			rayDashboardResponse.Body.Close()
+			currTime = time.Now()
+		}
+		if !portForwardReady {
+			return fmt.Errorf("Timed out waiting for port forwarding")
+		}
+		options.address = dashboardAddr
+		fmt.Printf("Port forwarding started on %s\n", options.address)
+	} else {
+		fmt.Printf("Using address %s (no port-forwarding)\n", options.address)
 	}
-	if !portforwardReady {
-		return fmt.Errorf("Timed out waiting for port forwarding")
-	}
-	fmt.Printf("Portforwarding started on %s\n", dashboardAddr)
 
 	// If submission ID is not provided by the user, generate one.
 	if options.submissionID == "" {
@@ -606,7 +623,11 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 }
 
 func (options *SubmitJobOptions) raySubmitCmd() ([]string, error) {
-	raySubmitCmd := []string{"ray", "job", "submit", "--address", dashboardAddr}
+	addr := options.address
+	if addr == "" {
+		addr = dashboardAddr
+	}
+	raySubmitCmd := []string{"ray", "job", "submit", "--address", addr}
 
 	if len(options.runtimeEnv) > 0 {
 		raySubmitCmd = append(raySubmitCmd, "--runtime-env", options.runtimeEnv)

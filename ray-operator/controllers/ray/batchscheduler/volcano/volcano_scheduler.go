@@ -10,14 +10,16 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	volcanov1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
-	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
+	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -30,9 +32,8 @@ const (
 )
 
 type VolcanoBatchScheduler struct {
-	extensionClient apiextensionsclient.Interface
-	volcanoClient   volcanoclient.Interface
-	log             logr.Logger
+	cli client.Client
+	log logr.Logger
 }
 
 type VolcanoBatchSchedulerFactory struct{}
@@ -65,15 +66,14 @@ func getAppPodGroupName(app *rayv1.RayCluster) string {
 
 func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.RayCluster, size int32, totalResource corev1.ResourceList) error {
 	podGroupName := getAppPodGroupName(app)
-	if pg, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Get(ctx, podGroupName, metav1.GetOptions{}); err != nil {
+	podGroup := volcanov1beta1.PodGroup{}
+	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: app.Namespace, Name: podGroupName}, &podGroup); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 
 		podGroup := createPodGroup(app, podGroupName, size, totalResource)
-		if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Create(
-			ctx, &podGroup, metav1.CreateOptions{},
-		); err != nil {
+		if err := v.cli.Create(ctx, &podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
 				v.log.Info("pod group already exists, no need to create")
 				return nil
@@ -83,12 +83,10 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 			return err
 		}
 	} else {
-		if pg.Spec.MinMember != size || !quotav1.Equals(*pg.Spec.MinResources, totalResource) {
-			pg.Spec.MinMember = size
-			pg.Spec.MinResources = &totalResource
-			if _, err := v.volcanoClient.SchedulingV1beta1().PodGroups(app.Namespace).Update(
-				ctx, pg, metav1.UpdateOptions{},
-			); err != nil {
+		if podGroup.Spec.MinMember != size || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
+			podGroup.Spec.MinMember = size
+			podGroup.Spec.MinResources = &totalResource
+			if err := v.cli.Update(ctx, &podGroup); err != nil {
 				v.log.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
 				return err
 			}
@@ -143,12 +141,8 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.R
 	pod.Spec.SchedulerName = v.Name()
 }
 
-func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Config) (schedulerinterface.BatchScheduler, error) {
-	vkClient, err := volcanoclient.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize volcano client with error %w", err)
-	}
-
+func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
+	// client not start yet, so we need to create new client to check if podGroup CRD exists
 	extClient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
@@ -167,10 +161,13 @@ func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Co
 			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
 		}
 	}
+
+	if err := volcanov1beta1.AddToScheme(cli.Scheme()); err != nil {
+		return nil, fmt.Errorf("failed to add volcano to scheme with error %w", err)
+	}
 	return &VolcanoBatchScheduler{
-		extensionClient: extClient,
-		volcanoClient:   vkClient,
-		log:             logf.Log.WithName("volcano"),
+		cli: cli,
+		log: logf.Log.WithName("volcano"),
 	}, nil
 }
 

@@ -1,9 +1,6 @@
 package e2eautoscaler
 
 import (
-	"embed"
-
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -12,16 +9,6 @@ import (
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
-
-//go:embed *.py
-var _files embed.FS
-
-func ReadFile(t Test, fileName string) []byte {
-	t.T().Helper()
-	file, err := _files.ReadFile(fileName)
-	require.NoError(t.T(), err)
-	return file
-}
 
 type option[T any] func(t *T) *T
 
@@ -105,12 +92,12 @@ func headPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigura
 				).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
-						corev1.ResourceMemory: resource.MustParse("1G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("2G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
-						corev1.ResourceMemory: resource.MustParse("2G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("4G"),
 					}))))
 }
 
@@ -130,12 +117,12 @@ func headPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfigu
 				WithEnv(corev1ac.EnvVar().WithName(utils.RAY_ENABLE_AUTOSCALER_V2).WithValue("1")).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
-						corev1.ResourceMemory: resource.MustParse("1G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("2G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
-						corev1.ResourceMemory: resource.MustParse("2G"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("4G"),
 					}))))
 }
 
@@ -147,11 +134,11 @@ func workerPodTemplateApplyConfiguration() *corev1ac.PodTemplateSpecApplyConfigu
 				WithImage(GetRayImage()).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}))))
 }
@@ -165,11 +152,28 @@ func workerPodTemplateApplyConfigurationV2() *corev1ac.PodTemplateSpecApplyConfi
 				WithImage(GetRayImage()).
 				WithResources(corev1ac.ResourceRequirements().
 					WithRequests(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("300m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}).
 					WithLimits(corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
 						corev1.ResourceMemory: resource.MustParse("1G"),
 					}))))
+}
+
+var tests = []struct {
+	HeadPodTemplateGetter   func() *corev1ac.PodTemplateSpecApplyConfiguration
+	WorkerPodTemplateGetter func() *corev1ac.PodTemplateSpecApplyConfiguration
+	name                    string
+}{
+	{
+		HeadPodTemplateGetter:   headPodTemplateApplyConfiguration,
+		WorkerPodTemplateGetter: workerPodTemplateApplyConfiguration,
+		name:                    "Create a RayCluster with autoscaling enabled",
+	},
+	{
+		HeadPodTemplateGetter:   headPodTemplateApplyConfigurationV2,
+		WorkerPodTemplateGetter: workerPodTemplateApplyConfigurationV2,
+		name:                    "Create a RayCluster with autoscaler v2 enabled",
+	},
 }

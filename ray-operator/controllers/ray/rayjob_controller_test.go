@@ -882,22 +882,39 @@ var _ = Context("RayJob with different submission modes", func() {
 		})
 	})
 
-	Describe("RayJob with DeletionPolicy", Ordered, func() {
+	Describe("RayJob with DeletionStrategy", Ordered, func() {
 		JustBeforeEach(func() {
 			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayJobDeletionPolicy, true)
 		})
 
-		It("DeletionPolicy=DeleteCluster", func() {
+		It("Delete cluster on success", func() {
 			ctx := context.Background()
 			namespace := "default"
-			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletecluster", namespace)
-			deletionPolicy := rayv1.DeleteClusterDeletionPolicy
-			rayJob.Spec.DeletionPolicy = &deletionPolicy
+			rayJob := rayJobTemplate("rayjob-test-deletecluster-on-success", namespace)
+
+			onSuccessPolicy := rayv1.DeleteCluster
+			onFailurePolicy := rayv1.DeleteNone
+			deletionStrategy := &rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = deletionStrategy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteClusterDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {
@@ -995,7 +1012,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 			})
 
-			By("If DeletionPolicy=DeleteCluster, RayCluster should be deleted, but not the submitter Job.", func() {
+			By("If DeletionStrategy=DeleteCluster, RayCluster should be deleted, but not the submitter Job.", func() {
 				Eventually(
 					func() bool {
 						return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)())
@@ -1009,17 +1026,173 @@ var _ = Context("RayJob with different submission modes", func() {
 			})
 		})
 
-		It("DeletionPolicy=DeleteWorkers", func() {
+		It("Delete cluster on failure", func() {
 			ctx := context.Background()
 			namespace := "default"
-			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deleteworkers", namespace)
-			deletionPolicy := rayv1.DeleteWorkersDeletionPolicy
-			rayJob.Spec.DeletionPolicy = &deletionPolicy
+			rayJob := rayJobTemplate("rayjob-test-deletecluster-on-failure", namespace)
+
+			onSuccessPolicy := rayv1.DeleteNone
+			onFailurePolicy := rayv1.DeleteCluster
+			deletionStrategy := &rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = deletionStrategy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteWorkersDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
+			})
+
+			By("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+				Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+				Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+				Expect(rayJob.Status.StartTime).NotTo(BeNil())
+			})
+
+			By("In Initializing state, the RayCluster should eventually be created.", func() {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
+				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
+				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
+
+				// TODO (kevin85421): Check the RayCluster labels.
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
+			})
+
+			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Running state, the RayJob's Status.DashboardURL must be set.
+				Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+
+				// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+				// Update fake dashboard client to return job info with "Failed" status.
+				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				}
+				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+				// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+				Consistently(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// Update the submitter Kubernetes Job to Complete.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+				// Update the submitter Kubernetes Job to Complete.
+				conditions := []batchv1.JobCondition{
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+				}
+				job.Status.Conditions = conditions
+				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+
+				// RayJob transitions to Complete.
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+			})
+
+			By("If DeletionStrategy=DeleteCluster, RayCluster should be deleted, but not the submitter Job.", func() {
+				Eventually(
+					func() bool {
+						return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster)())
+					},
+					time.Second*3, time.Millisecond*500).Should(BeTrue())
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				Consistently(
+					getResourceFunc(ctx, namespacedName, job),
+					time.Second*3, time.Millisecond*500).Should(Succeed())
+			})
+		})
+
+		It("Delete workers on success", func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-test-deleteworkers-on-success", namespace)
+
+			onSuccessPolicy := rayv1.DeleteWorkers
+			onFailurePolicy := rayv1.DeleteNone
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
+			rayJob.Spec.ShutdownAfterJobFinishes = false
+			rayCluster := &rayv1.RayCluster{}
+
+			By("Verify RayJob spec", func() {
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {
@@ -1117,7 +1290,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 			})
 
-			By("If DeletionPolicy=DeleteWorkers, all workers should be deleted, but not the Head pod and submitter Job", func() {
+			By("If DeletionStrategy=DeleteWorkers, all workers should be deleted, but not the Head pod and submitter Job", func() {
 				// RayCluster exists
 				Consistently(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
@@ -1148,12 +1321,178 @@ var _ = Context("RayJob with different submission modes", func() {
 			})
 		})
 
-		It("DeletionPolicy=DeleteSelf", func() {
+		It("Delete workers on failure", func() {
 			ctx := context.Background()
 			namespace := "default"
-			rayJob := rayJobTemplate("rayjob-test-deleteself", namespace)
-			deletionPolicy := rayv1.DeleteSelfDeletionPolicy
-			rayJob.Spec.DeletionPolicy = &deletionPolicy
+			rayJob := rayJobTemplate("rayjob-test-deleteworkers-on-failure", namespace)
+
+			onSuccessPolicy := rayv1.DeleteWorkers
+			onFailurePolicy := rayv1.DeleteWorkers
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
+			rayJob.Spec.ShutdownAfterJobFinishes = false
+			rayCluster := &rayv1.RayCluster{}
+
+			By("Verify RayJob spec", func() {
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
+			})
+
+			By("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+				Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+				Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+				Expect(rayJob.Status.StartTime).NotTo(BeNil())
+			})
+
+			By("In Initializing state, the RayCluster should eventually be created.", func() {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
+				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
+				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
+
+				// TODO (kevin85421): Check the RayCluster labels.
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
+			})
+
+			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Running state, the RayJob's Status.DashboardURL must be set.
+				Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+
+				// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+				// Update fake dashboard client to return job info with "Failed" status.
+				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				}
+				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+				// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+				Consistently(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// Update the submitter Kubernetes Job to Complete.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+				// Update the submitter Kubernetes Job to Complete.
+				conditions := []batchv1.JobCondition{
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+				}
+				job.Status.Conditions = conditions
+				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+
+				// RayJob transitions to Complete.
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+			})
+
+			By("If DeletionStrategy=DeleteWorkers, all workers should be deleted, but not the Head pod and submitter Job", func() {
+				// RayCluster exists
+				Consistently(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Check worker group is suspended
+				Expect(*rayCluster.Spec.WorkerGroupSpecs[0].Suspend).To(BeTrue())
+
+				// 0 worker Pods exist
+				workerPods := corev1.PodList{}
+				workerLabels := common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToListOptions()
+				Eventually(
+					listResourceFunc(ctx, &workerPods, workerLabels...),
+					time.Second*3, time.Millisecond*500).Should(Equal(0), "expected 0 workers")
+
+				// Head Pod is still running
+				headPods := corev1.PodList{}
+				headLabels := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+				Consistently(
+					listResourceFunc(ctx, &headPods, headLabels...),
+					time.Second*3, time.Millisecond*500).Should(Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
+
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				Consistently(
+					getResourceFunc(ctx, namespacedName, job),
+					time.Second*3, time.Millisecond*500).Should(Succeed())
+			})
+		})
+
+		It("Delete self on success", func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-test-deleteself-on-success", namespace)
+
+			onSuccessPolicy := rayv1.DeleteSelf
+			onFailurePolicy := rayv1.DeleteNone
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
@@ -1246,7 +1585,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
 			})
 
-			By("If DeletionPolicy=DeleteSelf, the RayJob is deleted", func() {
+			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
 				Eventually(
 					func() bool {
 						return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob))
@@ -1254,17 +1593,150 @@ var _ = Context("RayJob with different submission modes", func() {
 			})
 		})
 
-		It("DeletionPolicy=DeleteNone", func() {
+		It("Delete self on failure", func() {
 			ctx := context.Background()
 			namespace := "default"
-			rayJob := rayJobTemplate("rayjob-test-deletionpolicy-deletenone", namespace)
-			deletionPolicy := rayv1.DeleteNoneDeletionPolicy
-			rayJob.Spec.DeletionPolicy = &deletionPolicy
+			rayJob := rayJobTemplate("rayjob-test-deleteself-on-failure", namespace)
+
+			onSuccessPolicy := rayv1.DeleteNone
+			onFailurePolicy := rayv1.DeleteSelf
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
+			rayJob.Spec.ShutdownAfterJobFinishes = false
+			rayCluster := &rayv1.RayCluster{}
+
+			By("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+				Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+				Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+				Expect(rayJob.Status.StartTime).NotTo(BeNil())
+			})
+
+			By("In Initializing state, the RayCluster should eventually be created.", func() {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
+				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
+				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
+
+				// TODO (kevin85421): Check the RayCluster labels.
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
+			})
+
+			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Running state, the RayJob's Status.DashboardURL must be set.
+				Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+
+				// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+				// Update fake dashboard client to return job info with "Failed" status.
+				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				}
+				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+
+				// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+				Consistently(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// Update the submitter Kubernetes Job to Complete.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+				// Update the submitter Kubernetes Job to Complete.
+				conditions := []batchv1.JobCondition{
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+				}
+				job.Status.Conditions = conditions
+				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+			})
+
+			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
+				Eventually(
+					func() bool {
+						return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob))
+					}, time.Second*5, time.Millisecond*500).Should(BeTrue())
+			})
+		})
+
+		It("Delete none on success", func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-test-deletenone-on-success", namespace)
+
+			onSuccessPolicy := rayv1.DeleteNone
+			onFailurePolicy := rayv1.DeleteNone
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
 			rayJob.Spec.ShutdownAfterJobFinishes = false
 			rayCluster := &rayv1.RayCluster{}
 
 			By("Verify RayJob spec", func() {
-				Expect(*rayJob.Spec.DeletionPolicy).To(Equal(rayv1.DeleteNoneDeletionPolicy))
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
 			})
 
 			By("Create a RayJob custom resource", func() {
@@ -1362,7 +1834,168 @@ var _ = Context("RayJob with different submission modes", func() {
 					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
 			})
 
-			By("If DeletionPolicy=DeleteNone, no resources are deleted", func() {
+			By("If DeletionStrategy=DeleteNone, no resources are deleted", func() {
+				// RayJob exists
+				Consistently(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayJob %v not found", rayJob)
+
+				// RayCluster exists
+				Consistently(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Worker replicas set to 3
+				Expect(*rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(int32(3)))
+
+				// 3 worker Pods exist
+				workerPods := corev1.PodList{}
+				workerLabels := common.RayClusterWorkerPodsAssociationOptions(rayCluster).ToListOptions()
+				Consistently(
+					listResourceFunc(ctx, &workerPods, workerLabels...),
+					time.Second*3, time.Millisecond*500).Should(Equal(3), "expected 3 workers")
+
+				// Head Pod is still running
+				headPods := corev1.PodList{}
+				headLabels := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+				Consistently(
+					listResourceFunc(ctx, &headPods, headLabels...),
+					time.Second*3, time.Millisecond*500).Should(Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
+
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				Consistently(
+					getResourceFunc(ctx, namespacedName, job),
+					time.Second*3, time.Millisecond*500).Should(Succeed())
+			})
+		})
+
+		It("Delete none on failure", func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-test-deletenone-on-failure", namespace)
+
+			onSuccessPolicy := rayv1.DeleteCluster
+			onFailurePolicy := rayv1.DeleteNone
+			deletionStrategy := rayv1.DeletionStrategy{
+				OnSuccess: rayv1.DeletionPolicy{
+					Policy: &onSuccessPolicy,
+				},
+				OnFailure: rayv1.DeletionPolicy{
+					Policy: &onFailurePolicy,
+				},
+			}
+			rayJob.Spec.DeletionStrategy = &deletionStrategy
+			rayJob.Spec.ShutdownAfterJobFinishes = false
+			rayCluster := &rayv1.RayCluster{}
+
+			By("Verify RayJob spec", func() {
+				Expect(*rayJob.Spec.DeletionStrategy).To(Equal(rayv1.DeletionStrategy{
+					OnSuccess: rayv1.DeletionPolicy{
+						Policy: &onSuccessPolicy,
+					},
+					OnFailure: rayv1.DeletionPolicy{
+						Policy: &onFailurePolicy,
+					},
+				}))
+			})
+
+			By("Create a RayJob custom resource", func() {
+				err := k8sClient.Create(ctx, rayJob)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayJob")
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayJob: %v", rayJob.Name)
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from New to Initializing.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Initializing state, Status.RayClusterName, Status.JobId, and Status.StartTime must be set.
+				Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+				Expect(rayJob.Status.JobId).NotTo(BeEmpty())
+				Expect(rayJob.Status.StartTime).NotTo(BeNil())
+			})
+
+			By("In Initializing state, the RayCluster should eventually be created.", func() {
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(Succeed(), "RayCluster %v not found", rayJob.Status.RayClusterName)
+
+				// Check whether RayCluster is consistent with RayJob's RayClusterSpec.
+				Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(rayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Replicas))
+				Expect(rayCluster.Spec.RayVersion).To(Equal(rayJob.Spec.RayClusterSpec.RayVersion))
+
+				// TODO (kevin85421): Check the RayCluster labels.
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRNameLabelKey, rayJob.Name))
+				Expect(rayCluster.Labels).Should(HaveKeyWithValue(utils.RayOriginatedFromCRDLabelKey, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)))
+
+				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
+			})
+
+			By("Make RayCluster.Status.State to be rayv1.Ready", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+				updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// The RayCluster.Status.State should be Ready.
+				Eventually(
+					getClusterState(ctx, namespace, rayCluster.Name),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// In Running state, the RayJob's Status.DashboardURL must be set.
+				Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+
+				// In Running state, the submitter Kubernetes Job must be created if this RayJob is in K8sJobMode.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+			})
+
+			By("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+				// Update fake dashboard client to return job info with "Failed" status.
+				getJobInfo := func(context.Context, string) (*utils.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
+					return &utils.RayJobInfo{JobStatus: rayv1.JobStatusFailed, EndTime: uint64(time.Now().UnixMilli())}, nil
+				}
+				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+				// RayJob transitions to Complete if and only if the corresponding submitter Kubernetes Job is Complete or Failed.
+				Consistently(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+
+				// Update the submitter Kubernetes Job to Complete.
+				namespacedName := common.RayJobK8sJobNamespacedName(rayJob)
+				job := &batchv1.Job{}
+				err := k8sClient.Get(ctx, namespacedName, job)
+				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
+
+				// Update the submitter Kubernetes Job to Complete.
+				conditions := []batchv1.JobCondition{
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+				}
+				job.Status.Conditions = conditions
+				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+
+				// RayJob transitions to Complete.
+				Eventually(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+			})
+
+			By("If DeletionStrategy=DeleteNone, no resources are deleted", func() {
 				// RayJob exists
 				Consistently(
 					getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob),

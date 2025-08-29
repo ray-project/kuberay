@@ -42,7 +42,7 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	dashboardClientFunc func() utils.RayDashboardClientInterface
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
 }
 
@@ -115,9 +115,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Error(err, "Failed to get RayCluster")
 			}
 
-			rayDashboardClient := r.dashboardClientFunc()
-			if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
-				logger.Error(err, "Failed to initialize dashboard client")
+			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 				logger.Error(err, "Failed to stop job for RayJob")
@@ -203,7 +203,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if rayJobInstance.Spec.SubmissionMode == rayv1.InteractiveMode {
-			logger.Info("SubmissionMode is InteractiveMode and the RayCluster is created. Transition the status from `Initializing` to `Waiting`.")
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusWaiting
 			break
 		}
@@ -214,8 +213,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		logger.Info("Both RayCluster and the submitter K8s Job are created. Transition the status from `Initializing` to `Running`.", "SubmissionMode", rayJobInstance.Spec.SubmissionMode,
-			"RayCluster", rayJobInstance.Status.RayClusterName)
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
 		// Try to get the Ray job id from rayJob.Spec.JobId
@@ -263,8 +260,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		// Check the current status of ray jobs
-		rayDashboardClient := r.dashboardClientFunc()
-		if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
@@ -382,24 +379,44 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			"ShutdownTime", shutdownTime)
 
 		if features.Enabled(features.RayJobDeletionPolicy) &&
-			rayJobInstance.Spec.DeletionPolicy != nil &&
-			*rayJobInstance.Spec.DeletionPolicy != rayv1.DeleteNoneDeletionPolicy &&
+			rayJobInstance.Spec.DeletionStrategy != nil &&
 			len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionPolicy)
+
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
 				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
 				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
 			}
 
-			switch *rayJobInstance.Spec.DeletionPolicy {
-			case rayv1.DeleteClusterDeletionPolicy:
+			policy := rayv1.DeleteNone
+			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
+				policy = *rayJobInstance.Spec.DeletionStrategy.OnSuccess.Policy
+			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
+				policy = *rayJobInstance.Spec.DeletionStrategy.OnFailure.Policy
+			} else {
+				logger.Info("jobStatus not valid for deletion", "jobStatus", rayJobInstance.Status.JobStatus)
+			}
+
+			// no need to continue as the selected policy is DeleteNone
+			if policy == rayv1.DeleteNone {
+				break
+			}
+
+			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionStrategy)
+			if shutdownTime.After(nowTime) {
+				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
+				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
+				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
+			}
+
+			switch policy {
+			case rayv1.DeleteCluster:
 				logger.Info("Deleting RayCluster", "RayCluster", rayJobInstance.Status.RayClusterName)
 				_, err = r.deleteClusterResources(ctx, rayJobInstance)
-			case rayv1.DeleteWorkersDeletionPolicy:
+			case rayv1.DeleteWorkers:
 				logger.Info("Suspending all worker groups", "RayCluster", rayJobInstance.Status.RayClusterName)
 				err = r.suspendWorkerGroups(ctx, rayJobInstance)
-			case rayv1.DeleteSelfDeletionPolicy:
+			case rayv1.DeleteSelf:
 				logger.Info("Deleting RayJob")
 				err = r.Client.Delete(ctx, rayJobInstance)
 			default:
@@ -409,7 +426,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionPolicy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionStrategy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			logger.Info("Shutdown behavior is defined by the `ShutdownAfterJobFinishes` flag", "shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes)
 			if shutdownTime.After(nowTime) {
 				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
@@ -554,9 +571,9 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 		if err != nil {
 			return corev1.PodTemplateSpec{}, err
 		}
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash"}
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
-		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{"-ce", strings.Join(k8sJobCommand, " ")}
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{"e"})
+		submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args = []string{strings.Join(k8sJobCommand, " ")}
 		logger.Info("No command is specified in the user-provided template. Default command is used", "command", k8sJobCommand)
 	} else {
 		logger.Info("User-provided command is used", "command", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
@@ -933,6 +950,13 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 		rayJobDeploymentGracePeriodTime, err := strconv.Atoi(os.Getenv(utils.RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS))
 		if err != nil {
 			rayJobDeploymentGracePeriodTime = utils.DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
+		}
+
+		// EndTime isn't nil when JobStatus is in a terminal state under normal conditions.
+		// This check is a nil pointer dereference safeguard when older RayJob CRDs without the
+		// RayJobStatusInfo field are used with newer versions of KubeRay operator.
+		if rayJob.Status.RayJobStatusInfo.EndTime == nil {
+			return false
 		}
 
 		if time.Now().Before(rayJob.Status.RayJobStatusInfo.EndTime.Add(time.Duration(rayJobDeploymentGracePeriodTime) * time.Second)) {

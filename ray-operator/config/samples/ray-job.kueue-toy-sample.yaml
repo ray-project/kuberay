@@ -8,7 +8,14 @@ spec:
   # The alternative value is "HTTPMode", indicating that KubeRay will submit the Ray job by sending an HTTP request to the RayCluster.
   # submissionMode: "K8sJobMode"
   entrypoint: |
-    python -c "import time; import ray; ray.init(); [print(f\"iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}\") or time.sleep(1) for i in range(600)]"
+    python -c "
+    import time
+    import ray
+    ray.init()
+    for i in range(600):
+        print(f'iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}')
+        time.sleep(1)
+    "
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.
   shutdownAfterJobFinishes: true
 
@@ -26,43 +33,43 @@ spec:
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.41.0'
+    rayVersion: '2.46.0'
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
-            - name: ray-head
-              image: rayproject/ray:2.41.0
-              ports:
-                - containerPort: 6379
-                  name: gcs-server
-                - containerPort: 8265
-                  name: dashboard
-                - containerPort: 10001
-                  name: client
-              resources:
-                limits:
-                  cpu: "1"
-                  memory: "2Gi"
-                requests:
-                  cpu: "1"
-                  memory: "2Gi"
+          - name: ray-head
+            image: rayproject/ray:2.46.0
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "1"
+                memory: "2Gi"
     workerGroupSpecs:
-      - replicas: 1
-        minReplicas: 1
-        maxReplicas: 5
-        groupName: small-group
-        rayStartParams: {}
-        template:
-          spec:
-            containers:
-              - name: ray-worker
-                image: rayproject/ray:2.41.0
-                resources:
-                  limits:
-                    cpu: "1"
-                    memory: "2Gi"
-                  requests:
-                    cpu: "1"
-                    memory: "2Gi"
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 5
+      groupName: small-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.46.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "1"
+                memory: "2Gi"

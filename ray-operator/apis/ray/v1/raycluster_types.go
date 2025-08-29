@@ -87,7 +87,7 @@ type HeadGroupSpec struct {
 type WorkerGroupSpec struct {
 	// Suspend indicates whether a worker group should be suspended.
 	// A suspended worker group will have all pods deleted.
-	// This is not a user-facing API and is only used by RayJob DeletionPolicy.
+	// This is not a user-facing API and is only used by RayJob DeletionStrategy.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
 	// we can have multiple worker groups, we distinguish them by name

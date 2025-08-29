@@ -308,4 +308,15 @@ rules:
   verbs:
   - get
 {{- end -}}
+{{- if or .batchSchedulerEnabled (eq .batchSchedulerName "scheduler-plugins") }}
+- apiGroups:
+  - scheduling.x-k8s.io
+  resources:
+  - podgroups
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+{{- end -}}
 {{- end -}}

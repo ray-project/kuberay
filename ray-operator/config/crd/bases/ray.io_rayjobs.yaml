@@ -58,12 +58,36 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              deletionPolicy:
-                type: string
-                x-kubernetes-validations:
-                - message: the deletionPolicy field value must be either 'DeleteCluster',
-                    'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
-                  rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']
+              deletionStrategy:
+                properties:
+                  onFailure:
+                    properties:
+                      policy:
+                        type: string
+                        x-kubernetes-validations:
+                        - message: the policy field value must be either 'DeleteCluster',
+                            'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
+                          rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
+                            'DeleteNone']
+                    required:
+                    - policy
+                    type: object
+                  onSuccess:
+                    properties:
+                      policy:
+                        type: string
+                        x-kubernetes-validations:
+                        - message: the policy field value must be either 'DeleteCluster',
+                            'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'
+                          rule: self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf',
+                            'DeleteNone']
+                    required:
+                    - policy
+                    type: object
+                required:
+                - onFailure
+                - onSuccess
+                type: object
               entrypoint:
                 type: string
               entrypointNumCpus:

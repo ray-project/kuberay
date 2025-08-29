@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
@@ -52,9 +51,9 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func() utils.RayDashboardClientInterface {
-	return func() utils.RayDashboardClientInterface {
-		return fakeRayDashboardClient
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
+	return func(_ *rayv1.RayCluster, _ string) (utils.RayDashboardClientInterface, error) {
+		return fakeRayDashboardClient, nil
 	}
 }
 
@@ -117,8 +116,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			},
 		},
 	}
-	configs := configapi.Configuration{}
-	err = NewReconciler(ctx, mgr, options, configs).SetupWithManager(mgr, 1)
+	err = NewReconciler(ctx, mgr, options).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	testClientProvider := TestClientProvider{}

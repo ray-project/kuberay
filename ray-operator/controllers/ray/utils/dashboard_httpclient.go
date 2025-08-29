@@ -6,15 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
-	fmtErrors "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -28,7 +23,6 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*ServeDetails, error)
@@ -36,100 +30,15 @@ type RayDashboardClientInterface interface {
 	GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error)
 	ListJobs(ctx context.Context) (*[]RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
-	SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (string, error)
+	SubmitJobReq(ctx context.Context, request *RayJobRequest) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
 }
 
-type BaseDashboardClient struct {
+type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
-}
-
-func GetRayDashboardClientFunc(mgr ctrl.Manager, useKubernetesProxy bool) func() RayDashboardClientInterface {
-	return func() RayDashboardClientInterface {
-		return &RayDashboardClient{
-			mgr:                mgr,
-			useKubernetesProxy: useKubernetesProxy,
-		}
-	}
-}
-
-type RayDashboardClient struct {
-	mgr ctrl.Manager
-	BaseDashboardClient
-	useKubernetesProxy bool
-}
-
-// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
-// and the port with the given port name (defaultPortName).
-func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	headSvc := &corev1.Service{}
-	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-	if err != nil {
-		log.Error(err, "Failed to generate head service name", "RayCluster name", rayCluster.Name, "RayCluster spec", rayCluster.Spec)
-		return "", err
-	}
-
-	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
-		if errors.IsNotFound(err) {
-			log.Error(err, "Head service is not found", "head service name", headSvcName, "namespace", rayCluster.Namespace)
-		}
-		return "", err
-	}
-
-	log.Info("FetchHeadServiceURL", "head service name", headSvc.Name, "namespace", headSvc.Namespace)
-	servicePorts := headSvc.Spec.Ports
-	port := int32(-1)
-
-	for _, servicePort := range servicePorts {
-		if servicePort.Name == defaultPortName {
-			port = servicePort.Port
-			break
-		}
-	}
-
-	if port == int32(-1) {
-		return "", fmtErrors.Errorf("%s port is not found", defaultPortName)
-	}
-
-	domainName := GetClusterDomainName()
-	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
-		headSvc.Name,
-		headSvc.Namespace,
-		domainName,
-		port)
-	log.Info("FetchHeadServiceURL", "head service URL", headServiceURL)
-	return headServiceURL, nil
-}
-
-func (r *RayDashboardClient) InitClient(ctx context.Context, url string, rayCluster *rayv1.RayCluster) error {
-	log := ctrl.LoggerFrom(ctx)
-
-	if r.useKubernetesProxy {
-		var err error
-		headSvcName := rayCluster.Status.Head.ServiceName
-		if headSvcName == "" {
-			log.Info("RayCluster is missing .status.head.serviceName, calling GenerateHeadServiceName instead...", "RayCluster name", rayCluster.Name, "namespace", rayCluster.Namespace)
-			headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
-			if err != nil {
-				return err
-			}
-		}
-
-		r.client = r.mgr.GetHTTPClient()
-		r.dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", r.mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
-		return nil
-	}
-
-	r.client = &http.Client{
-		Timeout: 2 * time.Second,
-	}
-
-	r.dashboardURL = "http://" + url
-	return nil
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -148,7 +57,10 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response when updating deployments: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("UpdateDeployments fail: %s %s", resp.Status, string(body))
 	}
@@ -159,7 +71,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*ServeApplicationStatus, error) {
 	serveDetails, err := r.GetServeDetails(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get serve details: %w", err)
+		return nil, fmt.Errorf("failed to get serve details: %w", err)
 	}
 
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
@@ -167,7 +79,7 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+ServeDetailsPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +90,10 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response when getting serve details: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("GetServeDetails fail: %s %s", resp.Status, string(body))
@@ -195,12 +110,12 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*ServeDetails
 func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetails *ServeDetails) (map[string]*ServeApplicationStatus, error) {
 	detailsJson, err := json.Marshal(serveDetails.Applications)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal serve details: %v", serveDetails.Applications)
+		return nil, fmt.Errorf("failed to marshal serve details: %v", serveDetails.Applications)
 	}
 
 	applicationStatuses := map[string]*ServeApplicationStatus{}
 	if err = json.Unmarshal(detailsJson, &applicationStatuses); err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
+		return nil, fmt.Errorf("failed to unmarshal serve details bytes into map of application statuses: %w. Bytes: %s", err, string(detailsJson))
 	}
 
 	return applicationStatuses, nil
@@ -252,7 +167,7 @@ type RayJobLogsResponse struct {
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath+jobId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +184,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job info: %w", err)
 	}
 
 	var jobInfo RayJobInfo
@@ -282,7 +197,7 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*Ray
 }
 
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", r.dashboardURL+JobPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +214,7 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]RayJobInfo, error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when listing jobs: %w", err)
 	}
 
 	var jobInfo []RayJobInfo
@@ -316,17 +231,13 @@ func (r *RayDashboardClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob
 	if err != nil {
 		return "", err
 	}
-	return r.SubmitJobReq(ctx, request, &rayJob.Name)
+	return r.SubmitJobReq(ctx, request)
 }
 
-func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest, name *string) (jobId string, err error) {
-	log := ctrl.LoggerFrom(ctx)
+func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRequest) (jobId string, err error) {
 	rayJobJson, err := json.Marshal(request)
 	if err != nil {
 		return
-	}
-	if name != nil {
-		log.Info("Submit a ray job", "rayJob", name, "jobInfo", string(rayJobJson))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
@@ -341,7 +252,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response when submitting job: %w", err)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
@@ -358,9 +272,6 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *RayJobRe
 
 // Get Job Log
 func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Get ray job log", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
@@ -379,7 +290,7 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response when getting job log: %w", err)
 	}
 
 	var jobLog RayJobLogsResponse
@@ -392,9 +303,6 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Stop a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
@@ -407,7 +315,10 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response when stopping job: %w", err)
+	}
 
 	var jobStopResp RayJobStopResponse
 	if err = json.Unmarshal(body, &jobStopResp); err != nil {
@@ -421,16 +332,13 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 		}
 		// StopJob only returns an error when JobStatus is not in terminal states (STOPPED / SUCCEEDED / FAILED)
 		if !rayv1.IsJobTerminal(jobInfo.JobStatus) {
-			return fmt.Errorf("Failed to stopped job: %v", jobInfo)
+			return fmt.Errorf("failed to stop job: %v", jobInfo)
 		}
 	}
 	return nil
 }
 
 func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Delete a ray job", "rayJob", jobName)
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
 	if err != nil {
 		return err

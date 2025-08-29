@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -24,27 +23,6 @@ func GetSampleYAMLDir(t Test) string {
 	require.NoError(t.T(), err)
 	assert.True(t.T(), info.IsDir())
 	return sampleYAMLDir
-}
-
-func IsPodRunningAndReady(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodRunning {
-		return false
-	}
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-	return false
-}
-
-func AllPodsRunningAndReady(pods []corev1.Pod) bool {
-	for _, pod := range pods {
-		if !IsPodRunningAndReady(&pod) {
-			return false
-		}
-	}
-	return true
 }
 
 func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
@@ -87,7 +65,6 @@ func AllAppsRunning(rayService *rayv1.RayService) bool {
 
 func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 	return func(g Gomega) {
-		rayDashboardClient := &utils.RayDashboardClient{}
 		pod, err := GetHeadPod(t, rayCluster)
 		g.Expect(err).ToNot(HaveOccurred())
 
@@ -98,8 +75,8 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		g.Expect(err).ToNot(HaveOccurred())
 		url := fmt.Sprintf("127.0.0.1:%d", localPort)
-
-		err = rayDashboardClient.InitClient(t.Ctx(), url, rayCluster)
+		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(nil, false)
+		rayDashboardClient, err := rayDashboardClientFunc(rayCluster, url)
 		g.Expect(err).ToNot(HaveOccurred())
 		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())
 		g.Expect(err).ToNot(HaveOccurred())

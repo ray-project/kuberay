@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -164,7 +163,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
 	podTemplate := headSpec.Template
-	podTemplate.Name = podName
+	if utils.IsDeterministicHeadPodNameEnabled() {
+		podTemplate.Name = podName
+	} else {
+		podTemplate.GenerateName = podName
+	}
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
@@ -259,7 +262,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			Name:            "wait-gcs-ready",
 			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"/bin/bash", "-lc", "--"},
+			Command:         utils.GetContainerCommand([]string{}),
 			Args: []string{
 				fmt.Sprintf(`
 					SECONDS=0
@@ -465,7 +468,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		generatedCmd := fmt.Sprintf("%s; %s", ulimitCmd, rayStartCmd)
 		log.Info("BuildPod", "rayNodeType", rayNodeType, "generatedCmd", generatedCmd)
 		// replacing the old command
-		pod.Spec.Containers[utils.RayContainerIndex].Command = []string{"/bin/bash", "-lc", "--"}
+		pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 		if cmd != "" {
 			// If 'ray start' has --block specified, commands after it will not get executed.
 			// so we need to put cmd before cont.
@@ -532,11 +535,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				Value: "v1",
 			},
 		},
-		Command: []string{
-			"/bin/bash",
-			"-lc",
-			"--",
-		},
+		Command: utils.GetContainerCommand([]string{}),
 		Args: []string{
 			"ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
 		},
@@ -854,7 +853,7 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 
 		// Scan for resource keys of gpus
 		if _, ok := rayStartParams["num-gpus"]; !ok {
-			if isGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
+			if utils.IsGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
 				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
 			}
 		}
@@ -1026,15 +1025,4 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
-}
-
-func isGPUResourceKey(key string) bool {
-	// ending with "gpu" like "nvidia.com/gpu"
-	if strings.HasSuffix(key, "gpu") {
-		return true
-	}
-	// Nvidia Multi-Instance GPU in the form of "nvidia.com/mig-<slice_count>g.<memory_size>gb" like "nvidia.com/mig-2g.32gb"
-	// reference: https://github.com/NVIDIA/k8s-device-plugin#configuration-option-details
-	match, _ := regexp.MatchString(`nvidia\.com/mig-\d+g\.\d+gb$`, key)
-	return match
 }

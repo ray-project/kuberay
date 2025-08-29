@@ -34,5 +34,5 @@ func waitForClusterConditions(t *testing.T, tCtx *End2EndTestingContext, cluster
 			}
 		}
 		return false
-	}, 1*time.Minute, testPollingInterval).Should(gomega.BeTrue())
+	}, 3*time.Minute, testPollingInterval).Should(gomega.BeTrue())
 }

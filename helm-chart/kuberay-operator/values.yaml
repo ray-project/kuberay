@@ -65,7 +65,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", and "yunikorn".
+#    "default", "volcano", "yunikorn", and "scheduler-plugins".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
@@ -82,11 +82,19 @@ logging:
 #       batchScheduler:
 #         name: yunikorn
 #
+#  4. Use PodGroup
+#       batchScheduler:
+#         name: scheduler-plugins
+
+#  5. Use Kai Scheduler
+#       batchScheduler:
+#         name: kai-scheduler
+
 batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano" or "yunikorn", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn", "kai-scheduler" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
@@ -100,6 +108,18 @@ featureGates:
 metrics:
   # -- Whether KubeRay operator should emit control plane metrics.
   enabled: true
+  serviceMonitor:
+    # -- Enable a prometheus ServiceMonitor
+    enabled: false
+    # -- Prometheus ServiceMonitor interval
+    interval: 30s
+    # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
+    honorLabels: true
+    # -- Prometheus ServiceMonitor selector
+    selector: {}
+      #  release: prometheus
+    # -- Prometheus ServiceMonitor namespace
+    namespace: ""  # "monitoring"
 
 # -- Path to the operator binary
 operatorCommand: /manager
@@ -110,6 +130,11 @@ operatorCommand: /manager
 
 # -- If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability.
 leaderElectionEnabled: true
+
+# -- The maximum number of reconcile operations that can be performed simultaneously.
+# This setting controls the concurrency of the controller reconciliation loops.
+# Higher values can improve throughput in clusters with many resources, but may increase resource consumption.
+reconcileConcurrency: 1
 
 # -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
@@ -175,6 +200,23 @@ env:
 # If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job. Otherwise, only the RayCluster CR will be deleted. Default is false.
 # - name: DELETE_RAYJOB_CR_AFTER_JOB_FINISHES
 #   value: "false"
+# If set to true, we will use deterministic name for head pod. Otherwise, the non-deterministic name is used.
+# - name: ENABLE_DETERMINISTIC_HEAD_POD_NAME
+#   value: "false"
+# This environment variable determines whether to enable a login shell by passing the -l option to the container command /bin/bash.
+# The -l flag was added by default before KubeRay v1.4.0, but it is no longer added by default starting with v1.4.0.
+# - name: ENABLE_LOGIN_SHELL
+#   value: "true"
+# This KubeRay operator environment variable is used to determine if random Pod
+# deletion should be enabled. Note that this only takes effect when autoscaling
+# is enabled for the RayCluster.
+# - name: ENABLE_RANDOM_POD_DELETE
+#   value: "false"
+# If JobDeploymentStatus does not transition to Complete or Failed within
+# this grace period seconds after JobStatus reaches a terminal state,
+# KubeRay will update JobDeploymentStatus directly.
+# - name: RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
+#   value: "300"
 
 # -- Resource requests and limits for containers.
 resources:

@@ -3,33 +3,33 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v6e-multihost
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
-          - name: ray-head
-            image: rayproject/ray:2.41.0
-            imagePullPolicy: IfNotPresent
-            resources:
-              limits:
-                cpu: "8"
-                memory: 40G
-              requests:
-                cpu: "8"
-                memory: 40G
-            ports:
-            - containerPort: 6379
-              name: gcs
-            - containerPort: 8265
-              name: dashboard
-            - containerPort: 10001
-              name: client
-            - containerPort: 8000
-              name: serve
-            - containerPort: 8888
-              name: grpc
+        - name: ray-head
+          image: rayproject/ray:2.46.0-py310
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "8"
+              memory: 40G
+            requests:
+              cpu: "8"
+              memory: 40G
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8000
+            name: serve
+          - containerPort: 8888
+            name: grpc
   workerGroupSpecs:
   - groupName: tpu-group
     replicas: 1
@@ -40,32 +40,32 @@ spec:
     template:
       spec:
         containers:
-          - name: ray-worker
-            image: rayproject/ray:2.41.0
-            imagePullPolicy: IfNotPresent
-            resources:
-              limits:
-                cpu: "24"
-                google.com/tpu: "4"
-                memory: 200G
-              requests:
-                cpu: "24"
-                google.com/tpu: "4"
-                memory: 200G
-            env:
-            - name: NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-            - name: VBAR_CONTROL_SERVICE_URL
-              value: $(NODE_IP):8353
-            - name: JAX_PLATFORMS
-              value: tpu,cpu
-            - name: ENABLE_PJRT_COMPATIBILITY
-              value: "true"
-            ports:
-            - containerPort: 8081
-              name: mxla
+        - name: ray-worker
+          image: rayproject/ray:2.46.0-py310
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "24"
+              google.com/tpu: "4"
+              memory: 200G
+            requests:
+              cpu: "24"
+              google.com/tpu: "4"
+              memory: 200G
+          env:
+          - name: NODE_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: VBAR_CONTROL_SERVICE_URL
+            value: $(NODE_IP):8353
+          - name: JAX_PLATFORMS
+            value: tpu,cpu
+          - name: ENABLE_PJRT_COMPATIBILITY
+            value: "true"
+          ports:
+          - containerPort: 8081
+            name: mxla
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
           cloud.google.com/gke-tpu-topology: 16x16

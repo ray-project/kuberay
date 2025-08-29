@@ -16,7 +16,10 @@ func TestValidateResourceQuantity(t *testing.T) {
 		{"aaa", "cpu", true},
 		{"10Gi", "memory", false},
 		{"bbb", "memory", true},
-		{"", "memory", false},
+		{"", "memory", true},
+		{"", "ephemeral-storage", true},
+		{"100Gi", "head-ephemeral-storage", false},
+		{"-100Gi", "worker-ephemeral-storage", true},
 	}
 
 	for _, tt := range tests {

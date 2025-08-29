@@ -8,7 +8,7 @@
 
 if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     helm repo update && helm install kuberay/kuberay-operator
-    KUBERAY_TEST_IMAGE="rayproject/ray:nightly.$(date +'%y%m%d').${RAY_NIGHTLY_COMMIT:0:6}-py39" && export KUBERAY_TEST_IMAGE
+    KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly.$(date +'%y%m%d').${RAY_NIGHTLY_COMMIT:0:6}-py39" && export KUBERAY_TEST_RAY_IMAGE
 else
     IMG=kuberay/operator:nightly make docker-image &&
     kind load docker-image kuberay/operator:nightly &&

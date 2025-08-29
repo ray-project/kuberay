@@ -19,11 +19,11 @@ tests:
   - it: Should set Ray version when `head.rayVersion` is set
     set:
       head:
-        rayVersion: 2.44.1
+        rayVersion: 2.46.0
     asserts:
       - equal:
           path: spec.rayVersion
-          value: 2.44.1
+          value: 2.46.0
 
   - it: Should enable in-tree auto scaling when `head.enableInTreeAutoscaling` is `true`
     set:
@@ -96,6 +96,33 @@ tests:
               runAsNonRoot: true
               seccompProfile:
                 type: RuntimeDefault
+
+  - it: Should add GCS fault tolerance options when `gcsFaultTolerance.enabled` is `true`
+    set:
+      gcsFaultTolerance:
+        enabled: true
+        redisAddress: "test-redis:6379"
+        externalStorageNamespace: "test-gcs-namespace"
+        redisPassword:
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: password
+        redisUsername:
+          value: "test-user"
+    asserts:
+      - equal:
+          path: spec.gcsFaultToleranceOptions
+          value:
+            redisAddress: "test-redis:6379"
+            externalStorageNamespace: "test-gcs-namespace"
+            redisPassword:
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+            redisUsername:
+              value: "test-user"
 
   # ===========================================================================
   # Test Head Group

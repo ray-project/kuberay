@@ -6,16 +6,16 @@ kind: RayCluster
 metadata:
   name: raycluster-kuberay
 spec:
-  rayVersion: '2.41.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
     rayStartParams: {}
-    #pod template
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.41.0
+          image: rayproject/ray:2.46.0
           resources:
             limits:
               cpu: 1
@@ -31,23 +31,23 @@ spec:
           - containerPort: 10001
             name: client
   workerGroupSpecs:
-    # the pod replicas in this group typed worker
-    - replicas: 1
-      minReplicas: 1
-      maxReplicas: 5
-      # logical group name, for this called small-group, also can be functional
-      groupName: workergroup
-      rayStartParams: {}
-      #pod template
-      template:
-        spec:
-          containers:
-            - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-              image: rayproject/ray:2.41.0
-              resources:
-                limits:
-                  cpu: 1
-                  memory: 1G
-                requests:
-                  cpu: 1
-                  memory: 1G
+  # the pod replicas in this group typed worker
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 5
+    # logical group name, for this called small-group, also can be functional
+    groupName: workergroup
+    # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: 1
+              memory: 1G
+            requests:
+              cpu: 1
+              memory: 1G

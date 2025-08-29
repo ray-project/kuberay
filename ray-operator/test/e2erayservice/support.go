@@ -2,11 +2,10 @@ package e2erayservice
 
 import (
 	"bytes"
-	"embed"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -16,16 +15,6 @@ import (
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
-
-//go:embed *.py
-var _files embed.FS
-
-func ReadFile(t Test, fileName string) []byte {
-	t.T().Helper()
-	file, err := _files.ReadFile(fileName)
-	require.NoError(t.T(), err)
-	return file
-}
 
 type option[T any] func(t *T) *T
 
@@ -177,8 +166,22 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 								WithLimits(corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("2"),
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
-								})))))),
-		)
+								})))))))
+}
+
+func applyRayServiceYAMLAndWaitReady(g *WithT, t Test, filename string, namespace string, name string) {
+	t.T().Helper()
+
+	// Apply the RayService YAML
+	KubectlApplyYAML(t, filename, namespace)
+	rayService, err := GetRayService(t, namespace, name)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(t.T(), "Created RayService %s/%s successfully", rayService.Namespace, rayService.Name)
+
+	// Wait for RayService to be ready
+	LogWithTimestamp(t.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(t, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
 }
 
 func waitingForRayClusterSwitch(g *WithT, test Test, rayService *rayv1.RayService, oldRayClusterName string) {
@@ -190,6 +193,36 @@ func waitingForRayClusterSwitch(g *WithT, test Test, rayService *rayv1.RayServic
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(func(rayService *rayv1.RayService) string {
 		return rayService.Status.ActiveServiceStatus.RayClusterName
 	}, Not(Equal(oldRayClusterName))))
+
+	LogWithTimestamp(test.T(), "Verifying RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
+	rayService, err := GetRayService(test, rayService.Namespace, rayService.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(IsRayServiceUpgrading(rayService)).To(BeFalse())
+}
+
+func waitingForRayClusterSwitchWithDeletionDelay(g *WithT, test Test, rayService *rayv1.RayService, oldRayClusterName string, deletionDelayDuration time.Duration) {
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+	// Assert that the active RayCluster is eventually different
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to switch to a new cluster", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutLong).Should(WithTransform(func(rayService *rayv1.RayService) string {
+		return rayService.Status.ActiveServiceStatus.RayClusterName
+	}, Not(Equal(oldRayClusterName))))
+
+	// Ensure the old RayCluster still exists during the deletion delay
+	LogWithTimestamp(test.T(), "Ensuring old RayCluster %s/%s still exists for deletionDelayDuration (%v)", rayService.Namespace, oldRayClusterName, deletionDelayDuration)
+	g.Consistently(func() error {
+		_, err := GetRayCluster(test, rayService.Namespace, oldRayClusterName)
+		return err
+	}, deletionDelayDuration, time.Second).Should(Not(HaveOccurred()))
+
+	// Verify that the old RayCluster is eventually deleted with the grace period of 5 seconds
+	LogWithTimestamp(test.T(), "Checking that old RayCluster %s/%s is eventually deleted", rayService.Namespace, oldRayClusterName)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayService.Namespace, oldRayClusterName)
+		return err
+	}, 5*time.Second).Should(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Verifying RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
 	rayService, err := GetRayService(test, rayService.Namespace, rayService.Name)

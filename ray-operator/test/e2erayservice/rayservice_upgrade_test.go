@@ -12,7 +12,6 @@ import (
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -44,14 +43,8 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 
 	LogWithTimestamp(test.T(), "Creating curl pod %s/%s", namespace.Name, curlPodName)
 
-	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(func(g Gomega) *corev1.Pod {
-		updatedCurlPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		return updatedCurlPod
-	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
-	LogWithTimestamp(test.T(), "Curl pod %s/%s is running and ready", namespace.Name, curlPodName)
 
 	LogWithTimestamp(test.T(), "Sending requests to the RayService to make sure it is ready to serve requests")
 	stdout, _ := CurlRayServicePod(test, rayService, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)

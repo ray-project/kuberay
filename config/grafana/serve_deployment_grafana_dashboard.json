@@ -14,7 +14,7 @@
     },
     "editable": true,
     "gnetId": null,
-    "graphTooltip": 0,
+    "graphTooltip": 1,
     "iteration": 1667344411089,
     "links": [],
     "panels": [
@@ -56,7 +56,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -96,7 +96,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_deployment_replica_healthy{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment)",
                     "interval": "",
-                    "legendFormat": "{{application, deployment}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -182,7 +182,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -222,7 +222,7 @@
                     "exemplar": true,
                     "expr": "sum(rate(ray_serve_deployment_request_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -308,7 +308,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -348,7 +348,7 @@
                     "exemplar": true,
                     "expr": "sum(rate(ray_serve_deployment_error_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -474,7 +474,7 @@
                     "exemplar": true,
                     "expr": "histogram_quantile(0.5, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 },
@@ -608,7 +608,7 @@
                     "exemplar": true,
                     "expr": "histogram_quantile(0.9, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 },
@@ -742,7 +742,7 @@
                     "exemplar": true,
                     "expr": "histogram_quantile(0.99, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 },
@@ -876,7 +876,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_deployment_queued_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment)",
                     "interval": "",
-                    "legendFormat": "{{application, deployment}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1002,7 +1002,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_replica_processing_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1128,7 +1128,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_num_multiplexed_models{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1254,7 +1254,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1380,7 +1380,7 @@
                     "exemplar": true,
                     "expr": "sum(ray_serve_multiplexed_models_unload_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1506,7 +1506,7 @@
                     "exemplar": true,
                     "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_load_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1632,7 +1632,7 @@
                     "exemplar": true,
                     "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_unload_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1844,7 +1844,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
             "options": {
                 "alertThreshold": true
             },
@@ -1884,7 +1884,7 @@
                     "exemplar": true,
                     "expr": "(1 - sum(rate(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m]))/sum(rate(ray_serve_multiplexed_get_model_requests_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])))",
                     "interval": "",
-                    "legendFormat": "{{replica}}",
+                    "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
                     "refId": "A"
                 }
@@ -1937,7 +1937,7 @@
     "schemaVersion": 27,
     "style": "dark",
     "tags": [
-        "rayVersion:2.41.0"
+        "rayVersion:2.46.0"
     ],
     "templating": {
         "list": [
@@ -2106,7 +2106,7 @@
                 "description": "Filter queries to specific Ray clusters for KubeRay. When ingesting metrics across multiple ray clusters, the ray_io_cluster label should be set per cluster. For KubeRay users, this is done automaticaly with Prometheus PodMonitor.",
                 "error": null,
                 "hide": 0,
-                "includeAll": false,
+                "includeAll": true,
                 "label": null,
                 "multi": false,
                 "name": "Cluster",

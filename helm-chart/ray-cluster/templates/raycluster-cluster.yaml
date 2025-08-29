@@ -20,6 +20,21 @@ spec:
   autoscalerOptions:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- if .Values.gcsFaultTolerance.enabled }}
+  gcsFaultToleranceOptions:
+    redisAddress: {{ .Values.gcsFaultTolerance.redisAddress | quote }}
+    {{- with .Values.gcsFaultTolerance.externalStorageNamespace }}
+    externalStorageNamespace: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.gcsFaultTolerance.redisPassword }}
+    redisPassword:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.gcsFaultTolerance.redisUsername }}
+    redisUsername:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
   headGroupSpec:
     {{- with .Values.head.headService }}
     headService:
@@ -38,7 +53,6 @@ spec:
         {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:
@@ -165,7 +179,6 @@ spec:
       {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:
@@ -293,7 +306,6 @@ spec:
         {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
-    rayStartParams: {}
     {{- end }}
     template:
       metadata:

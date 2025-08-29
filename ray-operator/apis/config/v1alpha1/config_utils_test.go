@@ -6,6 +6,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 
+	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
+	schedulerPlugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 )
@@ -56,6 +58,26 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 				logger: testr.New(t),
 				config: Configuration{
 					BatchScheduler: volcano.GetPluginName(),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid option, batch-scheduler=scheduler-plugins",
+			args: args{
+				logger: testr.New(t),
+				config: Configuration{
+					BatchScheduler: schedulerPlugins.GetPluginName(),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid option, batch-scheduler=kai-scheduler",
+			args: args{
+				logger: testr.New(t),
+				config: Configuration{
+					BatchScheduler: kaischeduler.GetPluginName(),
 				},
 			},
 			wantErr: false,

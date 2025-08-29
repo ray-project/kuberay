@@ -18,12 +18,13 @@
     <img src="https://img.shields.io/github/watchers/ray-project/kuberay?style=social" alt="github watchers"/>
     <img src="https://img.shields.io/github/stars/ray-project/kuberay?style=social" alt="github stars"/>
     <img src="https://img.shields.io/github/forks/ray-project/kuberay?style=social" alt="github forks"/>
-    <a href="https://hub.docker.com/r/kuberay/operator/">
-        <img src="https://img.shields.io/docker/pulls/kuberay/operator" alt="docker pulls"/>
-    </a>
 </p>
 
 ## KubeRay
+
+> We have moved all documentation to the [ray-project/ray](https://github.com/ray-project/ray) repository.
+Please refer to the [Ray docs](https://docs.ray.io/en/latest/cluster/kubernetes/index.html) for the latest information.
+The [ray-project/kuberay](https://github.com/ray-project/kuberay) repository hosts the KubeRay source code and community information.
 
 KubeRay is a powerful, open-source Kubernetes operator that simplifies the deployment and management of [Ray](https://github.com/ray-project/ray) applications on Kubernetes. It offers several key components:
 
@@ -35,27 +36,14 @@ KubeRay is a powerful, open-source Kubernetes operator that simplifies the deplo
 
 * **RayService**: RayService is made up of two parts: a RayCluster and a Ray Serve deployment graph. RayService offers zero-downtime upgrades for RayCluster and high availability.
 
-**Community-managed components (optional)**: Some components are maintained by the KubeRay community.
+**KubeRay ecosystem**: Some optional components.
 
-* **KubeRay APIServer**: It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
+* **Kubectl Plugin** (Beta): Starting from KubeRay v1.3.0, you can use the `kubectl ray` plugin to simplify
+common workflows when deploying Ray on Kubernetes. If you aren’t familiar with Kubernetes, this
+plugin simplifies running Ray on Kubernetes. See [kubectl-plugin](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kubectl-plugin.html#kubectl-plugin) for more details.
+
+* **KubeRay APIServer** (Alpha): It provides a layer of simplified configuration for KubeRay resources. The KubeRay API server is used internally
 by some organizations to back user interfaces for KubeRay resource management.
 
-* **KubeRay Python client**: This Python client library provides APIs to handle RayCluster from your Python application.
-
-## KubeRay ecosystem
-
-* [AWS Application Load Balancer](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#aws-application-load-balancer-alb-ingress-support-on-aws-eks)
-* [Nginx](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/ingress.html#manually-setting-up-nginx-ingress-on-kind)
-* [Prometheus and Grafana](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#kuberay-prometheus-grafana)
-* [Volcano](https://docs.ray.io/en/master/cluster/kubernetes/k8s-ecosystem/volcano.html)
-* [MCAD](guidance/kuberay-with-MCAD.md)
-
-## Security
-
-**Security and isolation must be enforced outside of the Ray Cluster.** Restrict network access with Kubernetes or other external controls. Refer to [**Ray security documentation**](https://docs.ray.io/en/master/ray-security/index.html) for more guidance on what controls to implement.
-
-Please report security issues to <security@anyscale.com>.
-
-## The Ray docs
-
-You can find even more information on deployments of Ray on Kubernetes at the [official Ray docs](https://docs.ray.io/en/latest/cluster/kubernetes/index.html).
+* **KubeRay Dashboard** (Experimental): Starting from KubeRay v1.4.0, we have introduced a new dashboard that enables users to view and manage KubeRay resources.
+While it is not yet production-ready, we welcome your feedback.

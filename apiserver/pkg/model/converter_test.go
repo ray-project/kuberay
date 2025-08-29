@@ -46,15 +46,15 @@ var headSpecTest = rayv1api.HeadGroupSpec{
 			Labels: map[string]string{
 				"app.kubernetes.io/created-by": "kuberay-operator",
 				"app.kubernetes.io/name":       "kuberay",
-				"ray.io/cluster":               "boris-cluster",
-				"ray.io/cluster-dashboard":     "boris-cluster-dashboard",
+				"ray.io/cluster":               "kuberay-cluster",
+				"ray.io/cluster-dashboard":     "kuberay-cluster-dashboard",
 				"ray.io/group":                 utils.RayNodeHeadGroupLabelValue,
-				"ray.io/identifier":            "boris-cluster-head",
+				"ray.io/identifier":            "kuberay-cluster-head",
 				"ray.io/is-ray-node":           "yes",
 				"ray.io/node-type":             "head",
 				"test":                         "value",
 			},
-			Name:      "boris-cluster-head-f7zx2",
+			Name:      "kuberay-cluster-head-f7zx2",
 			Namespace: "max",
 		},
 		Spec: corev1.PodSpec{
@@ -179,15 +179,15 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 			Labels: map[string]string{
 				"app.kubernetes.io/created-by": "kuberay-operator",
 				"app.kubernetes.io/name":       "kuberay",
-				"ray.io/cluster":               "boris-cluster",
-				"ray.io/cluster-dashboard":     "boris-cluster-dashboard",
+				"ray.io/cluster":               "kuberay-cluster",
+				"ray.io/cluster-dashboard":     "kuberay-cluster-dashboard",
 				"ray.io/group":                 "8-CPUs",
-				"ray.io/identifier":            "boris-cluster-worker",
+				"ray.io/identifier":            "kuberay-cluster-worker",
 				"ray.io/is-ray-node":           "yes",
 				"ray.io/node-type":             "worker",
 				"test":                         "value",
 			},
-			Name:      "boris-cluster-worker-8-cpus-4dp9v",
+			Name:      "kuberay-cluster-worker-8-cpus-4dp9v",
 			Namespace: "max",
 		},
 		Spec: corev1.PodSpec{
@@ -226,7 +226,7 @@ var workerSpecTest = rayv1api.WorkerGroupSpec{
 						},
 						{
 							Name:  "RAY_IP",
-							Value: "boris-cluster-head-svc",
+							Value: "kuberay-cluster-head-svc",
 						},
 						{
 							Name:  "RAY_USAGE_STATS_KUBERAY_IN_USE",

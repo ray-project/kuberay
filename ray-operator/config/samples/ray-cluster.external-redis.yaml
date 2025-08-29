@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-external-redis
 spec:
-  rayVersion: '2.41.0'
+  rayVersion: '2.46.0'
   gcsFaultToleranceOptions:
     # In most cases, you don't need to set `externalStorageNamespace` because KubeRay will
     # automatically set it to the UID of RayCluster. Only modify this annotation if you fully understand
@@ -27,64 +27,64 @@ spec:
     template:
       spec:
         containers:
-          - name: ray-head
-            image: rayproject/ray:2.41.0
-            resources:
-              limits:
-                cpu: "1"
-              requests:
-                cpu: "1"
-            ports:
-              - containerPort: 6379
-                name: redis
-              - containerPort: 8265
-                name: dashboard
-              - containerPort: 10001
-                name: client
-            volumeMounts:
-              - mountPath: /tmp/ray
-                name: ray-logs
-              - mountPath: /home/ray/samples
-                name: ray-example-configmap
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "1"
+          ports:
+          - containerPort: 6379
+            name: redis
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
         volumes:
-          - name: ray-logs
-            emptyDir: {}
-          - name: ray-example-configmap
-            configMap:
-              name: ray-example
-              defaultMode: 0777
-              items:
-                - key: detached_actor.py
-                  path: detached_actor.py
-                - key: increment_counter.py
-                  path: increment_counter.py
+        - name: ray-logs
+          emptyDir: {}
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: detached_actor.py
+              path: detached_actor.py
+            - key: increment_counter.py
+              path: increment_counter.py
   workerGroupSpecs:
-    # the pod replicas in this group typed worker
-    - replicas: 1
-      minReplicas: 1
-      maxReplicas: 10
-      groupName: small-group
-      # The `rayStartParams` are used to configure the `ray start` command.
-      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
-      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
-      rayStartParams: {}
-      # Pod template
-      template:
-        spec:
-          containers:
-            - name: ray-worker
-              image: rayproject/ray:2.41.0
-              volumeMounts:
-                - mountPath: /tmp/ray
-                  name: ray-logs
-              resources:
-                limits:
-                  cpu: "1"
-                requests:
-                  cpu: "1"
-          volumes:
-            - name: ray-logs
-              emptyDir: {}
+  # the pod replicas in this group typed worker
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 10
+    groupName: small-group
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+    # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+    rayStartParams: {}
+    # Pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: "1"
+        volumes:
+        - name: ray-logs
+          emptyDir: {}
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -111,8 +111,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: redis
-      port: 6379
+  - name: redis
+    port: 6379
   selector:
     app: redis
 ---
@@ -133,22 +133,22 @@ spec:
         app: redis
     spec:
       containers:
-        - name: redis
-          image: redis:7.4.0
-          command:
-            - "sh"
-            - "-c"
-            - "redis-server /usr/local/etc/redis/redis.conf"
-          ports:
-            - containerPort: 6379
-          volumeMounts:
-            - name: config
-              mountPath: /usr/local/etc/redis/redis.conf
-              subPath: redis.conf
-      volumes:
+      - name: redis
+        image: redis:7.4.0
+        command:
+        - "sh"
+        - "-c"
+        - "redis-server /usr/local/etc/redis/redis.conf"
+        ports:
+        - containerPort: 6379
+        volumeMounts:
         - name: config
-          configMap:
-            name: redis-config
+          mountPath: /usr/local/etc/redis/redis.conf
+          subPath: redis.conf
+      volumes:
+      - name: config
+        configMap:
+          name: redis-config
 ---
 # Redis password
 apiVersion: v1

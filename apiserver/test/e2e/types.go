@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"runtime"
@@ -22,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
+	"github.com/ray-project/kuberay/apiserversdk/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1api "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -74,7 +76,7 @@ func NewEnd2EndTestingContext(t *testing.T) (*End2EndTestingContext, error) {
 
 func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndTestingContext, error) {
 	testingContext := &End2EndTestingContext{
-		namespaceName:       petnames.Generate(2, "-"),
+		namespaceName:       fmt.Sprintf("%s-%d", petnames.Generate(2, "-"), time.Now().UnixNano()),
 		computeTemplateName: petnames.Name(),
 		clusterName:         petnames.Name(),
 		configMapName:       petnames.Generate(2, "-"),
@@ -92,7 +94,24 @@ func newEnd2EndTestingContext(t *testing.T, options ...contextOption) (*End2EndT
 func withHttpClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
-		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient)
+
+		retryCfg := util.RetryConfig{
+			MaxRetry:       util.HTTPClientDefaultMaxRetry,
+			BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
+			InitBackoff:    util.HTTPClientDefaultInitBackoff,
+			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
+		}
+
+		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+
+		remoteExecClient, err := newRemoteExecuteClient()
+		if err != nil {
+			return err
+		}
+
+		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
+
 		return nil
 	}
 }
@@ -108,7 +127,7 @@ func withBaseURL() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:31888"
+			baseURL = "http://localhost:8888"
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
