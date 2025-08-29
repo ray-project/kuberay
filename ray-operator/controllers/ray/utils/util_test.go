@@ -1282,3 +1282,47 @@ func TestGetContainerCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestHasSubmitter(t *testing.T) {
+	// test all submission modes
+	tests := []struct {
+		name     string
+		spec     rayv1.RayJobSpec
+		expected bool
+	}{
+		{
+			name: "K8sJobMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.K8sJobMode,
+			},
+			expected: true,
+		},
+		{
+			name: "SidecarMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+			},
+			expected: true,
+		},
+		{
+			name: "HTTPMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.HTTPMode,
+			},
+			expected: false,
+		},
+		{
+			name: "InteractiveMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.InteractiveMode,
+			},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, HasSubmitter(&rayv1.RayJob{Spec: test.spec}))
+		})
+	}
+}
