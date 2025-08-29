@@ -195,6 +195,66 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 	}
 }
 
+func TestRayJobSubmit_AddressValidation(t *testing.T) {
+	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	test := []struct {
+		name             string
+		address          string
+		expectError      string
+		expectNormalized string
+		flagChanged      bool
+	}{
+		{
+			name:        "address flag not set: port-forward mode",
+			address:     "",
+			flagChanged: false,
+		},
+		{
+			name:        "address flag set but empty: error",
+			address:     "",
+			flagChanged: true,
+			expectError: "--address was provided but is empty",
+		},
+		{
+			name:        "valid https address: OK",
+			address:     "https://ingress.example.com",
+			flagChanged: true,
+		},
+	}
+
+	for _, tc := range test {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &SubmitJobOptions{
+				cmdFactory: cmdFactory,
+				ioStreams:  &testStreams,
+				rayjobName: "rayjob-sample",
+				workingDir: "Fake/File/Path",
+			}
+
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVar(&opts.address, "address", "", "Ray Dashboard base URL")
+
+			if tc.flagChanged {
+				require.NoError(t, cmd.Flags().Set("address", tc.address))
+			} else {
+				opts.address = tc.address
+			}
+
+			err := opts.Validate(cmd)
+			if tc.expectError != "" {
+				require.EqualError(t, err, tc.expectError)
+			} else {
+				require.NoError(t, err)
+				if tc.expectNormalized != "" {
+					require.Equal(t, tc.expectNormalized, opts.address)
+				}
+			}
+		})
+	}
+}
+
 func TestRayJobSubmitCmdFlagsOverrideYaml(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
@@ -438,6 +498,7 @@ func TestRaySubmitCmd(t *testing.T) {
 	fakeSubmitJobOptions.verify = "True"
 	fakeSubmitJobOptions.workingDir = "/fake/working/dir"
 	fakeSubmitJobOptions.entryPoint = "python fake_python_script.py"
+	fakeSubmitJobOptions.address = dashboardAddr
 
 	actualCmd, err := fakeSubmitJobOptions.raySubmitCmd()
 	require.NoError(t, err)
@@ -488,4 +549,52 @@ func TestRayJobSubmit_FlagsHaveDefaults(t *testing.T) {
 	assert.InDelta(t, float32(0), opts.entryPointGPU, 1e-6, "default entrypoint-num-gpus should be 0")
 	assert.Equal(t, 0, opts.entryPointMemory, "default entrypoint-memory should be 0")
 	assert.False(t, opts.noWait, "default no-wait should be false")
+}
+
+func TestRaySubmitCmd_AddressSelection(t *testing.T) {
+	streams, _, _, _ := genericclioptions.NewTestIOStreams()
+	factory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	makeCmd := func(addr string) ([]string, error) {
+		opts := NewJobSubmitOptions(factory, streams)
+		opts.workingDir = "/fake/working/dir"
+		opts.entryPoint = "python fake.py"
+		opts.address = addr
+		return opts.raySubmitCmd()
+	}
+
+	tests := []struct {
+		name         string
+		address      string
+		expectedAddr string
+	}{
+		{
+			name:         "no address provided: falls back to dashboardAddr",
+			address:      "",
+			expectedAddr: dashboardAddr,
+		},
+		{
+			name:         "custom address provided: uses custom",
+			address:      "https://ingress.example.com",
+			expectedAddr: "https://ingress.example.com",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, err := makeCmd(tc.address)
+			require.NoError(t, err)
+
+			require.GreaterOrEqual(t, len(cmd), 5, "command too short")
+			assert.Equal(t, "ray", cmd[0])
+			assert.Equal(t, "job", cmd[1])
+			assert.Equal(t, "submit", cmd[2])
+
+			assert.Equal(t, "--address", cmd[3])
+			assert.Equal(t, tc.expectedAddr, cmd[4])
+
+			require.Contains(t, cmd, "--working-dir")
+			require.Contains(t, cmd, "--")
+		})
+	}
 }
