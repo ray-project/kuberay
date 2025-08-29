@@ -88,6 +88,6 @@ func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayClus
 	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 }
 
-func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func() utils.RayHttpProxyClientInterface {
+func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
 	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 }
