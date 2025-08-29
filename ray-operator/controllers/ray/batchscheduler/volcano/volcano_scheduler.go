@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	volcanov1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
-	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -100,8 +98,8 @@ func createPodGroup(
 	podGroupName string,
 	size int32,
 	totalResource corev1.ResourceList,
-) v1beta1.PodGroup {
-	podGroup := v1beta1.PodGroup{
+) volcanov1beta1.PodGroup {
+	podGroup := volcanov1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: app.Namespace,
 			Name:      podGroupName,
@@ -109,12 +107,12 @@ func createPodGroup(
 				*metav1.NewControllerRef(app, rayv1.SchemeGroupVersion.WithKind("RayCluster")),
 			},
 		},
-		Spec: v1beta1.PodGroupSpec{
+		Spec: volcanov1beta1.PodGroupSpec{
 			MinMember:    size,
 			MinResources: &totalResource,
 		},
-		Status: v1beta1.PodGroupStatus{
-			Phase: v1beta1.PodGroupPending,
+		Status: volcanov1beta1.PodGroupStatus{
+			Phase: volcanov1beta1.PodGroupPending,
 		},
 	}
 
@@ -130,7 +128,7 @@ func createPodGroup(
 }
 
 func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	pod.Annotations[v1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
+	pod.Annotations[volcanov1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		pod.Labels[QueueNameLabelKey] = queue
@@ -141,27 +139,7 @@ func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.R
 	pod.Spec.SchedulerName = v.Name()
 }
 
-func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
-	// client not start yet, so we need to create new client to check if podGroup CRD exists
-	extClient, err := apiextensionsclient.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize k8s extension client with error %w", err)
-	}
-
-	if _, err := extClient.ApiextensionsV1().CustomResourceDefinitions().Get(
-		ctx,
-		PodGroupName,
-		metav1.GetOptions{},
-	); err != nil {
-		if _, err := extClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(
-			ctx,
-			PodGroupName,
-			metav1.GetOptions{},
-		); err != nil {
-			return nil, fmt.Errorf("podGroup CRD is required to exist in current cluster. error: %w", err)
-		}
-	}
-
+func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
 	if err := volcanov1beta1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to add volcano to scheme with error %w", err)
 	}
@@ -172,9 +150,9 @@ func (vf *VolcanoBatchSchedulerFactory) New(ctx context.Context, config *rest.Co
 }
 
 func (vf *VolcanoBatchSchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
-	utilruntime.Must(v1beta1.AddToScheme(scheme))
+	utilruntime.Must(volcanov1beta1.AddToScheme(scheme))
 }
 
 func (vf *VolcanoBatchSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
-	return b.Owns(&v1beta1.PodGroup{})
+	return b.Owns(&volcanov1beta1.PodGroup{})
 }
