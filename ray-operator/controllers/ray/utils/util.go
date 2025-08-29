@@ -6,10 +6,12 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -20,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -637,7 +640,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
 }
 
@@ -716,6 +719,68 @@ func GetContainerCommand(additionalOptions []string) []string {
 // GetEnableDeterministicHeadName returns true if deterministic head pod name is enabled.
 func IsDeterministicHeadPodNameEnabled() bool {
 	return strings.ToLower(os.Getenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)) == "true"
+}
+
+// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
+// and the port with the given port name (defaultPortName).
+func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
+	headSvc := &corev1.Service{}
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+	if err != nil {
+		return "", err
+	}
+
+	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+		return "", err
+	}
+
+	servicePorts := headSvc.Spec.Ports
+	port := int32(-1)
+
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == defaultPortName {
+			port = servicePort.Port
+			break
+		}
+	}
+
+	if port == int32(-1) {
+		return "", fmt.Errorf("%s port is not found", defaultPortName)
+	}
+
+	domainName := GetClusterDomainName()
+	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
+		headSvc.Name,
+		headSvc.Namespace,
+		domainName,
+		port)
+	return headServiceURL, nil
+}
+
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+	return func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+		if useKubernetesProxy {
+			var err error
+			headSvcName := rayCluster.Status.Head.ServiceName
+			if headSvcName == "" {
+				headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return &RayDashboardClient{
+				client:       mgr.GetHTTPClient(),
+				dashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+			}, nil
+		}
+
+		return &RayDashboardClient{
+			client: &http.Client{
+				Timeout: 2 * time.Second,
+			},
+			dashboardURL: "http://" + url,
+		}, nil
+	}
 }
 
 func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
