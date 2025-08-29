@@ -151,6 +151,19 @@ var _ = Context("RayJob with different submission modes", func() {
 				}
 			})
 
+			It("Creates a Head Service", func() {
+				for rayJob := range rayJobs {
+					rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD,
+						*rayJob.Spec.RayClusterSpec, rayJob.Name)
+					Expect(err).NotTo(HaveOccurred(), "Failed to get Head Service Name: %v", rayJobHeadSvcName)
+
+					var rayJobHeadSvc corev1.Service
+					Eventually(
+						getResourceFunc(ctx, client.ObjectKey{Name: rayJobHeadSvcName, Namespace: namespace}, &rayJobHeadSvc),
+						time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see Service: %v", rayJobHeadSvcName)
+				}
+			})
+
 			It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
 				for rayJob := range rayJobs {
 					rayCluster := &rayv1.RayCluster{}

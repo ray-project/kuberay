@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -15,6 +16,36 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
+
+// BuildHeadServiceForRayJob Builds the service for a RayJob. Currently, there is only one service that allows
+// the worker nodes to connect to the head node.
+func BuildHeadServiceForRayJob(ctx context.Context, rayJob rayv1.RayJob,
+	rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	service, err := BuildServiceForHeadPod(ctx, rayCluster, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var clusterSpec rayv1.RayClusterSpec
+	if rayJob.Spec.RayClusterSpec != nil {
+		clusterSpec = *rayJob.Spec.RayClusterSpec
+	}
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, clusterSpec, rayJob.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	service.ObjectMeta.Name = headSvcName
+	service.ObjectMeta.Namespace = rayJob.Namespace
+	service.ObjectMeta.Labels = map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: rayJob.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+		utils.RayNodeTypeLabelKey:             string(rayv1.HeadNode),
+		utils.RayIDLabelKey:                   utils.CheckLabel(utils.GenerateIdentifier(rayJob.Name, rayv1.HeadNode)),
+	}
+
+	return service, nil
+}
 
 // GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
 func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {

@@ -260,6 +260,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
+		_, err = r.reconcileServices(ctx, rayJobInstance, rayClusterInstance)
+		if err != nil {
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService),
+				"Failed to update head service for Job %s/%s, %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+		}
+
 		// Check the current status of ray jobs
 		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
 		if err != nil {
@@ -606,6 +612,55 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 	})
 
 	return submitterTemplate, nil
+}
+
+func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob,
+	rayClusterInstance *rayv1.RayCluster) (*corev1.Service, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	newSvc, err := common.BuildHeadServiceForRayJob(ctx, *rayJobInstance, *rayClusterInstance)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
+	oldSvc := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: newSvc.Name, Namespace: rayJobInstance.Namespace}, oldSvc)
+
+	if err == nil {
+		// Only update the service if the RayCluster switches.
+		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
+			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster",
+				newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", utils.HeadService)
+			return oldSvc, nil
+		}
+
+		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
+		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
+		// with older versions of Kubernetes, we need to assign the ClusterIP here.
+		newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
+		oldSvc.Spec = *newSvc.Spec.DeepCopy()
+		logger.Info("Update Kubernetes Service", "serviceType", utils.HeadService)
+		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService), "Failed to update the service %s/%s, %v", oldSvc.Namespace, oldSvc.Name, updateErr)
+			return nil, updateErr
+		}
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.UpdatedService), "Updated the service %s/%s", oldSvc.Namespace, oldSvc.Name)
+		// Return the updated service.
+		return oldSvc, nil
+	} else if errors.IsNotFound(err) {
+		logger.Info("Create a Kubernetes Service", "serviceType", utils.HeadService)
+		if err := ctrl.SetControllerReference(rayJobInstance, newSvc, r.Scheme); err != nil {
+			return nil, err
+		}
+		if err := r.Create(ctx, newSvc); err != nil {
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateService), "Failed to create the service %s/%s, %v", newSvc.Namespace, newSvc.Name, err)
+			return nil, err
+		}
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedService), "Created the service %s/%s", newSvc.Namespace, newSvc.Name)
+		return newSvc, nil
+	}
+	return nil, err
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
