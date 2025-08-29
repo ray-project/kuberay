@@ -89,7 +89,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		}
 	}
 
-	sid, err := rayDashboardClient.SubmitJobReq(ctx, request, nil)
+	sid, err := rayDashboardClient.SubmitJobReq(ctx, request)
 	if err != nil {
 		return nil, err
 	}
