@@ -18,6 +18,7 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	fakeclientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
@@ -179,7 +180,7 @@ func TestConvertNodeInfo(t *testing.T) {
 	metadata := map[string]string{
 		"foo": "boo",
 	}
-	runtimeEnv := utils.RuntimeEnvType{
+	runtimeEnv := utiltypes.RuntimeEnvType{
 		"working_dir": "/tmp/workdir",
 		"pip":         []string{"numpy", "pandas"},
 	}

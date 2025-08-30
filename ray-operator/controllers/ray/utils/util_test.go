@@ -794,44 +794,6 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 	}
 }
 
-func TestUnmarshalRuntimeEnv(t *testing.T) {
-	tests := []struct {
-		name           string
-		runtimeEnvYAML string
-		isErrorNil     bool
-	}{
-		{
-			name:           "Empty runtimeEnvYAML",
-			runtimeEnvYAML: "",
-			isErrorNil:     true,
-		},
-		{
-			name: "Valid runtimeEnvYAML",
-			runtimeEnvYAML: `
-env_vars:
-  counter_name: test_counter
-`,
-			isErrorNil: true,
-		},
-		{
-			name:           "Invalid runtimeEnvYAML",
-			runtimeEnvYAML: `invalid_yaml_str`,
-			isErrorNil:     false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
-			if tc.isErrorNil {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-			}
-		})
-	}
-}
-
 func TestFindHeadPodReadyCondition(t *testing.T) {
 	tests := []struct {
 		name     string
