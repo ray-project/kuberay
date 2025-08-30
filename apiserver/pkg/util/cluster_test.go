@@ -270,6 +270,7 @@ var templateWorker = api.ComputeTemplate{
 			Effect:   "NoExecute",
 		},
 	},
+	MemoryUnit: "Gi",
 }
 
 var expectedToleration = corev1.Toleration{
