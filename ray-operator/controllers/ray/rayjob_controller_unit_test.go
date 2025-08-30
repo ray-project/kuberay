@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -621,6 +623,133 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			}
 
 			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, tt.originalRayJobStatus, tt.rayJobStatus)
+		})
+	}
+}
+
+func TestReconcile_ValidationFailures(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	tests := []struct {
+		name                string
+		rayJob              *rayv1.RayJob
+		expectedErrorString string
+		expectedMessage     string
+	}{
+		{
+			name: "metadata validation error - name too long",
+			rayJob: &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.Repeat("a", 48), // Exceeds max length of 47
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{{Image: "rayproject/ray"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorString: "RayJob name should be no more than 47 characters",
+			expectedMessage:     "The RayJob metadata is invalid",
+		},
+		{
+			name: "spec validation failure - empty containers",
+			rayJob: &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "valid-name",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedErrorString: "headGroupSpec should have at least one container",
+			expectedMessage:     "The RayJob spec is invalid",
+		},
+		{
+			name: "status validation failure - invalid status combination",
+			rayJob: &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "valid-name",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					SubmissionMode: rayv1.K8sJobMode, // not interactive
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{{Image: "rayproject/ray"}},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayJobStatus{
+					JobDeploymentStatus: rayv1.JobDeploymentStatusWaiting,
+				},
+			},
+			expectedErrorString: "invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode",
+			expectedMessage:     "The RayJob status is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fake client with the RayJob
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(tt.rayJob).
+				WithStatusSubresource(&rayv1.RayJob{}).
+				Build()
+
+			// Create recorder for events
+			recorder := record.NewFakeRecorder(10)
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   scheme,
+			}
+
+			// Call Reconcile
+			ctx := context.Background()
+			req := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tt.rayJob.Name,
+					Namespace: tt.rayJob.Namespace,
+				},
+			}
+			result, err := reconciler.Reconcile(ctx, req)
+			require.Error(t, err)
+			assert.Equal(t, tt.expectedErrorString, err.Error())
+
+			// Make sure no requeue happening
+			assert.Equal(t, time.Duration(0), result.RequeueAfter)
+
+			// Verify the status was properly set
+			updatedRayJob := &rayv1.RayJob{}
+			err = fakeClient.Get(ctx, req.NamespacedName, updatedRayJob)
+			require.NoError(t, err)
+			assert.Equal(t, rayv1.JobDeploymentStatusValidationFailed, updatedRayJob.Status.JobDeploymentStatus)
+			assert.Equal(t, rayv1.JobStatusFailed, updatedRayJob.Status.JobStatus)
+			assert.Equal(t, rayv1.ValidationFailed, updatedRayJob.Status.Reason)
+			assert.Equal(t, fmt.Sprintf("%s: %s", tt.expectedMessage, tt.expectedErrorString), updatedRayJob.Status.Message)
 		})
 	}
 }
