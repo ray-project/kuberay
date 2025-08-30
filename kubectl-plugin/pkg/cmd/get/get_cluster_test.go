@@ -329,7 +329,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, len(tc.expectedRayClusters), len(rayClusters.Items))
+			assert.Len(t, rayClusters.Items, len(tc.expectedRayClusters))
 		})
 	}
 }
