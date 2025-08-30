@@ -468,7 +468,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 			require.Equal(t, response.Jobs[0].Name, testJobs[i].Job.Name)
 			continueToken = response.Continue
 		}
-		require.Equal(t, "", continueToken) // Continue token should be empty because this is the last page
+		require.Empty(t, continueToken) // Continue token should be empty because this is the last page
 	})
 
 	// Test pagination return all jobs
@@ -482,7 +482,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Equal(t, len(response.Jobs), testJobNum)
-		require.Equal(t, "", response.Continue) // Continue token should be empty because this is the last page
+		require.Empty(t, response.Continue) // Continue token should be empty because this is the last page
 	})
 
 	t.Run("Test no pagination", func(t *testing.T) {
@@ -493,7 +493,7 @@ func TestGetJobByPaginationInNamespace(t *testing.T) {
 		require.Nil(t, actualRPCStatus, "No RPC status expected")
 		require.NotNil(t, response, "A response is expected")
 		require.Equal(t, len(response.Jobs), testJobNum)
-		require.Equal(t, "", response.Continue) // Continue token should be empty because this is the last page
+		require.Empty(t, response.Continue) // Continue token should be empty because this is the last page
 	})
 }
 

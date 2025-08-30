@@ -630,7 +630,7 @@ func TestPopulateRayClusterSpec(t *testing.T) {
 			assert.Equal(t, "resource", value.Key)
 		default:
 			assert.Equal(t, "FIELD", value.Source.String())
-			assert.Equal(t, "", value.Name)
+			assert.Empty(t, value.Name)
 			assert.Equal(t, "path", value.Key)
 		}
 	}
@@ -645,7 +645,7 @@ func TestFromKubeToAPIComputeTemplates(t *testing.T) {
 	assert.Equal(t, uint32(4), template.Cpu, "CPU mismatch")
 	assert.Equal(t, uint32(8), template.Memory, "Memory mismatch")
 	assert.Equal(t, uint32(0), template.Gpu, "GPU mismatch")
-	assert.Equal(t, "", template.GpuAccelerator, "GPU accelerator mismatch")
+	assert.Empty(t, template.GpuAccelerator, "GPU accelerator mismatch")
 }
 
 func TestPopulateTemplate(t *testing.T) {
