@@ -535,6 +535,7 @@ func TestFailedDeleteRayClusterEvent(t *testing.T) {
 func TestEmitRayJobExecutionDuration(t *testing.T) {
 	rayJobName := "test-job"
 	rayJobNamespace := "default"
+	rayJobUID := types.UID("test-job-uid")
 	mockTime := time.Now().Add(-60 * time.Second)
 
 	//nolint:govet // disable govet to keep the order of the struct fields
@@ -611,6 +612,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 					ObserveRayJobExecutionDuration(
 						rayJobName,
 						rayJobNamespace,
+						rayJobUID,
 						tt.expectedJobDeploymentStatus,
 						tt.expectedRetryCount,
 						mock.MatchedBy(func(d float64) bool {
@@ -620,7 +622,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 					).Times(1)
 			}
 
-			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, tt.originalRayJobStatus, tt.rayJobStatus)
+			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, rayJobUID, tt.originalRayJobStatus, tt.rayJobStatus)
 		})
 	}
 }

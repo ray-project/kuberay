@@ -28,19 +28,19 @@ func NewRayServiceMetricsManager(ctx context.Context, client client.Client) *Ray
 		rayServiceInfo: prometheus.NewDesc(
 			"kuberay_service_info",
 			"Metadata information about RayService custom resources",
-			[]string{"name", "namespace"},
+			[]string{"name", "namespace", "uid"},
 			nil,
 		),
 		rayServiceConditionReady: prometheus.NewDesc(
 			"kuberay_service_condition_ready",
 			"Describes whether the RayService is ready. Ready means users can send requests to the underlying cluster and the number of serve endpoints is greater than 0.",
-			[]string{"name", "namespace", "condition"},
+			[]string{"name", "namespace", "uid", "condition"},
 			nil,
 		),
 		rayServiceConditionUpgradeInProgress: prometheus.NewDesc(
 			"kuberay_service_condition_upgrade_in_progress",
 			"Describes whether the RayService is performing a zero-downtime upgrade.",
-			[]string{"name", "namespace", "condition"},
+			[]string{"name", "namespace", "uid", "condition"},
 			nil,
 		),
 		client: client,
@@ -76,6 +76,7 @@ func (c *RayServiceMetricsManager) collectRayServiceInfo(service *rayv1.RayServi
 		1,
 		service.Name,
 		service.Namespace,
+		string(service.UID),
 	)
 }
 
@@ -87,6 +88,7 @@ func (c *RayServiceMetricsManager) collectRayServiceConditionMetrics(service *ra
 		1,
 		service.Name,
 		service.Namespace,
+		string(service.UID),
 		strconv.FormatBool(ready),
 	)
 	upgradeInProgress := meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
@@ -96,6 +98,7 @@ func (c *RayServiceMetricsManager) collectRayServiceConditionMetrics(service *ra
 		1,
 		service.Name,
 		service.Namespace,
+		string(service.UID),
 		strconv.FormatBool(upgradeInProgress),
 	)
 }
