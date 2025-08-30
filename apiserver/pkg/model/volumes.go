@@ -130,7 +130,7 @@ func GetVolumeMountPropagation(mount *corev1.VolumeMount) api.Volume_MountPropag
 }
 
 func GetVolumeHostPathType(vol *corev1.Volume) api.Volume_HostPathType {
-	if *vol.VolumeSource.HostPath.Type == corev1.HostPathFile {
+	if vol.VolumeSource.HostPath.Type == nil || *vol.VolumeSource.HostPath.Type == corev1.HostPathFile {
 		return api.Volume_FILE
 	}
 	return api.Volume_DIRECTORY
