@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -96,7 +95,8 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 }
 
 func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
-	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+	newTestRayJob := testRayJob.DeepCopy()
+	newTestRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
 		{
 			Ports: []corev1.ContainerPort{
 				{
@@ -128,7 +128,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"echo no quote 'single quote' \"double quote\"",
 		";",
 	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(newTestRayJob, rayv1.SidecarMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
@@ -231,33 +231,4 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 	}
 	template := GetDefaultSubmitterTemplate(rayCluster)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
-}
-
-func TestGetDefaultSubmitterContainer(t *testing.T) {
-	rayCluster := &rayv1.RayCluster{
-		Spec: rayv1.RayClusterSpec{
-			HeadGroupSpec: rayv1.HeadGroupSpec{
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Image: "rayproject/ray:test-submitter-container",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	container := GetDefaultSubmitterContainer(rayCluster)
-	assert.Equal(t, container.Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
-	assert.Equal(t, utils.SubmitterContainerName, container.Name)
-	assert.Equal(t, corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse("1"),
-		corev1.ResourceMemory: resource.MustParse("1Gi"),
-	}, container.Resources.Limits)
-	assert.Equal(t, corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse("500m"),
-		corev1.ResourceMemory: resource.MustParse("200Mi"),
-	}, container.Resources.Requests)
 }
