@@ -150,7 +150,7 @@ func TestAddMetadataToPod(t *testing.T) {
 			}
 
 			scheduler := &KubeScheduler{}
-			scheduler.AddMetadataToPod(context.TODO(), &cluster, "worker", pod)
+			scheduler.AddMetadataToChildResource(context.TODO(), &cluster, "worker", pod)
 
 			if tt.enableGang {
 				a.Equal(cluster.Name, pod.Labels[kubeSchedulerPodGroupLabelKey])

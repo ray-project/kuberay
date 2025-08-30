@@ -9,6 +9,7 @@ package kaischeduler
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,7 +34,13 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object client.Object) error {
+	_, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
+	// yunikorn doesn't require any resources to be created upfront
+	// this is a no-opt for this implementation
 	return nil
 }
 
@@ -51,6 +58,12 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 		pod.Labels = make(map[string]string)
 	}
 	pod.Labels[QueueLabelName] = queue
+}
+
+func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ string, _ client.Object) {
+}
+
+func (k *KaiScheduler) AddMetadataToChildResourceFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster) {
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
