@@ -182,6 +182,20 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("BackoffLimit is incompatible with InteractiveMode")
 	}
 
+	if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+		if rayJob.Spec.SubmitterPodTemplate != nil {
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterPodTemplate")
+		}
+
+		if rayJob.Spec.SubmitterConfig != nil {
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterConfig")
+		}
+
+		if rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using SidecarMode")
+		}
+	}
+
 	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return err

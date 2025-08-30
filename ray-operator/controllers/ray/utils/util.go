@@ -785,3 +785,7 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 		}, nil
 	}
 }
+
+func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
+	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
+}
