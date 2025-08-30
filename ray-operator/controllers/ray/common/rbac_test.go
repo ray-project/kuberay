@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,8 @@ import (
 
 // Test subject and role ref names in the function BuildRoleBinding.
 func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
+	ctx := context.Background()
+
 	tests := []struct {
 		name  string
 		input *rayv1.RayCluster
@@ -70,15 +73,15 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 				},
 			},
 			want: []string{
-				shortString(t), // 50 chars long, truncated by utils.CheckName
-				shortString(t),
+				shortString(ctx, t), // 50 chars long, truncated by utils.CheckName
+				shortString(ctx, t),
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			rb, err := BuildRoleBinding(tc.input)
+			rb, err := BuildRoleBinding(ctx, tc.input)
 			require.NoError(t, err)
 			got := []string{rb.Subjects[0].Name, rb.RoleRef.Name}
 			assert.Equal(t, tc.want, got)

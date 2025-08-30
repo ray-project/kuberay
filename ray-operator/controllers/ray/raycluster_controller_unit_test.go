@@ -1010,6 +1010,8 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 func TestReconcileHeadService(t *testing.T) {
 	setupTest(t)
 
+	ctx := context.Background()
+
 	// Create a new scheme with CRDs, Pod, Service schemes.
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -1024,7 +1026,7 @@ func TestReconcileHeadService(t *testing.T) {
 			Labels: map[string]string{
 				utils.RayClusterLabelKey:  cluster.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
-				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
+				utils.RayIDLabelKey:       utils.CheckLabel(ctx, utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 			},
 		},
 	}
@@ -1034,11 +1036,10 @@ func TestReconcileHeadService(t *testing.T) {
 	// Initialize a fake client with newScheme and runtimeObjects.
 	runtimeObjects := []runtime.Object{cluster}
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-	ctx := context.TODO()
 	headServiceSelector := labels.SelectorFromSet(map[string]string{
 		utils.RayClusterLabelKey:  cluster.Name,
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
-		utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
+		utils.RayIDLabelKey:       utils.CheckLabel(ctx, utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)),
 	})
 
 	// Initialize RayCluster reconciler.
@@ -1415,6 +1416,8 @@ func TestGetHeadPodIPAndNameFromGetRayClusterHeadPod(t *testing.T) {
 func TestGetHeadServiceIPAndName(t *testing.T) {
 	setupTest(t)
 
+	ctx := context.Background()
+
 	headServiceIP := "1.2.3.4"
 	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
 	if err != nil {
@@ -1429,7 +1432,7 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "unexpectedExtraHeadService",
 			Namespace: namespaceStr,
-			Labels:    common.HeadServiceLabels(*testRayCluster),
+			Labels:    common.HeadServiceLabels(ctx, *testRayCluster),
 		},
 	}
 

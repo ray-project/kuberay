@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +57,7 @@ func BuildRole(cluster *rayv1.RayCluster) (*rbacv1.Role, error) {
 }
 
 // BuildRole
-func BuildRoleBinding(cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
+func BuildRoleBinding(ctx context.Context, cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
 	serviceAccountName := utils.GetHeadGroupServiceAccountName(cluster)
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -72,7 +73,7 @@ func BuildRoleBinding(cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
 			{
 				Kind: rbacv1.ServiceAccountKind,
 				// Clip name for consistency with the function reconcileAutoscalerServiceAccount.
-				Name:      utils.CheckName(serviceAccountName),
+				Name:      utils.CheckName(ctx, serviceAccountName),
 				Namespace: cluster.Namespace,
 			},
 		},
@@ -80,7 +81,7 @@ func BuildRoleBinding(cluster *rayv1.RayCluster) (*rbacv1.RoleBinding, error) {
 			APIGroup: rbacv1.GroupName,
 			Kind:     "Role",
 			// Clip name for consistency with the function reconcileAutoscalerRole.
-			Name: utils.CheckName(cluster.Name),
+			Name: utils.CheckName(ctx, cluster.Name),
 		},
 	}
 
