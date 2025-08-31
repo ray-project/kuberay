@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,9 +12,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	volcanov1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
@@ -31,7 +30,6 @@ const (
 
 type VolcanoBatchScheduler struct {
 	cli client.Client
-	log logr.Logger
 }
 
 type VolcanoBatchSchedulerFactory struct{}
@@ -63,6 +61,8 @@ func getAppPodGroupName(app *rayv1.RayCluster) string {
 }
 
 func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.RayCluster, size int32, totalResource corev1.ResourceList) error {
+	logger := ctrl.LoggerFrom(ctx).WithName(v.Name())
+
 	podGroupName := getAppPodGroupName(app)
 	podGroup := volcanov1beta1.PodGroup{}
 	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: app.Namespace, Name: podGroupName}, &podGroup); err != nil {
@@ -73,11 +73,11 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 		podGroup := createPodGroup(app, podGroupName, size, totalResource)
 		if err := v.cli.Create(ctx, &podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
-				v.log.Info("pod group already exists, no need to create")
+				logger.Info("pod group already exists, no need to create")
 				return nil
 			}
 
-			v.log.Error(err, "Pod group CREATE error!", "PodGroup.Error", err)
+			logger.Error(err, "Pod group CREATE error!", "PodGroup.Error", err)
 			return err
 		}
 	} else {
@@ -85,7 +85,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 			podGroup.Spec.MinMember = size
 			podGroup.Spec.MinResources = &totalResource
 			if err := v.cli.Update(ctx, &podGroup); err != nil {
-				v.log.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
+				logger.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
 				return err
 			}
 		}
@@ -145,7 +145,6 @@ func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, c
 	}
 	return &VolcanoBatchScheduler{
 		cli: cli,
-		log: logf.Log.WithName("volcano"),
 	}, nil
 }
 
