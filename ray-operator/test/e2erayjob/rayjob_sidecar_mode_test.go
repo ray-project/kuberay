@@ -1,6 +1,7 @@
 package e2erayjob
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -9,6 +10,7 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -135,5 +137,52 @@ env_vars:
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Verify Sidecar Container Injection", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("sidecar-verification", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		g.Eventually(func() error {
+			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+			if err != nil {
+				return err
+			}
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			if err != nil {
+				return err
+			}
+
+			// Use existing pod verification logic
+			if headPod == nil {
+				return fmt.Errorf("head pod not found")
+			}
+
+			containerNames := make(map[string]bool)
+			for _, container := range headPod.Spec.Containers {
+				containerNames[container.Name] = true
+			}
+
+			if !containerNames[utils.SubmitterContainerName] {
+				return fmt.Errorf("submitter container not found")
+			}
+
+			return nil
+		}, TestTimeoutMedium).Should(Succeed())
+
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
 	})
 }
