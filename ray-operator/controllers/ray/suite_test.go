@@ -57,8 +57,8 @@ func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) fun
 	}
 }
 
-func (testProvider TestClientProvider) GetHttpProxyClient(_ manager.Manager) func() utils.RayHttpProxyClientInterface {
-	return func() utils.RayHttpProxyClientInterface {
+func (testProvider TestClientProvider) GetHttpProxyClient(_ manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
+	return func(_, _, _ string, _ int) utils.RayHttpProxyClientInterface {
 		return fakeRayHttpProxyClient
 	}
 }

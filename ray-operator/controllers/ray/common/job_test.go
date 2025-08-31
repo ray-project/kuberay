@@ -14,27 +14,30 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-var testRayJob = &rayv1.RayJob{
-	Spec: rayv1.RayJobSpec{
-		RuntimeEnvYAML: "test: test",
-		Metadata: map[string]string{
-			"testKey": "testValue",
+func rayJobTemplate() *rayv1.RayJob {
+	return &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			RuntimeEnvYAML: "test: test",
+			Metadata: map[string]string{
+				"testKey": "testValue",
+			},
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				RayVersion: "2.6.0",
+			},
+			Entrypoint:          "echo no quote 'single quote' \"double quote\"",
+			EntrypointNumCpus:   1,
+			EntrypointNumGpus:   0.5,
+			EntrypointResources: `{"Custom_1": 1, "Custom_2": 5.5}`,
 		},
-		RayClusterSpec: &rayv1.RayClusterSpec{
-			RayVersion: "2.6.0",
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "testJobId",
 		},
-		Entrypoint:          "echo no quote 'single quote' \"double quote\"",
-		EntrypointNumCpus:   1,
-		EntrypointNumGpus:   0.5,
-		EntrypointResources: `{"Custom_1": 1, "Custom_2": 5.5}`,
-	},
-	Status: rayv1.RayJobStatus{
-		DashboardURL: "http://127.0.0.1:8265",
-		JobId:        "testJobId",
-	},
+	}
 }
 
 func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
+	testRayJob := rayJobTemplate()
 	expected := `{"test":"test"}`
 	jsonOutput, err := getRuntimeEnvJson(testRayJob)
 	require.NoError(t, err)
@@ -66,6 +69,7 @@ pip: ["python-multipart==0.0.6"]
 }
 
 func TestGetMetadataJson(t *testing.T) {
+	testRayJob := rayJobTemplate()
 	expected := `{"testKey":"testValue"}`
 	metadataJson, err := GetMetadataJson(testRayJob.Spec.Metadata, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
@@ -73,6 +77,7 @@ func TestGetMetadataJson(t *testing.T) {
 }
 
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
+	testRayJob := rayJobTemplate()
 	expected := []string{
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
@@ -95,8 +100,8 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 }
 
 func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
-	newTestRayJob := testRayJob.DeepCopy()
-	newTestRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+	testRayJob := rayJobTemplate()
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
 		{
 			Ports: []corev1.ContainerPort{
 				{
@@ -128,7 +133,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"echo no quote 'single quote' \"double quote\"",
 		";",
 	}
-	command, err := BuildJobSubmitCommand(newTestRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }

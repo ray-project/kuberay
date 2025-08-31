@@ -121,6 +121,17 @@ leaderElectionEnabled: true
 # Higher values can improve throughput in clusters with many resources, but may increase resource consumption.
 reconcileConcurrency: 1
 
+# -- Kube Client configuration for QPS and burst settings.
+# This setting controls the QPS and burst rate of the kube client when sending requests to the Kubernetes API server.
+# If the QPS and burst values are too low, we may easily hit rate limits on the API server and slow down the controller reconciliation loops.
+kubeClient:
+  # -- The QPS value for the client communicating with the Kubernetes API server.
+  # Must be a float number.
+  qps: 100.0
+  # -- The maximum burst for throttling requests from this client to the Kubernetes API server.
+  # Must be a non-negative integer.
+  burst: 200
+
 # -- If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on.
 rbacEnable: true
 
