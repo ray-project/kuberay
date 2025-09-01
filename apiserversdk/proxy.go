@@ -48,7 +48,7 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
 
 	// Compute Template middleware
-	ctMiddleware := apiserverutil.NewComputeTemplateMiddleware(k8sClient)
+	ctMiddleware := apiserversdkutil.NewComputeTemplateMiddleware(k8sClient)
 	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayclusters", ctMiddleware(handler))
 	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayclusters/{name}", ctMiddleware(handler))
 	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayjobs", ctMiddleware(handler))

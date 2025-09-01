@@ -2,7 +2,6 @@ package apiserversdk
 
 import (
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -97,9 +96,8 @@ spec:
 `, clusterName, tCtx.GetNamespaceName(), templateName, tCtx.GetRayImage(), templateName, tCtx.GetRayImage())
 
 	// Send HTTP POST request to apiserver proxy to create RayCluster
-	resp, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayclusters", tCtx.GetNamespaceName()), rayClusterYAML)
+	_, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayclusters", tCtx.GetNamespaceName()), rayClusterYAML)
 	require.NoError(t, err, "No error expected when sending YAML request")
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "Expected HTTP 201 Created")
 
 	t.Cleanup(func() {
 		rayClient := tCtx.GetRayHttpClient()
@@ -159,9 +157,8 @@ spec:
 `, jobName, tCtx.GetNamespaceName(), templateName, tCtx.GetRayImage(), templateName, tCtx.GetRayImage())
 
 	// Send HTTP POST request to apiserver proxy to create RayJob
-	resp, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayjobs", tCtx.GetNamespaceName()), rayJobYAML)
+	_, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayjobs", tCtx.GetNamespaceName()), rayJobYAML)
 	require.NoError(t, err, "No error expected when sending YAML request")
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "Expected HTTP 201 Created")
 
 	t.Cleanup(func() {
 		rayClient := tCtx.GetRayHttpClient()
@@ -220,9 +217,8 @@ spec:
 `, serviceName, tCtx.GetNamespaceName(), templateName, tCtx.GetRayImage(), templateName, tCtx.GetRayImage())
 
 	// Send HTTP POST request to apiserver proxy to create RayService
-	resp, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayservices", tCtx.GetNamespaceName()), rayServiceYAML)
+	_, err := tCtx.SendYAMLRequest("POST", fmt.Sprintf("/apis/ray.io/v1/namespaces/%s/rayservices", tCtx.GetNamespaceName()), rayServiceYAML)
 	require.NoError(t, err, "No error expected when sending YAML request")
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "Expected HTTP 201 Created")
 
 	t.Cleanup(func() {
 		rayClient := tCtx.GetRayHttpClient()

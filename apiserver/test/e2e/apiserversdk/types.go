@@ -19,7 +19,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	// api "github.com/ray-project/kuberay/proto/go_client" kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	util "github.com/ray-project/kuberay/apiserversdk/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -197,15 +196,24 @@ func withAPIServerClient() contextOption {
 			Timeout: 30 * time.Second, // Set a reasonable timeout for HTTP requests
 		}
 
-		retryCfg := kuberayHTTP.RetryConfig{
+		retryCfg := util.RetryConfig{
 			MaxRetry:       util.HTTPClientDefaultMaxRetry,
-			BackoffFactor:  util.HTTPClientDefaultBackoffBase,
+			BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
 			InitBackoff:    util.HTTPClientDefaultInitBackoff,
 			MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 			OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 		}
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
+
+		// Use remote execution for accessing  APIServer within the cluster
+		remoteExecClient, err := NewRemoteExecuteClient()
+		if err != nil {
+			return err
+		}
+
+		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
+
 		return nil
 	}
 }
@@ -252,12 +260,15 @@ func (e2etc *End2EndTestingContext) GetRayServiceByName(serviceName string) (*ra
 }
 
 // SendYAMLRequest sends a YAML request to the apiserver proxy with the specified method, path, and YAML content
-func (e2etc *End2EndTestingContext) SendYAMLRequest(method, path, yamlContent string) (*http.Response, error) {
+func (e2etc *End2EndTestingContext) SendYAMLRequest(method, path, yamlContent string) ([]byte, error) {
 	url := e2etc.apiServerBaseURL + path
 	req, err := http.NewRequestWithContext(e2etc.ctx, method, url, bytes.NewBufferString(yamlContent))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/yaml")
-	return e2etc.apiServerHttpClient.Do(req)
+
+	bodyBytes, _, err := e2etc.kuberayAPIServerClient.ExecuteHttpRequest(req, url)
+
+	return bodyBytes, err
 }
