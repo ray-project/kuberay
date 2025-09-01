@@ -25,15 +25,12 @@ class RayjobApi:
     """
     RayjobApi provides APIs to list, get, create, build, update, delete rayjobs.
     Methods:
-    - submit_job(entrypoint: str, ...) -> str: Submit and execute a job asynchronously.
-    - TODO: stop_job(job_id: str) -> (bool, str): Request a job to exit asynchronously.
-    - get_job_status(job_id: str) -> str: Get the most recent status of a job.
-    - wait_until_job_finished(job_id: str) -> bool: Wait until a job is completed.
-    - get_job_info(job_id: str): Get the latest status and other information associated with a job.
-    - TODO: list_jobs() -> List[JobDetails]: List all jobs along with their status and other information.
-    - TODO: get_job_logs(job_id: str) -> str: Get all logs produced by a job.
-    - TODO: tail_job_logs(job_id: str) -> Iterator[str]: Get an iterator that follows the logs of a job.
-    - delete_job(job_id: str) -> (bool, str): Delete a job in a terminal state and all of its associated data.
+    - submit_job(k8s_namespace: str, job: Any) -> Any: Submit and execute a job asynchronously.
+    - stop_job(name: str, k8s_namespace: str) -> bool: Stop a job by suspending it.
+    - resubmit_job(name: str, k8s_namespace: str) -> bool: Resubmit a job that has been suspended.
+    - get_job_status(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> Any: Get the most recent status of a job.
+    - wait_until_job_finished(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> bool: Wait until a job is completed.
+    - delete_job(name: str, k8s_namespace: str) -> bool: Delete a job and all of its associated data.
     """
 
     # initial config to setup the kube client
@@ -177,16 +174,100 @@ class RayjobApi:
         )
         return False
 
-    def delete_job(self, name: str, k8s_namespace: str = "default") -> Any:
+    def stop_job(self, name: str, k8s_namespace: str = "default") -> bool:
+        """Stop a Ray job by setting the suspend field to True.
+
+        This will delete the associated RayCluster and transition the job to 'Suspended' status.
+        Only works on jobs in 'Running' or 'Initializing' status.
+
+        Parameters:
+        - name (str): The name of the Ray job custom resource.
+        - k8s_namespace (str, optional): The namespace in which to stop the Ray job. Defaults to "default".
+
+        Returns:
+            bool: True if the job was successfully stopped, False otherwise.
+        """
         try:
-            resource: Any = self.api.delete_namespaced_custom_object(
+            # Patch the RayJob to set suspend=true
+            patch_body = {
+                "spec": {
+                    "suspend": True
+                }
+            }
+            self.api.patch_namespaced_custom_object(
+                group=constants.GROUP,
+                version=constants.JOB_VERSION,
+                plural=constants.JOB_PLURAL,
+                name=name,
+                namespace=k8s_namespace,
+                body=patch_body,
+            )
+            log.info(f"Successfully stopped rayjob {name} in namespace {k8s_namespace}")
+            return True
+        except ApiException as e:
+            if e.status == 404:
+                log.error(f"rayjob {name} not found in namespace {k8s_namespace}")
+            else:
+                log.error(f"error stopping rayjob {name}: {e.reason}")
+            return False
+
+    def resubmit_job(self, name: str, k8s_namespace: str = "default") -> bool:
+        """Resubmit a suspended Ray job by setting the suspend field to False.
+
+        This will create a new RayCluster and resubmit the job.
+        Only works on jobs in 'Suspended' status.
+
+        Parameters:
+        - name (str): The name of the Ray job custom resource.
+        - k8s_namespace (str, optional): The namespace in which to resubmit the Ray job. Defaults to "default".
+
+        Returns:
+            bool: True if the job was successfully resubmitted, False otherwise.
+        """
+        try:
+            # Patch the RayJob to set suspend=false
+            patch_body = {
+                "spec": {
+                    "suspend": False
+                }
+            }
+            self.api.patch_namespaced_custom_object(
+                group=constants.GROUP,
+                version=constants.JOB_VERSION,
+                plural=constants.JOB_PLURAL,
+                name=name,
+                namespace=k8s_namespace,
+                body=patch_body,
+            )
+            log.info(f"Successfully resubmitted rayjob {name} in namespace {k8s_namespace}")
+            return True
+        except ApiException as e:
+            if e.status == 404:
+                log.error(f"rayjob {name} not found in namespace {k8s_namespace}")
+            else:
+                log.error(f"error resubmitting rayjob {name}: {e.reason}")
+            return False
+
+    def delete_job(self, name: str, k8s_namespace: str = "default") -> bool:
+        """Delete a Ray job and all of its associated data.
+
+        Parameters:
+        - name (str): The name of the Ray job custom resource.
+        - k8s_namespace (str, optional): The namespace in which to delete the Ray job. Defaults to "default".
+
+        Returns:
+            bool: True if the job was successfully deleted, False otherwise.
+        """
+        try:
+            self.api.delete_namespaced_custom_object(
                 group=constants.GROUP,
                 version=constants.JOB_VERSION,
                 plural=constants.JOB_PLURAL,
                 name=name,
                 namespace=k8s_namespace,
             )
-            return resource
+            log.info(f"Successfully deleted rayjob {name} in namespace {k8s_namespace}")
+            return True
         except ApiException as e:
             if e.status == 404:
                 log.error(f"rayjob custom resource already deleted. error = {e.reason}")
