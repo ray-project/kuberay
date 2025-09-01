@@ -42,7 +42,7 @@ type RayJobReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	dashboardClientFunc func() utils.RayDashboardClientInterface
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
 }
 
@@ -91,7 +91,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	if err := r.Get(ctx, request.NamespacedName, rayJobInstance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request. Stop reconciliation.
-			logger.Info("RayJob resource not found. Ignoring since object must be deleted")
+			logger.Info("RayJob resource not found.")
+			cleanUpRayJobMetrics(r.options.RayJobMetricsManager, request.Name, request.Namespace)
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -115,9 +116,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				logger.Error(err, "Failed to get RayCluster")
 			}
 
-			rayDashboardClient := r.dashboardClientFunc()
-			if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
-				logger.Error(err, "Failed to initialize dashboard client")
+			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 				logger.Error(err, "Failed to stop job for RayJob")
@@ -242,8 +243,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		// Check the current status of ray jobs
-		rayDashboardClient := r.dashboardClientFunc()
-		if err := rayDashboardClient.InitClient(ctx, rayJobInstance.Status.DashboardURL, rayClusterInstance); err != nil {
+		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
@@ -504,6 +505,13 @@ func emitRayJobExecutionDuration(rayJobMetricsObserver metrics.RayJobMetricsObse
 			time.Since(rayJobStatus.StartTime.Time).Seconds(),
 		)
 	}
+}
+
+func cleanUpRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string) {
+	if rayJobMetricsManager == nil {
+		return
+	}
+	rayJobMetricsManager.DeleteRayJobMetrics(rayJobName, rayJobNamespace)
 }
 
 // checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
