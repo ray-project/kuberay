@@ -1,7 +1,6 @@
 package e2erayjob
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -106,41 +105,25 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
+		g.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 
 		// Refresh the RayJob status
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 
 		// Verify sidecar container injection
-		g.Eventually(func() error {
-			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
-			if err != nil {
-				return err
-			}
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
 
-			headPod, err := GetHeadPod(test, rayCluster)
-			if err != nil {
-				return err
-			}
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
 
-			// Use existing pod verification logic
-			if headPod == nil {
-				return fmt.Errorf("head pod not found")
-			}
-
-			containerNames := make(map[string]bool)
-			for _, container := range headPod.Spec.Containers {
-				containerNames[container.Name] = true
-			}
-
-			if !containerNames[utils.SubmitterContainerName] {
-				return fmt.Errorf("submitter container not found")
-			}
-
-			return nil
-		}, TestTimeoutShort).Should(Succeed())
-
-		g.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
+		containerNames := make(map[string]bool)
+		for _, container := range headPod.Spec.Containers {
+			containerNames[container.Name] = true
+		}
+		g.Expect(containerNames[utils.SubmitterContainerName]).To(BeTrue(), "submitter container should be present")
 	})
 
 	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(_ *testing.T) {
