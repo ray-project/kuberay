@@ -96,9 +96,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 
 	// Test case 1: Delete specific job metrics
 	// Manually add some metrics
-	manager.ObserveRayJobExecutionDuration("job1", "ns1", rayv1.JobDeploymentStatusComplete, 0, 10.5)
-	manager.ObserveRayJobExecutionDuration("job2", "ns2", rayv1.JobDeploymentStatusFailed, 1, 20.3)
-	manager.ObserveRayJobExecutionDuration("job3", "ns1", rayv1.JobDeploymentStatusRunning, 0, 5.7)
+	manager.ObserveRayJobExecutionDuration("job1", "ns1", "uid1", rayv1.JobDeploymentStatusComplete, 0, 10.5)
+	manager.ObserveRayJobExecutionDuration("job2", "ns2", "uid2", rayv1.JobDeploymentStatusFailed, 1, 20.3)
+	manager.ObserveRayJobExecutionDuration("job3", "ns1", "uid3", rayv1.JobDeploymentStatusRunning, 0, 5.7)
 
 	// Test deleting metrics for job1 in ns1
 	manager.DeleteRayJobMetrics("job1", "ns1")
