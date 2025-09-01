@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -33,7 +34,8 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			defer r.Body.Close()
 
 			// Convert request body to Golang Map object
-			requestMap, err := convertRequestBodyToMap(bodyBytes)
+			contentType := r.Header.Get("Content-Type")
+			requestMap, err := convertRequestBodyToMap(bodyBytes, contentType)
 			if err != nil {
 				http.Error(w, "Failed to convert request body to Golang map object", http.StatusBadRequest)
 				return
@@ -127,11 +129,21 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 	}
 }
 
-// Convert the request body to map
-func convertRequestBodyToMap(requestBody []byte) (map[string]any, error) {
+// Convert the request body to map, handling both JSON and YAML formats
+func convertRequestBodyToMap(requestBody []byte, contentType string) (map[string]any, error) {
 	var requestMap map[string]interface{}
-	if err := yaml.Unmarshal(requestBody, &requestMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Kubernetes object: %w", err)
+
+	// Check content type to determine format
+	if strings.Contains(contentType, "application/json") {
+		if err := json.Unmarshal(requestBody, &requestMap); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
+	} else if strings.Contains(contentType, "application/yaml") {
+		if err := yaml.Unmarshal(requestBody, &requestMap); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("Cannot unmarshal content type that's not JSON or YAML: %s", contentType)
 	}
 
 	return requestMap, nil
