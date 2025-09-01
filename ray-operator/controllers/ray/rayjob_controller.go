@@ -461,23 +461,22 @@ func (r *RayJobReconciler) validateRayJobAndUpdateStatusIfNeeded(ctx context.Con
 	validationRules := []struct {
 		validate func() error
 		errType  utils.K8sEventType
-		message  string
 	}{
-		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata, "The RayJob metadata is invalid"},
-		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec, "The RayJob spec is invalid"},
-		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus, "The RayJob status is invalid"},
+		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata},
+		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec},
+		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus},
 	}
 
 	for _, validation := range validationRules {
 		if err := validation.validate(); err != nil {
-			logger.Error(err, validation.message)
+			logger.Error(err, err.Error())
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
-				"%s %s/%s: %v", validation.message, rayJobInstance.Namespace, rayJobInstance.Name, err)
+				"%s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
 
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusValidationFailed
 			rayJobInstance.Status.Reason = rayv1.ValidationFailed
-			rayJobInstance.Status.Message = fmt.Sprintf("%s: %v", validation.message, err)
+			rayJobInstance.Status.Message = err.Error()
 
 			return err
 		}
