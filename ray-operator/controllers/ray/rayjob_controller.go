@@ -872,7 +872,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			if err != nil {
 				return nil, err
 			}
-			if r.options.BatchSchedulerManager != nil {
+			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 					submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
 					if err != nil {
