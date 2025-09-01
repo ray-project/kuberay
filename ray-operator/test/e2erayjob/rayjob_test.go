@@ -1,6 +1,7 @@
 package e2erayjob
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ func TestRayJob(t *testing.T) {
 
 	test.T().Run("Successful RayJob", func(_ *testing.T) {
 		// RayJob
+		os.Setenv(utils.ENABLE_DETERMINISTIC_HEAD_POD_NAME, "true")
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).

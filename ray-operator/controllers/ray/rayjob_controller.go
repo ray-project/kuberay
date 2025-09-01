@@ -183,7 +183,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		if len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if utils.IsDeterministicHeadPodNameEnabled() && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			initRayHeadSvc(rayJobInstance)
 		}
 
