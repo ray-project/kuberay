@@ -183,7 +183,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		if len(rayJobInstance.Spec.ClusterSelector) == 0 {
+		if utils.IsDeterministicHeadPodNameEnabled() && len(rayJobInstance.Spec.ClusterSelector) == 0 {
 			if err = initRayHeadSvc(rayJobInstance); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayJobSvc),
 					"Failed to create new Kubernetes service for head pod: %v", err)
