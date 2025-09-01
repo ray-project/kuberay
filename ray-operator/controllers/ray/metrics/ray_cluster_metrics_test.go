@@ -101,9 +101,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 
 	// Test case 1: Delete specific cluster metrics
 	// Manually add some metrics
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster1", "namespace": "ns1"}).Set(10.5)
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster2", "namespace": "ns2"}).Set(20.3)
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster3", "namespace": "ns1"}).Set(5.7)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster1", "namespace": "ns1", "uid": "uid1"}).Set(10.5)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster2", "namespace": "ns2", "uid": "uid2"}).Set(20.3)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster3", "namespace": "ns1", "uid": "uid3"}).Set(5.7)
 
 	// Test deleting metrics for cluster1 in ns1
 	manager.DeleteRayClusterMetrics("cluster1", "ns1")
