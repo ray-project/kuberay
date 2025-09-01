@@ -19,7 +19,6 @@ spec:
     # Ray head pod template
     headGroupSpec:
       rayStartParams: {}
-      #pod template
       template:
         spec:
           containers:
