@@ -107,6 +107,10 @@ env_vars:
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 
+		// Refresh the RayJob status
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
 		// Verify sidecar container injection
 		g.Eventually(func() error {
 			rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
