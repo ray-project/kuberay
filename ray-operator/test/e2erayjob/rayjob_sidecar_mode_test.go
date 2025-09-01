@@ -100,6 +100,8 @@ env_vars:
 			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
 
 		// Assert that the RayJob deployment status and RayJob reason have been updated accordingly.
+		// Assert that the RayJob failed reason is "AppFailed".
+		// In the sidecar submission mode, the submitter Kubernetes Job should not be created.
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
@@ -134,8 +136,6 @@ env_vars:
 			return nil
 		}, TestTimeoutShort).Should(Succeed())
 
-		// Assert that the RayJob failed reason is "AppFailed".
-		// In the sidecar submission mode, the submitter Kubernetes Job should not be created.
 		g.Eventually(Jobs(test, namespace.Name)).Should(BeEmpty())
 	})
 
