@@ -1,4 +1,4 @@
-let jobs = [
+const jobs = [
   {
     name: "	Embedding all of Roblox's data",
     namespace: "ray-system",
@@ -133,7 +133,8 @@ let jobs = [
     createdAt: "2023-09-28T12:36:02Z",
     jobStatus: "RUNNING",
     jobDeploymentStatus: "Running",
-    message: "Resource Quota exceeded: requested 350,000 H100 GPUs, the cluster has 1 available. ",
+    message:
+      "Resource Quota exceeded: requested 350,000 H100 GPUs, the cluster has 1 available. ",
   },
 ];
 
@@ -141,4 +142,4 @@ for (let i = 0; i < 100; i++) {
   jobs.push({ ...jobs[1], name: "rayjob-test-generated-" + i });
 }
 
-export {jobs};
+export { jobs };

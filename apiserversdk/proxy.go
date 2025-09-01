@@ -2,20 +2,20 @@ package apiserversdk
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	apiserverutil "github.com/ray-project/kuberay/apiserversdk/util"
+	apiserversdkutil "github.com/ray-project/kuberay/apiserversdk/util"
 	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -95,29 +95,32 @@ func requireKubeRayService(handler http.Handler, k8sClient *kubernetes.Clientset
 // retryRoundTripper is a custom implementation of http.RoundTripper that retries HTTP requests.
 // It verifies retryable HTTP status codes and retries using exponential backoff.
 type retryRoundTripper struct {
-	base http.RoundTripper
-
-	// Num of retries after the initial attempt
-	maxRetries int
-
-	// Retry backoff settings
-	initBackoff time.Duration
-	backoffBase float64
-	maxBackoff  time.Duration
+	base     http.RoundTripper
+	retryCfg apiserversdkutil.RetryConfig
 }
 
 func newRetryRoundTripper(base http.RoundTripper) http.RoundTripper {
+	retryCfg := apiserversdkutil.RetryConfig{
+		MaxRetry:       apiserversdkutil.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  apiserversdkutil.HTTPClientDefaultBackoffFactor,
+		InitBackoff:    apiserversdkutil.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     apiserversdkutil.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: apiserversdkutil.HTTPClientDefaultOverallTimeout,
+	}
+
 	return &retryRoundTripper{
-		base:        base,
-		maxRetries:  apiserverutil.HTTPClientDefaultMaxRetry,
-		initBackoff: apiserverutil.HTTPClientDefaultInitBackoff,
-		backoffBase: apiserverutil.HTTPClientDefaultBackoffBase,
-		maxBackoff:  apiserverutil.HTTPClientDefaultMaxBackoff,
+		base:     base,
+		retryCfg: retryCfg,
 	}
 }
 
 func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, rrt.retryCfg.OverallTimeout)
+	defer cancel()
+
+	req = req.WithContext(ctx)
 
 	var bodyBytes []byte
 	var resp *http.Response
@@ -135,8 +138,8 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 	}
 
-	for attempt := 0; attempt <= rrt.maxRetries; attempt++ {
-		/* Try up to (rrt.maxRetries + 1) times: initial attempt + retries */
+	for attempt := 0; attempt <= rrt.retryCfg.MaxRetry; attempt++ {
+		/* Try up to (rrt.retryCfg.MaxRetry + 1) times: initial attempt + retries */
 
 		if bodyBytes != nil {
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -147,15 +150,15 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			return resp, fmt.Errorf("request to %s %s failed with error: %w", req.Method, req.URL.String(), err)
 		}
 
-		if apiserverutil.IsSuccessfulStatusCode(resp.StatusCode) {
+		if apiserversdkutil.IsSuccessfulStatusCode(resp.StatusCode) {
 			return resp, nil
 		}
 
-		if !apiserverutil.IsRetryableHTTPStatusCodes(resp.StatusCode) {
+		if !apiserversdkutil.IsRetryableHTTPStatusCodes(resp.StatusCode) {
 			return resp, nil
 		}
 
-		if attempt == rrt.maxRetries {
+		if attempt == rrt.retryCfg.MaxRetry {
 			return resp, nil
 		}
 
@@ -169,20 +172,14 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			}
 		}
 
-		sleepDuration := apiserverutil.GetRetryBackoff(attempt, rrt.initBackoff, rrt.backoffBase, rrt.maxBackoff)
+		sleepDuration := apiserversdkutil.GetRetryBackoff(attempt, rrt.retryCfg.InitBackoff, rrt.retryCfg.BackoffFactor, rrt.retryCfg.MaxBackoff)
 
-		// TODO: merge common utils for apiserver v1 and v2
-		if deadline, ok := ctx.Deadline(); ok {
-			remaining := time.Until(deadline)
-			if sleepDuration > remaining {
-				return resp, fmt.Errorf("retry timeout exceeded context deadline")
-			}
+		if ok := apiserversdkutil.CheckContextDeadline(ctx, sleepDuration); !ok {
+			return resp, fmt.Errorf("retry timeout exceeded context deadline")
 		}
 
-		select {
-		case <-time.After(sleepDuration):
-		case <-ctx.Done():
-			return resp, fmt.Errorf("retry canceled during backoff: %w", ctx.Err())
+		if err = apiserversdkutil.Sleep(ctx, sleepDuration); err != nil {
+			return resp, fmt.Errorf("retry canceled during backoff: %w", err)
 		}
 	}
 	return resp, err

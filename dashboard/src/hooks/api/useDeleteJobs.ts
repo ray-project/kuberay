@@ -31,12 +31,12 @@ export const useDeleteJobs = () => {
       await mutate(
         `/namespaces/${namespace}/jobs`,
         Promise.all(jobs.map((jobName) => _deleteJob(namespace, jobName))),
-        { populateCache: false }
+        { populateCache: false },
       );
       snackBar.showSnackBar(
         `${jobs.length} job${jobs.length > 1 ? "s" : ""} deleted`,
         `Deleted ${jobs.join(", ")}`,
-        "success"
+        "success",
       );
     } catch (err) {
       snackBar.showSnackBar("Failed to delete jobs", "Error: " + err, "danger");

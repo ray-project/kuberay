@@ -1,4 +1,4 @@
-export const ALL_NAMESPACES = "all"
+export const ALL_NAMESPACES = "all";
 
 interface RuntimeConfig {
   url: string;
@@ -16,7 +16,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   }
 
   try {
-    const response = await fetch('/api/config');
+    const response = await fetch("/api/config");
     if (response.ok) {
       const data = await response.json();
       runtimeConfig = {
@@ -25,7 +25,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
       return runtimeConfig;
     }
   } catch (error) {
-    console.warn('Failed to fetch runtime config, using default:', error);
+    console.warn("Failed to fetch runtime config, using default:", error);
   }
 
   // Fallback to default config
@@ -41,7 +41,7 @@ export const config = {
 
   get url(): string {
     return runtimeConfig?.url || defaultConfig.url;
-  }
+  },
 };
 
 export const roblox = false;
