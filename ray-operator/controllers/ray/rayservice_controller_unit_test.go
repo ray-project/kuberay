@@ -671,7 +671,7 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
 				Scheme:   newScheme,
-				httpProxyClientFunc: func() utils.RayHttpProxyClientInterface {
+				httpProxyClientFunc: func(_, _, _ string, _ int) utils.RayHttpProxyClientInterface {
 					return fakeRayHttpProxyClient
 				},
 			}
