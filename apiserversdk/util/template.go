@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,10 +40,14 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			}
 			spec, ok := requestMap["spec"].(map[string]interface{})
 			if !ok {
-				klog.Errorf("spec is not a map")
+				klog.Infof("ComputeTemplate middleware: spec is not a map, skipping compute template processing")
+				// Continue with original request body without compute template processing
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				next.ServeHTTP(w, r)
 				return
 			}
 
+			// Process compute templates and apply them to the request
 			var headGroupMap map[string]interface{}
 			var workerGroupMaps []interface{}
 			if rayClusterSpec, ok := spec["rayClusterSpec"].(map[string]interface{}); ok {
@@ -77,7 +82,7 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			if headGroupMap != nil {
 				computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, headGroupMap, namespace)
 				if err != nil {
-					klog.Errorf("Failed to get compute template for head group: %v", err)
+					klog.Errorf("ComputeTemplate middleware: Failed to get compute template for head group: %v", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -87,32 +92,36 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 			}
 
 			// Apply compute templates to worker groups
-			for _, workerGroupSpec := range workerGroupMaps {
+			for i, workerGroupSpec := range workerGroupMaps {
 				if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
 					computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
 					if err != nil {
-						klog.Errorf("Failed to get compute template for worker group: %v", err)
+						klog.Errorf("ComputeTemplate middleware: Failed to get compute template for worker group %d: %v", i, err)
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
 					if computeTemplate != nil {
+						klog.Infof("ComputeTemplate middleware: Applying compute template %s to worker group %d", computeTemplate.Name, i)
 						applyComputeTemplateToRequest(computeTemplate, &workerGroupMap, "worker")
 					}
 				}
 			}
 
-			// Convert the modified requestMap back to bytes
-			modifiedBodyBytes, err := yaml.Marshal(requestMap)
+			// Convert the modified requestMap to JSON since K8s API expects JSON format
+			jsonBytes, err := convertMapToJSON(requestMap)
 			if err != nil {
-				klog.Errorf("Failed to marshal modified request map: %v", err)
+				klog.Errorf("ComputeTemplate middleware: Failed to convert to JSON: %v", err)
 				http.Error(w, "Failed to process request", http.StatusInternalServerError)
 				return
 			}
 
-			// Update Content-Length header to match the new body size
-			r.ContentLength = int64(len(modifiedBodyBytes))
-			r.Header.Set("Content-Length", fmt.Sprintf("%d", len(modifiedBodyBytes)))
-			r.Body = io.NopCloser(bytes.NewReader(modifiedBodyBytes))
+			klog.Infof("ComputeTemplate middleware: Successfully processed request, sending to next handler")
+			// Update Content-Type to application/json and Content-Length header to match the new body size
+			r.Header.Set("Content-Type", "application/json")
+			r.ContentLength = int64(len(jsonBytes))
+			r.Header.Set("Content-Length", fmt.Sprintf("%d", len(jsonBytes)))
+			r.Body = io.NopCloser(bytes.NewReader(jsonBytes))
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -128,11 +137,21 @@ func convertRequestBodyToMap(requestBody []byte) (map[string]any, error) {
 	return requestMap, nil
 }
 
+// Convert YAML request map to JSON bytes for K8s API
+func convertMapToJSON(requestMap map[string]interface{}) ([]byte, error) {
+	jsonBytes, err := json.Marshal(requestMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request map to JSON: %w", err)
+	}
+	return jsonBytes, nil
+}
+
 // Get the compute template by extracting the name from request and query the compute template
 func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceManager, clusterSpecMap map[string]interface{}, nameSpace string) (*api.ComputeTemplate, error) {
 	name, ok := clusterSpecMap["computeTemplate"].(string)
 	if !ok {
 		// No compute template name found, directly return
+		klog.Infof("ComputeTemplate middleware: No computeTemplate field found in spec")
 		return nil, nil
 	}
 
