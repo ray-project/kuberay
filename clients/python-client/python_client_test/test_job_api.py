@@ -481,7 +481,7 @@ class TestUtils(unittest.TestCase):
             # Clean up - delete the job (cluster will be automatically cleaned up by KubeRay)
             self.api.delete_job(job_name, namespace)
 
-    def test_stop_job(self):
+    def test_suspend_job(self):
         """Test stopping a running job."""
         job_name = "stop-test-job"
         namespace = "default"
@@ -545,8 +545,8 @@ class TestUtils(unittest.TestCase):
             time.sleep(20)
 
             # Test stopping the job
-            stop_result = self.api.stop_job(job_name, namespace)
-            self.assertTrue(stop_result, "Job should be stopped successfully")
+            stop_result = self.api.suspend_job(job_name, namespace)
+            self.assertTrue(stop_result, "Job should be suspended successfully")
 
             # Wait a bit for the status to update
             time.sleep(10)
@@ -633,8 +633,8 @@ class TestUtils(unittest.TestCase):
             time.sleep(15)
 
             # Stop the job
-            stop_result = self.api.stop_job(job_name, namespace)
-            self.assertTrue(stop_result, "Job should be stopped successfully")
+            stop_result = self.api.suspend_job(job_name, namespace)
+            self.assertTrue(stop_result, "Job should be suspended successfully")
 
             # Wait for suspended status
             time.sleep(15)
@@ -732,8 +732,8 @@ class TestUtils(unittest.TestCase):
             time.sleep(15)  # Give time for cluster creation and job start
 
             # Stop the job
-            stop_result = self.api.stop_job(job_name, namespace)
-            self.assertTrue(stop_result, "Job should be stopped successfully")
+            stop_result = self.api.suspend_job(job_name, namespace)
+            self.assertTrue(stop_result, "Job should be suspended successfully")
 
             # Wait for suspended status
             time.sleep(15)
@@ -764,12 +764,84 @@ class TestUtils(unittest.TestCase):
             # Clean up
             self.api.delete_job(job_name, namespace)
 
-    def test_stop_job_nonexistent(self):
+    def test_suspend_job_nonexistent(self):
         """Test stopping a non-existent job."""
-        result = self.api.stop_job("nonexistent-job", "default")
+        result = self.api.suspend_job("nonexistent-job", "default")
         self.assertFalse(result, "Should return False for non-existent job")
 
     def test_resubmit_job_nonexistent(self):
         """Test resubmitting a non-existent job."""
         result = self.api.resubmit_job("nonexistent-job", "default")
         self.assertFalse(result, "Should return False for non-existent job")
+
+    def test_wait_until_job_running(self):
+        """Test waiting for a job to reach running state."""
+        job_name = "wait-running-test-job"
+        namespace = "default"
+
+        try:
+            job_body = {
+                "apiVersion": constants.GROUP + "/" + constants.JOB_VERSION,
+                "kind": constants.JOB_KIND,
+                "metadata": {
+                    "name": job_name,
+                    "namespace": namespace,
+                    "labels": {
+                        "app.kubernetes.io/name": job_name,
+                        "app.kubernetes.io/managed-by": "kuberay",
+                    },
+                },
+                "spec": {
+                    "rayClusterSpec": {
+                        "headGroupSpec": {
+                            "serviceType": "ClusterIP",
+                            "replicas": 1,
+                            "rayStartParams": {
+                                "dashboard-host": "0.0.0.0",
+                            },
+                            "template": {
+                                "spec": {
+                                    "containers": [
+                                        {
+                                            "name": "ray-head",
+                                            "image": "rayproject/ray:2.48.0",
+                                            "resources": {
+                                                "limits": {
+                                                    "cpu": "1",
+                                                    "memory": "2Gi",
+                                                },
+                                                "requests": {
+                                                    "cpu": "500m",
+                                                    "memory": "1Gi",
+                                                },
+                                            },
+                                        }
+                                    ]
+                                }
+                            },
+                        },
+                    },
+                    "entrypoint": "python -c \"import time; print('Job running'); time.sleep(30)\"",
+                    "submissionMode": "K8sJobMode",
+                    "shutdownAfterJobFinishes": True,
+                },
+            }
+
+            # Submit the job
+            submitted_job = self.api.submit_job(
+                job=job_body,
+                k8s_namespace=namespace,
+            )
+            self.assertIsNotNone(submitted_job, "Job should be submitted successfully")
+
+            # Test waiting for running state
+            result = self.api.wait_until_job_running(
+                job_name, namespace, timeout=60, delay_between_attempts=3
+            )
+            self.assertTrue(result, "Job should reach running state")
+
+            # Wait for job to complete
+            self.api.wait_until_job_finished(job_name, namespace, 60, 5)
+
+        finally:
+            self.api.delete_job(job_name, namespace)

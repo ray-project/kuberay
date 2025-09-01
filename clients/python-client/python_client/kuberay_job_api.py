@@ -26,10 +26,11 @@ class RayjobApi:
     RayjobApi provides APIs to list, get, create, build, update, delete rayjobs.
     Methods:
     - submit_job(k8s_namespace: str, job: Any) -> Any: Submit and execute a job asynchronously.
-    - stop_job(name: str, k8s_namespace: str) -> bool: Stop a job by suspending it.
+    - suspend_job(name: str, k8s_namespace: str) -> bool: Stop a job by suspending it.
     - resubmit_job(name: str, k8s_namespace: str) -> bool: Resubmit a job that has been suspended.
     - get_job_status(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> Any: Get the most recent status of a job.
     - wait_until_job_finished(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> bool: Wait until a job is completed.
+    - wait_until_job_running(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> bool: Wait until a job reaches running state.
     - delete_job(name: str, k8s_namespace: str) -> bool: Delete a job and all of its associated data.
     """
 
@@ -123,8 +124,8 @@ class RayjobApi:
     ) -> bool:
         """Wait until a Ray job reaches a terminal status.
 
-        This method waits for the job to have a jobStatus field with a terminal value
-        (STOPPED, SUCCEEDED, or FAILED).
+        This method waits for the job to reach a terminal state by checking both jobStatus
+        (STOPPED, SUCCEEDED, FAILED) and jobDeploymentStatus (Complete, Failed).
 
         Parameters:
         - name (str): The name of the Ray job custom resource.
@@ -140,31 +141,55 @@ class RayjobApi:
                 name, k8s_namespace, timeout, delay_between_attempts
             )
 
-            if status and "jobStatus" in status:
-                current_status = status["jobStatus"]
-                if current_status in ["", "PENDING"]:
-                    log.info("rayjob {} has not started yet".format(name))
-                elif current_status == "RUNNING":
-                    log.info("rayjob {} is running".format(name))
-                elif current_status in TERMINAL_JOB_STATUSES:
+            if status:
+                if "jobDeploymentStatus" in status:
+                    deployment_status = status["jobDeploymentStatus"]
+                    if deployment_status in ["Complete", "Failed"]:
+                        log.info(
+                            "rayjob {} has finished with deployment status: {}".format(
+                                name, deployment_status
+                            )
+                        )
+                        return True
+                    elif deployment_status == "Suspended":
+                        log.info("rayjob {} is suspended".format(name))
+                        # Suspended is not terminal, continue waiting
+                    elif deployment_status in ["Initializing", "Running", "Suspending"]:
+                        log.info(
+                            "rayjob {} is {}".format(name, deployment_status.lower())
+                        )
+                    elif deployment_status:
+                        log.info(
+                            "rayjob {} deployment status: {}".format(
+                                name, deployment_status
+                            )
+                        )
+
+                if "jobStatus" in status:
+                    current_status = status["jobStatus"]
+                    if current_status in ["", "PENDING"]:
+                        log.info("rayjob {} has not started yet".format(name))
+                    elif current_status == "RUNNING":
+                        log.info("rayjob {} is running".format(name))
+                    elif current_status in TERMINAL_JOB_STATUSES:
+                        log.info(
+                            "rayjob {} has finished with status {}!".format(
+                                name, current_status
+                            )
+                        )
+                        return True
+                    else:
+                        log.info(
+                            "rayjob {} has an unknown status: {}".format(
+                                name, current_status
+                            )
+                        )
+                elif "jobDeploymentStatus" not in status:
                     log.info(
-                        "rayjob {} has finished with status {}!".format(
-                            name, current_status
+                        "rayjob {} status fields not available yet, waiting...".format(
+                            name
                         )
                     )
-                    return True
-                else:
-                    log.info(
-                        "rayjob {} has an unknown status: {}".format(
-                            name, current_status
-                        )
-                    )
-            else:
-                log.info(
-                    "rayjob {} jobStatus field not available yet, waiting...".format(
-                        name
-                    )
-                )
 
             time.sleep(delay_between_attempts)
             timeout -= delay_between_attempts
@@ -174,7 +199,58 @@ class RayjobApi:
         )
         return False
 
-    def stop_job(self, name: str, k8s_namespace: str = "default") -> bool:
+    def wait_until_job_running(
+        self,
+        name: str,
+        k8s_namespace: str = "default",
+        timeout: int = 60,
+        delay_between_attempts: int = 5,
+    ) -> bool:
+        """Wait until a Ray job reaches Running state.
+
+        This method waits for the job's jobDeploymentStatus to reach "Running".
+        Useful for confirming a job has started after submission or resubmission.
+
+        Parameters:
+        - name (str): The name of the Ray job custom resource.
+        - k8s_namespace (str, optional): The namespace in which to retrieve the Ray job. Defaults to "default".
+        - timeout (int, optional): The duration in seconds after which we stop trying. Defaults to 60 seconds.
+        - delay_between_attempts (int, optional): The duration in seconds to wait between attempts. Defaults to 5 seconds.
+
+        Returns:
+            bool: True if the rayjob reaches Running status, False otherwise.
+        """
+        while timeout > 0:
+            status = self.get_job_status(
+                name, k8s_namespace, timeout, delay_between_attempts
+            )
+
+            if status and "jobDeploymentStatus" in status:
+                deployment_status = status["jobDeploymentStatus"]
+                if deployment_status == "Running":
+                    log.info("rayjob {} is running".format(name))
+                    return True
+                elif deployment_status in ["Complete", "Failed", "Suspended"]:
+                    log.info(
+                        "rayjob {} reached terminal/suspended status {} before running".format(
+                            name, deployment_status
+                        )
+                    )
+                    return False
+                elif deployment_status:
+                    log.info("rayjob {} is {}".format(name, deployment_status.lower()))
+                else:
+                    log.info("rayjob {} deployment status not set yet".format(name))
+            else:
+                log.info("rayjob {} status not available yet, waiting...".format(name))
+
+            time.sleep(delay_between_attempts)
+            timeout -= delay_between_attempts
+
+        log.info("rayjob {} has not reached running status before timeout".format(name))
+        return False
+
+    def suspend_job(self, name: str, k8s_namespace: str = "default") -> bool:
         """Stop a Ray job by setting the suspend field to True.
 
         This will delete the associated RayCluster and transition the job to 'Suspended' status.
@@ -185,15 +261,10 @@ class RayjobApi:
         - k8s_namespace (str, optional): The namespace in which to stop the Ray job. Defaults to "default".
 
         Returns:
-            bool: True if the job was successfully stopped, False otherwise.
+            bool: True if the job was successfully suspended, False otherwise.
         """
         try:
-            # Patch the RayJob to set suspend=true
-            patch_body = {
-                "spec": {
-                    "suspend": True
-                }
-            }
+            patch_body = {"spec": {"suspend": True}}
             self.api.patch_namespaced_custom_object(
                 group=constants.GROUP,
                 version=constants.JOB_VERSION,
@@ -202,7 +273,7 @@ class RayjobApi:
                 namespace=k8s_namespace,
                 body=patch_body,
             )
-            log.info(f"Successfully stopped rayjob {name} in namespace {k8s_namespace}")
+            log.info(f"Successfully suspended rayjob {name} in namespace {k8s_namespace}")
             return True
         except ApiException as e:
             if e.status == 404:
@@ -226,11 +297,7 @@ class RayjobApi:
         """
         try:
             # Patch the RayJob to set suspend=false
-            patch_body = {
-                "spec": {
-                    "suspend": False
-                }
-            }
+            patch_body = {"spec": {"suspend": False}}
             self.api.patch_namespaced_custom_object(
                 group=constants.GROUP,
                 version=constants.JOB_VERSION,
@@ -239,7 +306,9 @@ class RayjobApi:
                 namespace=k8s_namespace,
                 body=patch_body,
             )
-            log.info(f"Successfully resubmitted rayjob {name} in namespace {k8s_namespace}")
+            log.info(
+                f"Successfully resubmitted rayjob {name} in namespace {k8s_namespace}"
+            )
             return True
         except ApiException as e:
             if e.status == 404:
