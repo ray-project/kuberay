@@ -138,9 +138,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	originalRayJobInstance := rayJobInstance.DeepCopy()
 
 	// Perform all validations and directly fail the RayJob if any of the validation fails
-	validateErr := r.validateRayJobAndUpdateStatusIfNeeded(ctx, rayJobInstance)
+	errType, err := validateRayJob(ctx, rayJobInstance)
 	// Immediately update the status after validation
-	if validateErr != nil {
+	if err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(errType),
+			"%s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusValidationFailed
+		rayJobInstance.Status.Reason = rayv1.ValidationFailed
+		rayJobInstance.Status.Message = err.Error()
+
 		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 			logger.Info("Failed to update RayJob status", "error", err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -456,7 +463,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-func (r *RayJobReconciler) validateRayJobAndUpdateStatusIfNeeded(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
+func validateRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (utils.K8sEventType, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	validationRules := []struct {
 		validate func() error
@@ -470,18 +477,10 @@ func (r *RayJobReconciler) validateRayJobAndUpdateStatusIfNeeded(ctx context.Con
 	for _, validation := range validationRules {
 		if err := validation.validate(); err != nil {
 			logger.Error(err, err.Error())
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(validation.errType),
-				"%s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-
-			rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
-			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusValidationFailed
-			rayJobInstance.Status.Reason = rayv1.ValidationFailed
-			rayJobInstance.Status.Message = err.Error()
-
-			return err
+			return validation.errType, err
 		}
 	}
-	return nil
+	return "", nil
 }
 
 func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
