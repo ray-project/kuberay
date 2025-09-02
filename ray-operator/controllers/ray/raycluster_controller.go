@@ -299,6 +299,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		r.reconcileHeadService,
 		r.reconcileHeadlessService,
 		r.reconcileServeService,
+		r.reconcileTTL,
 		r.reconcilePods,
 	}
 
@@ -348,8 +349,22 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		)
 		requeueAfterSeconds = utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS
 	}
-	logger.Info("Unconditional requeue after", "seconds", requeueAfterSeconds)
-	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
+	// Check if TTL expiration requires sooner requeue
+	requeueDuration := time.Duration(requeueAfterSeconds) * time.Second
+	if newInstance.Spec.TTLSeconds != nil && *newInstance.Spec.TTLSeconds > 0 && newInstance.Status.TTLExpirationTime != nil {
+		timeUntilExpiration := time.Until(newInstance.Status.TTLExpirationTime.Time)
+		// Add a small buffer (2 seconds) to ensure we process the deletion promptly
+		ttlRequeue := timeUntilExpiration + (2 * time.Second)
+
+		// Only use TTL requeue if it's sooner than default requeue and positive
+		if ttlRequeue > 0 && ttlRequeue < requeueDuration {
+			requeueDuration = ttlRequeue
+			logger.Info("Using TTL-based requeue", "ttlRequeueSeconds", ttlRequeue.Seconds(), "defaultRequeueSeconds", requeueAfterSeconds)
+		}
+	}
+
+	logger.Info("Unconditional requeue after", "seconds", requeueDuration.Seconds())
+	return ctrl.Result{RequeueAfter: requeueDuration}, nil
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1592,4 +1607,61 @@ func setDefaults(instance *rayv1.RayCluster) {
 			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
 		}
 	}
+}
+
+// reconcileTTL handles the TTL (Time-To-Live) functionality for RayCluster
+func (r *RayClusterReconciler) reconcileTTL(ctx context.Context, instance *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// If TTLSeconds is not set or is 0, no TTL functionality is needed
+	if instance.Spec.TTLSeconds == nil || *instance.Spec.TTLSeconds == 0 {
+		// If TTL was previously set but now removed, clear the expiration time
+		if instance.Status.TTLExpirationTime != nil {
+			instance.Status.TTLExpirationTime = nil
+		}
+		return nil
+	}
+
+	ttlSeconds := *instance.Spec.TTLSeconds
+	creationTime := instance.CreationTimestamp.Time
+	expirationTime := creationTime.Add(time.Duration(ttlSeconds) * time.Second)
+
+	// Update the TTL expiration time in status if it's not set or different
+	if instance.Status.TTLExpirationTime == nil || !instance.Status.TTLExpirationTime.Time.Equal(expirationTime) {
+		instance.Status.TTLExpirationTime = &metav1.Time{Time: expirationTime}
+		logger.Info("TTL expiration time set", "expirationTime", expirationTime, "ttlSeconds", ttlSeconds)
+	}
+
+	nowTime := time.Now()
+
+	// Check if the TTL has expired
+	if expirationTime.Before(nowTime) || expirationTime.Equal(nowTime) {
+		logger.Info("RayCluster TTL has expired, deleting cluster",
+			"creationTime", creationTime,
+			"expirationTime", expirationTime,
+			"currentTime", nowTime,
+			"ttlSeconds", ttlSeconds)
+
+		// Delete the RayCluster
+		if err := r.Client.Delete(ctx, instance); err != nil {
+			logger.Error(err, "Failed to delete RayCluster due to TTL expiration")
+			return err
+		}
+
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, "TTLExpired",
+			"RayCluster %s/%s deleted due to TTL expiration after %d seconds",
+			instance.Namespace, instance.Name, ttlSeconds)
+
+		return nil
+	}
+
+	// Calculate time until expiration and log it
+	timeUntilExpiration := time.Until(expirationTime)
+	logger.V(1).Info("RayCluster TTL status",
+		"creationTime", creationTime,
+		"expirationTime", expirationTime,
+		"timeUntilExpiration", timeUntilExpiration,
+		"ttlSeconds", ttlSeconds)
+
+	return nil
 }

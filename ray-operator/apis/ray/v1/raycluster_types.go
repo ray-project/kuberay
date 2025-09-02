@@ -25,6 +25,12 @@ type RayClusterSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
+	// TTLSeconds specifies the time-to-live for the RayCluster in seconds.
+	// After this time has elapsed since the RayCluster was created, the cluster will be automatically deleted.
+	// If not specified or set to 0, the cluster will not have a TTL.
+	// +kubebuilder:default:=0
+	// +optional
+	TTLSeconds *int32 `json:"ttlSeconds,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	// +optional
 	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
@@ -217,6 +223,11 @@ type RayClusterStatus struct {
 	// LastUpdateTime indicates last update timestamp for this cluster status.
 	// +nullable
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// TTLExpirationTime indicates when the RayCluster should be deleted based on its TTL.
+	// This field is set when TTLSeconds is specified in the RayClusterSpec.
+	// +nullable
+	// +optional
+	TTLExpirationTime *metav1.Time `json:"ttlExpirationTime,omitempty"`
 	// StateTransitionTimes indicates the time of the last state transition for each state.
 	// +optional
 	StateTransitionTimes map[ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`

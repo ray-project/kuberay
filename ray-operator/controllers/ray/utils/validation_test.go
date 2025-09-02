@@ -1193,6 +1193,54 @@ func TestValidateRayServiceMetadata(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateRayClusterSpecTTL(t *testing.T) {
+	tests := []struct {
+		name        string
+		ttlSeconds  *int32
+		expectError bool
+	}{
+		{
+			name:        "TTLSeconds is nil (not set)",
+			ttlSeconds:  nil,
+			expectError: false,
+		},
+		{
+			name:        "TTLSeconds is 0 (no TTL)",
+			ttlSeconds:  ptr.To(int32(0)),
+			expectError: false,
+		},
+		{
+			name:        "TTLSeconds is positive",
+			ttlSeconds:  ptr.To(int32(3600)),
+			expectError: false,
+		},
+		{
+			name:        "TTLSeconds is negative",
+			ttlSeconds:  ptr.To(int32(-1)),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{
+				TTLSeconds: tt.ttlSeconds,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+			}
+
+			err := ValidateRayClusterSpec(spec, map[string]string{})
+			if tt.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "ttlSeconds must be a non-negative integer")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 	return &rayv1.RayClusterSpec{
 		HeadGroupSpec: rayv1.HeadGroupSpec{
