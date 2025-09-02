@@ -112,9 +112,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
-	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
+	assert.NotContains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
+	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
 
 	// Test case 2: Delete with empty name
 	manager.DeleteRayClusterMetrics("", "ns1")
@@ -123,9 +123,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 
 	// Test case 3: Delete with empty name and namespace
 	manager.DeleteRayClusterMetrics("", "")
@@ -134,9 +134,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body3, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 
 	// Test case 4: Delete with false name and namespace
 	manager.DeleteRayClusterMetrics("ns2", "cluster2")
@@ -145,9 +145,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body4, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 }
 
 func TestRayClusterConditionProvisioned(t *testing.T) {

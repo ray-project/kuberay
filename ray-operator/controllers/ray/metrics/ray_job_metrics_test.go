@@ -107,9 +107,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 2: Delete with empty name
 	manager.DeleteRayJobMetrics("", "ns1")
@@ -118,9 +118,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 3: Delete with empty name and namespace
 	manager.DeleteRayJobMetrics("", "")
@@ -129,9 +129,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body3, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 4: Delete with false name and namespace
 	manager.DeleteRayJobMetrics("ns2", "job2")
@@ -140,9 +140,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body4, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 }
 
 func TestMetricRayJobDeploymentStatus(t *testing.T) {
