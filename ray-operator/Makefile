@@ -179,7 +179,7 @@ CRD_REF_DOCS = $(LOCALBIN)/crd-ref-docs
 $(CRD_REF_DOCS): $(LOCALBIN)
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
-	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.0.12
+	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.2.0
 
 .PHONY: clean
 clean:

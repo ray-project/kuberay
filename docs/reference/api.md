@@ -53,6 +53,10 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
+| Field | Description |
+| --- | --- |
+| `v1` |  |
+| `v2` |  |
 
 
 #### DeletionPolicy
@@ -82,6 +86,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 
+| Field | Description |
+| --- | --- |
+| `DeleteCluster` |  |
+| `DeleteWorkers` |  |
+| `DeleteSelf` |  |
+| `DeleteNone` |  |
 
 
 #### DeletionStrategy
@@ -155,6 +165,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
+| Field | Description |
+| --- | --- |
+| `K8sJobMode` |  |
+| `HTTPMode` |  |
+| `InteractiveMode` |  |
+| `SidecarMode` |  |
 
 
 #### RayCluster
@@ -333,6 +349,10 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
+| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential
