@@ -53,6 +53,10 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
+| Field | Description |
+| --- | --- |
+| `v1` |  |
+| `v2` |  |
 
 
 #### DeletionPolicy
@@ -82,6 +86,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 
+| Field | Description |
+| --- | --- |
+| `DeleteCluster` |  |
+| `DeleteWorkers` |  |
+| `DeleteSelf` |  |
+| `DeleteNone` |  |
 
 
 #### DeletionStrategy
@@ -155,6 +165,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
+| Field | Description |
+| --- | --- |
+| `K8sJobMode` |  |
+| `HTTPMode` |  |
+| `InteractiveMode` |  |
+| `SidecarMode` |  |
 
 
 #### RayCluster
@@ -246,7 +262,7 @@ _Appears in:_
 | `entrypoint` _string_ | Entrypoint represents the command to start execution. |  |  |
 | `runtimeEnvYAML` _string_ | RuntimeEnvYAML represents the runtime environment configuration<br />provided as a multi-line YAML string. |  |  |
 | `jobId` _string_ | If jobId is not set, a new jobId will be auto-generated. |  |  |
-| `submissionMode` _[JobSubmissionMode](#jobsubmissionmode)_ | SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.<br />In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.<br />In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.<br />In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster. | K8sJobMode |  |
+| `submissionMode` _[JobSubmissionMode](#jobsubmissionmode)_ | SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.<br />In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.<br />In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.<br />In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.<br />In "SidecarMode", the KubeRay operator injects a container into the Ray head Pod that acts as the job submitter to submit the Ray job. | K8sJobMode |  |
 | `entrypointResources` _string_ | EntrypointResources specifies the custom resources and quantities to reserve for the<br />entrypoint command. |  |  |
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |  |  |
 | `entrypointNumGpus` _float_ | EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command. |  |  |
@@ -333,6 +349,10 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
+| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential

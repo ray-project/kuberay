@@ -14,7 +14,10 @@
 		},
 		{
 			"path": "proto"
-		}
+		},
+		{
+			"path": "dashboard"
+		},
 	],
 	"settings": {}
 }

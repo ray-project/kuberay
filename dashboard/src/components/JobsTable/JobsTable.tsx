@@ -66,7 +66,7 @@ export const JobsTable = () => {
 
   const filteredItems = React.useMemo(
     () => filterJobs(jobs, search, statusFilter, typeFilter),
-    [jobs, search, statusFilter, typeFilter]
+    [jobs, search, statusFilter, typeFilter],
   );
 
   const renderRow = (row: JobRow) => {
@@ -76,7 +76,7 @@ export const JobsTable = () => {
           <Tooltip
             variant="outlined"
             title={`Job status: ${getJobStatus(
-              row.jobStatus.jobStatus
+              row.jobStatus.jobStatus,
             )}. Job deployment status: ${row.jobStatus.jobDeploymentStatus}`}
           >
             <Chip
@@ -101,7 +101,11 @@ export const JobsTable = () => {
               // target="_blank"
               // component="a"
               onClick={() => {
-                snackBar.showSnackBar("Ray Dashboard not available", "We are working on exposing the dashboard securely without slowing down jobs. Apologies for the inconvenience.", "warning");
+                snackBar.showSnackBar(
+                  "Ray Dashboard not available",
+                  "We are working on exposing the dashboard securely without slowing down jobs. Apologies for the inconvenience.",
+                  "warning",
+                );
               }}
             >
               <Image
@@ -141,7 +145,17 @@ export const JobsTable = () => {
             target="_blank"
             component="a"
           >
-            <Typography sx={{ fontFamily: "monospace", letterSpacing: -.9, fontSize: "small", color: "#0b6bcb", textDecoration: "underline" }}>Logs</Typography>
+            <Typography
+              sx={{
+                fontFamily: "monospace",
+                letterSpacing: -0.9,
+                fontSize: "small",
+                color: "#0b6bcb",
+                textDecoration: "underline",
+              }}
+            >
+              Logs
+            </Typography>
           </IconButton>
         </td>
         <td className="truncate">
@@ -164,11 +178,13 @@ export const JobsTable = () => {
         refreshInterval={refreshInterval}
         setRefreshInterval={setRefreshInterval}
         name="jobs"
-        {...(roblox ? {
-          typeFilter: typeFilter,
-          setTypeFilter: setTypeFilter,
-          types: ["All", "Batch API"]
-        } : {})}
+        {...(roblox
+          ? {
+              typeFilter: typeFilter,
+              setTypeFilter: setTypeFilter,
+              types: ["All", "Batch API"],
+            }
+          : {})}
       />
       <FrontendTable<JobRow>
         data={filteredItems}

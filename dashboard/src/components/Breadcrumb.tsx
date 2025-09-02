@@ -1,7 +1,7 @@
 "use client";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
-import { Breadcrumbs, Link, Typography } from "@mui/joy";
+import { Breadcrumbs, Typography } from "@mui/joy";
 import { usePathname } from "next/navigation";
 import NextLink from "next/link";
 

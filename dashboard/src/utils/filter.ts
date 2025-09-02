@@ -6,7 +6,7 @@ export const filterJobs = (
   jobs: Jobs,
   search: string,
   statusFilter: Status | null,
-  typeFilter: number
+  typeFilter: number,
 ): JobRow[] =>
   jobs
     .map((job) => {
@@ -29,7 +29,7 @@ export const filterJobs = (
       if (
         typeFilter == 1 &&
         job.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"] !==
-        "rayllmbatchinference"
+          "rayllmbatchinference"
       ) {
         return false;
       }
@@ -58,7 +58,7 @@ export const filterCluster = (
   clusters: Cluster[],
   search: string,
   statusFilter: ClusterStatus | null,
-  typeFilter: number
+  typeFilter: number,
 ): ClusterRow[] =>
   clusters
     .map((cluster) => {
@@ -85,8 +85,8 @@ export const filterCluster = (
       // this relies on roblox flags
       if (
         roblox &&
-        ((typeFilter == 2 && !clusterIsRayJob(cluster))
-          || (typeFilter == 1 && clusterIsRayJob(cluster)))
+        ((typeFilter == 2 && !clusterIsRayJob(cluster)) ||
+          (typeFilter == 1 && clusterIsRayJob(cluster)))
       ) {
         return false;
       }
@@ -102,17 +102,21 @@ const transformCluster = (cluster: Cluster): ClusterRow => {
     links: {
       rayGrafanaDashboardLink: cluster.rayGrafanaDashboardLink,
       rayHeadDashboardLink: cluster.rayHeadDashboardLink,
-      notebookLink: roblox && clusterIsNotebook(cluster) && !clusterIsRayJob(cluster) ? cluster.notebookLink : "",
+      notebookLink:
+        roblox && clusterIsNotebook(cluster) && !clusterIsRayJob(cluster)
+          ? cluster.notebookLink
+          : "",
     },
   };
 };
 
 export const clusterIsRayJob = (cluster: Cluster): boolean => {
-  const jobType = cluster.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"];
+  const jobType =
+    cluster.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"];
   return jobType === "rayjob" || jobType === "rayllmbatchinference";
-}
+};
 
 export const clusterIsNotebook = (cluster: Cluster): boolean => {
   const notebookType = cluster.annotations["mlp.rbx.com/notebook-type"];
   return notebookType === "jupyter" || notebookType === "vscode";
-}
+};

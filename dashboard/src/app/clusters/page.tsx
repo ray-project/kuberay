@@ -10,12 +10,12 @@ import { useEffect } from "react";
 import { useFirstVisit } from "@/components/FirstVisitContext";
 
 export default function ClustersPage() {
-  const { firstVisit, setFirstVisit} = useFirstVisit();
+  const { firstVisit, setFirstVisit } = useFirstVisit();
   useEffect(() => {
     if (firstVisit) {
       setFirstVisit(false);
     }
-  }, [])
+  }, [firstVisit, setFirstVisit]);
   return (
     <>
       <Box

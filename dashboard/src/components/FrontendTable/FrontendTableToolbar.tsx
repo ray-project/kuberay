@@ -58,7 +58,7 @@ export const FrontendTableToolbar: React.FC<FrontendTableToolbarProps> = ({
           size="sm"
           placeholder="Filter by status"
           slotProps={{ button: { sx: { whiteSpace: "nowrap" } } }}
-          value={statusFilter}
+          value={statusFilter ? { value: statusFilter } : null}
           onChange={(e, newValue) => setStatusFilter(newValue)}
         >
           {statuses.map((status, index) => (

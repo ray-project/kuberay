@@ -53,8 +53,8 @@ type RayServiceReconciler struct {
 	// Cache value is map of RayCluster name to Serve application config.
 	ServeConfigs                 *lru.Cache
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
-	dashboardClientFunc          func() utils.RayDashboardClientInterface
-	httpProxyClientFunc          func() utils.RayHttpProxyClientInterface
+	dashboardClientFunc          func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
+	httpProxyClientFunc          func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface
 }
 
 // NewRayServiceReconciler returns a new reconcile.Reconciler
@@ -944,8 +944,8 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		return false, serveApplications, err
 	}
 
-	rayDashboardClient := r.dashboardClientFunc()
-	if err := rayDashboardClient.InitClient(ctx, clientURL, rayClusterInstance); err != nil {
+	rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, clientURL)
+	if err != nil {
 		return false, serveApplications, err
 	}
 
@@ -984,13 +984,10 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayS
 		return fmt.Errorf("found 0 head. cluster name %s, namespace %v", rayClusterInstance.Name, rayClusterInstance.Namespace)
 	}
 
-	client := r.httpProxyClientFunc()
-	client.InitClient()
-
 	rayContainer := headPod.Spec.Containers[utils.RayContainerIndex]
 	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
-	client.SetHostIp(headPod.Status.PodIP, headPod.Namespace, headPod.Name, servingPort)
 
+	client := r.httpProxyClientFunc(headPod.Status.PodIP, headPod.Namespace, headPod.Name, servingPort)
 	if headPod.Labels == nil {
 		headPod.Labels = make(map[string]string)
 	}
