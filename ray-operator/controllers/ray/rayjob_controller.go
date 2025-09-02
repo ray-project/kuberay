@@ -31,9 +31,8 @@ import (
 )
 
 const (
-	RayJobDefaultRequeueDuration    = 3 * time.Second
-	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
-	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	RayJobDefaultRequeueDuration = 3 * time.Second
+	PythonUnbufferedEnvVarName   = "PYTHONUNBUFFERED"
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -172,9 +171,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
 		logger.Info("JobDeploymentStatusNew")
-		if err = initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
+		initRayJobStatusIfNeed(ctx, rayJobInstance)
 	case rayv1.JobDeploymentStatusInitializing:
 		if shouldUpdate := updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
@@ -778,13 +775,13 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurren
 // prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations. In addition, this
 // function also sets `Status.StartTime` to support `ActiveDeadlineSeconds`.
 // This function will set or generate JobId if SubmissionMode is not InteractiveMode.
-func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
+func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
 	// Please don't update `shouldUpdateStatus` below.
 	logger.Info("initRayJobStatusIfNeed", "shouldUpdateStatus", shouldUpdateStatus, "jobId", rayJob.Status.JobId, "rayClusterName", rayJob.Status.RayClusterName, "jobStatus", rayJob.Status.JobStatus)
 	if !shouldUpdateStatus {
-		return nil
+		return
 	}
 
 	if rayJob.Spec.SubmissionMode != rayv1.InteractiveMode && rayJob.Status.JobId == "" {
@@ -796,15 +793,10 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Status.RayClusterName == "" {
-		// if the clusterSelector is not empty, default use this cluster name
-		// we assume the length of clusterSelector is one
 		if len(rayJob.Spec.ClusterSelector) != 0 {
-			var useValue string
-			var ok bool
-			if useValue, ok = rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]; !ok {
-				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
-			}
-			rayJob.Status.RayClusterName = useValue
+			// The ClusterSelector map is non-empty,
+			// and must contain the default key, which will never yield an empty string.
+			rayJob.Status.RayClusterName = rayJob.Spec.ClusterSelector[utils.RayJobDefaultClusterSelectorKey]
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
@@ -815,7 +807,6 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	}
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
-	return nil
 }
 
 func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *rayv1.RayJob, newRayJob *rayv1.RayJob) error {

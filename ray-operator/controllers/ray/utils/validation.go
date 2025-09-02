@@ -171,6 +171,16 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+	if isClusterSelectorMode {
+		clusterName, ok := rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]
+		if !ok {
+			return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
+		}
+		if len(clusterName) == 0 {
+			return fmt.Errorf("cluster name in ClusterSelector is empty")
+		}
+	}
+
 	// InteractiveMode does not support backoffLimit > 1.
 	// When a RayJob fails (e.g., due to a missing script) and retries,
 	// spec.JobId remains set, causing the new job to incorrectly transition
