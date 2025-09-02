@@ -641,7 +641,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 
 type ClientProvider interface {
 	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
-	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
+	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
 func ManagedByExternalController(controllerName *string) *string {
@@ -784,4 +784,23 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			dashboardURL: "http://" + url,
 		}, nil
 	}
+}
+
+func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+		if useKubernetesProxy {
+			return &RayHttpProxyClient{
+				client:       mgr.GetHTTPClient(),
+				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
+			}
+		}
+		return &RayHttpProxyClient{
+			client:       &http.Client{Timeout: 2 * time.Second},
+			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
+		}
+	}
+}
+
+func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
+	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
 }
