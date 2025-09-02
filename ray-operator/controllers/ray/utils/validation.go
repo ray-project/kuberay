@@ -184,7 +184,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
-			return err
+			return fmt.Errorf("The RayJob spec is invalid: %w", err)
 		}
 	}
 

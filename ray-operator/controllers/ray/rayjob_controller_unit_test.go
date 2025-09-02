@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -633,10 +632,9 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 	_ = corev1.AddToScheme(scheme)
 
 	tests := []struct {
-		name                string
-		rayJob              *rayv1.RayJob
-		expectedErrorString string
-		expectedMessage     string
+		name            string
+		rayJob          *rayv1.RayJob
+		expectedMessage string
 	}{
 		{
 			name: "metadata validation error - name too long",
@@ -657,8 +655,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					},
 				},
 			},
-			expectedErrorString: "RayJob name should be no more than 47 characters",
-			expectedMessage:     "The RayJob metadata is invalid",
+			expectedMessage: "The RayJob metadata is invalid: RayJob name should be no more than 47 characters",
 		},
 		{
 			name: "spec validation failure - empty containers",
@@ -679,8 +676,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					},
 				},
 			},
-			expectedErrorString: "headGroupSpec should have at least one container",
-			expectedMessage:     "The RayJob spec is invalid",
+			expectedMessage: "The RayJob spec is invalid: headGroupSpec should have at least one container",
 		},
 		{
 			name: "status validation failure - invalid status combination",
@@ -705,8 +701,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 					JobDeploymentStatus: rayv1.JobDeploymentStatusWaiting,
 				},
 			},
-			expectedErrorString: "invalid RayJob State: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode",
-			expectedMessage:     "The RayJob status is invalid",
+			expectedMessage: "The RayJob status is invalid: JobDeploymentStatus cannot be `Waiting` when SubmissionMode is not InteractiveMode",
 		},
 	}
 
@@ -736,8 +731,7 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 				},
 			}
 			result, err := reconciler.Reconcile(ctx, req)
-			require.Error(t, err)
-			assert.Equal(t, tt.expectedErrorString, err.Error())
+			require.NoError(t, err)
 
 			// Make sure no requeue happening
 			assert.Equal(t, time.Duration(0), result.RequeueAfter)
@@ -747,9 +741,8 @@ func TestReconcile_ValidationFailures(t *testing.T) {
 			err = fakeClient.Get(ctx, req.NamespacedName, updatedRayJob)
 			require.NoError(t, err)
 			assert.Equal(t, rayv1.JobDeploymentStatusValidationFailed, updatedRayJob.Status.JobDeploymentStatus)
-			assert.Equal(t, rayv1.JobStatusFailed, updatedRayJob.Status.JobStatus)
 			assert.Equal(t, rayv1.ValidationFailed, updatedRayJob.Status.Reason)
-			assert.Equal(t, fmt.Sprintf("%s: %s", tt.expectedMessage, tt.expectedErrorString), updatedRayJob.Status.Message)
+			assert.Equal(t, tt.expectedMessage, updatedRayJob.Status.Message)
 		})
 	}
 }
