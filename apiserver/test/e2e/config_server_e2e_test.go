@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -128,9 +127,18 @@ func TestCreateTemplate(t *testing.T) {
 				if tc.Input.ComputeTemplate.MemoryUnit == "" {
 					require.Equal(t, "Gi", actualTemplate.MemoryUnit, "Default MemoryUnit should be Gi")
 					// Copy tc.Input.ComputeTemplate to the expected template with the default MemoryUnit
-					expected := proto.Clone(tc.Input.ComputeTemplate).(*api.ComputeTemplate)
-					expected.MemoryUnit = "Gi"
-					require.Truef(t, reflect.DeepEqual(&expected, actualTemplate), "Equal templates expected (with default MemoryUnit)")
+					expected := &api.ComputeTemplate{
+						Name:              tc.Input.ComputeTemplate.Name,
+						Cpu:               tc.Input.ComputeTemplate.Cpu,
+						Memory:            tc.Input.ComputeTemplate.Memory,
+						Namespace:         tc.Input.ComputeTemplate.Namespace,
+						Gpu:               tc.Input.ComputeTemplate.Gpu,
+						GpuAccelerator:    tc.Input.ComputeTemplate.GpuAccelerator,
+						Tolerations:       tc.Input.ComputeTemplate.Tolerations,
+						ExtendedResources: tc.Input.ComputeTemplate.ExtendedResources,
+						MemoryUnit:        "Gi",
+					}
+					require.Truef(t, reflect.DeepEqual(expected, actualTemplate), "Equal templates expected (with default MemoryUnit)")
 				} else {
 					require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
 				}
