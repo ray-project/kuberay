@@ -172,12 +172,12 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
 	if isClusterSelectorMode {
-		clusterName, ok := rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]
+		clusterName, ok := rayJob.Spec.ClusterSelector[RayJobClusterSelectorKey]
 		if !ok {
-			return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
+			return fmt.Errorf("failed to get cluster name in ClusterSelector map, the key is %v", RayJobClusterSelectorKey)
 		}
 		if len(clusterName) == 0 {
-			return fmt.Errorf("cluster name in ClusterSelector is empty")
+			return fmt.Errorf("cluster name in ClusterSelector should not be empty")
 		}
 	}
 

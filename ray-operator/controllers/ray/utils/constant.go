@@ -46,7 +46,7 @@ const (
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
 	// RayJob default cluster selector key
-	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
+	RayJobClusterSelectorKey = "ray.io/cluster"
 
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
