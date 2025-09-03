@@ -138,6 +138,8 @@ func TestCreateTemplate(t *testing.T) {
 						ExtendedResources: tc.Input.ComputeTemplate.ExtendedResources,
 						MemoryUnit:        "Gi",
 					}
+					t.Logf("Expected template: %+v", expected)
+					t.Logf("Actual template: %+v", actualTemplate)
 					require.Truef(t, reflect.DeepEqual(expected, actualTemplate), "Equal templates expected (with default MemoryUnit)")
 				} else {
 					require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
