@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,6 +36,8 @@ const (
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
 )
+
+var jobInfoMap sync.Map
 
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
@@ -256,24 +259,32 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		// Check the current status of ray jobs
-		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-
-		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-		if err != nil {
-			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
-			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
-				logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
-					logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-				}
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		jobInfoFromMapInterface, exists := jobInfoMap.Load(rayJobInstance.Name)
+		var jobInfoFromMap utils.RayJobInfo
+		if exists {
+			jobInfoFromMap = jobInfoFromMapInterface.(utils.RayJobInfo)
+			logger.Info("JobInfoFromMap exists", "JobId", rayJobInstance.Status.JobId, "JobInfo", jobInfoFromMap.JobStatus)
+		} else {
+			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+			if err != nil {
+				// If the Ray job was not found, GetJobInfo returns a BadRequest error.
+				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
+					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
+					if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
+						logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
+						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+					}
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+				}
+				logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			jobInfoFromMap = *jobInfo
+			jobInfoMap.Store(rayJobInstance.Name, jobInfoFromMap)
 		}
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
@@ -281,7 +292,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
 		reason := rayv1.JobFailedReason("")
-		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
+		isJobTerminal := rayv1.IsJobTerminal(jobInfoFromMap.JobStatus)
 		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if utils.HasSubmitter(rayJobInstance) {
@@ -290,27 +301,42 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if isJobTerminal {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
-			if jobInfo.JobStatus == rayv1.JobStatusFailed {
+			if jobInfoFromMap.JobStatus == rayv1.JobStatusFailed {
 				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 				reason = rayv1.AppFailed
 			}
+		} else {
+			go func() {
+				rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+				if err != nil {
+					logger.Error(err, "Failed to get Job client", "JobId", rayJobInstance.Status.JobId)
+					return
+				}
+				jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+				if err != nil {
+					logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+					return
+				}
+				jobInfoMap.Store(rayJobInstance.Name, *jobInfo)
+			}()
 		}
 
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
 		rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-		rayJobInstance.Status.JobStatus = jobInfo.JobStatus
+		rayJobInstance.Status.JobStatus = jobInfoFromMap.JobStatus
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
-		rayJobInstance.Status.Message = jobInfo.Message
+		rayJobInstance.Status.Message = jobInfoFromMap.Message
 		// It is safe to convert uint64 to int64 here because Ray Core uses `int64_t` under the hood,
 		// even though the type defined in `message JobTableData` (gcs.proto) is `uint64`.
 		// See `gcs_job_manager.cc` and the function `current_sys_time_ms` for more details.
-		if jobInfo.StartTime != 0 {
-			rayJobInstance.Status.RayJobStatusInfo.StartTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.StartTime))}
+		if jobInfoFromMap.StartTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.StartTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfoFromMap.StartTime))}
 		}
-		if jobInfo.EndTime != 0 {
-			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
+		if jobInfoFromMap.EndTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfoFromMap.EndTime))}
 		}
+
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -364,6 +390,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
 		ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
 		nowTime := time.Now()
+		jobInfoMap.Delete(rayJobInstance.Name)
 		shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
 		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus),
 			"ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
