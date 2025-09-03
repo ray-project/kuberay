@@ -850,7 +850,7 @@ func NewComputeTemplate(runtime *api.ComputeTemplate) (*corev1.ConfigMap, error)
 		return nil, fmt.Errorf("failed to marshal extended resources: %w", err)
 	}
 	memoryUnit := "Gi"
-	if len(runtime.MemoryUnit) > 0 {
+	if runtime.MemoryUnit != "" {
 		memoryUnit = runtime.MemoryUnit
 	}
 

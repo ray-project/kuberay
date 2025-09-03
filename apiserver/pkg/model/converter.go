@@ -416,6 +416,11 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	runtime.Gpu = uint32(gpu)
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 
+	if runtime.MemoryUnit == "" {
+		klog.Warningf("memory_unit is not in the configMap: %s, will set Gi for default", runtime.Name)
+		runtime.MemoryUnit = "Gi"  // Apply default
+	}
+
 	val, ok := configMap.Data["extended_resources"]
 	if ok {
 		err := json.Unmarshal(pkgutils.ConvertStringToByteSlice(val), &runtime.ExtendedResources)
