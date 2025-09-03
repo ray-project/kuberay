@@ -39,6 +39,20 @@ const (
 
 var jobInfoMap sync.Map
 
+// Simple worker pool for job info updates
+var jobInfoChan = make(chan func(), 300) // Unbuffered channel with unlimited capacity
+
+func init() {
+	// Start 10 worker goroutines that will live for the entire program
+	for i := 0; i < 100; i++ {
+		go func() {
+			for task := range jobInfoChan {
+				task() // Execute the function
+			}
+		}()
+	}
+}
+
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
@@ -306,7 +320,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				reason = rayv1.AppFailed
 			}
 		} else {
-			go func() {
+			// Submit to simple worker pool instead of creating new goroutine
+			select {
+			case jobInfoChan <- func() {
 				rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
 				if err != nil {
 					logger.Error(err, "Failed to get Job client", "JobId", rayJobInstance.Status.JobId)
@@ -318,7 +334,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					return
 				}
 				jobInfoMap.Store(rayJobInstance.Name, *jobInfo)
-			}()
+			}:
+				// Task submitted successfully
+			default:
+				// Channel full, skip this update
+				logger.V(1).Info("Worker pool busy, skipping job info update")
+			}
 		}
 
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.
