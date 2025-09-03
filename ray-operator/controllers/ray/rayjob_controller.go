@@ -793,12 +793,11 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) {
 	}
 
 	if rayJob.Status.RayClusterName == "" {
+		rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		if len(rayJob.Spec.ClusterSelector) != 0 {
-			// The ClusterSelector map is non-empty,
-			// and must contain the default key, which will never yield an empty string.
-			rayJob.Status.RayClusterName = rayJob.Spec.ClusterSelector[utils.RayJobDefaultClusterSelectorKey]
-		} else {
-			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
+			if clusterName := rayJob.Spec.ClusterSelector[utils.RayJobDefaultClusterSelectorKey]; clusterName != "" {
+				rayJob.Status.RayClusterName = clusterName
+			}
 		}
 	}
 
