@@ -60,6 +60,37 @@ spec:
                 type: object
               deletionStrategy:
                 properties:
+                  deletionRules:
+                    items:
+                      properties:
+                        condition:
+                          properties:
+                            jobStatus:
+                              enum:
+                              - SUCCEEDED
+                              - FAILED
+                              type: string
+                            ttlSecondsAfterFinished:
+                              default: 0
+                              format: int32
+                              minimum: 0
+                              type: integer
+                          required:
+                          - jobStatus
+                          type: object
+                        resource:
+                          enum:
+                          - DeleteCluster
+                          - DeleteWorkers
+                          - DeleteSelf
+                          - DeleteNone
+                          type: string
+                      required:
+                      - condition
+                      - resource
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
                   onFailure:
                     properties:
                       policy:
@@ -84,9 +115,6 @@ spec:
                     required:
                     - policy
                     type: object
-                required:
-                - onFailure
-                - onSuccess
                 type: object
               entrypoint:
                 type: string
