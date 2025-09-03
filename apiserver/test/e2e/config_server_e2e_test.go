@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -26,10 +27,10 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create a valid compute template",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       tCtx.GetComputeTemplateName(),
-					Namespace:  tCtx.GetNamespaceName(),
-					Cpu:        2,
-					Memory:     4,
+					Name:      tCtx.GetComputeTemplateName(),
+					Namespace: tCtx.GetNamespaceName(),
+					Cpu:       2,
+					Memory:    4,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -39,11 +40,11 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create an invalid template with no Name",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       "",
-					Namespace:  tCtx.GetNamespaceName(),
-					Cpu:        2,
-					Memory:     4,
-					Gpu:        0,
+					Name:      "",
+					Namespace: tCtx.GetNamespaceName(),
+					Cpu:       2,
+					Memory:    4,
+					Gpu:       0,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -55,11 +56,11 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create an invalid template with different namespace",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       tCtx.GetComputeTemplateName(),
-					Namespace:  "another",
-					Cpu:        2,
-					Memory:     4,
-					Gpu:        0,
+					Name:      tCtx.GetComputeTemplateName(),
+					Namespace: "another",
+					Cpu:       2,
+					Memory:    4,
+					Gpu:       0,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -71,10 +72,10 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create an invalid template with zero cpu",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       tCtx.GetComputeTemplateName(),
-					Namespace:  tCtx.GetNamespaceName(),
-					Cpu:        0,
-					Memory:     4,
+					Name:      tCtx.GetComputeTemplateName(),
+					Namespace: tCtx.GetNamespaceName(),
+					Cpu:       0,
+					Memory:    4,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -86,10 +87,10 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create an invalid template with zero memory",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       tCtx.GetComputeTemplateName(),
-					Namespace:  tCtx.GetNamespaceName(),
-					Cpu:        2,
-					Memory:     0,
+					Name:      tCtx.GetComputeTemplateName(),
+					Namespace: tCtx.GetNamespaceName(),
+					Cpu:       2,
+					Memory:    0,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -101,10 +102,10 @@ func TestCreateTemplate(t *testing.T) {
 			Name: "Create a duplicate invalid",
 			Input: &api.CreateComputeTemplateRequest{
 				ComputeTemplate: &api.ComputeTemplate{
-					Name:       tCtx.GetComputeTemplateName(),
-					Namespace:  tCtx.GetNamespaceName(),
-					Cpu:        2,
-					Memory:     0,
+					Name:      tCtx.GetComputeTemplateName(),
+					Namespace: tCtx.GetNamespaceName(),
+					Cpu:       2,
+					Memory:    0,
 				},
 				Namespace: tCtx.GetNamespaceName(),
 			},
@@ -124,7 +125,15 @@ func TestCreateTemplate(t *testing.T) {
 			} else {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
+				if tc.Input.ComputeTemplate.MemoryUnit == "" {
+					require.Equal(t, "Gi", actualTemplate.MemoryUnit, "Default MemoryUnit should be Gi")
+					// Copy tc.Input.ComputeTemplate to the expected template with the default MemoryUnit
+					expected := proto.Clone(tc.Input.ComputeTemplate).(*api.ComputeTemplate)
+					expected.MemoryUnit = "Gi"
+					require.Truef(t, reflect.DeepEqual(&expected, actualTemplate), "Equal templates expected (with default MemoryUnit)")
+				} else {
+					require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
+				}
 			}
 		})
 	}
