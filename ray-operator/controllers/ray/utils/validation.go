@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	errstd "errors"
 	"fmt"
 
@@ -218,43 +219,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature")
 	}
 
-	if rayJob.Spec.DeletionStrategy != nil {
-		onSuccessPolicy := rayJob.Spec.DeletionStrategy.OnSuccess
-		onFailurePolicy := rayJob.Spec.DeletionStrategy.OnFailure
-
-		if onSuccessPolicy.Policy == nil {
-			return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnSuccess cannot be unset when DeletionStrategy is enabled")
-		}
-		if onFailurePolicy.Policy == nil {
-			return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnFailure cannot be unset when DeletionStrategy is enabled")
-		}
-
-		if isClusterSelectorMode {
-			switch *onSuccessPolicy.Policy {
-			case rayv1.DeleteCluster:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster on success")
-			case rayv1.DeleteWorkers:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers on success")
-			}
-
-			switch *onFailurePolicy.Policy {
-			case rayv1.DeleteCluster:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster on failure")
-			case rayv1.DeleteWorkers:
-				return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers on failure")
-			}
-		}
-
-		if (*onSuccessPolicy.Policy == rayv1.DeleteWorkers || *onFailurePolicy.Policy == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
-			// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
-			return fmt.Errorf("DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
-		}
-
-		if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
-			return fmt.Errorf("shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
-		}
-	}
-	return nil
+	return validateDeletionStrategy(rayJob)
 }
 
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
@@ -287,6 +252,179 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
 		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
 		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+	}
+
+	return nil
+}
+
+// validateDeletionStrategy centralizes all validation logic for the deletion strategy.
+// This includes the new `deletionRules` and the legacy fields (`onSuccess`,`onFailure`).
+func validateDeletionStrategy(rayJob *rayv1.RayJob) error {
+	if rayJob.Spec.DeletionStrategy == nil {
+		return nil
+	}
+
+	if !features.Enabled(features.RayJobDeletionPolicy) {
+		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature")
+	}
+
+	usingDeletionRules := len(rayJob.Spec.DeletionStrategy.DeletionRules) > 0
+	usingLegacyAPI := rayJob.Spec.DeletionStrategy.OnSuccess.Policy != nil || rayJob.Spec.DeletionStrategy.OnFailure.Policy != nil
+
+	// ShutdownAfterJobFinishes cannot be used with the new API.
+	if usingDeletionRules && rayJob.Spec.ShutdownAfterJobFinishes {
+		return fmt.Errorf("ShutdownAfterJobFinishes cannot be used when spec.deletionStrategy.deletionRules is defined. Please configure all deletion behaviors within deletionRules")
+	}
+
+	// Legacy API and DeletionRules cannot be used simultaneously.
+	if usingDeletionRules && usingLegacyAPI {
+		return fmt.Errorf("legacy policies (onSuccess, onFailure) and the new deletionRules cannot be used simultaneously within the same deletionStrategy")
+	}
+
+	// DeletionStrategy must contain at least one policy if specified.
+	if !usingDeletionRules && !usingLegacyAPI {
+		return fmt.Errorf("deletionStrategy is specified, but no policies (onSuccess, onFailure, or deletionRules) are defined within it")
+	}
+
+	if usingDeletionRules {
+		return validateDeletionRules(rayJob)
+	}
+
+	// If not using DeletionRules, validate the legacy strategy
+	return validateLegacyDeletionPolicies(rayJob)
+}
+
+// validateDeletionRules validates the deletion rules in the RayJob spec.
+// It performs per-rule validations, checks for uniqueness, and ensures logical TTL consistency.
+// Errors are collected and returned as a single aggregated error using errors.Join for better user feedback.
+func validateDeletionRules(rayJob *rayv1.RayJob) error {
+	type ruleKey struct {
+		Policy rayv1.DeletionPolicyType
+		Status rayv1.JobStatus
+	}
+
+	rules := rayJob.Spec.DeletionStrategy.DeletionRules
+	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
+
+	// Group TTLs by JobStatus for cross-rule validation.
+	rulesByStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
+	// Track unique (Policy, JobStatus) combinations.
+	ruleUniquenessSet := make(map[ruleKey]struct{})
+
+	var errs []error
+
+	// Single pass: Validate each rule individually and group for later consistency checks.
+	for i, rule := range rules {
+		// Validate TTL is non-negative.
+		if rule.Condition.TTLSecondsAfterFinished < 0 {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSecondsAfterFinished must be non-negative", i))
+			continue
+		}
+
+		// Check uniqueness.
+		key := ruleKey{Policy: rule.Policy, Status: rule.Condition.JobStatus}
+		if _, exists := ruleUniquenessSet[key]; exists {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
+			continue
+		}
+		ruleUniquenessSet[key] = struct{}{}
+
+		// Contextual validations based on spec.
+		if isClusterSelectorMode && (rule.Policy == rayv1.DeleteCluster || rule.Policy == rayv1.DeleteWorkers) {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: DeletionPolicyType '%s' not supported when ClusterSelector is set", i, rule.Policy))
+			continue
+		}
+		if IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) && rule.Policy == rayv1.DeleteWorkers {
+			// TODO (rueian): Support in future Ray versions by checking RayVersion.
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: DeletionPolicyType 'DeleteWorkers' not supported with autoscaling enabled", i))
+			continue
+		}
+
+		// Group valid rule for consistency check.
+		statusMap, ok := rulesByStatus[rule.Condition.JobStatus]
+		if !ok {
+			statusMap = make(map[rayv1.DeletionPolicyType]int32)
+			rulesByStatus[rule.Condition.JobStatus] = statusMap
+		}
+		statusMap[rule.Policy] = rule.Condition.TTLSecondsAfterFinished
+	}
+
+	// Second pass: Validate TTL consistency per JobStatus.
+	for status, policyTTLs := range rulesByStatus {
+		if err := validateTTLConsistency(policyTTLs, status); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
+// (Lower TTL means deletes earlier.)
+func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status rayv1.JobStatus) error {
+	// Define the required deletion order. TTLs must be non-decreasing along this sequence.
+	deletionOrder := []rayv1.DeletionPolicyType{
+		rayv1.DeleteWorkers,
+		rayv1.DeleteCluster,
+		rayv1.DeleteSelf,
+	}
+
+	var prevPolicy rayv1.DeletionPolicyType
+	var prevTTL int32
+	var hasPrev bool
+
+	var errs []error
+
+	for _, policy := range deletionOrder {
+		ttl, exists := policyTTLs[policy]
+		if !exists {
+			continue
+		}
+
+		if hasPrev && ttl < prevTTL {
+			errs = append(errs, fmt.Errorf(
+				"for JobStatus '%s': %s TTL (%d) must be >= %s TTL (%d)",
+				status, policy, ttl, prevPolicy, prevTTL,
+			))
+		}
+
+		prevPolicy = policy
+		prevTTL = ttl
+		hasPrev = true
+	}
+
+	return errors.Join(errs...)
+}
+
+// validateLegacyDeletionPolicies handles validation for the old `onSuccess` and `onFailure` fields.
+func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
+	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
+	onSuccessPolicy := rayJob.Spec.DeletionStrategy.OnSuccess
+	onFailurePolicy := rayJob.Spec.DeletionStrategy.OnFailure
+
+	if onSuccessPolicy.Policy == nil {
+		return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnSuccess cannot be unset when DeletionStrategy is enabled")
+	}
+	if onFailurePolicy.Policy == nil {
+		return fmt.Errorf("the DeletionPolicyType field of DeletionStrategy.OnFailure cannot be unset when DeletionStrategy is enabled")
+	}
+
+	if isClusterSelectorMode {
+		if *onSuccessPolicy.Policy == rayv1.DeleteCluster || *onSuccessPolicy.Policy == rayv1.DeleteWorkers {
+			return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=%s on success", *onSuccessPolicy.Policy)
+		}
+		if *onFailurePolicy.Policy == rayv1.DeleteCluster || *onFailurePolicy.Policy == rayv1.DeleteWorkers {
+			return fmt.Errorf("the ClusterSelector mode doesn't support DeletionStrategy=%s on failure", *onFailurePolicy.Policy)
+		}
+	}
+
+	if (*onSuccessPolicy.Policy == rayv1.DeleteWorkers || *onFailurePolicy.Policy == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
+		// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
+		return fmt.Errorf("DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+	}
+
+	if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
+		return fmt.Errorf("shutdownAfterJobFinishes is set to 'true' while deletion policy is 'DeleteNone'")
 	}
 
 	return nil

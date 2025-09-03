@@ -55,11 +55,28 @@ _Appears in:_
 
 
 
+#### DeletionCondition
+
+
+
+DeletionCondition specifies the trigger conditions for a deletion action.
+
+
+
+_Appears in:_
+- [DeletionRule](#deletionrule)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the time in seconds from when the JobStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
+
+
 #### DeletionPolicy
 
 
 
-
+DeletionPolicy is the legacy single-stage deletion policy.
+Deprecated: This struct is part of the legacy API. Use DeletionRule for new configurations.
 
 
 
@@ -68,7 +85,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `policy` _[DeletionPolicyType](#deletionpolicytype)_ | Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'. |  |  |
+| `policy` _[DeletionPolicyType](#deletionpolicytype)_ | Policy is the action to take when the condition is met.<br />This field is logically required when using the legacy OnSuccess/OnFailure policies.<br />It is marked as '+optional' at the API level to allow the 'deletionRules' field to be used instead. |  | Enum: [DeleteCluster DeleteWorkers DeleteSelf DeleteNone] <br /> |
 
 
 #### DeletionPolicyType
@@ -81,14 +98,54 @@ _Underlying type:_ _string_
 
 _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
+- [DeletionRule](#deletionrule)
 
+
+
+#### DeletionRule
+
+
+
+DeletionRule defines a single deletion action and its trigger condition.
+This is the new, recommended way to define deletion behavior.
+
+
+
+_Appears in:_
+- [DeletionStrategy](#deletionstrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `policy` _[DeletionPolicyType](#deletionpolicytype)_ | Policy is the action to take when the condition is met. This field is required. |  | Enum: [DeleteCluster DeleteWorkers DeleteSelf DeleteNone] <br /> |
+| `condition` _[DeletionCondition](#deletioncondition)_ | The condition under which this deletion rule is triggered. This field is required. |  |  |
 
 
 #### DeletionStrategy
 
 
 
+DeletionStrategy defines the deletion policies for a RayJob.
+It allows for fine-grained control over resource cleanup after a job finishes.
 
+
+Legacy fields `onSuccess` and `onFailure` are still supported for backward compatibility,
+but it is highly recommended to migrate to the new `deletionRules` field.
+
+
+Notes:
+  - When this block is set, you must configure **either**
+    (a) BOTH `onSuccess` and `onFailure` policies,
+    OR
+    (b) the `deletionRules` field (which may be empty, in which case no deletion will occur).
+  - `onSuccess` / `onFailure` must NOT be used together with `deletionRules`.
+  - `onSuccess` and `onFailure` are **deprecated** and planned for removal in a future release.
+
+
+Validation rules:
+ 1. Prevent mixing legacy and new fields
+
+
+ 2. Require either both legacy fields or deletionRules presence
 
 
 
@@ -97,8 +154,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `onSuccess` _[DeletionPolicy](#deletionpolicy)_ |  |  |  |
-| `onFailure` _[DeletionPolicy](#deletionpolicy)_ |  |  |  |
+| `onSuccess` _[DeletionPolicy](#deletionpolicy)_ | OnSuccess is the deletion policy for a successful RayJob.<br />Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.<br />This field will be removed in a future release. |  |  |
+| `onFailure` _[DeletionPolicy](#deletionpolicy)_ | OnFailure is the deletion policy for a failed RayJob.<br />Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.<br />This field will be removed in a future release. |  |  |
+| `deletionRules` _[DeletionRule](#deletionrule) array_ | DeletionRules is a list of deletion rules, processed based on their trigger conditions.<br />While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),<br />the most impactful rule (e.g., DeleteCluster) will be executed first to prioritize resource cleanup and cost savings. |  |  |
 
 
 
