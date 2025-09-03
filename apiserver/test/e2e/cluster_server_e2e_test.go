@@ -448,7 +448,6 @@ func TestCreateClusterEndpoint(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(tc.Input)
 			if tc.ExpectedError == nil {
@@ -520,7 +519,6 @@ func TestDeleteCluster(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteCluster(tc.Input)
 			if tc.ExpectedError == nil {
@@ -798,7 +796,6 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetCluster(tc.Input)
 			if tc.ExpectedError == nil {

@@ -115,7 +115,6 @@ func TestCreateTemplate(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
@@ -178,7 +177,6 @@ func TestDeleteTemplate(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
@@ -295,7 +293,6 @@ func TestGetTemplateByNameInNamespace(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {

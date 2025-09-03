@@ -130,7 +130,6 @@ func TestCreateServiceV2(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualService, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayService(tc.Input)
 			if tc.ExpectedError == nil {
@@ -189,7 +188,6 @@ func TestDeleteService(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteRayService(tc.Input)
 			if tc.ExpectedError == nil {

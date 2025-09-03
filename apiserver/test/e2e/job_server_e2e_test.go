@@ -208,7 +208,6 @@ func TestCreateJobWithDisposableClusters(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateRayJob(tc.Input)
 			if tc.ExpectedError == nil {
@@ -268,7 +267,6 @@ func TestDeleteJob(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteRayJob(tc.Input)
 			if tc.ExpectedError == nil {
@@ -549,7 +547,6 @@ func TestGetJob(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-
 		t.Run(tc.Name, func(t *testing.T) {
 			actualJob, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetRayJob(tc.Input)
 			if tc.ExpectedError == nil {
