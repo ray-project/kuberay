@@ -28,6 +28,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -274,9 +275,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of ray jobs
 		jobInfoFromMapInterface, exists := jobInfoMap.Load(rayJobInstance.Name)
-		var jobInfoFromMap utils.RayJobInfo
+		var jobInfoFromMap utiltypes.RayJobInfo
 		if exists {
-			jobInfoFromMap = jobInfoFromMapInterface.(utils.RayJobInfo)
+			jobInfoFromMap = jobInfoFromMapInterface.(utiltypes.RayJobInfo)
 			logger.Info("JobInfoFromMap exists", "JobId", rayJobInstance.Status.JobId, "JobInfo", jobInfoFromMap.JobStatus)
 		} else {
 			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
