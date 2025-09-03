@@ -28,6 +28,8 @@ class RayjobApi:
     - submit_job(k8s_namespace: str, job: Any) -> Any: Submit and execute a job asynchronously.
     - suspend_job(name: str, k8s_namespace: str) -> bool: Stop a job by suspending it.
     - resubmit_job(name: str, k8s_namespace: str) -> bool: Resubmit a job that has been suspended.
+    - get_job(name: str, k8s_namespace: str) -> Any: Get a job.
+    - list_jobs(k8s_namespace: str) -> Any: List all jobs.
     - get_job_status(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> Any: Get the most recent status of a job.
     - wait_until_job_finished(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> bool: Wait until a job is completed.
     - wait_until_job_running(name: str, k8s_namespace: str, timeout: int, delay_between_attempts: int) -> bool: Wait until a job reaches running state.
@@ -344,3 +346,34 @@ class RayjobApi:
             else:
                 log.error(f"error deleting the rayjob custom resource: {e.reason}")
                 return False
+
+    def get_job(self, name: str, k8s_namespace: str = "default") -> Any:
+        """Get a Ray job in a given namespace."""
+        try:
+            return self.api.get_namespaced_custom_object(
+                group=constants.GROUP,
+                version=constants.JOB_VERSION,
+                plural=constants.JOB_PLURAL,
+                name=name,
+                namespace=k8s_namespace,
+            )
+        except ApiException as e:
+            if e.status == 404:
+                log.error(f"rayjob {name} not found in namespace {k8s_namespace}")
+                return None
+            else:
+                log.error(f"error fetching rayjob {name}: {e.reason}")
+                return None
+
+    def list_jobs(self, k8s_namespace: str = "default") -> Any:
+        """List all Ray jobs in a given namespace."""
+        try:
+            return self.api.list_namespaced_custom_object(
+                group=constants.GROUP,
+                version=constants.JOB_VERSION,
+                plural=constants.JOB_PLURAL,
+                namespace=k8s_namespace,
+            )
+        except ApiException as e:
+            log.error(f"error fetching rayjobs: {e.reason}")
+            return None

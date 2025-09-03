@@ -1,6 +1,5 @@
 import unittest
 import copy
-import re
 from python_client.utils import kuberay_cluster_utils, kuberay_cluster_builder
 
 
