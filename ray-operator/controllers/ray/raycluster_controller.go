@@ -123,7 +123,7 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// No match found
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
-		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
+		r.rayClusterScaleExpectation.Delete(request.Name, request.Namespace)
 		cleanUpRayClusterMetrics(r.options.RayClusterMetricsManager, request.Name, request.Namespace)
 	} else {
 		logger.Error(err, "Read request instance error!")
