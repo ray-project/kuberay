@@ -26,9 +26,13 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToPodFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
-	// AddMetadataToChildResourcesFromRayJob enriches child resource with metadata necessary to tie it to the scheduler.
+	// AddMetadataToRayClusterFromRayJob enriches RayCluster with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToChildResourcesFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec)
+	AddMetadataToRayClusterFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, submitterTemplate *corev1.PodTemplateSpec)
+
+	// AddMetadataToSubmitterPodTemplateFromRayJob enriches submitter pod template with metadata necessary to tie it to the scheduler.
+	// For example, setting labels for queues / priority, and setting schedulerName.
+	AddMetadataToSubmitterPodTemplateFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, submitterTemplate *corev1.PodTemplateSpec)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -65,7 +69,10 @@ func (d *DefaultBatchScheduler) AddMetadataToPodFromRayCluster(_ context.Context
 }
 
 // AddMetadataToChildResourcesFromRayJob Add necessary metadata from RayJob to RayCluster and submitter pod template for BatchScheduler
-func (d *DefaultBatchScheduler) AddMetadataToChildResourcesFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
+func (d *DefaultBatchScheduler) AddMetadataToRayClusterFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
+}
+
+func (d *DefaultBatchScheduler) AddMetadataToSubmitterPodTemplateFromRayJob(_ context.Context, _ *rayv1.RayJob, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {

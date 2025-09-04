@@ -347,7 +347,7 @@ func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *test
 	submitterPodTemplate := createSubmitterPodTemplate()
 	rayJobWithGangScheduling.Spec.SubmitterPodTemplate = submitterPodTemplate
 
-	yk.populateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(ctx, rayJobWithGangScheduling, rayCluster, submitterPodTemplate)
+	yk.populateTaskGroupsAnnotationToRayCluster(ctx, rayJobWithGangScheduling, rayCluster, submitterPodTemplate)
 
 	// verify the correctness of rayCluster
 	kk, err := getTaskGroupsFromRayCluster(rayCluster)
@@ -379,6 +379,7 @@ func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *test
 	assert.Equal(t, resource.MustParse("1"), submitterGroup.MinResource[corev1.ResourceCPU.String()])
 	assert.Equal(t, resource.MustParse("1Gi"), submitterGroup.MinResource[corev1.ResourceMemory.String()])
 
+	yk.populateTaskGroupsAnnotationToSubmitterPodTemplate(ctx, rayJobWithGangScheduling, submitterPodTemplate)
 	// verify the correctness of submitter pod template
 	kk, err = getTaskGroupsFromPodTemplate(submitterPodTemplate)
 	require.NoError(t, err)
@@ -479,11 +480,11 @@ func TestAddMetadataToChildResourcesFromRayJob(t *testing.T) {
 
 	submitterPodTemplate := createSubmitterPodTemplate()
 
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, rayCluster, submitterPodTemplate)
+	yk.AddMetadataToRayClusterFromRayJob(ctx, rayJob, rayCluster, submitterPodTemplate)
 	assert.Equal(t, "job-3", rayCluster.Labels[RayApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayCluster.Labels[RayApplicationQueueLabelName])
 	assert.Equal(t, "", rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]) // no task groups annotation since gang scheduling is not enabled
-
+	yk.AddMetadataToSubmitterPodTemplateFromRayJob(ctx, rayJob, submitterPodTemplate)
 	assert.Equal(t, "job-3", submitterPodTemplate.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", submitterPodTemplate.Labels[YuniKornPodQueueLabelName])
 	assert.Equal(t, "", submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName]) // no task groups annotation since gang scheduling is not enabled
@@ -516,11 +517,12 @@ func TestAddMetadataToChildResourcesFromRayJob(t *testing.T) {
 	)
 	submitterPodTemplate = createSubmitterPodTemplate()
 
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, rayCluster, submitterPodTemplate)
+	yk.AddMetadataToRayClusterFromRayJob(ctx, rayJob, rayCluster, submitterPodTemplate)
 
 	assert.Equal(t, "job-4", rayCluster.Labels[RayApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayCluster.Labels[RayApplicationQueueLabelName])
 	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"submittergroup","minMember":1}]`, rayCluster.Annotations[YuniKornTaskGroupsAnnotationName])
+	yk.AddMetadataToSubmitterPodTemplateFromRayJob(ctx, rayJob, submitterPodTemplate)
 
 	assert.Equal(t, utils.RayNodeSubmitterGroupLabelValue, submitterPodTemplate.Annotations[YuniKornTaskGroupNameAnnotationName])
 	assert.Equal(t, "job-4", submitterPodTemplate.Labels[YuniKornPodApplicationIDLabelName])
