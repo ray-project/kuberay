@@ -86,6 +86,14 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		},
 	}
 }
+func getRayContainerFromPod(pod *corev1.Pod) *corev1.Container {
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "ray-head" || pod.Spec.Containers[i].Name == "ray-worker" {
+			return &pod.Spec.Containers[i]
+		}
+	}
+	return nil
+}
 
 var _ = Context("Inside the default namespace", func() {
 	Describe("Static RayCluster", Ordered, func() {
@@ -1414,6 +1422,134 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name + "-headless", Namespace: namespace}, &svc),
 				time.Second*3, time.Millisecond*500).Should(Succeed())
+		})
+	})
+
+	Describe("RayCluster with custom probe ports", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayClusterName := "raycluster-custom-probe-ports"
+
+		rayCluster := rayClusterTemplate(rayClusterName, namespace)
+
+		rayCluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{
+			"dashboard-host":              "0.0.0.0",
+			"dashboard-port":              "8365",
+			"dashboard-agent-listen-port": "8266",
+			"metrics-export-port":         "8080",
+			"block":                       "true",
+		}
+
+		rayCluster.Spec.WorkerGroupSpecs[0].RayStartParams = map[string]string{
+			"dashboard-agent-listen-port": "9000",
+			"metrics-export-port":         "8080",
+			"block":                       "true",
+		}
+
+		rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
+		rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](1)
+
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			Expect(rayCluster.Spec.HeadGroupSpec.RayStartParams["dashboard-port"]).To(Equal("8365"))
+			Expect(rayCluster.Spec.HeadGroupSpec.RayStartParams["dashboard-agent-listen-port"]).To(Equal("8266"))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].RayStartParams["dashboard-agent-listen-port"]).To(Equal("9000"))
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](1)))
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of head Pods", func() {
+			numHeadPods := 1
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numHeadPods), fmt.Sprintf("headGroup %v", headPods.Items))
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 1
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("Update all Pods to Running", func() {
+			for _, headPod := range headPods.Items {
+				headPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &headPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "Head Pod should be running.")
+
+			for _, workerPod := range workerPods.Items {
+				workerPod.Status.Phase = corev1.PodRunning
+				Expect(k8sClient.Status().Update(ctx, &workerPod)).Should(Succeed())
+			}
+
+			Eventually(
+				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("Should have head pod with correct probe configuration", func() {
+			Expect(headPods.Items).Should(HaveLen(1), "Should have exactly one head pod")
+			headPod := headPods.Items[0]
+
+			rayContainer := getRayContainerFromPod(&headPod)
+			Expect(rayContainer).NotTo(BeNil(), "Ray container should exist")
+
+			Expect(rayContainer.LivenessProbe).NotTo(BeNil(), "LivenessProbe should be configured")
+			Expect(rayContainer.LivenessProbe.Exec).NotTo(BeNil(), "LivenessProbe should use Exec")
+			
+			livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+			Expect(livenessCommand).To(ContainSubstring(":8266"), "Head pod liveness probe should use custom dashboard-agent-listen-port")
+			Expect(livenessCommand).To(ContainSubstring(":8365"), "Head pod liveness probe should use custom dashboard-port")
+
+			Expect(rayContainer.ReadinessProbe).NotTo(BeNil(), "ReadinessProbe should be configured")
+			Expect(rayContainer.ReadinessProbe.Exec).NotTo(BeNil(), "ReadinessProbe should use Exec")
+
+			readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+			Expect(readinessCommand).To(ContainSubstring(":8266"), "Head pod readiness probe should use custom dashboard-agent-listen-port")
+			Expect(readinessCommand).To(ContainSubstring(":8365"), "Head pod readiness probe should use custom dashboard-port")
+		})
+
+		It("Should have worker pod with correct probe configuration", func() {
+			Expect(workerPods.Items).Should(HaveLen(1), "Should have exactly one worker pod")
+			workerPod := workerPods.Items[0]
+
+			rayContainer := getRayContainerFromPod(&workerPod)
+			Expect(rayContainer).NotTo(BeNil(), "Ray container should exist")
+
+			Expect(rayContainer.LivenessProbe).NotTo(BeNil(), "LivenessProbe should be configured")
+			Expect(rayContainer.LivenessProbe.Exec).NotTo(BeNil(), "LivenessProbe should use Exec")
+
+			livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+			Expect(livenessCommand).To(ContainSubstring(":9000"), "Worker pod should use custom dashboard-agent-listen-port")
+			Expect(livenessCommand).NotTo(ContainSubstring(":8365"), "Worker pod should not check dashboard-port")
+
+			Expect(rayContainer.ReadinessProbe).NotTo(BeNil(), "ReadinessProbe should be configured")
+			Expect(rayContainer.ReadinessProbe.Exec).NotTo(BeNil(), "ReadinessProbe should use Exec")
+
+			readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+			Expect(readinessCommand).To(ContainSubstring(":9000"), "Worker pod should use custom dashboard-agent-listen-port")
+			Expect(readinessCommand).NotTo(ContainSubstring(":8365"), "Worker pod should not check dashboard-port")
+		})
+
+		It("RayCluster's .status.state should be updated to 'ready' shortly after all Pods are Running", func() {
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 	})
 })
