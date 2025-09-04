@@ -338,7 +338,6 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string) {
-
 	getPort := func(key string, defaultVal int) int {
 		if portStr, ok := rayStartParams[key]; ok {
 			if port, err := strconv.Atoi(portStr); err == nil {

@@ -86,6 +86,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		},
 	}
 }
+
 func getRayContainerFromPod(pod *corev1.Pod) *corev1.Container {
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "ray-head" || pod.Spec.Containers[i].Name == "ray-worker" {
@@ -1511,7 +1512,7 @@ var _ = Context("Inside the default namespace", func() {
 
 			Expect(rayContainer.LivenessProbe).NotTo(BeNil(), "LivenessProbe should be configured")
 			Expect(rayContainer.LivenessProbe.Exec).NotTo(BeNil(), "LivenessProbe should use Exec")
-			
+
 			livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 			Expect(livenessCommand).To(ContainSubstring(":8266"), "Head pod liveness probe should use custom dashboard-agent-listen-port")
 			Expect(livenessCommand).To(ContainSubstring(":8365"), "Head pod liveness probe should use custom dashboard-port")
