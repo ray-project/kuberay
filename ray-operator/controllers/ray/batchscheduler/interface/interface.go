@@ -68,7 +68,6 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 func (d *DefaultBatchScheduler) AddMetadataToPodFromRayCluster(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-// AddMetadataToChildResourcesFromRayJob Add necessary metadata from RayJob to RayCluster and submitter pod template for BatchScheduler
 func (d *DefaultBatchScheduler) AddMetadataToRayClusterFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ /*submitterTemplate*/ *corev1.PodTemplateSpec) {
 }
 
