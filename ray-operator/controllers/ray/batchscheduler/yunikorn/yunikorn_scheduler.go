@@ -1,184 +1,97 @@
-package yunikorn
+package batchscheduler
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
+	schedulerplugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
 )
 
-const (
-	SchedulerName                       string = "yunikorn"
-	YuniKornPodApplicationIDLabelName   string = "applicationId"
-	YuniKornPodQueueLabelName           string = "queue"
-	RayApplicationIDLabelName           string = "yunikorn.apache.org/app-id"
-	RayApplicationQueueLabelName        string = "yunikorn.apache.org/queue"
-	YuniKornTaskGroupNameAnnotationName string = "yunikorn.apache.org/task-group-name"
-	YuniKornTaskGroupsAnnotationName    string = "yunikorn.apache.org/task-groups"
-)
-
-type YuniKornScheduler struct{}
-
-type YuniKornSchedulerFactory struct{}
-
-func GetPluginName() string {
-	return SchedulerName
+type SchedulerManager struct {
+	config     *rest.Config
+	factory    schedulerinterface.BatchSchedulerFactory
+	scheduler  schedulerinterface.BatchScheduler
+	rayConfigs configapi.Configuration
+	sync.Mutex
 }
 
-func (y *YuniKornScheduler) Name() string {
-	return GetPluginName()
-}
-
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
-	// yunikorn doesn't require any resources to be created upfront
-	// this is a no-opt for this implementation
-	return nil
-}
-
-// propagateTaskGroupsAnnotation is a helper function that propagates the task groups annotation to the child
-// if the parent has the task groups annotation, it will be copied to the child
-// if the parent doesn't have the task groups annotation, a new one will be created
-// TODO: remove the legacy labels, i.e "applicationId" and "queue", directly populate labels
-// RayApplicationIDLabelName and RayApplicationQueueLabelName to pod labels.
-// Currently we use this function to translate labels "yunikorn.apache.org/app-id" and "yunikorn.apache.org/queue"
-// to legacy labels "applicationId" and "queue", this is for the better compatibilities to support older yunikorn
-// versions.
-func propagateTaskGroupsAnnotation(parent metav1.Object, child metav1.Object) error {
-	var taskGroupsAnnotationValue string
-	if parentAnnotations, exist := parent.GetAnnotations()[YuniKornTaskGroupsAnnotationName]; exist && parentAnnotations != "" {
-		taskGroupsAnnotationValue = parentAnnotations
-	}
-	if taskGroupsAnnotationValue == "" {
-		var err error
-		taskGroupsAnnotationValue, err = getTaskGroupsAnnotationValue(parent)
-		if err != nil {
-			return err
-		}
-	}
-	annotations := child.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
-	child.SetAnnotations(annotations)
-	return nil
-}
-
-func populateLabelsFromObject(parent metav1.Object, child metav1.Object, sourceKey string, targetKey string) {
-	labels := child.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	if parentLabel, exist := parent.GetLabels()[sourceKey]; exist && parentLabel != "" {
-		labels[targetKey] = parentLabel
-	}
-	child.SetLabels(labels)
-}
-
-func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
-	switch obj := obj.(type) {
-	case *corev1.Pod:
-		obj.Spec.SchedulerName = schedulerName
-	case *corev1.PodTemplateSpec:
-		obj.Spec.SchedulerName = schedulerName
-	}
-}
-
-func getTaskGroupsAnnotationValue(obj metav1.Object) (string, error) {
-	taskGroups := newTaskGroups()
-	switch obj := obj.(type) {
-	case *rayv1.RayCluster:
-		taskGroups = newTaskGroupsFromRayClusterSpec(&obj.Spec)
-	case *rayv1.RayJob:
-		taskGroups = newTaskGroupsFromRayJobSpec(&obj.Spec)
-	}
-	taskGroupsAnnotationValue, err := taskGroups.marshal()
+// NewSchedulerManager maintains a specific scheduler plugin based on config
+func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration, config *rest.Config, cli client.Client) (*SchedulerManager, error) {
+	// init the scheduler factory from config
+	factory, err := getSchedulerFactory(rayConfigs)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return taskGroupsAnnotationValue, nil
-}
 
-func addTaskGroupNameAnnotation(obj metav1.Object, groupName string) {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
+	scheduler, err := factory.New(ctx, config, cli)
+	if err != nil {
+		return nil, err
 	}
-	annotations[YuniKornTaskGroupNameAnnotationName] = groupName
-	obj.SetAnnotations(annotations)
+
+	manager := SchedulerManager{
+		rayConfigs: rayConfigs,
+		config:     config,
+		factory:    factory,
+		scheduler:  scheduler,
+	}
+
+	return &manager, nil
 }
 
-func (y *YuniKornScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
-	_, exist := obj.GetLabels()[utils.RayGangSchedulingEnabled]
-	return exist
-}
+func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface.BatchSchedulerFactory, error) {
+	var factory schedulerinterface.BatchSchedulerFactory
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pod
-// the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
-	// the applicationID and queue name must be provided in the labels
-	populateLabelsFromObject(rayCluster, pod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	populateLabelsFromObject(rayCluster, pod, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
-	addSchedulerNameToObject(pod, y.Name())
-
-	// when gang scheduling is enabled, extra annotations need to be added to all pods
-	if y.isGangSchedulingEnabled(rayCluster) {
-		// populate the taskGroups info to each pod
-		err := propagateTaskGroupsAnnotation(rayCluster, pod)
-		if err != nil {
-			logger.Error(err, "failed to add gang scheduling related annotations to pod, "+
-				"gang scheduling will not be enabled for this workload",
-				"name", pod.Name, "namespace", pod.Namespace)
-			return
+	// when a batch scheduler name is provided
+	// only support a white list of names, empty value is the default value
+	// it throws error if an unknown name is provided
+	if len(rayConfigs.BatchScheduler) > 0 {
+		switch rayConfigs.BatchScheduler {
+		case volcano.GetPluginName():
+			factory = &volcano.VolcanoBatchSchedulerFactory{}
+		case yunikorn.GetPluginName():
+			factory = &yunikorn.YuniKornSchedulerFactory{}
+		case kaischeduler.GetPluginName():
+			factory = &kaischeduler.KaiSchedulerFactory{}
+		case schedulerplugins.GetPluginName():
+			factory = &schedulerplugins.KubeSchedulerFactory{}
+		default:
+			return nil, fmt.Errorf("the scheduler is not supported, name=%s", rayConfigs.BatchScheduler)
 		}
-
-		// set the task group name based on the head or worker group name
-		// the group name for the head and each of the worker group should be different
-		pod.Annotations[YuniKornTaskGroupNameAnnotationName] = groupName
+	} else {
+		// empty is the default value, when not set
+		// use DefaultBatchSchedulerFactory, it's a no-opt factory
+		factory = &schedulerinterface.DefaultBatchSchedulerFactory{}
 	}
-}
 
-func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string) {
-	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
-
-	populateLabelsFromObject(parent, child, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	populateLabelsFromObject(parent, child, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
-	addSchedulerNameToObject(child, y.Name())
-
-	if y.isGangSchedulingEnabled(parent) {
-		logger.Info("gang scheduling is enabled, propagating task groups annotation to child", "name", child.GetName(), "namespace", child.GetNamespace())
-
-		err := propagateTaskGroupsAnnotation(parent, child)
-		if err != nil {
-			logger.Error(err, "failed to add gang scheduling related annotations to object, "+
-				"gang scheduling will not be enabled for this workload",
-				"name", child.GetName(), "namespace", child.GetNamespace())
-			return
-		}
-		if groupName != "" {
-			addTaskGroupNameAnnotation(child, groupName)
-		}
+	// legacy option, if this is enabled, register volcano
+	// this is for backward compatibility
+	if rayConfigs.EnableBatchScheduler {
+		factory = &volcano.VolcanoBatchSchedulerFactory{}
 	}
+
+	return factory, nil
 }
 
-func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
-	return &YuniKornScheduler{}, nil
+func (batch *SchedulerManager) GetScheduler() (schedulerinterface.BatchScheduler, error) {
+	return batch.scheduler, nil
 }
 
-func (yf *YuniKornSchedulerFactory) AddToScheme(_ *runtime.Scheme) {
-	// No extra scheme needs to be registered
-}
-
-func (yf *YuniKornSchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
+func (batch *SchedulerManager) ConfigureReconciler(b *builder.Builder) *builder.Builder {
+	batch.factory.ConfigureReconciler(b)
 	return b
+}
+
+func (batch *SchedulerManager) AddToScheme(scheme *runtime.Scheme) {
+	batch.factory.AddToScheme(scheme)
 }
