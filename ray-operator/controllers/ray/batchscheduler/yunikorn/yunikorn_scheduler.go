@@ -79,12 +79,10 @@ func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, pare
 	y.populatePodLabels(ctx, app, pod, RayClusterApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
 	y.populatePodLabels(ctx, app, pod, RayClusterQueueLabelName, YuniKornPodQueueLabelName)
 	pod.Spec.SchedulerName = y.Name()
-
 	// when gang scheduling is enabled, extra annotations need to be added to all pods
 	if y.isGangSchedulingEnabled(app) {
 		// populate the taskGroups info to each pod
 		y.populateTaskGroupsAnnotationToPod(ctx, app, pod)
-
 		// set the task group name based on the head or worker group name
 		// the group name for the head and each of the worker group should be different
 		pod.Annotations[YuniKornTaskGroupNameAnnotationName] = groupName
