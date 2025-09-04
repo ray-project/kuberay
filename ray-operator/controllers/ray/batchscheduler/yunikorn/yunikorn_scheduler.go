@@ -80,9 +80,9 @@ func (y *YuniKornScheduler) populateSubmitterPodTemplateLabelsFromRayJob(ctx con
 	}
 }
 
-// AddMetadataToChildResourceFromRayCluster adds essential labels and annotations to the Ray pods
+// AddMetadataToPodFromRayCluster adds essential labels and annotations to the Ray pod
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToChildResourceFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (y *YuniKornScheduler) AddMetadataToPodFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	// the applicationID and queue name must be provided in the labels
 	y.populatePodLabelsFromRayCluster(ctx, rayCluster, pod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
 	y.populatePodLabelsFromRayCluster(ctx, rayCluster, pod, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)

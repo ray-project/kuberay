@@ -424,7 +424,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 	)
 
 	rayPod := createPod("ray-pod", "default")
-	yk.AddMetadataToChildResourceFromRayCluster(ctx, rayCluster, "ray-cluster-without-gang-scheduling", rayPod)
+	yk.AddMetadataToPodFromRayCluster(ctx, rayCluster, "ray-cluster-without-gang-scheduling", rayPod)
 
 	assert.Equal(t, "job-1", rayPod.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayPod.Labels[YuniKornPodQueueLabelName])
@@ -449,7 +449,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 	})
 
 	rayPod = createPod("ray-pod", "default")
-	yk.AddMetadataToChildResourceFromRayCluster(ctx, rayCluster, "ray-cluster-with-gang-scheduling", rayPod)
+	yk.AddMetadataToPodFromRayCluster(ctx, rayCluster, "ray-cluster-with-gang-scheduling", rayPod)
 
 	assert.Equal(t, "job-2", rayPod.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayPod.Labels[YuniKornPodQueueLabelName])

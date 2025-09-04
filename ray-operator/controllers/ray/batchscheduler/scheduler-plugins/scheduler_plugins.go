@@ -93,9 +93,9 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, objec
 	return nil
 }
 
-// AddMetadataToChildResourceFromRayCluster adds essential labels and annotations to the Ray pods
+// AddMetadataToPodFromRayCluster adds essential labels and annotations to the Ray pod
 // the scheduler needs these labels and annotations in order to do the scheduling properly
-func (k *KubeScheduler) AddMetadataToChildResourceFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+func (k *KubeScheduler) AddMetadataToPodFromRayCluster(_ context.Context, rayCluster *rayv1.RayCluster, _ string, pod *corev1.Pod) {
 	// when gang scheduling is enabled, extra labels need to be added to all pods
 	if k.isGangSchedulingEnabled(rayCluster) {
 		pod.Labels[kubeSchedulerPodGroupLabelKey] = rayCluster.Name
