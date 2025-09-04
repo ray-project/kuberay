@@ -208,7 +208,7 @@ func (y *YuniKornScheduler) populateTaskGroupsAnnotationToRayCluster(ctx context
 	}
 
 	rayCluster.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
-	logger.Info("Gang Scheduling enabled for RayCluster")
+	logger.Info("Gang Scheduling enabled for RayJob")
 }
 
 func (y *YuniKornScheduler) populateTaskGroupsAnnotationToSubmitterPodTemplate(ctx context.Context, rayJob *rayv1.RayJob, submitterTemplate *corev1.PodTemplateSpec) {
