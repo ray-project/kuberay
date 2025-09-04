@@ -69,7 +69,7 @@ func (y *YuniKornScheduler) populateRayClusterLabelsFromRayJob(ctx context.Conte
 	}
 }
 
-// populateSubmitterPodTemplateLabelsFromRayJob adds essential labels and annotations to the Ray pods
+// populateSubmitterPodTemplateLabelsFromRayJob adds essential labels and annotations to the Submitter pod
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
 func (y *YuniKornScheduler) populateSubmitterPodTemplateLabelsFromRayJob(ctx context.Context, rayJob *rayv1.RayJob, submitterTemplate *corev1.PodTemplateSpec, sourceKey string, targetKey string) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
