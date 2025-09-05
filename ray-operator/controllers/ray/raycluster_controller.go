@@ -102,6 +102,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
@@ -301,6 +302,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		r.reconcileHeadlessService,
 		r.reconcileServeService,
 		r.reconcilePods,
+		r.reconcileNetworkPolicies,
 	}
 
 	for _, fn := range reconcileFuncs {
@@ -783,6 +785,97 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 	return nil
+}
+
+// reconcileNetworkPolicies creates a default deny NetworkPolicy for the RayCluster.
+func (r *RayClusterReconciler) reconcileNetworkPolicies(ctx context.Context, instance *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Feature gate check
+	if !features.Enabled(features.RayClusterNetworkPolicy) {
+		logger.V(1).Info("NetworkPolicy feature disabled, skipping reconciliation")
+		return nil
+	}
+
+	logger.Info("Reconciling Network Policies")
+
+	networkPolicy := createDefaultDenyPolicy(instance)
+
+	if err := ctrl.SetControllerReference(instance, networkPolicy, r.Scheme); err != nil {
+		return err
+	}
+
+	if err := r.Create(ctx, networkPolicy); err != nil {
+		if errors.IsAlreadyExists(err) {
+			logger.Info("NetworkPolicy already exists, no need to create")
+			return nil
+		}
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy), "Failed to apply Head NetworkPolicy %s/%s, %v", networkPolicy.Namespace, networkPolicy.Name, err)
+		return err
+	}
+
+	logger.Info("Successfully created NetworkPolicy", "name", networkPolicy.Name)
+	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy),
+		"Created NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
+
+	return nil
+}
+
+// createDefaultDenyPolicy creates a default deny NetworkPolicy for the RayCluster.
+func createDefaultDenyPolicy(instance *rayv1.RayCluster) *networkingv1.NetworkPolicy {
+	operatorNamespace := os.Getenv("POD_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "ray-system" // fallback
+	}
+
+	labels := map[string]string{
+		utils.RayClusterLabelKey:                instance.Name,
+		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
+	}
+
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-default-deny", instance.Name),
+			Namespace: instance.Namespace,
+			Labels:    labels,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					utils.RayClusterLabelKey: instance.Name,
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				// Allow traffic from within the same cluster
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									utils.RayClusterLabelKey: instance.Name,
+								},
+							},
+						},
+						// Allow KubeRay operator communication
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+								},
+							},
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"kubernetes.io/metadata.name": operatorNamespace,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
