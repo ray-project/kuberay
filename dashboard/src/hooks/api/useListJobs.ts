@@ -14,7 +14,7 @@ export const useListJobs = (refreshInterval: number = 5000) => {
     // Also, you can't reach all_namespaces in the kubeflow UI, but you can do it
     // when viewing the standalone app.
     namespace
-      ? `${namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`}/jobs`
+      ? `${namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`}/rayjobs`
       : null,
     fetcher,
     {

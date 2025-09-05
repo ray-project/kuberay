@@ -15,7 +15,7 @@ export const useListClusters = (refreshInterval: number = 5000) => {
     namespace
       ? `${
           namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`
-        }/clusters`
+        }/rayclusters`
       : null,
     fetcher,
     {

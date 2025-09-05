@@ -5,7 +5,7 @@ import { useNamespace } from "@/components/NamespaceProvider";
 import { config } from "@/utils/constants";
 
 async function _deleteCluster(namespace: string, clusterName: string) {
-  const baseUrl = `${config.url}/namespaces/${namespace}/clusters/`;
+  const baseUrl = `${config.url}/namespaces/${namespace}/rayclusters/`;
   const response = await fetch(`${baseUrl}${clusterName}`, {
     method: "DELETE",
   });
@@ -29,7 +29,7 @@ export const useDeleteClusters = () => {
     // response is empty.
     try {
       await mutate(
-        `/namespaces/${namespace}/clusters`,
+        `/namespaces/${namespace}/rayclusters`,
         Promise.all(
           clusters.map((clusterName) => _deleteCluster(namespace, clusterName)),
         ),
