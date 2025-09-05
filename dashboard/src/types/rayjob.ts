@@ -1,4 +1,4 @@
-import { ClusterSpec } from "./raycluster";
+// import { RayClusterItem } from "./raycluster";
 
 export interface Job {
   name: string;
@@ -6,7 +6,8 @@ export interface Job {
   user: string;
   entrypoint: string;
   jobId?: string;
-  clusterSpec: ClusterSpec;
+  // In this commit temporarily, this will be fix in the next commit
+  clusterSpec: any;
   createdAt: string;
   jobStatus: string;
   jobDeploymentStatus?: string;
