@@ -162,7 +162,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	cmd = append(cmd, "--", entrypoint, ";")
+	// Use "sh -c" to properly handle shell operators like && and ;
+	cmd = append(cmd, "--", "sh", "-c", strconv.Quote(entrypoint), ";")
 	if submissionMode == rayv1.K8sJobMode {
 		cmd = append(cmd, "fi", ";")
 		cmd = append(cmd, jobFollowCommand...)
