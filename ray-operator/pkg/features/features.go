@@ -24,6 +24,13 @@ const (
 	//
 	// Enables new deletion policy API in RayJob
 	RayJobDeletionPolicy featuregate.Feature = "RayJobDeletionPolicy"
+
+	// owner: @laurafitzgerald @kyranbeane
+	// rep: https://github.com/ray-project/kuberay/issues/3974
+	// alpha: tbd
+	//
+	// Enables mTLS with certmanager support for Ray clusters
+	MTLS featuregate.Feature = "MTLS"
 )
 
 func init() {
@@ -33,6 +40,7 @@ func init() {
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions: {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:       {Default: false, PreRelease: featuregate.Alpha},
+	MTLS:                       {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
