@@ -262,10 +262,10 @@ func (e2etc *End2EndTestingContext) GetCurrentName() string {
 func (e2etc *End2EndTestingContext) CreateComputeTemplate(t *testing.T) {
 	computeTemplateRequest := &api.CreateComputeTemplateRequest{
 		ComputeTemplate: &api.ComputeTemplate{
-			Name:       e2etc.computeTemplateName,
-			Namespace:  e2etc.namespaceName,
-			Cpu:        ComputeTemplateCPUForE2E,
-			Memory:     CompTemplateMemGiBForE2E,
+			Name:      e2etc.computeTemplateName,
+			Namespace: e2etc.namespaceName,
+			Cpu:       ComputeTemplateCPUForE2E,
+			Memory:    CompTemplateMemGiBForE2E,
 		},
 		Namespace: e2etc.namespaceName,
 	}

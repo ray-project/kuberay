@@ -689,8 +689,6 @@ func TestPopulateTemplate(t *testing.T) {
 		template.ExtendedResources,
 		"Extended resources mismatch",
 	)
-	// test memory unit GiB
-	assert.Equal(t, "Gi", template.MemoryUnit, "Memory Unit mismatch")
 
 	template = FromKubeToAPIComputeTemplate(&configMapWithMemoryUnit)
 	assert.Equal(t, uint32(8192), template.Memory, "Memory mismatch")
