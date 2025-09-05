@@ -35,8 +35,12 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 
 			// Convert request body to Golang Map object
 			contentType := r.Header.Get("Content-Type")
+			fmt.Println("Content Type: ", contentType)
+			fmt.Printf("Request body length: %d\n", len(bodyBytes))
+			fmt.Printf("Request body preview: %.200s\n", string(bodyBytes))
 			requestMap, err := convertRequestBodyToMap(bodyBytes, contentType)
 			if err != nil {
+				fmt.Printf("convertRequestBodyToMap error: %v\n", err)
 				http.Error(w, "Failed to convert request body to Golang map object", http.StatusBadRequest)
 				return
 			}

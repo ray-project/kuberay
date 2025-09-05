@@ -103,7 +103,8 @@ func (rec *RemoteExecuteClient) executeRequest(httpRequest *http.Request, _ stri
 	}
 
 	// call curl execution inside pod
-	bodyBytes, err := rec.execCommandWithCurlInPod(pod, httpRequest.URL.String(), method, body)
+	contentType := httpRequest.Header.Get("Content-Type")
+	bodyBytes, err := rec.execCommandWithCurlInPod(pod, httpRequest.URL.String(), method, body, contentType)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,7 +133,7 @@ func (rec *RemoteExecuteClient) findPod(namespace string) (*corev1.Pod, error) {
 }
 
 // execCommandWithCurlInPod executes a curl command inside the specified pod's container by `kubectl exec`
-func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url string, method string, jsonBody string) ([]byte, error) {
+func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url string, method string, body string, contentType string) ([]byte, error) {
 	var (
 		execOut bytes.Buffer
 		execErr bytes.Buffer
@@ -142,8 +143,11 @@ func (rec *RemoteExecuteClient) execCommandWithCurlInPod(pod *corev1.Pod, url st
 	// E.g. {foo: boo, ...}HTTP_STATUS:200
 	command := []string{"curl", "-s", "-L", "-w", "HTTP_STATUS:%{http_code}", "-H", "Accept: application/json", "-X", method}
 
-	if jsonBody != "" {
-		command = append(command, "-H", "Content-Type: application/json", "-d", jsonBody)
+	if body != "" {
+		if contentType != "" {
+			command = append(command, "-H", fmt.Sprintf("Content-Type: %s", contentType))
+		}
+		command = append(command, "-d", body)
 	}
 
 	command = append(command, url)
