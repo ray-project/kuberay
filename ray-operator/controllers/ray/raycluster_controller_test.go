@@ -1416,4 +1416,66 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 	})
+
+	Describe("RayCluster with multi-host observability", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		rayCluster := rayClusterTemplate("raycluster-multi-host-observability", namespace)
+		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 2
+		gpuResource := corev1.ResourceName("nvidia.com/gpu")
+		tpuResource := corev1.ResourceName("google.com/tpu")
+		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		}
+		rayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+			gpuResource:           resource.MustParse("1"),
+			tpuResource:           resource.MustParse("1"),
+		}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+
+		It("Verify RayCluster spec", func() {
+			// These test are designed based on the following assumptions:
+			// (1) Ray Autoscaler is disabled.
+			// (2) There is only one worker group, and its `replicas` is set to 3, and `maxReplicas` is set to 4, `numOfHosts` is set to 2, and `workersToDelete` is empty.
+			Expect(rayCluster.Spec.EnableInTreeAutoscaling).To(BeNil())
+			Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(1))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].Replicas).To(Equal(ptr.To[int32](3)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas).To(Equal(ptr.To[int32](4)))
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete).To(BeEmpty())
+			Expect(rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts).To(Equal(int32(2)))
+		})
+
+		It("Create a RayCluster custom resource", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
+		})
+
+		It("Check the number of worker Pods", func() {
+			numWorkerPods := 3 * 2
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
+		})
+
+		It("have expected Desired resource.", func() {
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
+			desiredMemory := resource.MustParse("7Gi")
+			desiredCPU := resource.MustParse("7")
+			desiredGPU := resource.MustParse("6")
+			desiredTPU := resource.MustParse("6")
+			Expect(rayCluster.Status.DesiredMemory).To(Equal(desiredMemory))
+			Expect(rayCluster.Status.DesiredCPU).To(Equal(desiredCPU))
+			Expect(rayCluster.Status.DesiredGPU).To(Equal(desiredGPU))
+			Expect(rayCluster.Status.DesiredTPU).To(Equal(desiredTPU))
+		})
+	})
 })
