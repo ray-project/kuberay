@@ -5,7 +5,7 @@ import { useNamespace } from "@/components/NamespaceProvider";
 import { config } from "@/utils/constants";
 
 async function _deleteJob(namespace: string, jobName: string) {
-  const baseUrl = `${config.url}/namespaces/${namespace}/jobs/`;
+  const baseUrl = `${config.url}/namespaces/${namespace}/rayjobs/`;
   const response = await fetch(`${baseUrl}${jobName}`, {
     method: "DELETE",
   });
@@ -29,7 +29,7 @@ export const useDeleteJobs = () => {
     // response is empty.
     try {
       await mutate(
-        `/namespaces/${namespace}/jobs`,
+        `/namespaces/${namespace}/rayjobs`,
         Promise.all(jobs.map((jobName) => _deleteJob(namespace, jobName))),
         { populateCache: false },
       );

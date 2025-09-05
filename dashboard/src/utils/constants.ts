@@ -5,7 +5,7 @@ interface RuntimeConfig {
 }
 
 const defaultConfig: RuntimeConfig = {
-  url: "http://localhost:31888/apis/v1",
+  url: "http://localhost:31888/apis/ray.io/v1",
 };
 
 let runtimeConfig: RuntimeConfig | null = null;
