@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -35,10 +36,13 @@ type RayDashboardClientInterface interface {
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
+	AsyncGetJobInfo(ctx context.Context, jobId string)
 }
 
 type RayDashboardClient struct {
 	client       *http.Client
+	jobInfoMap   *sync.Map
+	taskQueue    chan func()
 	dashboardURL string
 }
 
@@ -341,4 +345,14 @@ func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utiltypes.RuntimeEnvType, e
 		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}
 	return runtimeEnv, nil
+}
+
+func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) {
+	r.taskQueue <- func() {
+		jobInfo, err := r.GetJobInfo(ctx, jobId)
+		if err != nil {
+			return
+		}
+		r.jobInfoMap.Store(jobId, *jobInfo)
+	}
 }

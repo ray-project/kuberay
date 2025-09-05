@@ -36,23 +36,14 @@ const (
 	RayJobDefaultRequeueDuration    = 3 * time.Second
 	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
 	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	DashboardWorkerNum              = 100
+	TaskQueueSize                   = 500
 )
 
 var jobInfoMap sync.Map
 
 // Simple worker pool for job info updates
-var jobInfoChan = make(chan func(), 300) // Unbuffered channel with unlimited capacity
-
-func init() {
-	// Start 10 worker goroutines that will live for the entire program
-	for i := 0; i < 100; i++ {
-		go func() {
-			for task := range jobInfoChan {
-				task() // Execute the function
-			}
-		}()
-	}
-}
+var taskQueue = make(chan func(), TaskQueueSize) // Unbuffered channel with unlimited capacity
 
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
@@ -70,7 +61,14 @@ type RayJobReconcilerOptions struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	dashboardClientFunc := provider.GetDashboardClient(mgr)
+	dashboardClientFunc := provider.GetDashboardClient(mgr, &jobInfoMap, taskQueue)
+	for i := 0; i < DashboardWorkerNum; i++ {
+		go func() {
+			for task := range taskQueue {
+				task()
+			}
+		}()
+	}
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
@@ -274,7 +272,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		// Check the current status of ray jobs
-		jobInfoFromMapInterface, exists := jobInfoMap.Load(rayJobInstance.Name)
+		jobInfoFromMapInterface, exists := jobInfoMap.Load(rayJobInstance.Status.JobId)
 		var jobInfoFromMap utiltypes.RayJobInfo
 		if exists {
 			jobInfoFromMap = jobInfoFromMapInterface.(utiltypes.RayJobInfo)
@@ -299,7 +297,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 			jobInfoFromMap = *jobInfo
-			jobInfoMap.Store(rayJobInstance.Name, jobInfoFromMap)
+			jobInfoMap.Store(rayJobInstance.Status.JobId, jobInfoFromMap)
 		}
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
@@ -321,26 +319,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				reason = rayv1.AppFailed
 			}
 		} else {
-			// Submit to simple worker pool instead of creating new goroutine
-			select {
-			case jobInfoChan <- func() {
-				rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
-				if err != nil {
-					logger.Error(err, "Failed to get Job client", "JobId", rayJobInstance.Status.JobId)
-					return
-				}
-				jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-				if err != nil {
-					logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-					return
-				}
-				jobInfoMap.Store(rayJobInstance.Name, *jobInfo)
-			}:
-				// Task submitted successfully
-			default:
-				// Channel full, skip this update
-				logger.V(1).Info("Worker pool busy, skipping job info update")
+			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
+			rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
 		}
 
 		// Always update RayClusterStatus along with JobStatus and JobDeploymentStatus updates.

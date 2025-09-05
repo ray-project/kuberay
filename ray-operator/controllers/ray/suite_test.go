@@ -18,6 +18,7 @@ package ray
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -51,7 +52,7 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager, _ *sync.Map, _ chan func()) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
 	return func(_ *rayv1.RayCluster, _ string) (utils.RayDashboardClientInterface, error) {
 		return fakeRayDashboardClient, nil
 	}
