@@ -319,7 +319,8 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utiltypes.RayJobRequest, error) 
 		Metadata:     rayJob.Spec.Metadata,
 	}
 	if len(rayJob.Spec.RuntimeEnvYAML) != 0 {
-		runtimeEnv, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML)
+		runtimeEnv := utiltypes.RuntimeEnvType{}
+		err := yaml.Unmarshal([]byte(rayJob.Spec.RuntimeEnvYAML), &runtimeEnv)
 		if err != nil {
 			return nil, err
 		}
@@ -333,12 +334,4 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utiltypes.RayJobRequest, error) 
 		}
 	}
 	return req, nil
-}
-
-func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utiltypes.RuntimeEnvType, error) {
-	var runtimeEnv utiltypes.RuntimeEnvType
-	if err := yaml.Unmarshal([]byte(runtimeEnvYAML), &runtimeEnv); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
-	}
-	return runtimeEnv, nil
 }
