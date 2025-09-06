@@ -562,7 +562,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitterTemplate = common.GetDefaultSubmitterTemplate(rayClusterInstance)
+		submitterTemplate = common.GetDefaultSubmitterTemplate(&rayClusterInstance.Spec)
 		logger.Info("default submitter template is used")
 	} else {
 		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
@@ -578,7 +578,7 @@ func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, ray
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
 func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
-	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(rayClusterInstance)
+	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
 
 	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
