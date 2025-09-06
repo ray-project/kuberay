@@ -204,7 +204,8 @@ const (
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
-	RayNodeHeadGroupLabelValue = "headgroup"
+	RayNodeHeadGroupLabelValue      = "headgroup"
+	RayNodeSubmitterGroupLabelValue = "submittergroup"
 
 	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
 	SubmitterContainerName = "ray-job-submitter"
