@@ -285,6 +285,11 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.TTLSeconds != nil {
+		in, out := &in.TTLSeconds, &out.TTLSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	if in.AutoscalerOptions != nil {
 		in, out := &in.AutoscalerOptions, &out.AutoscalerOptions
 		*out = new(AutoscalerOptions)
@@ -336,6 +341,10 @@ func (in *RayClusterStatus) DeepCopyInto(out *RayClusterStatus) {
 	out.DesiredTPU = in.DesiredTPU.DeepCopy()
 	if in.LastUpdateTime != nil {
 		in, out := &in.LastUpdateTime, &out.LastUpdateTime
+		*out = (*in).DeepCopy()
+	}
+	if in.TTLExpirationTime != nil {
+		in, out := &in.TTLExpirationTime, &out.TTLExpirationTime
 		*out = (*in).DeepCopy()
 	}
 	if in.StateTransitionTimes != nil {
