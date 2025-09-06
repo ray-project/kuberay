@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"sync"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -84,8 +86,8 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+func (config Configuration) GetDashboardClient(mgr manager.Manager, jobInfoMap *sync.Map, taskQueue chan func()) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, jobInfoMap, taskQueue)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
