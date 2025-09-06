@@ -87,11 +87,59 @@ const (
 
 type DeletionPolicyType string
 
+// DeletionStrategy defines the deletion policies for a RayJob.
+// It allows for fine-grained control over resource cleanup after a job finishes.
+// Note: While the legacy `onSuccess` and `onFailure` fields are still supported for backward compatibility,
+// it is highly recommended to use the new `deletionRules` field for defining multi-stage deletion strategies.
+// The validation webhook will prevent the simultaneous use of legacy fields (onSuccess, onFailure) and the new `deletionRules` field.
 type DeletionStrategy struct {
-	OnSuccess DeletionPolicy `json:"onSuccess"`
-	OnFailure DeletionPolicy `json:"onFailure"`
+	// OnSuccess is the deletion policy for a successful RayJob.
+	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
+	// +optional
+	OnSuccess DeletionPolicy `json:"onSuccess,omitempty"`
+
+	// OnFailure is the deletion policy for a failed RayJob.
+	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
+	// +optional
+	OnFailure DeletionPolicy `json:"onFailure,omitempty"`
+
+	// DeletionRules is a list of deletion rules that are executed based on their conditions.
+	// This new field enables features like deleting workers first for debugging, followed by the cluster.
+	// It cannot be used simultaneously with the legacy `onSuccess` or `onFailure` fields.
+	// +optional
+	// +listType=atomic
+	DeletionRules []DeletionRule `json:"deletionRules,omitempty"`
 }
 
+// DeletionRule defines a single deletion action and its trigger condition.
+// This is the new, recommended way to define deletion behavior.
+type DeletionRule struct {
+	// The type of resource to delete. This field is required.
+	// +kubebuilder:validation:Enum=DeleteCluster;DeleteWorkers;DeleteSelf;DeleteNone
+	Resource DeletionPolicyType `json:"resource"`
+
+	// The condition under which this deletion rule is triggered. This field is required.
+	Condition DeletionCondition `json:"condition"`
+}
+
+// DeletionCondition specifies the trigger conditions for a deletion action.
+type DeletionCondition struct {
+	// The terminal status of the RayJob that triggers this condition. This field is required.
+	// For the initial implementation, only "SUCCEEDED" and "FAILED" are supported.
+	// +kubebuilder:validation:Enum=SUCCEEDED;FAILED
+	JobStatus JobStatus `json:"jobStatus"`
+
+	// TTLSecondsAfterFinished is the time in seconds from when the JobStatus
+	// reaches the specified terminal state to when this deletion action should be triggered.
+	// The value must be a non-negative integer.
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
+}
+
+// DeletionPolicy is the legacy single-stage deletion policy.
+// Deprecated: This struct is part of the legacy API. Use DeletionRule for new configurations.
 type DeletionPolicy struct {
 	// Valid values are 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf' or 'DeleteNone'.
 	// +kubebuilder:validation:XValidation:rule="self in ['DeleteCluster', 'DeleteWorkers', 'DeleteSelf', 'DeleteNone']",message="the policy field value must be either 'DeleteCluster', 'DeleteWorkers', 'DeleteSelf', or 'DeleteNone'"
