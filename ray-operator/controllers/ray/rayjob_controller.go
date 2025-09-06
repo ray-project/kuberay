@@ -185,6 +185,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if utils.IsDeterministicHeadPodNameEnabled() && len(rayJobInstance.Spec.ClusterSelector) == 0 {
+			initRayHeadSvc(rayJobInstance)
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -612,6 +616,18 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
 
 	return nil
+}
+
+func initRayHeadSvc(rayJobInstance *rayv1.RayJob) {
+	if rayJobInstance.Spec.RayClusterSpec == nil {
+		rayJobInstance.Spec.RayClusterSpec = &rayv1.RayClusterSpec{}
+	}
+
+	if rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService == nil {
+		rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService = &corev1.Service{}
+	}
+
+	rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.HeadService.Name = rayJobInstance.Name
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.

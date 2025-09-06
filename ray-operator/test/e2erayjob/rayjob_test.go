@@ -1,6 +1,7 @@
 package e2erayjob
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ func TestRayJob(t *testing.T) {
 
 	test.T().Run("Successful RayJob", func(_ *testing.T) {
 		// RayJob
+		os.Setenv(utils.ENABLE_DETERMINISTIC_HEAD_POD_NAME, "true")
 		rayJobAC := rayv1ac.RayJob("counter", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
@@ -44,6 +46,15 @@ env_vars:
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD,
+			*rayJob.Spec.RayClusterSpec, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred(), "Failed to get Head Service Name: %v", rayJobHeadSvcName)
+
+		g.Eventually(func() error {
+			_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), rayJobHeadSvcName, metav1.GetOptions{})
+			return err
+		}).Should(Succeed())
 
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
