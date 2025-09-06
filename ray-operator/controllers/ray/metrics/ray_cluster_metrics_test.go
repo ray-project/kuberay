@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -30,6 +31,7 @@ func TestRayClusterInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-ray-cluster",
 						Namespace: "default",
+						UID:       types.UID("test-ray-cluster-uid"),
 						Labels: map[string]string{
 							"ray.io/originated-from-crd": "RayJob",
 						},
@@ -39,13 +41,14 @@ func TestRayClusterInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-ray-cluster-2",
 						Namespace: "default",
+						UID:       types.UID("test-ray-cluster-2-uid"),
 						Labels:    map[string]string{},
 					},
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob"} 1`,
-				`kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="None"} 1`,
+				`kuberay_cluster_info{name="test-ray-cluster",namespace="default",owner_kind="RayJob",uid="test-ray-cluster-uid"} 1`,
+				`kuberay_cluster_info{name="test-ray-cluster-2",namespace="default",owner_kind="None",uid="test-ray-cluster-2-uid"} 1`,
 			},
 		},
 	}
@@ -98,9 +101,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 
 	// Test case 1: Delete specific cluster metrics
 	// Manually add some metrics
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster1", "namespace": "ns1"}).Set(10.5)
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster2", "namespace": "ns2"}).Set(20.3)
-	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster3", "namespace": "ns1"}).Set(5.7)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster1", "namespace": "ns1", "uid": "uid1"}).Set(10.5)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster2", "namespace": "ns2", "uid": "uid2"}).Set(20.3)
+	manager.rayClusterProvisionedDurationSeconds.With(prometheus.Labels{"name": "cluster3", "namespace": "ns1", "uid": "uid3"}).Set(5.7)
 
 	// Test deleting metrics for cluster1 in ns1
 	manager.DeleteRayClusterMetrics("cluster1", "ns1")
@@ -109,9 +112,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
-	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
+	assert.NotContains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
+	assert.Contains(t, body, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
 
 	// Test case 2: Delete with empty name
 	manager.DeleteRayClusterMetrics("", "ns1")
@@ -120,9 +123,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body2, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 
 	// Test case 3: Delete with empty name and namespace
 	manager.DeleteRayClusterMetrics("", "")
@@ -131,9 +134,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body3, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body3, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 
 	// Test case 4: Delete with false name and namespace
 	manager.DeleteRayClusterMetrics("ns2", "cluster2")
@@ -142,9 +145,9 @@ func TestDeleteRayClusterMetrics(t *testing.T) {
 	body4, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1"}`)
-	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1"}`)
-	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2"}`)
+	assert.NotContains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster1",namespace="ns1",uid="uid1"}`)
+	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster3",namespace="ns1",uid="uid3"}`)
+	assert.Contains(t, body4, `kuberay_cluster_provisioned_duration_seconds{name="cluster2",namespace="ns2",uid="uid2"}`)
 }
 
 func TestRayClusterConditionProvisioned(t *testing.T) {
@@ -160,6 +163,7 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "provisioned-cluster",
 						Namespace: "default",
+						UID:       types.UID("provisioned-cluster-uid"),
 					},
 					Status: rayv1.RayClusterStatus{
 						Conditions: []metav1.Condition{
@@ -174,6 +178,7 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "unprovisioned-cluster",
 						Namespace: "default",
+						UID:       types.UID("unprovisioned-cluster-uid"),
 					},
 					Status: rayv1.RayClusterStatus{
 						Conditions: []metav1.Condition{
@@ -186,8 +191,8 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_cluster_condition_provisioned{condition="true",name="provisioned-cluster",namespace="default"} 1`,
-				`kuberay_cluster_condition_provisioned{condition="false",name="unprovisioned-cluster",namespace="default"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="true",name="provisioned-cluster",namespace="default",uid="provisioned-cluster-uid"} 1`,
+				`kuberay_cluster_condition_provisioned{condition="false",name="unprovisioned-cluster",namespace="default",uid="unprovisioned-cluster-uid"} 1`,
 			},
 		},
 	}

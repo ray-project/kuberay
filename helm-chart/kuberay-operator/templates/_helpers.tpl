@@ -166,6 +166,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods/resize
+  verbs:
+  - patch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
