@@ -1,6 +1,5 @@
-import { Cluster, ClusterRow, ClusterStatus } from "@/types/raycluster";
-import { Job, JobRow, Jobs, Status } from "../types/rayjob";
-import { roblox } from "./constants";
+import { ClusterRow, ClusterStatus } from "@/types/raycluster";
+import { Job, JobRow, Jobs, Status } from "@/types/rayjob";
 
 export const filterJobs = (
   jobs: Jobs,
@@ -55,68 +54,43 @@ const transformJob = (job: Job): JobRow => {
 };
 
 export const filterCluster = (
-  clusters: Cluster[],
+  clusters: ClusterRow[],
   search: string,
   statusFilter: ClusterStatus | null,
   typeFilter: number,
-): ClusterRow[] =>
-  clusters
-    .map((cluster) => {
-      if (!cluster.clusterState) {
-        cluster.clusterState = "PENDING";
-      }
-      cluster.clusterState = cluster.clusterState.toUpperCase();
-      return cluster;
-    })
-    .filter((cluster) => {
-      if (
-        statusFilter &&
-        cluster.clusterState.toUpperCase() !== statusFilter.toUpperCase()
-      ) {
-        return false;
-      }
-      if (
-        search &&
-        !cluster.name.toUpperCase().includes(search.toUpperCase())
-      ) {
-        return false;
-      }
-      // if the label is not rayllmbatchinference or rayjob, then it's a notebook
-      // this relies on roblox flags
-      if (
-        roblox &&
-        ((typeFilter == 2 && !clusterIsRayJob(cluster)) ||
-          (typeFilter == 1 && clusterIsRayJob(cluster)))
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map(transformCluster);
+): ClusterRow[] => {
+  return clusters.filter((cluster) => {
+    if (statusFilter && cluster.clusterState !== statusFilter) {
+      return false;
+    }
 
-const transformCluster = (cluster: Cluster): ClusterRow => {
-  return {
-    name: cluster.name,
-    clusterState: cluster.clusterState,
-    createdAt: cluster.createdAt,
-    links: {
-      rayGrafanaDashboardLink: cluster.rayGrafanaDashboardLink,
-      rayHeadDashboardLink: cluster.rayHeadDashboardLink,
-      notebookLink:
-        roblox && clusterIsNotebook(cluster) && !clusterIsRayJob(cluster)
-          ? cluster.notebookLink
-          : "",
-    },
-  };
+    const searchUpper = search.toUpperCase();
+    const nameMatch = cluster.name.toUpperCase().includes(searchUpper);
+    const namespaceMatch = cluster.namespace
+      .toUpperCase()
+      .includes(searchUpper);
+
+    if (!nameMatch && !namespaceMatch) {
+      return false;
+    }
+    const isRayJob = clusterIsRayJob(cluster);
+
+    if (typeFilter === 1 && isRayJob) {
+      return false;
+    }
+    if (typeFilter === 2 && !isRayJob) {
+      return false;
+    }
+
+    return true;
+  });
 };
 
-export const clusterIsRayJob = (cluster: Cluster): boolean => {
-  const jobType =
-    cluster.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"];
+export const clusterIsRayJob = (cluster: ClusterRow): boolean => {
+  if (!cluster.labels) {
+    return false;
+  }
+
+  const jobType = cluster.labels["mlp.rbx.com/component"];
   return jobType === "rayjob" || jobType === "rayllmbatchinference";
-};
-
-export const clusterIsNotebook = (cluster: Cluster): boolean => {
-  const notebookType = cluster.annotations["mlp.rbx.com/notebook-type"];
-  return notebookType === "jupyter" || notebookType === "vscode";
 };

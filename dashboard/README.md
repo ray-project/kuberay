@@ -19,7 +19,7 @@ make install
 
 Now, you should be able to access the KubeRay apiserver at `http://localhost:31888/apis/v1/namespaces/default/jobs`.
 
-Now, to deploy the dashboard, you can run `npm run dev` and go to `localhost:3000/ray/jobs` on your browser. Note that
+Now, to deploy the dashboard, you can run `yarn dev` and go to `localhost:3000/ray/jobs` on your browser. Note that
 you might need to disable CORS by launching Chrome with
 
 ```bash
