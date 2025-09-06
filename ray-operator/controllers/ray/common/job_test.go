@@ -234,6 +234,6 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 			},
 		},
 	}
-	template := GetDefaultSubmitterTemplate(rayCluster)
+	template := GetDefaultSubmitterTemplate(&rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 }

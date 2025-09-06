@@ -172,11 +172,11 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 }
 
 // GetDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.PodTemplateSpec {
+func GetDefaultSubmitterTemplate(rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
-				GetDefaultSubmitterContainer(rayClusterInstance),
+				GetDefaultSubmitterContainer(rayClusterSpec),
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
@@ -184,11 +184,11 @@ func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.Po
 }
 
 // GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
-func GetDefaultSubmitterContainer(rayClusterInstance *rayv1.RayCluster) corev1.Container {
+func GetDefaultSubmitterContainer(rayClusterSpec *rayv1.RayClusterSpec) corev1.Container {
 	return corev1.Container{
 		Name: utils.SubmitterContainerName,
 		// Use the image of the Ray head to be defensive against version mismatch issues
-		Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
+		Image: rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("1"),
