@@ -141,6 +141,7 @@ var configMapWithoutTolerations = corev1.ConfigMap{
 		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
 		"name":               "head-node-template",
 		"namespace":          "max",
+		"memory_unit":        "Gi",
 	},
 }
 
@@ -154,6 +155,20 @@ var configMapWithTolerations = corev1.ConfigMap{
 		"name":               "head-node-template",
 		"namespace":          "max",
 		"tolerations":        "[{\"key\":\"blah1\",\"operator\":\"Exists\",\"effect\":\"NoExecute\"}]",
+		"memory_unit":        "Gi",
+	},
+}
+
+var configMapWithMemoryUnit = corev1.ConfigMap{
+	Data: map[string]string{
+		"cpu":                "4",
+		"gpu":                "0",
+		"gpu_accelerator":    "",
+		"memory":             "8192",
+		"extended_resources": "{\"vpc.amazonaws.com/efa\": 32}",
+		"name":               "head-node-template",
+		"namespace":          "max",
+		"memory_unit":        "Mi",
 	},
 }
 
@@ -674,6 +689,11 @@ func TestPopulateTemplate(t *testing.T) {
 		template.ExtendedResources,
 		"Extended resources mismatch",
 	)
+
+	template = FromKubeToAPIComputeTemplate(&configMapWithMemoryUnit)
+	assert.Equal(t, uint32(8192), template.Memory, "Memory mismatch")
+	// test memory unit MiB
+	assert.Equal(t, "Mi", template.MemoryUnit, "Memory Unit mismatch")
 }
 
 func tolerationToString(toleration *api.PodToleration) string {
