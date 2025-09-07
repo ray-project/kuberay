@@ -26,6 +26,8 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToPodFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
+	// AddMetadataToChildResourcesFromRayJob enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
+	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResourcesFromRayJob(ctx context.Context, parent client.Object, child client.Object, groupName string)
 }
 
