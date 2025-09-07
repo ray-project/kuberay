@@ -24,6 +24,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
+	InitClient(client *http.Client, dashboardURL string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -38,21 +39,26 @@ type RayDashboardClientInterface interface {
 }
 
 type RayDashboardClient struct {
-	Client       *http.Client
-	DashboardURL string
+	client       *http.Client
+	dashboardURL string
+}
+
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string) {
+	r.client = client
+	r.dashboardURL = dashboardURL
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
 func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson []byte) error {
 	var req *http.Request
 	var err error
-	if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.DashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, http.MethodPut, r.dashboardURL+DeployPathV2, bytes.NewBuffer(configJson)); err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -80,12 +86,12 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all live applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.DashboardURL+ServeDetailsPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -125,12 +131,12 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
 func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.DashboardURL+JobPath+jobId, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +161,12 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 }
 
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.DashboardURL+JobPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -198,13 +204,13 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.DashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath, bytes.NewBuffer(rayJobJson))
 	if err != nil {
 		return
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return
 	}
@@ -230,11 +236,11 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 
 // Get Job Log
 func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.DashboardURL+JobPath+jobName+"/logs", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobName+"/logs", nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -261,13 +267,13 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 }
 
 func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.DashboardURL+JobPath+jobName+"/stop", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.dashboardURL+JobPath+jobName+"/stop", nil)
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -297,13 +303,13 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 }
 
 func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.DashboardURL+JobPath+jobName, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, r.dashboardURL+JobPath+jobName, nil)
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := r.Client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
 	}

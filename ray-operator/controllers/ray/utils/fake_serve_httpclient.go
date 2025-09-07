@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -17,6 +18,9 @@ type FakeRayDashboardClient struct {
 }
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
+
+func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string) {
+}
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {
 	fmt.Print("UpdateDeployments fake succeeds.")

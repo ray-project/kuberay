@@ -760,6 +760,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 
 func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+		dashboardClient := &dashboardclient.RayDashboardClient{}
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -770,20 +771,15 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 					return nil, err
 				}
 			}
-			return &dashboardclient.RayDashboardClient{
-				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
-				// configured to communicate with the Kubernetes API server.
-				Client:       mgr.GetHTTPClient(),
-				DashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
-			}, nil
+
+			dashboardClient.InitClient(mgr.GetHTTPClient(), fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName))
+			return dashboardClient, nil
 		}
 
-		return &dashboardclient.RayDashboardClient{
-			Client: &http.Client{
-				Timeout: 2 * time.Second,
-			},
-			DashboardURL: "http://" + url,
-		}, nil
+		dashboardClient.InitClient(&http.Client{
+			Timeout: 2 * time.Second,
+		}, "http://"+url)
+		return dashboardClient, nil
 	}
 }
 
