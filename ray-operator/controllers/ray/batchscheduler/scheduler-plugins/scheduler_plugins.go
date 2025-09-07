@@ -103,10 +103,7 @@ func (k *KubeScheduler) AddMetadataToPodFromRayCluster(_ context.Context, rayClu
 	pod.Spec.SchedulerName = k.Name()
 }
 
-func (k *KubeScheduler) AddMetadataToRayClusterFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *rayv1.RayCluster, _ *corev1.PodTemplateSpec) {
-}
-
-func (k *KubeScheduler) AddMetadataToSubmitterPodTemplateFromRayJob(_ context.Context, _ *rayv1.RayJob, _ *corev1.PodTemplateSpec) {
+func (k *KubeScheduler) AddMetadataToChildResourcesFromRayJob(_ context.Context, _ client.Object, _ client.Object, _ string) {
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {

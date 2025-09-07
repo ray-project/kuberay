@@ -633,14 +633,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
-	if r.options.BatchSchedulerManager != nil {
-		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToSubmitterPodTemplateFromRayJob(ctx, rayJobInstance, &submitterTemplate)
-			logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
-		} else {
-			return err
-		}
-	}
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
@@ -659,6 +651,13 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			BackoffLimit: submitterBackoffLimit,
 			Template:     submitterTemplate,
 		},
+	}
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, job, utils.RayNodeSubmitterGroupLabelValue)
+		} else {
+			return err
+		}
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
@@ -884,12 +883,8 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-					submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
-					if err != nil {
-						return nil, err
-					}
-					scheduler.AddMetadataToRayClusterFromRayJob(ctx, rayJobInstance, rayClusterInstance, &submitterTemplate)
-					logger.Info("Check if RayJob have submitter pod template with task groups annotation in RayJob controller", "template", rayJobInstance.Spec.SubmitterPodTemplate)
+					// We don't need to pass the group name here because the group name is not used for RayCluster.
+					scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, rayClusterInstance, "")
 				} else {
 					return nil, err
 				}

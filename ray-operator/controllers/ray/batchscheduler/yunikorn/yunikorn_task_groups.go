@@ -2,12 +2,12 @@ package yunikorn
 
 import (
 	"encoding/json"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -68,7 +68,7 @@ func newTaskGroupsFromRayCluster(rayCluster *v1.RayCluster) *TaskGroups {
 	return taskGroups
 }
 
-func newTaskGroupsFromRayJob(rayJob *v1.RayJob, submitterTemplate *corev1.PodTemplateSpec) (*TaskGroups, error) {
+func newTaskGroupsFromRayJob(rayJob *v1.RayJob) *TaskGroups {
 	taskGroups := newTaskGroups()
 
 	// head group
@@ -100,10 +100,11 @@ func newTaskGroupsFromRayJob(rayJob *v1.RayJob, submitterTemplate *corev1.PodTem
 	}
 
 	var submitterGroupSpec corev1.PodSpec
-	if submitterTemplate == nil {
-		return nil, fmt.Errorf("submitter template should not be nil when creating task groups from RayJob")
+	if rayJob.Spec.SubmitterPodTemplate != nil {
+		submitterGroupSpec = rayJob.Spec.SubmitterPodTemplate.Spec
+	} else {
+		submitterGroupSpec = common.GetDefaultSubmitterTemplate(rayJob.Spec.RayClusterSpec).Spec
 	}
-	submitterGroupSpec = submitterTemplate.Spec
 
 	submitterPodMinResource := utils.CalculatePodResource(submitterGroupSpec)
 	taskGroups.addTaskGroup(
@@ -115,11 +116,7 @@ func newTaskGroupsFromRayJob(rayJob *v1.RayJob, submitterTemplate *corev1.PodTem
 			Tolerations:  submitterGroupSpec.Tolerations,
 			Affinity:     submitterGroupSpec.Affinity,
 		})
-	return taskGroups, nil
-}
-
-func (t *TaskGroups) size() int {
-	return len(t.Groups)
+	return taskGroups
 }
 
 func (t *TaskGroups) addTaskGroup(taskGroup TaskGroup) {
