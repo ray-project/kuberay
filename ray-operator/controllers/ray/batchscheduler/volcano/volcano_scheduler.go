@@ -131,7 +131,7 @@ func createPodGroup(
 	return podGroup
 }
 
-func (v *VolcanoBatchScheduler) AddMetadataToPodFromRayCluster(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	pod.Annotations[volcanov1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
 	pod.Annotations[volcanov1alpha1.TaskSpecKey] = groupName
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {

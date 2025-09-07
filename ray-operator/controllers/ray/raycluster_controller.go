@@ -928,7 +928,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	// call the scheduler plugin if so
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToPodFromRayCluster(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
+			scheduler.AddMetadataToPod(ctx, &instance, utils.RayNodeHeadGroupLabelValue, &pod)
 		} else {
 			return err
 		}
@@ -951,7 +951,7 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	pod := r.buildWorkerPod(ctx, instance, worker)
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToPodFromRayCluster(ctx, &instance, worker.GroupName, &pod)
+			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
 		} else {
 			return err
 		}

@@ -22,9 +22,9 @@ type BatchScheduler interface {
 	// For most batch schedulers, this results in the creation of a PodGroup.
 	DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error
 
-	// AddMetadataToPodFromRayCluster enriches the pod with metadata necessary to tie it to the scheduler.
+	// AddMetadataToPod enriches the pod with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToPodFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
+	AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
 	// AddMetadataToChildResources enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
@@ -61,7 +61,7 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 	return nil
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToPodFromRayCluster(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
+func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
 func (d *DefaultBatchScheduler) AddMetadataToChildResources(_ context.Context, _ client.Object, _ client.Object, _ string) {

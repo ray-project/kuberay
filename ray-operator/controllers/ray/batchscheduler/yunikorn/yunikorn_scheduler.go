@@ -158,9 +158,9 @@ func (y *YuniKornScheduler) isGangSchedulingEnabled(obj client.Object) bool {
 	}
 }
 
-// AddMetadataToPodFromRayCluster adds essential labels and annotations to the Ray pod
+// AddMetadataToPod adds essential labels and annotations to the Ray pod
 // the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToPodFromRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 	// the applicationID and queue name must be provided in the labels
 	populateLabelsFromObject(rayCluster, pod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
