@@ -56,7 +56,7 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 func (k *KaiScheduler) AddMetadataToPodFromRayCluster(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (k *KaiScheduler) AddMetadataToChildResourcesFromRayJob(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (k *KaiScheduler) AddMetadataToChildResources(_ context.Context, _ client.Object, _ client.Object, _ string) {
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {

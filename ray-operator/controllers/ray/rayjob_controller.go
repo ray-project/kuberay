@@ -654,7 +654,7 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	}
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, job, utils.RayNodeSubmitterGroupLabelValue)
+			scheduler.AddMetadataToChildResources(ctx, rayJobInstance, job, utils.RayNodeSubmitterGroupLabelValue)
 		} else {
 			return err
 		}
@@ -884,7 +884,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 					// We don't need to pass the group name here because the group name is not used for RayCluster.
-					scheduler.AddMetadataToChildResourcesFromRayJob(ctx, rayJobInstance, rayClusterInstance, "")
+					scheduler.AddMetadataToChildResources(ctx, rayJobInstance, rayClusterInstance, "")
 				} else {
 					return nil, err
 				}

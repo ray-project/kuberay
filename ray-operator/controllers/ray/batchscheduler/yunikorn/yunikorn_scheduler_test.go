@@ -411,7 +411,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 	)
 
 	rayPod := createPod("ray-pod", "default")
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayCluster, rayPod, "ray-cluster-without-gang-scheduling")
+	yk.AddMetadataToChildResources(ctx, rayCluster, rayPod, "ray-cluster-without-gang-scheduling")
 
 	assert.Equal(t, "job-1", rayPod.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayPod.Labels[YuniKornPodQueueLabelName])
@@ -436,7 +436,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 	})
 
 	rayPod = createPod("ray-pod", "default")
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayCluster, rayPod, "ray-cluster-with-gang-scheduling")
+	yk.AddMetadataToChildResources(ctx, rayCluster, rayPod, "ray-cluster-with-gang-scheduling")
 
 	assert.Equal(t, "job-2", rayPod.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayPod.Labels[YuniKornPodQueueLabelName])
@@ -445,7 +445,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 	assert.Equal(t, "yunikorn", rayPod.Spec.SchedulerName)
 }
 
-func TestAddMetadataToChildResourcesFromRayJobFromRayJob(t *testing.T) {
+func TestAddMetadataToChildResourcesFromRayJob(t *testing.T) {
 	yk := &YuniKornScheduler{}
 	ctx := context.Background()
 
@@ -466,11 +466,11 @@ func TestAddMetadataToChildResourcesFromRayJobFromRayJob(t *testing.T) {
 
 	k8sJob := createJobTemplate()
 
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, rayCluster, "")
+	yk.AddMetadataToChildResources(ctx, rayJob, rayCluster, "")
 	assert.Equal(t, "job-3", rayCluster.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayCluster.Labels[YuniKornPodQueueLabelName])
 	assert.Equal(t, "", rayCluster.Annotations[YuniKornTaskGroupsAnnotationName]) // no task groups annotation since gang scheduling is not enabled
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, k8sJob, "")
+	yk.AddMetadataToChildResources(ctx, rayJob, k8sJob, "")
 	assert.Equal(t, "job-3", k8sJob.Spec.Template.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", k8sJob.Spec.Template.Labels[YuniKornPodQueueLabelName])
 	assert.Equal(t, "", k8sJob.Annotations[YuniKornTaskGroupsAnnotationName]) // no task groups annotation since gang scheduling is not enabled
@@ -503,13 +503,13 @@ func TestAddMetadataToChildResourcesFromRayJobFromRayJob(t *testing.T) {
 	)
 	k8sJob = createJobTemplate()
 
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, rayCluster, "")
+	yk.AddMetadataToChildResources(ctx, rayJob, rayCluster, "")
 
 	assert.Equal(t, "job-4", rayCluster.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayCluster.Labels[YuniKornPodQueueLabelName])
 	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"500m","memory":"200Mi"},"name":"submittergroup","minMember":1}]`, rayCluster.Annotations[YuniKornTaskGroupsAnnotationName])
 
-	yk.AddMetadataToChildResourcesFromRayJob(ctx, rayJob, k8sJob, utils.RayNodeSubmitterGroupLabelValue)
+	yk.AddMetadataToChildResources(ctx, rayJob, k8sJob, utils.RayNodeSubmitterGroupLabelValue)
 	assert.Equal(t, utils.RayNodeSubmitterGroupLabelValue, k8sJob.Spec.Template.Annotations[YuniKornTaskGroupNameAnnotationName])
 	assert.Equal(t, "job-4", k8sJob.Spec.Template.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", k8sJob.Spec.Template.Labels[YuniKornPodQueueLabelName])

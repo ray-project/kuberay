@@ -184,7 +184,7 @@ func (y *YuniKornScheduler) AddMetadataToPodFromRayCluster(ctx context.Context, 
 	}
 }
 
-func (y *YuniKornScheduler) AddMetadataToChildResourcesFromRayJob(ctx context.Context, parent client.Object, child client.Object, groupName string) {
+func (y *YuniKornScheduler) AddMetadataToChildResources(ctx context.Context, parent client.Object, child client.Object, groupName string) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 
 	populateLabelsFromObject(parent, child, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
