@@ -35,6 +35,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -51,8 +52,8 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
-	return func(_ *rayv1.RayCluster, _ string) (utils.RayDashboardClientInterface, error) {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
 		return fakeRayDashboardClient, nil
 	}
 }

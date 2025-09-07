@@ -20,6 +20,7 @@ import (
 	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
@@ -33,7 +34,7 @@ type RayJobSubmissionServiceServer struct {
 	api.UnimplementedRayJobSubmissionServiceServer
 	options             *RayJobSubmissionServiceServerOptions
 	clusterServer       *ClusterServer
-	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	log                 logr.Logger
 }
 

@@ -1,4 +1,4 @@
-package utils
+package dashboardclient
 
 import (
 	"bytes"
@@ -24,6 +24,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
+	InitClient(client *http.Client, dashboardURL string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -40,6 +41,11 @@ type RayDashboardClientInterface interface {
 type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
+}
+
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string) {
+	r.client = client
+	r.dashboardURL = dashboardURL
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
