@@ -157,9 +157,10 @@ func startHttpProxy() {
 			klog.Fatalf("Failed to load kubeconfig: %v", err)
 		}
 
+		clientManager := manager.NewClientManager()
 		topMux, err = apiserversdk.NewMux(apiserversdk.MuxConfig{
 			KubernetesConfig: kubernetesConfig,
-		})
+		}, &clientManager)
 		if err != nil {
 			klog.Fatalf("Failed to create API server mux: %v", err)
 		}

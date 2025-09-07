@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	apiserversdkutil "github.com/ray-project/kuberay/apiserversdk/util"
 	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
@@ -24,7 +25,7 @@ type MuxConfig struct {
 	Middleware       func(http.Handler) http.Handler
 }
 
-func NewMux(config MuxConfig) (*http.ServeMux, error) {
+func NewMux(config MuxConfig, clientManager manager.ClientManagerInterface) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url %s from config: %w", config.KubernetesConfig.Host, err)
@@ -48,7 +49,7 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
 
 	// Compute Template middleware
-	ctMiddleware := apiserversdkutil.NewComputeTemplateMiddleware(k8sClient)
+	ctMiddleware := apiserversdkutil.NewComputeTemplateMiddleware(clientManager)
 	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayclusters", ctMiddleware(handler))
 	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayclusters/{name}", ctMiddleware(handler))
 	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayjobs", ctMiddleware(handler))

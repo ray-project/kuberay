@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 
@@ -20,7 +19,7 @@ import (
 )
 
 // compute_template_middleware.go
-func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) http.Handler {
+func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			namespace := r.PathValue("namespace")
@@ -82,8 +81,7 @@ func NewComputeTemplateMiddleware(_ kubernetes.Interface) func(http.Handler) htt
 				}
 			}
 
-			clientManager := manager.NewClientManager()
-			resourceManager := manager.NewResourceManager(&clientManager)
+			resourceManager := manager.NewResourceManager(clientManager)
 
 			if headGroupMap != nil {
 				computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, headGroupMap, namespace)
