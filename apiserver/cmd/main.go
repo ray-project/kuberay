@@ -157,9 +157,18 @@ func startHttpProxy() {
 			klog.Fatalf("Failed to load kubeconfig: %v", err)
 		}
 
-		topMux, err = apiserversdk.NewMux(apiserversdk.MuxConfig{
+		muxConfig := apiserversdk.MuxConfig{
 			KubernetesConfig: kubernetesConfig,
-		})
+		}
+		if *corsAllowOrigin != "" {
+			klog.Info("Enabling CORS with Access-Control-Allow-Origin in apiserversdk:", *corsAllowOrigin)
+			c := cors.New(cors.Options{
+				AllowedOrigins: []string{*corsAllowOrigin},
+			})
+			muxConfig.Middleware = c.Handler
+		}
+
+		topMux, err = apiserversdk.NewMux(muxConfig)
 		if err != nil {
 			klog.Fatalf("Failed to create API server mux: %v", err)
 		}
