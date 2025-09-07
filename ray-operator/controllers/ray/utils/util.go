@@ -772,7 +772,12 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				}
 			}
 
-			dashboardClient.InitClient(mgr.GetHTTPClient(), fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName))
+			dashboardClient.InitClient(
+				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
+				// configured to communicate with the Kubernetes API server.
+				mgr.GetHTTPClient(),
+				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+			)
 			return dashboardClient, nil
 		}
 
