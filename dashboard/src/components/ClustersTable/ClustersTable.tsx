@@ -1,6 +1,6 @@
 import { useDeleteJobs } from "@/hooks/api/useDeleteJobs";
 import { useListJobs } from "@/hooks/api/useListJobs";
-import { JobRow, JobType, Status } from "@/types/rayjob";
+import { JobRow, JobType, JobStatus } from "@/types/rayjob";
 import { filterCluster } from "@/utils/filter";
 import { Chip, IconButton } from "@mui/joy";
 import dayjs from "dayjs";
@@ -14,6 +14,7 @@ import { ClusterRow, ClusterStatus } from "@/types/raycluster";
 import { useListClusters } from "@/hooks/api/useListClusters";
 import {
   getClusterStatusColor,
+  getClusterStatusDisplay,
   getClusterStatusIcon,
 } from "./ClusterStatusParser";
 import { useDeleteClusters } from "@/hooks/api/useDeleteClusters";
@@ -71,7 +72,7 @@ export const ClustersTable = () => {
             startDecorator={getClusterStatusIcon(row.clusterState)}
             color={getClusterStatusColor(row.clusterState)}
           >
-            {row.clusterState}
+            {getClusterStatusDisplay(row.clusterState)}
           </Chip>
         </td>
         <td>{dayjs(row.createdAt).format("M/D/YY HH:mm:ss")}</td>

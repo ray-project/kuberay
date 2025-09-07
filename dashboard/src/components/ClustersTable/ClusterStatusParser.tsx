@@ -34,33 +34,21 @@ import { ClusterStatus } from "@/types/raycluster";
 export const capitalize = (status: string) =>
   status.charAt(0).toUpperCase() + status.toLowerCase().slice(1);
 
-export const getClusterStatusDisplay = (status: ClusterStatus): string => {
-  const statusMap: Record<ClusterStatus, string> = {
-    READY: "Ready",
-    PENDING: "Pending",
-    FAILED: "Failed",
-    SUSPENDED: "Suspended",
-    SUSPENDING: "Suspending",
-    UNKNOWN: "Unknown",
-  };
-  return statusMap[status] || status;
+export const getClusterStatusDisplay = (status: ClusterStatus) => {
+  return capitalize(status);
 };
 
-export const getClusterStatusColor = (status: string): ColorPaletteProp => {
-  switch (status) {
-    case "READY":
-      return "primary";
-    case "PENDING":
-    case "SUSPENDING":
-      return "warning";
-    case "FAILED":
-      return "danger";
-    case "SUSPENDED":
-    case "UNKNOWN":
-      return "neutral";
-    default:
-      return "neutral";
-  }
+export const getClusterStatusColor = (
+  status: ClusterStatus,
+): ColorPaletteProp => {
+  return {
+    READY: "primary",
+    PENDING: "warning",
+    SUSPENDING: "warning",
+    FAILED: "danger",
+    SUSPENDED: "neutral",
+    UNKNOWN: "neutral",
+  }[status] as ColorPaletteProp;
 };
 
 export const getClusterStatusIcon = (status: string) => {

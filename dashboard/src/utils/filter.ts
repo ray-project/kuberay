@@ -1,57 +1,48 @@
 import { ClusterRow, ClusterStatus } from "@/types/raycluster";
-import { Job, JobRow, Jobs, Status } from "@/types/rayjob";
+import { JobRow, JobStatus } from "@/types/rayjob";
 
 export const filterJobs = (
-  jobs: Jobs,
+  jobs: JobRow[],
   search: string,
-  statusFilter: Status | null,
+  statusFilter: JobStatus | null,
   typeFilter: number,
 ): JobRow[] =>
   jobs
     .map((job) => {
-      if (!job.jobStatus) {
-        job.jobStatus = "PENDING";
+      // Ensure jobStatus exists and has a default value
+      if (!job.jobStatus.jobStatus) {
+        job.jobStatus.jobStatus = "PENDING";
       }
       return job;
     })
-    .filter((job: Job) => {
-      // case-insensitive search
+    .filter((job: JobRow) => {
+      // Status filter
       if (
         statusFilter &&
-        job.jobStatus.toUpperCase() !== statusFilter.toUpperCase()
+        job.jobStatus.jobStatus.toUpperCase() !== statusFilter.toUpperCase()
       ) {
         return false;
       }
+
+      // Search filter
       if (search && !job.name.toUpperCase().includes(search.toUpperCase())) {
         return false;
       }
-      if (
-        typeFilter == 1 &&
-        job.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"] !==
-          "rayllmbatchinference"
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map(transformJob);
 
-const transformJob = (job: Job): JobRow => {
-  return {
-    name: job.name,
-    jobStatus: {
-      jobStatus: job.jobStatus,
-      jobDeploymentStatus: job.jobDeploymentStatus || "",
-    },
-    createdAt: job.createdAt,
-    links: {
-      rayGrafanaDashboardLink: job.rayGrafanaDashboardLink,
-      logsLink: job.logsLink,
-      rayHeadDashboardLink: job.rayHeadDashboardLink,
-    },
-    message: job.message || "",
-  };
-};
+      // Type filter for Batch API
+      if (typeFilter == 1) {
+        // Check if it's a Batch API job by looking at labels
+        const labels = job.clusterSpec.headGroupSpec.template.metadata?.labels;
+        if (
+          !labels ||
+          labels["mlp.rbx.com/component"] !== "rayllmbatchinference"
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
 
 export const filterCluster = (
   clusters: ClusterRow[],
