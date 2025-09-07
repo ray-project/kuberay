@@ -61,7 +61,7 @@ type RemoteExecuteClient struct {
 	unmarshaler *protojson.UnmarshalOptions // Protobuf JSON unmarshaler for decoding API error responses
 }
 
-func NewRemoteExecuteClient() (*RemoteExecuteClient, error) {
+func newRemoteExecuteClient() (*RemoteExecuteClient, error) {
 	config, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load in-cluster config: %w", err)

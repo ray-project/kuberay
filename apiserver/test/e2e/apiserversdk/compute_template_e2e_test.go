@@ -48,7 +48,7 @@ func TestComputeTemplateMiddleware(t *testing.T) {
 	require.NoError(t, err, "No error expected when creating compute template")
 
 	t.Cleanup(func() {
-		tCtx.DeleteComputeTemplate(t)
+		tCtx.DeleteComputeTemplate(t, templateName)
 	})
 
 	t.Run("RayCluster with compute template", func(t *testing.T) {
@@ -100,9 +100,7 @@ spec:
 	require.NoError(t, err, "No error expected when sending YAML request")
 
 	t.Cleanup(func() {
-		rayClient := tCtx.GetRayHttpClient()
-		err := rayClient.RayClusters(tCtx.GetNamespaceName()).Delete(tCtx.GetCtx(), clusterName, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		tCtx.DeleteRayCluster(t, clusterName)
 	})
 
 	// Verify the actual RayCluster was created with correct resources applied by middleware
@@ -161,9 +159,7 @@ spec:
 	require.NoError(t, err, "No error expected when sending YAML request")
 
 	t.Cleanup(func() {
-		rayClient := tCtx.GetRayHttpClient()
-		err := rayClient.RayJobs(tCtx.GetNamespaceName()).Delete(tCtx.GetCtx(), jobName, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		tCtx.DeleteRayJobByName(t, jobName)
 	})
 
 	// Verify the actual RayJob was created with correct resources applied by middleware
@@ -221,9 +217,7 @@ spec:
 	require.NoError(t, err, "No error expected when sending YAML request")
 
 	t.Cleanup(func() {
-		rayClient := tCtx.GetRayHttpClient()
-		err := rayClient.RayServices(tCtx.GetNamespaceName()).Delete(tCtx.GetCtx(), serviceName, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		tCtx.DeleteRayService(t, serviceName)
 	})
 
 	// Verify the actual RayService was created with correct resources applied by middleware

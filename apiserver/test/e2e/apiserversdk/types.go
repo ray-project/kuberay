@@ -21,6 +21,7 @@ import (
 
 	kuberayHTTP "github.com/ray-project/kuberay/apiserver/pkg/http"
 	util "github.com/ray-project/kuberay/apiserversdk/util"
+	api "github.com/ray-project/kuberay/proto/go_client"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1client "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
@@ -192,9 +193,7 @@ func (e2etc *End2EndTestingContext) GetRayImage() string {
 
 func withAPIServerClient() contextOption {
 	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
-		testingContext.apiServerHttpClient = &http.Client{
-			Timeout: 30 * time.Second, // Set a reasonable timeout for HTTP requests
-		}
+		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
 
 		retryCfg := util.RetryConfig{
 			MaxRetry:       util.HTTPClientDefaultMaxRetry,
@@ -206,8 +205,7 @@ func withAPIServerClient() contextOption {
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
 
-		// Use remote execution for accessing  APIServer within the cluster
-		remoteExecClient, err := NewRemoteExecuteClient()
+		remoteExecClient, err := newRemoteExecuteClient()
 		if err != nil {
 			return err
 		}
@@ -231,9 +229,13 @@ func (e2etc *End2EndTestingContext) GetNextName() string {
 	return e2etc.currentName
 }
 
-func (e2etc *End2EndTestingContext) DeleteComputeTemplate(_ *testing.T) {
-	// This method is called in cleanup, implementation would depend on API client
-	// For now, we'll leave it as a no-op since cleanup is handled elsewhere
+func (e2etc *End2EndTestingContext) DeleteComputeTemplate(t *testing.T, computeTemplateName string) {
+	deleteComputeTemplateRequest := &api.DeleteClusterRequest{
+		Name:      computeTemplateName,
+		Namespace: e2etc.namespaceName,
+	}
+	_, err := e2etc.kuberayAPIServerClient.DeleteComputeTemplate((*api.DeleteComputeTemplateRequest)(deleteComputeTemplateRequest))
+	require.NoErrorf(t, err, "No error expected while deleting a compute template (%s, %s)", computeTemplateName, e2etc.namespaceName)
 }
 
 func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName string) {
