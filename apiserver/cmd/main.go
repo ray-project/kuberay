@@ -150,6 +150,18 @@ func startHttpProxy() {
 	registerHttpHandlerFromEndpoint(ctx, api.RegisterRayJobSubmissionServiceHandlerFromEndpoint, "RayJobSubmissionService", runtimeMux)
 
 	// Create a top level mux to include both Http gRPC servers and other endpoints like metrics
+	var corsHandler func(http.Handler) http.Handler
+	if *corsAllowOrigin != "" {
+		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
+		c := cors.New(cors.Options{
+			AllowedOrigins: []string{*corsAllowOrigin},
+		})
+		corsHandler = c.Handler
+	} else {
+		klog.Info("Access-Control-Allow-Origin not set, CORS is disabled.")
+		corsHandler = func(h http.Handler) http.Handler { return h }
+	}
+
 	var topMux *http.ServeMux
 	if *enableAPIServerV2 {
 		kubernetesConfig, err := config.GetConfig()
@@ -159,13 +171,7 @@ func startHttpProxy() {
 
 		muxConfig := apiserversdk.MuxConfig{
 			KubernetesConfig: kubernetesConfig,
-		}
-		if *corsAllowOrigin != "" {
-			klog.Info("Enabling CORS with Access-Control-Allow-Origin in apiserversdk:", *corsAllowOrigin)
-			c := cors.New(cors.Options{
-				AllowedOrigins: []string{*corsAllowOrigin},
-			})
-			muxConfig.Middleware = c.Handler
+			Middleware:       corsHandler, // Always set, even if it's a no-op
 		}
 
 		topMux, err = apiserversdk.NewMux(muxConfig)
@@ -176,18 +182,8 @@ func startHttpProxy() {
 		topMux = http.NewServeMux()
 	}
 
-	if *corsAllowOrigin != "" {
-		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
-		handler := cors.New(cors.Options{
-			AllowedOrigins: []string{*corsAllowOrigin},
-		}).Handler(runtimeMux)
-
-		topMux.Handle("/", handler)
-	} else {
-		klog.Info("Access-Control-Allow-Origin not set, CORS is disabled.")
-		// Seems /apis (matches /apis/v1alpha1/clusters) works fine
-		topMux.Handle("/", runtimeMux)
-	}
+	// Always wrap the runtimeMux with the CORS handler (no-op if not enabled)
+	topMux.Handle("/", corsHandler(runtimeMux))
 
 	topMux.Handle("/metrics", promhttp.Handler())
 	topMux.HandleFunc("/swagger/", serveSwaggerFile)
