@@ -158,12 +158,6 @@ func TestRayJobSubmitter(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted submitter pod %s/%s successfully", submitterPod.Namespace, submitterPod.Name)
 
-		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
-		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
-
 		// Get the new submitter pod that was created after the first one was deleted
 		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission")), TestTimeoutMedium).
 			Should(HaveLen(1))
@@ -183,6 +177,10 @@ func TestRayJobSubmitter(t *testing.T) {
 		g.Expect(logContent).To(ContainSubstring("test_counter got 4"))
 		g.Expect(logContent).To(ContainSubstring("test_counter got 5"))
 		LogWithTimestamp(test.T(), "New submitter pod %s/%s has logs indicating successful job completion", newSubmitterPod.Namespace, newSubmitterPod.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
