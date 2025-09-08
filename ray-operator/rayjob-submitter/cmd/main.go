@@ -34,11 +34,11 @@ func main() {
 
 	address := os.Getenv("RAY_DASHBOARD_ADDRESS")
 	if address == "" {
-		exitOnError(fmt.Errorf("missing RAY_DASHBOARD_ADDRESS"))
+		exitOnError(fmt.Errorf("missing RAY_DASHBOARD_ADDRESS in environment variables"))
 	}
 	submissionId := os.Getenv("RAY_JOB_SUBMISSION_ID")
 	if submissionId == "" {
-		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID"))
+		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID in environment variables"))
 	}
 
 	req := utiltypes.RayJobRequest{
