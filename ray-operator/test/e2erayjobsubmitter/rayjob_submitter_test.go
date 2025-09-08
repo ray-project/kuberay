@@ -30,13 +30,12 @@ func TestRayJobSubmitter(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", TestScript.Namespace, TestScript.Name)
 	// We need to specify Args and Command in order to use the light weight submitter.
-	SubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
-	image := SubmitterImage
-	SubmitterPodTemplate.Spec.Containers[0].Image = &image
-	SubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
-	SubmitterPodTemplate.Spec.Containers[0].Args = []string{"--runtime-env-json", `{"pip":["requests==2.26.0","pendulum==2.1.2"],"env_vars":{"counter_name":"test_counter"}}`, "--", "python", "/home/ray/jobs/counter.py"}
-
 	test.T().Run("Successful RayJob with light weight submitter", func(_ *testing.T) {
+		SubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
+		image := SubmitterImage
+		SubmitterPodTemplate.Spec.Containers[0].Image = &image
+		SubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
+		SubmitterPodTemplate.Spec.Containers[0].Args = []string{"--runtime-env-json", `{"pip":["requests==2.26.0","pendulum==2.1.2"],"env_vars":{"counter_name":"test_counter"}}`, "--", "python", "/home/ray/jobs/counter.py"}
 		rayJobAC := rayv1ac.RayJob("successful-rayjob", namespace.Name).WithSpec(
 			rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](TestScript, "/home/ray/jobs"))).
@@ -86,16 +85,16 @@ func TestRayJobSubmitter(t *testing.T) {
 	})
 
 	test.T().Run("Failed RayJob with light weight submitter", func(_ *testing.T) {
-		failedSubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
-		failedSubmitterPodTemplate.Spec.Containers[0].Image = &image
-		failedSubmitterPodTemplate.Spec.Containers[0].Args = []string{"--entrypoint-resources", `{"cpu":"Intentionally wrong value"}`}
-		failedSubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
-
+		SubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
+		image := SubmitterImage
+		SubmitterPodTemplate.Spec.Containers[0].Image = &image
+		SubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
+		SubmitterPodTemplate.Spec.Containers[0].Args = []string{"--entrypoint-resources", `{"cpu":"Intentionally wrong value"}`}
 		// To trigger the error, we intentionally set the entrypoint resources to an invalid value.
 		rayJobAC := rayv1ac.RayJob("failed-rayjob", namespace.Name).WithSpec(
 			rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](TestScript, "/home/ray/jobs"))).
-				WithSubmitterPodTemplate(failedSubmitterPodTemplate).
+				WithSubmitterPodTemplate(SubmitterPodTemplate).
 				WithShutdownAfterJobFinishes(true),
 		)
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
@@ -120,6 +119,11 @@ func TestRayJobSubmitter(t *testing.T) {
 	})
 
 	test.T().Run("Delete submitter pod after submission to test job logging of new submitter pod works", func(_ *testing.T) {
+		SubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
+		image := SubmitterImage
+		SubmitterPodTemplate.Spec.Containers[0].Image = &image
+		SubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
+		SubmitterPodTemplate.Spec.Containers[0].Args = []string{"--runtime-env-json", `{"pip":["requests==2.26.0","pendulum==2.1.2"],"env_vars":{"counter_name":"test_counter"}}`, "--", "python", "/home/ray/jobs/counter.py"}
 		rayJobAC := rayv1ac.RayJob("delete-submitter-pod-after-submission", namespace.Name).WithSpec(
 			rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](TestScript, "/home/ray/jobs"))).
