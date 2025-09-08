@@ -6,12 +6,22 @@ import (
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 )
 
-type Registry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageWritter, error)
+type WriterRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageWritter, error)
 
-func GetRegistry() Registry {
-	return registry
+func GetWriterRegistry() WriterRegistry {
+	return writerRegistry
 }
 
-var registry = Registry{
+var writerRegistry = WriterRegistry{
 	"aliyunoss": ray.NewWritter,
+}
+
+type ReaderRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageReader, error)
+
+func GetReaderRegistry() ReaderRegistry {
+	return readerRegistry
+}
+
+var readerRegistry = ReaderRegistry{
+	"aliyunoss": ray.NewReader,
 }

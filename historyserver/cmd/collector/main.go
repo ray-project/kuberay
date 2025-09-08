@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/backend"
@@ -53,7 +55,7 @@ func main() {
 		panic("Failed to parse runtime class config: " + err.Error())
 	}
 
-	registry := backend.GetRegistry()
+	registry := backend.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
 		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
@@ -76,8 +78,9 @@ func main() {
 	}
 	collector := runtime.NewCollector(&globalConfig, writter)
 
-	stop := make(chan struct{})
+	sigChan := make(chan os.Signal, 1)
+	stop := make(chan struct{}, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	collector.Start(stop)
-
 	<-stop
 }

@@ -81,6 +81,21 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.Reader) error {
 	return r.OssBucket.PutObject(file, reader)
 }
 
+func (r *RayLogsHandler) List() []utils.ClusterInfo {
+	return nil
+}
+
+func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+	return nil
+}
+
+func NewReader(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+	config := &config{}
+	config.complete(c, jd)
+
+	return New(config)
+}
+
 func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWritter, error) {
 	config := &config{}
 	config.complete(c, jd)
