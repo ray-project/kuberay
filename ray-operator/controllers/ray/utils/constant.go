@@ -45,6 +45,9 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayJob default cluster selector key
+	RayJobClusterSelectorKey = "ray.io/cluster"
+
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 

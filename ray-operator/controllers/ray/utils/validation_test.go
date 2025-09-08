@@ -901,6 +901,27 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "failed to get cluster name in ClusterSelector map",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": ""},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is not empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
