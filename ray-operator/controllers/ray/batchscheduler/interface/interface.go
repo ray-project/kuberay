@@ -26,9 +26,9 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
-	// AddMetadataToChildResources enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
+	// AddMetadataToChildResource enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToChildResources(ctx context.Context, parent client.Object, child client.Object, groupName string)
+	AddMetadataToChildResource(ctx context.Context, parent client.Object, child client.Object, groupName string)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -64,7 +64,7 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToChildResources(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {

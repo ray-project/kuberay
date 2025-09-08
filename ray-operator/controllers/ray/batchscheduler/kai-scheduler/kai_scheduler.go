@@ -53,7 +53,7 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 	pod.Labels[QueueLabelName] = queue
 }
 
-func (k *KaiScheduler) AddMetadataToChildResources(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
