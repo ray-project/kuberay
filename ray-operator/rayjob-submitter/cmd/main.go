@@ -69,7 +69,7 @@ func main() {
 	exitOnError(err)
 	fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
 	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
-	err = rayjobsubmitter.LogJob(address, submissionId, os.Stdout)
+	err = rayjobsubmitter.TailLogJob(address, submissionId, os.Stdout)
 	exitOnError(err)
 }
 
