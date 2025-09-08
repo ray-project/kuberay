@@ -215,9 +215,6 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
-	if !features.Enabled(features.RayJobDeletionPolicy) && rayJob.Spec.DeletionStrategy != nil {
-		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature")
-	}
 
 	return validateDeletionStrategy(rayJob)
 }
@@ -269,7 +266,7 @@ func validateDeletionStrategy(rayJob *rayv1.RayJob) error {
 	}
 
 	usingDeletionRules := len(rayJob.Spec.DeletionStrategy.DeletionRules) > 0
-	usingLegacyAPI := rayJob.Spec.DeletionStrategy.OnSuccess.Policy != nil || rayJob.Spec.DeletionStrategy.OnFailure.Policy != nil
+	usingLegacyAPI := rayJob.Spec.DeletionStrategy.OnSuccess != nil || rayJob.Spec.DeletionStrategy.OnFailure != nil
 
 	// ShutdownAfterJobFinishes cannot be used with the new API.
 	if usingDeletionRules && rayJob.Spec.ShutdownAfterJobFinishes {
@@ -399,6 +396,13 @@ func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, statu
 // validateLegacyDeletionPolicies handles validation for the old `onSuccess` and `onFailure` fields.
 func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
+
+	// Both policies must be set if using the legacy API.
+	if rayJob.Spec.DeletionStrategy.OnSuccess == nil || rayJob.Spec.DeletionStrategy.OnFailure == nil {
+		return fmt.Errorf("both DeletionStrategy.OnSuccess and DeletionStrategy.OnFailure must be set when using the legacy deletion policy fields")
+	}
+
+	// Validate that the Policy field is set within each policy.
 	onSuccessPolicy := rayJob.Spec.DeletionStrategy.OnSuccess
 	onFailurePolicy := rayJob.Spec.DeletionStrategy.OnFailure
 

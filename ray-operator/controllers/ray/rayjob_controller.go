@@ -1071,7 +1071,16 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 			continue
 		}
 
-		// Skip rules for actions that have already been completed to ensure idempotency.
+		deletionTime := rayJob.Status.EndTime.Add(time.Duration(rule.Condition.TTLSecondsAfterFinished) * time.Second)
+		// Track the earliest requeue time to re-check later.
+		if nowTime.Before(deletionTime) {
+			if nextRequeueTime == nil || deletionTime.Before(*nextRequeueTime) {
+				nextRequeueTime = &deletionTime
+			}
+			continue
+		}
+
+		// Need to check if the deletion action has already been completed to ensure idempotency.
 		isCompleted, err := r.isDeletionActionCompleted(ctx, rayJob, rule.Policy)
 		if err != nil {
 			logger.Error(err, "Failed to check if deletion action is completed", "rule", rule)
@@ -1082,14 +1091,7 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 			continue
 		}
 
-		// Categorize the rule based on its TTL.
-		deletionTime := rayJob.Status.EndTime.Add(time.Duration(rule.Condition.TTLSecondsAfterFinished) * time.Second)
-		if nowTime.After(deletionTime) {
-			overdueRules = append(overdueRules, rule)
-		} else if nextRequeueTime == nil || deletionTime.Before(*nextRequeueTime) {
-			// This is a pending rule. Track the earliest one to schedule the next requeue.
-			nextRequeueTime = &deletionTime
-		}
+		overdueRules = append(overdueRules, rule)
 	}
 
 	// Handle overdue rules if any exist.

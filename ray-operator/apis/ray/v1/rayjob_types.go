@@ -113,13 +113,13 @@ type DeletionStrategy struct {
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
 	// This field will be removed in a future release.
 	// +optional
-	OnSuccess DeletionPolicy `json:"onSuccess,omitempty"`
+	OnSuccess *DeletionPolicy `json:"onSuccess,omitempty"`
 
 	// OnFailure is the deletion policy for a failed RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
 	// This field will be removed in a future release.
 	// +optional
-	OnFailure DeletionPolicy `json:"onFailure,omitempty"`
+	OnFailure *DeletionPolicy `json:"onFailure,omitempty"`
 
 	// DeletionRules is a list of deletion rules, processed based on their trigger conditions.
 	// While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),
