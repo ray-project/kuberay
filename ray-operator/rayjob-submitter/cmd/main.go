@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	rayjobsubmitter "github.com/ray-project/kuberay/ray-operator/rayjob-submitter"
 )
 
@@ -36,7 +41,7 @@ func main() {
 		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID"))
 	}
 
-	req := rayjobsubmitter.RayJobRequest{
+	req := utiltypes.RayJobRequest{
 		Entrypoint:   strings.Join(flag.Args(), " "),
 		SubmissionId: submissionId,
 		NumCpus:      entrypointNumCpus,
@@ -57,7 +62,14 @@ func main() {
 			exitOnError(err)
 		}
 	}
-	err := rayjobsubmitter.Submit(address, req, os.Stdout)
+	rayDashboardClient := &dashboardclient.RayDashboardClient{}
+	address = rayjobsubmitter.JobSubmissionURL(address)
+	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address)
+	submissionId, err := rayDashboardClient.SubmitJobReq(context.Background(), &req)
+	exitOnError(err)
+	fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
+	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
+	err = rayjobsubmitter.LogJob(address, submissionId, os.Stdout)
 	exitOnError(err)
 }
 

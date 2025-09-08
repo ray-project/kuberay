@@ -2,6 +2,7 @@ package e2erayjobsubmitter
 
 import (
 	"io"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -108,6 +109,73 @@ func TestRayJobSubmitter(t *testing.T) {
 
 		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name=failed-rayjob"))(g)
 		g.Expect(submitterPods).To(HaveLen(3), "Expected to find exactly three submitter pods with label job-name=failed-rayjob")
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Delete submitter pod after submission to test job logging of new submitter pod works", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("delete-submitter-pod-after-submission", namespace.Name).WithSpec(
+			rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](TestScript, "/home/ray/jobs"))).
+				WithSubmitterPodTemplate(SubmitterPodTemplate).
+				WithShutdownAfterJobFinishes(true),
+		)
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission")), TestTimeoutMedium).
+			Should(HaveLen(1))
+		submitterPod := Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission"))(g)[0]
+
+		// Wait for the submitter pod to have log indicating successful submission
+		g.Eventually(func() bool {
+			logs, err := test.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(submitterPod.Name, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
+			if err != nil {
+				return false
+			}
+			defer logs.Close()
+			logsBytes, err := io.ReadAll(logs)
+			if err != nil {
+				return false
+			}
+			logsString := string(logsBytes)
+			return strings.Contains(logsString, "SUCC -- Job '")
+		}, TestTimeoutMedium).Should(BeTrue())
+
+		// Delete the submitter pod after successful submission
+		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), submitterPod.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted submitter pod %s/%s successfully", submitterPod.Namespace, submitterPod.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// Get the new submitter pod that was created after the first one was deleted
+		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission")), TestTimeoutMedium).
+			Should(HaveLen(1))
+		newSubmitterPod := Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission"))(g)[0]
+
+		// Check the logs of the new submitter pod
+		logs, err := test.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(newSubmitterPod.Name, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
+		g.Expect(err).NotTo(HaveOccurred())
+		defer logs.Close()
+		logsBytes, err := io.ReadAll(logs)
+		g.Expect(err).NotTo(HaveOccurred())
+		logContent := string(logsBytes)
+		// Verify the logs contain expected content
+		g.Expect(logContent).To(ContainSubstring("test_counter got 1"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 2"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 3"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 4"))
+		g.Expect(logContent).To(ContainSubstring("test_counter got 5"))
+		LogWithTimestamp(test.T(), "New submitter pod %s/%s has logs indicating successful job completion", newSubmitterPod.Namespace, newSubmitterPod.Name)
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
