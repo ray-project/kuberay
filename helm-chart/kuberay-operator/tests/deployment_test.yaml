@@ -267,3 +267,24 @@ tests:
             - key: key2
               operator: Exists
               effect: NoSchedule
+
+  - it: Should use custom reconcile concurrency when set
+    set:
+      reconcileConcurrency: 5
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--reconcile-concurrency=5"
+
+  - it: Should use custom kube client qps and burst when set
+    set:
+      kubeClient:
+        qps: 75.5
+        burst: 150
+    asserts:
+    - contains:
+        path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+        content: "--qps=75.5"
+    - contains:
+        path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+        content: "--burst=150"

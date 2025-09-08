@@ -6,10 +6,12 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -20,9 +22,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 const (
@@ -637,8 +641,8 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func() RayDashboardClientInterface
-	GetHttpProxyClient(mgr manager.Manager) func() RayHttpProxyClientInterface
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
 func ManagedByExternalController(controllerName *string) *string {
@@ -716,4 +720,89 @@ func GetContainerCommand(additionalOptions []string) []string {
 // GetEnableDeterministicHeadName returns true if deterministic head pod name is enabled.
 func IsDeterministicHeadPodNameEnabled() bool {
 	return strings.ToLower(os.Getenv(ENABLE_DETERMINISTIC_HEAD_POD_NAME)) == "true"
+}
+
+// FetchHeadServiceURL fetches the URL that consists of the FQDN for the RayCluster's head service
+// and the port with the given port name (defaultPortName).
+func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *rayv1.RayCluster, defaultPortName string) (string, error) {
+	headSvc := &corev1.Service{}
+	headSvcName, err := GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+	if err != nil {
+		return "", err
+	}
+
+	if err = cli.Get(ctx, client.ObjectKey{Name: headSvcName, Namespace: rayCluster.Namespace}, headSvc); err != nil {
+		return "", err
+	}
+
+	servicePorts := headSvc.Spec.Ports
+	port := int32(-1)
+
+	for _, servicePort := range servicePorts {
+		if servicePort.Name == defaultPortName {
+			port = servicePort.Port
+			break
+		}
+	}
+
+	if port == int32(-1) {
+		return "", fmt.Errorf("%s port is not found", defaultPortName)
+	}
+
+	domainName := GetClusterDomainName()
+	headServiceURL := fmt.Sprintf("%s.%s.svc.%s:%v",
+		headSvc.Name,
+		headSvc.Namespace,
+		domainName,
+		port)
+	return headServiceURL, nil
+}
+
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+		dashboardClient := &dashboardclient.RayDashboardClient{}
+		if useKubernetesProxy {
+			var err error
+			headSvcName := rayCluster.Status.Head.ServiceName
+			if headSvcName == "" {
+				headSvcName, err = GenerateHeadServiceName(RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+				if err != nil {
+					err = fmt.Errorf("failed to construct Ray dashboard client: %w", err)
+					return nil, err
+				}
+			}
+
+			dashboardClient.InitClient(
+				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
+				// configured to communicate with the Kubernetes API server.
+				mgr.GetHTTPClient(),
+				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+			)
+			return dashboardClient, nil
+		}
+
+		dashboardClient.InitClient(&http.Client{
+			Timeout: 2 * time.Second,
+		}, "http://"+url)
+		return dashboardClient, nil
+	}
+}
+
+func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+		if useKubernetesProxy {
+			return &RayHttpProxyClient{
+				client:       mgr.GetHTTPClient(),
+				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
+			}
+		}
+		return &RayHttpProxyClient{
+			client:       &http.Client{Timeout: 2 * time.Second},
+			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
+		}
+	}
+}
+
+func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
+	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
 }

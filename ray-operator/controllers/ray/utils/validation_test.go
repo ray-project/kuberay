@@ -563,6 +563,34 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			},
 			expectedErr: "worker group worker-group-1 cannot be suspended with Autoscaler enabled",
 		},
+		fmt.Sprintf("should return error if %s env var is set to '1' when autoscaler is disabled", RAY_ENABLE_AUTOSCALER_V2): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(false),
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec([]corev1.EnvVar{
+						{
+							Name:  RAY_ENABLE_AUTOSCALER_V2,
+							Value: "1",
+						},
+					}, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf("environment variable %s cannot be set to '1' when enableInTreeAutoscaling is false. Please set enableInTreeAutoscaling: true to use autoscaler v2", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		fmt.Sprintf("should return error if %s env var is set to 'true' when autoscaler is disabled", RAY_ENABLE_AUTOSCALER_V2): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(false),
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec([]corev1.EnvVar{
+						{
+							Name:  RAY_ENABLE_AUTOSCALER_V2,
+							Value: "true",
+						},
+					}, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf("environment variable %s cannot be set to 'true' when enableInTreeAutoscaling is false. Please set enableInTreeAutoscaling: true to use autoscaler v2", RAY_ENABLE_AUTOSCALER_V2),
+		},
 		fmt.Sprintf("should return error if autoscaler v2 is enabled and head Pod has env var %s", RAY_ENABLE_AUTOSCALER_V2): {
 			spec: rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To(true),
@@ -830,6 +858,46 @@ func TestValidateRayJobSpec(t *testing.T) {
 				ShutdownAfterJobFinishes: true,
 				TTLSecondsAfterFinished:  -5,
 				RayClusterSpec:           createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "SidecarMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "SidecarMode doesn't support SubmitterPodTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				SubmitterPodTemplate: &corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "SidecarMode doesn't support SubmitterConfig",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				SubmitterConfig: &rayv1.SubmitterConfig{
+					BackoffLimit: ptr.To[int32](1),
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "SidecarMode RayCluster head pod should only be Never or unset",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
 			},
 			expectError: true,
 		},

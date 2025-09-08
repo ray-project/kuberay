@@ -10,13 +10,12 @@ package kaischeduler
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
@@ -26,9 +25,7 @@ const (
 	QueueLabelName = "kai.scheduler/queue"
 )
 
-type KaiScheduler struct {
-	log logr.Logger
-}
+type KaiScheduler struct{}
 
 type KaiSchedulerFactory struct{}
 
@@ -40,14 +37,14 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1
 	return nil
 }
 
-func (k *KaiScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+	logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
 	pod.Spec.SchedulerName = k.Name()
 
 	queue, ok := app.Labels[QueueLabelName]
 	if !ok || queue == "" {
-		k.log.Info("Queue label missing from RayCluster; pods will remain pending",
-			"requiredLabel", QueueLabelName,
-			"rayCluster", app.Name)
+		logger.Info("Queue label missing from RayCluster; pods will remain pending",
+			"requiredLabel", QueueLabelName)
 		return
 	}
 	if pod.Labels == nil {
@@ -57,9 +54,7 @@ func (k *KaiScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
-	return &KaiScheduler{
-		log: logf.Log.WithName("kai-scheduler"),
-	}, nil
+	return &KaiScheduler{}, nil
 }
 
 func (kf *KaiSchedulerFactory) AddToScheme(_ *runtime.Scheme) {

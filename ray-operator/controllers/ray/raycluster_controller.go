@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -95,6 +96,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
@@ -122,7 +124,8 @@ func (r *RayClusterReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// No match found
 	if errors.IsNotFound(err) {
 		// Clear all related expectations
-		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
+		r.rayClusterScaleExpectation.Delete(request.Name, request.Namespace)
+		cleanUpRayClusterMetrics(r.options.RayClusterMetricsManager, request.Name, request.Namespace)
 	} else {
 		logger.Error(err, "Read request instance error!")
 	}
@@ -1538,25 +1541,32 @@ func (r *RayClusterReconciler) updateRayClusterStatus(ctx context.Context, origi
 	if err != nil {
 		logger.Info("Error updating status", "name", originalRayClusterInstance.Name, "error", err, "RayCluster", newInstance)
 	} else {
-		emitRayClusterMetrics(r.options.RayClusterMetricsManager, newInstance.Name, newInstance.Namespace, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
+		emitRayClusterMetrics(r.options.RayClusterMetricsManager, newInstance.Name, newInstance.Namespace, newInstance.UID, originalRayClusterInstance.Status, newInstance.Status, newInstance.CreationTimestamp.Time)
 	}
 
 	return inconsistent, err
 }
 
-func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+func emitRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string, clusterUID types.UID, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
 	if rayClusterMetricsManager == nil {
 		return
 	}
-	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, oldStatus, newStatus, creationTimestamp)
+	emitRayClusterProvisionedDuration(rayClusterMetricsManager, clusterName, namespace, clusterUID, oldStatus, newStatus, creationTimestamp)
 }
 
-func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
+func emitRayClusterProvisionedDuration(RayClusterMetricsObserver metrics.RayClusterMetricsObserver, clusterName, namespace string, clusterUID types.UID, oldStatus, newStatus rayv1.RayClusterStatus, creationTimestamp time.Time) {
 	// Emit kuberay_cluster_provisioned_duration_seconds when a RayCluster's RayClusterProvisioned status transitions from false (or unset) to true
 	if !meta.IsStatusConditionTrue(oldStatus.Conditions, string(rayv1.RayClusterProvisioned)) &&
 		meta.IsStatusConditionTrue(newStatus.Conditions, string(rayv1.RayClusterProvisioned)) {
-		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, time.Since(creationTimestamp).Seconds())
+		RayClusterMetricsObserver.ObserveRayClusterProvisionedDuration(clusterName, namespace, clusterUID, time.Since(creationTimestamp).Seconds())
 	}
+}
+
+func cleanUpRayClusterMetrics(rayClusterMetricsManager *metrics.RayClusterMetricsManager, clusterName, namespace string) {
+	if rayClusterMetricsManager == nil {
+		return
+	}
+	rayClusterMetricsManager.DeleteRayClusterMetrics(clusterName, namespace)
 }
 
 // sumGPUs sums the GPUs in the given resource list.

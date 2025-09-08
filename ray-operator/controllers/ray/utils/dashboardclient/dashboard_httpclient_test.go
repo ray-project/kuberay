@@ -1,4 +1,4 @@
-package utils
+package dashboardclient
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 const (
@@ -53,8 +54,8 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		}
 
 		rayDashboardClient = &RayDashboardClient{}
-		err := rayDashboardClient.InitClient(context.Background(), "127.0.0.1:8090", nil)
-		Expect(err).ToNot(HaveOccurred())
+		rayDashboardClient.dashboardURL = "http://127.0.0.1:8090"
+		rayDashboardClient.client = &http.Client{}
 	})
 
 	It("Test ConvertRayJobToReq", func() {
@@ -90,17 +91,17 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	It("Test submitting/getting rayJob", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath,
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobResponse{
+				body := &utiltypes.RayJobResponse{
 					JobId: expectJobId,
 				}
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+expectJobId,
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+expectJobId,
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusRunning,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,
@@ -108,7 +109,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+errorJobId,
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+errorJobId,
 			func(_ *http.Request) (*http.Response, error) {
 				// return a string in the body
 				return httpmock.NewStringResponse(200, "Ray misbehaved and sent string, not JSON"), nil
@@ -132,9 +133,9 @@ var _ = Describe("RayFrameworkGenerator", func() {
 	It("Test stop job", func() {
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: true,
 				}
 				bodyBytes, _ := json.Marshal(body)
@@ -149,17 +150,17 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		// StopJob only returns an error when JobStatus is not in terminated states (STOPPED / SUCCEEDED / FAILED)
 		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
-		httpmock.RegisterResponder("POST", rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
+		httpmock.RegisterResponder(http.MethodPost, rayDashboardClient.dashboardURL+JobPath+"stop-job-1/stop",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobStopResponse{
+				body := &utiltypes.RayJobStopResponse{
 					Stopped: false,
 				}
 				bodyBytes, _ := json.Marshal(body)
 				return httpmock.NewBytesResponse(200, bodyBytes), nil
 			})
-		httpmock.RegisterResponder("GET", rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+JobPath+"stop-job-1",
 			func(_ *http.Request) (*http.Response, error) {
-				body := &RayJobInfo{
+				body := &utiltypes.RayJobInfo{
 					JobStatus:  rayv1.JobStatusSucceeded,
 					Entrypoint: rayJob.Spec.Entrypoint,
 					Metadata:   rayJob.Spec.Metadata,

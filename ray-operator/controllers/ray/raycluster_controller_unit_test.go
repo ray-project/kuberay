@@ -3437,6 +3437,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	clusterName := "test-ray-cluster"
 	clusterNamespace := "default"
+	clusterUID := types.UID("test-cluster-uid")
 
 	// Creation time 5 minutes ago to simulate cluster runtime
 	creationTime := time.Now().Add(-5 * time.Minute)
@@ -3515,6 +3516,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 					ObserveRayClusterProvisionedDuration(
 						clusterName,
 						clusterNamespace,
+						clusterUID,
 						mock.MatchedBy(func(d float64) bool {
 							// Allow some wiggle room in timing
 							return math.Abs(d-tc.expectedDuration) < 1.0
@@ -3526,6 +3528,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 				mockCollector,
 				clusterName,
 				clusterNamespace,
+				clusterUID,
 				tc.oldStatus,
 				tc.newStatus,
 				creationTime,
