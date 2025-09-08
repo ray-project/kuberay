@@ -1,3 +1,5 @@
+import { Container, RayClusterStatus } from "./common";
+
 export interface RayJobListResponse {
   apiVersion: string;
   items: RayJobItem[];
@@ -31,7 +33,7 @@ export interface RayJobItem {
         template: {
           metadata?: Record<string, any>;
           spec: {
-            containers: RayJobContainer[];
+            containers: Container[];
           };
         };
       };
@@ -49,13 +51,7 @@ export interface RayJobItem {
     failed: number;
     jobDeploymentStatus: JobDeploymentStatus;
     rayClusterName: string;
-    rayClusterStatus: {
-      desiredCPU: string;
-      desiredGPU: string;
-      desiredMemory: string;
-      desiredTPU: string;
-      head: Record<string, any>;
-    };
+    rayClusterStatus: RayClusterStatus;
     rayJobInfo: Record<string, any>;
     startTime: string;
     succeeded: number;
@@ -64,26 +60,6 @@ export interface RayJobItem {
     message?: string;
     endTime?: string;
   };
-}
-
-interface RayJobContainer {
-  image: string;
-  name: string;
-  ports?: RayJobContainerPort[];
-  resources?: {
-    limits: Record<string, string | number>;
-    requests: Record<string, string | number>;
-  };
-  env?: Array<{
-    name: string;
-    value: string;
-  }>;
-}
-
-interface RayJobContainerPort {
-  containerPort: number;
-  name: string;
-  protocol: string;
 }
 
 interface RayJobWorkerGroupSpec {
@@ -97,7 +73,7 @@ interface RayJobWorkerGroupSpec {
   template: {
     metadata?: Record<string, any>;
     spec: {
-      containers: RayJobContainer[];
+      containers: Container[];
     };
   };
 }
@@ -125,7 +101,7 @@ export interface JobRow {
           labels?: Record<string, string>;
         };
         spec: {
-          containers: RayJobContainer[];
+          containers: Container[];
         };
       };
     };
