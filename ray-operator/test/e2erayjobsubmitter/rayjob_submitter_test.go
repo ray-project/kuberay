@@ -86,8 +86,11 @@ func TestRayJobSubmitter(t *testing.T) {
 	})
 
 	test.T().Run("Failed RayJob with light weight submitter", func(_ *testing.T) {
-		failedSubmitterPodTemplate := SubmitterPodTemplate
+		failedSubmitterPodTemplate := JobSubmitterPodTemplateApplyConfiguration()
+		failedSubmitterPodTemplate.Spec.Containers[0].Image = &image
 		failedSubmitterPodTemplate.Spec.Containers[0].Args = []string{"--entrypoint-resources", `{"cpu":"Intentionally wrong value"}`}
+		failedSubmitterPodTemplate.Spec.Containers[0].Command = []string{"/submitter"}
+
 		// To trigger the error, we intentionally set the entrypoint resources to an invalid value.
 		rayJobAC := rayv1ac.RayJob("failed-rayjob", namespace.Name).WithSpec(
 			rayv1ac.RayJobSpec().
