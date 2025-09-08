@@ -9,6 +9,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/backend"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/runtime"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
+	"github.com/ray-project/kuberay/historyserver/utils"
 )
 
 const runtimeClassConfigPath = "/var/collector-config/data"
@@ -18,6 +19,7 @@ func main() {
 	runtimeClassName := ""
 	rayClusterName := ""
 	rayClusterId := ""
+	rayRootDir := ""
 	logBatching := 1000
 	pushInterval := time.Minute
 
@@ -25,10 +27,21 @@ func main() {
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterId, "ray-cluster-id", "", "")
+	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
+
+	sessionDir, err := utils.GetSessionDir()
+	if err != nil {
+		panic("Failed to get session dir: " + err.Error())
+	}
+
+	rayNodeId, err := utils.GetRayNodeID()
+	if err != nil {
+		panic("Failed to get ray node id: " + err.Error())
+	}
 
 	data, err := os.ReadFile(runtimeClassConfigPath)
 	if err != nil {
@@ -47,6 +60,9 @@ func main() {
 	}
 
 	globalConfig := types.RayCollectorConfig{
+		RootDir:        rayRootDir,
+		SessionDir:     sessionDir,
+		RayNodeName:    rayNodeId,
 		Role:           role,
 		RayClusterName: rayClusterName,
 		RayClusterID:   rayClusterId,
@@ -60,7 +76,7 @@ func main() {
 	}
 	collector := runtime.NewCollector(&globalConfig, writter)
 
-	stop := make(chan int)
+	stop := make(chan struct{})
 	collector.Start(stop)
 
 	<-stop

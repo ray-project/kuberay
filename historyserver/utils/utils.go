@@ -19,8 +19,10 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
@@ -209,4 +211,31 @@ func GetRarClusterNameAndID(rayClusterNameID string) (string, string) {
 		logrus.Fatalf("rayClusterNameID %s must match name%sid pattern", rayClusterNameID, connector)
 	}
 	return strings.Join(nameID[:len(nameID)-1], "_"), nameID[len(nameID)-1]
+}
+
+func GetSessionDir() (string, error) {
+	session_latest_path := "/tmp/ray/session_latest"
+	for i := 0; i < 12; i++ {
+		rp, err := os.Readlink(session_latest_path)
+		if err != nil {
+			logrus.Errorf("read session_latest file error %v", err)
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		return rp, nil
+	}
+	return "", fmt.Errorf("timeout log_monitor --session-dir not found")
+}
+
+func GetRayNodeID() (string, error) {
+	for i := 0; i < 12; i++ {
+		nodeidBytes, err := os.ReadFile("/tmp/ray/raylet_node_id")
+		if err != nil {
+			logrus.Errorf("read nodeid file error %v", err)
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		return strings.Trim(string(nodeidBytes), "\n"), nil
+	}
+	return "", fmt.Errorf("timeout --node_id= not found")
 }

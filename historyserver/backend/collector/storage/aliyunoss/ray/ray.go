@@ -17,6 +17,8 @@ limitations under the License.
 package ray
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -27,6 +29,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/aliyunoss/rrsa"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 	"github.com/ray-project/kuberay/historyserver/utils"
@@ -50,15 +53,35 @@ type RayLogsHandler struct {
 	PushInterval time.Duration
 }
 
-func (r *RayLogsHandler) CreateDirectory(path string) error {
+func (r *RayLogsHandler) CreateDirectory(d string) error {
+	objectDir := fmt.Sprintf("%s/", path.Clean(d))
+
+	isExist, err := r.OssBucket.IsObjectExist(objectDir)
+	if err != nil {
+		logrus.Errorf("Failed to check if dirObject %s exists: %v", objectDir, err)
+		return err
+	}
+	if !isExist {
+		logrus.Infof("Begin to create oss dir %s ...", objectDir)
+		err = r.OssBucket.PutObject(objectDir, bytes.NewReader([]byte("")))
+		if err != nil {
+			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
+			return err
+		}
+		logrus.Infof("Create oss dir %s success", objectDir)
+	}
 	return nil
 }
 
 func (r *RayLogsHandler) Append(file string, reader io.Reader, appendPosition int64) (nextPod int64, err error) {
-	return 0, nil
+	return r.OssBucket.AppendObject(file, reader, appendPosition)
 }
 
-func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (*RayLogsHandler, error) {
+func (r *RayLogsHandler) WriteFile(file string, reader io.Reader) error {
+	return r.OssBucket.PutObject(file, reader)
+}
+
+func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWritter, error) {
 	config := &config{}
 	config.complete(c, jd)
 
@@ -94,9 +117,9 @@ func New(c *config) (*RayLogsHandler, error) {
 		OssClient:      client,
 		OssBucket:      bucket,
 		SessionDir:     sessionDir,
-		OSSRootLogDir:  utils.GetOssLogDir(c.OSSHistoryServerDir, c.RayClusterName, c.RayClusterID, c.RayNodeName),
-		OSSRootMetaDir: utils.GetOssMetaDir(c.OSSHistoryServerDir, c.RayClusterName, c.RayClusterID),
-		OssRootDir:     c.OSSHistoryServerDir,
+		OSSRootLogDir:  utils.GetOssLogDir(c.RootDir, c.RayClusterName, c.RayClusterID, c.RayNodeName),
+		OSSRootMetaDir: utils.GetOssMetaDir(c.RootDir, c.RayClusterName, c.RayClusterID),
+		OssRootDir:     c.RootDir,
 		LogDir:         logdir,
 		LogFiles:       make(chan string, 100),
 		EnableMeta:     c.Role == "Head",

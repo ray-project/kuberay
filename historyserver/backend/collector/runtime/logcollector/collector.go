@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,74 +20,80 @@ import (
 type RayLogHandler struct {
 	EnableMeta bool
 
-	RootDir  string
-	LogDir   string
-	LogFiles chan string
+	RootDir    string
+	LogDir     string
+	SessionDir string
+	LogFiles   chan string
+	// fill after start
+	MetaDir string
+
+	RayClusterName string
+	RayClusterID   string
 
 	LogBatching  int
 	PushInterval time.Duration
 
-	Writter storage.StorageWritter
+	HttpClient *http.Client
+	Writter    storage.StorageWritter
+
+	// key job id
+	JobResourcesUrlInfo map[string]*JobUrlInfo
 }
 
-func (r *RayLogHandler) Start(stop <-chan int) {
-
+func (r *RayLogHandler) Start(stop chan struct{}) {
+	go r.Run(stop)
 }
 
-func (h *RayLogHandler) Run(stop chan struct{}) error {
-	watchPath := h.LogDir
+func (r *RayLogHandler) Run(stop chan struct{}) error {
+	watchPath := r.LogDir
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
 	}
 	defer watcher.Close()
-	go h.WatchLogsLoops(watcher, watchPath, stop)
-	go h.PushLogsLoops(stop)
+	go r.WatchLogsLoops(watcher, watchPath, stop)
+	go r.PushLogsLoops(stop)
 
-	if h.EnableMeta {
+	if r.EnableMeta {
 		// Persist meta data
-		// go h.PersistMetaLoop(stop)
+		go r.PersistMetaLoop(stop)
 	}
 
-	select {
-	case <-stop:
-		logrus.Warnf("Receive stop single, so stop ray collector ")
-		return nil
-	}
-	logrus.Errorf("Run exist ...")
+	<-stop
+	logrus.Warnf("Receive stop single, so stop ray collector ")
 	return nil
 }
 
-func (h *RayLogHandler) AddLogFile(absoluteLogPathName string) {
-	h.LogFiles <- absoluteLogPathName
+func (r *RayLogHandler) AddLogFile(absoluteLogPathName string) {
+	r.LogFiles <- absoluteLogPathName
 }
 
-func (h *RayLogHandler) PushLog(absoluteLogPathName string) error {
+func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	// 判断文件是否存在
 	// 计算相对路径
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
 
-	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", h.LogDir))
+	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
 	// 分割相对路径为子目录和文件名
 	// subdir events/aa/
 	// filename a.txt
 	subdir, filename := filepath.Split(relativePath)
 
 	if len(subdir) != 0 {
-		dirName := path.Join(h.RootDir, subdir)
-		if err := h.Writter.CreateDirectory(dirName); err != nil {
+		dirName := path.Join(r.RootDir, subdir)
+		if err := r.Writter.CreateDirectory(dirName); err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
 			return err
 		}
 	}
 
-	objectName := path.Join(h.RootDir, subdir, filename)
+	objectName := path.Join(r.RootDir, subdir, filename)
 	logrus.Infof("Begin to create and append oss object %s by absoluteLogPathName %s, oss subdir [%s] filename [%s] relativePath[%s]",
 		objectName, absoluteLogPathName, subdir, filename, relativePath)
 
-	// utils.DeleteObject(h.OssBucket, objectName)
+	// utils.DeleteObject(r.OssBucket, objectName)
 
 	// 从文件开始读,
 	// Go 1.20推荐使用 io.SeekEnd, 老版本可能需要改为os.SEEK_END
@@ -103,7 +110,7 @@ func (h *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	var nextPos int64 = 0
 
 	logrus.Infof("Begin to first append oss object %s ...", objectName)
-	nextPos, err = h.Writter.Append(objectName, strings.NewReader(""), nextPos)
+	nextPos, err = r.Writter.Append(objectName, strings.NewReader(""), nextPos)
 	if err != nil {
 		logrus.Errorf("First append object %s error %v",
 			objectName,
@@ -116,9 +123,9 @@ func (h *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	buf := bytes.NewBufferString("")
 	for {
 		select {
-		case <-time.Tick(h.PushInterval):
+		case <-time.Tick(r.PushInterval):
 			if lines > 0 {
-				nextPos, err = h.Writter.Append(objectName, buf, nextPos)
+				nextPos, err = r.Writter.Append(objectName, buf, nextPos)
 				if err != nil {
 					logrus.Errorf("Tail file %s to object %s error, append value: %v, nextPos %d error [%v]",
 						absoluteLogPathName,
@@ -144,8 +151,8 @@ func (h *RayLogHandler) PushLog(absoluteLogPathName string) error {
 			}
 			lines++
 			buf.WriteString(line.Text + "\n")
-			if lines >= h.LogBatching {
-				nextPos, err = h.Writter.Append(objectName, buf, nextPos)
+			if lines >= r.LogBatching {
+				nextPos, err = r.Writter.Append(objectName, buf, nextPos)
 				if err != nil {
 					logrus.Errorf("Tail file %s to object %s error, append value: %v, nextPos %d error [%v]",
 						absoluteLogPathName,
@@ -168,17 +175,17 @@ func (h *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	}
 }
 
-func (h *RayLogHandler) PushLogsLoops(stop chan struct{}) {
+func (r *RayLogHandler) PushLogsLoops(stop chan struct{}) {
 
-	if err := h.Writter.CreateDirectory(h.RootDir); err != nil {
-		logrus.Errorf("Failed to create oss root directory %s: %v", h.RootDir, err)
+	if err := r.Writter.CreateDirectory(r.RootDir); err != nil {
+		logrus.Errorf("Failed to create oss root directory %s: %v", r.RootDir, err)
 		return
 	}
 
 	for {
 		select {
-		case logfile := <-h.LogFiles:
-			go h.PushLog(logfile)
+		case logfile := <-r.LogFiles:
+			go r.PushLog(logfile)
 		case <-stop:
 			logrus.Warnf("Receive stop signal, so return PushLogsLoop")
 			return
@@ -186,10 +193,10 @@ func (h *RayLogHandler) PushLogsLoops(stop chan struct{}) {
 	}
 }
 
-func (h *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string, stop chan struct{}) {
+func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string, stop chan struct{}) {
 	// 监听当前目录
 	if err := watcher.Add(walkPath); err != nil {
-		logrus.Fatalf("Watcher rootpath %s error %v", h.LogDir, err)
+		logrus.Fatalf("Watcher rootpath %s error %v", r.LogDir, err)
 	}
 
 	err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
@@ -200,11 +207,11 @@ func (h *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 		// 检查是否是文件
 		if !info.IsDir() {
 			logrus.Infof("Walk find new file %s", path) // 输出文件路径
-			go h.AddLogFile(path)
+			go r.AddLogFile(path)
 		} else {
 			logrus.Infof("Walk find new dir %s", path) // 输出dir路径
 			if err := watcher.Add(path); err != nil {
-				logrus.Fatalf("Watcher add %s error %v", h.LogDir, err)
+				logrus.Fatalf("Watcher add %s error %v", r.LogDir, err)
 			}
 		}
 		return nil
@@ -233,7 +240,7 @@ func (h *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 				// 判断是文件还是目录
 				if !info.IsDir() {
 					logrus.Infof("Watch find: create a new file %s", name)
-					h.AddLogFile(name)
+					r.AddLogFile(name)
 				} else {
 					if err := watcher.Add(name); err != nil {
 						logrus.Fatalf("Watch add file %s error %v", name, err)

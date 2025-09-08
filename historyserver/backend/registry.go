@@ -2,6 +2,7 @@ package backend
 
 import (
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
+	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/aliyunoss/ray"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 )
 
@@ -11,4 +12,6 @@ func GetRegistry() Registry {
 	return registry
 }
 
-var registry = Registry{}
+var registry = Registry{
+	"aliyunoss": ray.NewWritter,
+}

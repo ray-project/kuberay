@@ -7,10 +7,10 @@ import (
 )
 
 type RayCollectorConfig struct {
-	// need to fill these fields after start
+	RootDir     string
 	SessionDir  string
 	RayNodeName string
-	// fill these fields by cmdline arguments
+
 	Role           string
 	RayClusterName string
 	RayClusterID   string
