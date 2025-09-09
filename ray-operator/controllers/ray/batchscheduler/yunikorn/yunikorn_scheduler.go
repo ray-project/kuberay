@@ -53,7 +53,7 @@ func propagateTaskGroupsAnnotation(parent client.Object, child client.Object) er
 		if annotations == nil {
 			child.SetAnnotations(make(map[string]string))
 		}
-		annotations[YuniKornTaskGroupsAnnotationName] = parent.GetAnnotations()[YuniKornTaskGroupsAnnotationName]
+		annotations[YuniKornTaskGroupsAnnotationName] = parentAnnotations
 		child.SetAnnotations(annotations)
 		return nil
 	}
