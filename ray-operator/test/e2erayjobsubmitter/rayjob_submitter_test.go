@@ -174,6 +174,7 @@ func TestRayJobSubmitter(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		logContent := string(logsBytes)
 		// Verify the logs contain expected content
+		g.Expect(logContent).To(ContainSubstring("has already been submitted, tailing logs."))
 		g.Expect(logContent).To(ContainSubstring("test_counter got 1"))
 		g.Expect(logContent).To(ContainSubstring("test_counter got 2"))
 		g.Expect(logContent).To(ContainSubstring("test_counter got 3"))
