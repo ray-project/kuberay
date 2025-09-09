@@ -95,22 +95,24 @@ func TestRayJobSubmitter(t *testing.T) {
 			rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](TestScript, "/home/ray/jobs"))).
 				WithSubmitterPodTemplate(SubmitterPodTemplate).
+				WithSubmitterConfig(rayv1ac.SubmitterConfig().
+					WithBackoffLimit(2)).
 				WithShutdownAfterJobFinishes(true),
 		)
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to fail", rayJob.Namespace, rayJob.Name)
+
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
-		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusNew)))
+
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.SubmissionFailed)))
 
 		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name=failed-rayjob"))(g)
-		g.Expect(submitterPods).To(HaveLen(3), "Expected to find exactly three submitter pods with label job-name=failed-rayjob")
+		g.Expect(submitterPods).To(HaveLen(int(*rayJob.Spec.SubmitterConfig.BackoffLimit)+1), "Expected to find exactly %d submitter pods with label job-name=failed-rayjob", int(*rayJob.Spec.SubmitterConfig.BackoffLimit)+1)
 
 		// Delete the RayJob
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
