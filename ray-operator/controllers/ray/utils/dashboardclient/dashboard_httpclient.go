@@ -223,7 +223,7 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		// If the submission_id is already used,dashboard will return status code 400, we return the submission_id directly.
+		// If the submission_id is already used,dashboard will return status code 500, we return the submission_id directly.
 		if strings.Contains(string(body), "Please use a different submission_id") {
 			return request.SubmissionId, nil
 		}
