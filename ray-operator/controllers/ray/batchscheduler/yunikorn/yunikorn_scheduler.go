@@ -104,15 +104,6 @@ func addSchedulerNameToObject(obj client.Object, schedulerName string) {
 }
 
 func getTaskGroupsAnnotationValue(obj client.Object) (string, error) {
-	// check if the annotation already exists
-	if annotations := obj.GetAnnotations(); annotations != nil {
-		taskGroupsAnnotationValue, exist := annotations[YuniKornTaskGroupsAnnotationName]
-		if exist {
-			return taskGroupsAnnotationValue, nil
-		}
-	}
-
-	// if the annotation doesn't exist, create a new one
 	taskGroups := newTaskGroups()
 	switch obj := obj.(type) {
 	case *rayv1.RayCluster:
