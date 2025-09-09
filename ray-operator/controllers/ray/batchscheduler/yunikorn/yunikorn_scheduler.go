@@ -90,8 +90,10 @@ func populateLabelsFromObject(parent client.Object, child client.Object, sourceK
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	labels[targetKey] = parent.GetLabels()[sourceKey]
-	child.SetLabels(labels)
+	if parent.GetLabels() != nil && parent.GetLabels()[sourceKey] != "" {
+		labels[targetKey] = parent.GetLabels()[sourceKey]
+		child.SetLabels(labels)
+	}
 }
 
 func addSchedulerNameToObject(obj client.Object, schedulerName string) {
