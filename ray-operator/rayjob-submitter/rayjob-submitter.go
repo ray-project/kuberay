@@ -31,7 +31,7 @@ func logTailingURL(address, submissionId string) (string, error) {
 	return address, nil
 }
 
-func TailLogJob(address, submissionId string, out io.Writer) error {
+func TailJobLogs(address, submissionId string, out io.Writer) error {
 	wsAddr, err := logTailingURL(address, submissionId)
 	if err != nil {
 		return err

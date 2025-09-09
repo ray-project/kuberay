@@ -66,10 +66,17 @@ func main() {
 	address = rayjobsubmitter.JobSubmissionURL(address)
 	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address)
 	submissionId, err := rayDashboardClient.SubmitJobReq(context.Background(), &req)
-	exitOnError(err)
-	fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
-	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job exits (disable with --no-wait):\n")
-	err = rayjobsubmitter.TailLogJob(address, submissionId, os.Stdout)
+	if err != nil {
+		if strings.Contains(err.Error(), "Please use a different submission_id") {
+			fmt.Fprintf(os.Stdout, "INFO -- Job '%s' has already been submitted, tailing logs.\n", submissionId)
+		} else {
+			exitOnError(err)
+		}
+	} else {
+		fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
+	}
+	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job exits\n")
+	err = rayjobsubmitter.TailJobLogs(address, submissionId, os.Stdout)
 	exitOnError(err)
 }
 
