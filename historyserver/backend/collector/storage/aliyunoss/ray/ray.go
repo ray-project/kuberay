@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,17 +38,14 @@ import (
 )
 
 type RayLogsHandler struct {
-	OssClient      *oss.Client
 	OssBucket      *oss.Bucket
 	SessionDir     string
-	OSSRootLogDir  string
-	OSSRootMetaDir string
 	OssRootDir     string
 	LogDir         string
 	LogFiles       chan string
-	EnableMeta     bool
 	RayClusterName string
 	RayClusterID   string
+	RayNodeName    string
 	HttpClient     *http.Client
 
 	LogBatching  int
@@ -82,16 +81,76 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.Reader) error {
 }
 
 func (r *RayLogsHandler) List() []utils.ClusterInfo {
-	return nil
+	// 初始的继续标记
+	continueToken := ""
+	clusters := make(utils.ClusterInfoList, 0, 10)
+	logrus.Debugf("Prepare to get list clusters info ...")
+
+	getClusters := func() {
+		for {
+			options := []oss.Option{
+				oss.Prefix(path.Join(r.OssRootDir, "cluster_list") + "/"),
+				oss.ContinuationToken(continueToken),
+				oss.MaxKeys(100),
+				oss.Delimiter("/"),
+			}
+
+			// 列举所有文件
+			lsRes, err := r.OssBucket.ListObjectsV2(options...)
+			if err != nil {
+				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "cluster_list")+"/", err)
+				return
+			}
+			logrus.Infof("Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", path.Join(r.OssRootDir, "cluster_list")+"/", len(lsRes.Objects),
+				len(lsRes.CommonPrefixes))
+			for _, objects := range lsRes.Objects {
+				logrus.Infof("Process %++v", objects)
+				c := &utils.ClusterInfo{}
+				metas := strings.Split(objects.Key, "#")
+				if len(metas) < 4 {
+					continue
+				}
+				c.Name = path.Base(metas[0]) + "_" + metas[1]
+				c.SessionName = metas[2]
+				cs, _ := strconv.ParseInt(metas[3], 10, 64)
+				c.CreateTimeStamp = cs
+				t := time.Unix(cs, 0)
+				c.CreateTime = t.UTC().Format(("2006-01-02T15:04:05Z"))
+				clusters = append(clusters, *c)
+			}
+			if lsRes.IsTruncated {
+				continueToken = lsRes.NextContinuationToken
+			} else {
+				break
+			}
+		}
+	}
+	getClusters()
+	sort.Sort(clusters)
+	return clusters
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	return nil
+	logrus.Infof("Prepare to get object %s info ...", fileName)
+	options := []oss.Option{}
+	body, err := r.OssBucket.GetObject(fileName, options...)
+	if err != nil {
+		logrus.Errorf("Failed to get object %s: %v", fileName, err)
+		return nil
+	}
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		logrus.Errorf("Failed to read all data from object %s : %v", fileName, err)
+		return nil
+	}
+	return bytes.NewReader(data)
 }
 
-func NewReader(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
 	config := &config{}
-	config.complete(c, jd)
+	config.completeHSConfig(c, jd)
 
 	return New(config)
 }
@@ -129,17 +188,14 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		OssClient:      client,
 		OssBucket:      bucket,
 		SessionDir:     sessionDir,
-		OSSRootLogDir:  utils.GetOssLogDir(c.RootDir, c.RayClusterName, c.RayClusterID, c.RayNodeName),
-		OSSRootMetaDir: utils.GetOssMetaDir(c.RootDir, c.RayClusterName, c.RayClusterID),
 		OssRootDir:     c.RootDir,
 		LogDir:         logdir,
 		LogFiles:       make(chan string, 100),
-		EnableMeta:     c.Role == "Head",
 		RayClusterName: c.RayClusterName,
 		RayClusterID:   c.RayClusterID,
+		RayNodeName:    c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,              // 最大空闲连接数

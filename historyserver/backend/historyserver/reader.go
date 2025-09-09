@@ -25,8 +25,8 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) OssMetaKeyInfo(rayClusterNameID, key string) []byte {
-	baseObject := path.Join(utils.GetOssMetaDirByNameID(s.rootDir, rayClusterNameID), key)
+func (s *ServerHandler) MetaKeyInfo(rayClusterNameID, key string) []byte {
+	baseObject := path.Join(utils.GetMetaDirByNameID(s.rootDir, rayClusterNameID), key)
 	logrus.Infof("Prepare to get object %s info ...", baseObject)
 	body := s.reader.GetContent(rayClusterNameID, baseObject)
 	data, err := io.ReadAll(body)
@@ -37,8 +37,8 @@ func (s *ServerHandler) OssMetaKeyInfo(rayClusterNameID, key string) []byte {
 	return data
 }
 
-func (s *ServerHandler) OssLogKeyInfo(rayClusterNameID, nodeID, key string, lines int64) []byte {
-	baseObject := path.Join(utils.GetOssLogDirByNameID(s.rootDir, rayClusterNameID, nodeID), key)
+func (s *ServerHandler) LogKeyInfo(rayClusterNameID, nodeID, key string, lines int64) []byte {
+	baseObject := path.Join(utils.GetLogDirByNameID(s.rootDir, rayClusterNameID, nodeID), key)
 	logrus.Infof("Prepare to get object %s info ...", baseObject)
 	body := s.reader.GetContent(rayClusterNameID, baseObject)
 	data, err := io.ReadAll(body)

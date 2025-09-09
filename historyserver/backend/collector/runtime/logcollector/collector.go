@@ -14,6 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/hpcloud/tail"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
+	"github.com/ray-project/kuberay/historyserver/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,6 +30,7 @@ type RayLogHandler struct {
 
 	RayClusterName string
 	RayClusterID   string
+	RayNodeName    string
 
 	LogBatching  int
 	PushInterval time.Duration
@@ -80,16 +82,16 @@ func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	// subdir events/aa/
 	// filename a.txt
 	subdir, filename := filepath.Split(relativePath)
-
+	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, r.RayNodeName)
 	if len(subdir) != 0 {
-		dirName := path.Join(r.RootDir, subdir)
+		dirName := path.Join(logDir, subdir)
 		if err := r.Writter.CreateDirectory(dirName); err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
 			return err
 		}
 	}
 
-	objectName := path.Join(r.RootDir, subdir, filename)
+	objectName := path.Join(logDir, subdir, filename)
 	logrus.Infof("Begin to create and append oss object %s by absoluteLogPathName %s, oss subdir [%s] filename [%s] relativePath[%s]",
 		objectName, absoluteLogPathName, subdir, filename, relativePath)
 

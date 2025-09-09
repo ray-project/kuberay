@@ -10,7 +10,10 @@ import (
 
 func newCredential() (credentials.Credential, error) {
 	// https://www.alibabacloud.com/help/doc-detail/378661.html
-	cred, err := credentials.NewCredential(nil)
+	credType := "oidc_role_arn"
+	cred, err := credentials.NewCredential(&credentials.Config{
+		Type: &credType,
+	})
 	return cred, err
 }
 

@@ -41,7 +41,7 @@ func (r *RayLogHandler) PersistMetaLoop(stop chan struct{}) {
 		logrus.Errorf("Build cluster meta information error %v", err)
 		return
 	}
-	fileName := path.Clean(clistDir + "/" + r.RayClusterName + "_" + r.RayClusterID + "_" + path.Base(r.SessionDir) + "_" + fmt.Sprintf("%v", timestamp))
+	fileName := path.Clean(clistDir + "/" + r.RayClusterName + "#" + r.RayClusterID + "#" + path.Base(r.SessionDir) + "#" + fmt.Sprintf("%v", timestamp))
 	if err := r.Writter.WriteFile(fileName, bytes.NewReader(data)); err != nil {
 		logrus.Errorf("CreateObjectIfNotExist %s error %v", fileName, err)
 		return

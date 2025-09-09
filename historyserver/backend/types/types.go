@@ -6,6 +6,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
+type RayHistoryServerConfig struct {
+	RootDir string
+}
+
 type RayCollectorConfig struct {
 	RootDir     string
 	SessionDir  string

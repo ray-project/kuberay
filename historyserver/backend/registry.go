@@ -16,7 +16,7 @@ var writerRegistry = WriterRegistry{
 	"aliyunoss": ray.NewWritter,
 }
 
-type ReaderRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageReader, error)
+type ReaderRegistry map[string]func(globalData *types.RayHistoryServerConfig, data map[string]interface{}) (storage.StorageReader, error)
 
 func GetReaderRegistry() ReaderRegistry {
 	return readerRegistry

@@ -187,14 +187,14 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	view := req.QueryParameter("view")
 	logrus.Warnf("view is %s, but not do anything", view)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_NodeSummaryKey)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_NodeSummaryKey)
 
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_Events)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Events)
 	resp.Write(data)
 }
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
@@ -203,13 +203,13 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 }
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
 	resp.Write(data)
 }
 func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	node_id := req.PathParameter("node_id")
-	data := s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_Node_Prefix, node_id))
+	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_Node_Prefix, node_id))
 	resp.Write(data)
 }
 
@@ -218,7 +218,7 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	job_id := req.PathParameter("job_id")
 	logrus.Debugf("job_id is %s", job_id)
 
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
 	allData := []map[string]interface{}{}
 	if err := json.Unmarshal(data, &allData); err != nil {
 		logrus.Errorf("Ummarshal alljobs error%v", err)
@@ -251,25 +251,25 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	job_id := req.PathParameter("job_id")
-	data := s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, job_id))
+	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, job_id))
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_Applications)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Applications)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_PlacementGroups)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_PlacementGroups)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_ClusterStatus)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_ClusterStatus)
 
 	resp.Write(data)
 }
@@ -277,7 +277,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	nodeId := req.QueryParameter("node_id")
-	data := s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_NodeLogs_Prefix, nodeId))
+	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_NodeLogs_Prefix, nodeId))
 	// 根据 clustername 返回节点信息，以下是示例
 	//resp.WriteEntity(data)
 	resp.Write(data)
@@ -285,14 +285,14 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 
 func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	nodeId := req.PathParameter("single_actor")
-	data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
+	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
 	var allActors = map[string]interface{}{}
 	replyActorInfo := ReplyActorInfo{
 		Result: true,
@@ -338,13 +338,13 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 	data := make([]byte, 0, 1000)
 	if format == "leading_1" {
-		rawData := s.OssLogKeyInfo(clusterNameID, nodeId, filename, limit)
+		rawData := s.LogKeyInfo(clusterNameID, nodeId, filename, limit)
 		if len(rawData) > 0 {
 			data = append(data, byte('1'))
 			data = append(data, rawData...)
 		}
 	} else {
-		data = append(data, s.OssLogKeyInfo(clusterNameID, nodeId, filename, limit)...)
+		data = append(data, s.LogKeyInfo(clusterNameID, nodeId, filename, limit)...)
 	}
 
 	resp.Write(data)
@@ -392,9 +392,9 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	case "job_id":
 		var data []byte
 		if summary_by == "" || summary_by == "func_name" {
-			data = s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_FUNC_NAME_Prefix, filter_values))
+			data = s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_FUNC_NAME_Prefix, filter_values))
 		} else if summary_by == "lineage" {
-			data = s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix, filter_values))
+			data = s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix, filter_values))
 		}
 		//OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix
 		resp.Write(data)
@@ -414,10 +414,10 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 
 	switch filter_keys {
 	case "job_id":
-		data := s.OssMetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_DETAIL_Prefix, filter_values))
+		data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_DETAIL_Prefix, filter_values))
 		resp.Write(data)
 	case "task_id":
-		data := s.OssMetaKeyInfo(clusterNameID, utils.OssMetaFile_ALLTASKS_DETAIL)
+		data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_ALLTASKS_DETAIL)
 		taskData, err := getTaskInfo(data, filter_values)
 		if err != nil {
 			logrus.Errorf("get task info error %v", err)

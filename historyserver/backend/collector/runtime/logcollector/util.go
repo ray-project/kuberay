@@ -34,11 +34,6 @@ type JobUrlInfo struct {
 
 var metaCommonUrlInfo = []*UrlInfo{
 	&UrlInfo{
-		Key:  utils.OssMetaFile_ClusterSessionName,
-		Path: "/tmp/ray/session_[1-9].*",
-		Type: MetaTypeFileNames,
-	},
-	&UrlInfo{
 		Key:  utils.OssMetaFile_ClusterStatus,
 		Url:  "http://localhost:8265/api/cluster_status?format=1",
 		Type: MetaTypeUrl,

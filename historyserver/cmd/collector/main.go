@@ -1,4 +1,4 @@
-package collector
+package main
 
 import (
 	"encoding/json"
@@ -28,7 +28,7 @@ func main() {
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
-	flag.StringVar(&rayClusterId, "ray-cluster-id", "", "")
+	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
@@ -82,5 +82,6 @@ func main() {
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	collector.Start(stop)
-	<-stop
+	<-sigChan
+	stop <- struct{}{}
 }
