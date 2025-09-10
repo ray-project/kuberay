@@ -235,6 +235,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		var rayClusterInstance *rayv1.RayCluster
+		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
+		// before transitioning the status from `Initializing` to `Running`.
+		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		err = r.reconcileServices(ctx, rayJobInstance, rayClusterInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
 		var isSubmitterFinished bool
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
@@ -245,19 +257,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if shouldUpdate {
 				break
 			}
-		}
-
-		var rayClusterInstance *rayv1.RayCluster
-		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
-		// before transitioning the status from `Initializing` to `Running`.
-		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
-
-		_, err = r.reconcileServices(ctx, rayJobInstance, rayClusterInstance)
-		if err != nil {
-			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService),
-				"Failed to update head service for Job %s/%s, %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
 		}
 
 		// Check the current status of ray jobs
@@ -618,14 +617,13 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	return nil
 }
 
-func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob,
-	rayClusterInstance *rayv1.RayCluster,
-) (*corev1.Service, error) {
+// TODO: Move this function into a common package so that both RayJob and RayService can use it.
+func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	newSvc, err := common.BuildHeadServiceForRayJob(ctx, *rayJobInstance, *rayClusterInstance)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
@@ -637,7 +635,7 @@ func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance
 		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
 			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster",
 				newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", utils.HeadService)
-			return oldSvc, nil
+			return nil
 		}
 		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
 		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
@@ -647,24 +645,24 @@ func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance
 		logger.Info("Update Kubernetes Service", "serviceType", utils.HeadService)
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService), "Failed to update the service %s/%s, %v", oldSvc.Namespace, oldSvc.Name, updateErr)
-			return nil, updateErr
+			return updateErr
 		}
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.UpdatedService), "Updated the service %s/%s", oldSvc.Namespace, oldSvc.Name)
 		// Return the updated service.
-		return oldSvc, nil
+		return nil
 	} else if errors.IsNotFound(err) {
 		logger.Info("Create a Kubernetes Service", "serviceType", utils.HeadService)
 		if err := ctrl.SetControllerReference(rayJobInstance, newSvc, r.Scheme); err != nil {
-			return nil, err
+			return err
 		}
 		if err := r.Create(ctx, newSvc); err != nil {
 			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateService), "Failed to create the service %s/%s, %v", newSvc.Namespace, newSvc.Name, err)
-			return nil, err
+			return err
 		}
 		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedService), "Created the service %s/%s", newSvc.Namespace, newSvc.Name)
-		return newSvc, nil
+		return nil
 	}
-	return nil, err
+	return err
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.

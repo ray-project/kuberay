@@ -17,21 +17,16 @@ import (
 	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
 
-// BuildHeadServiceForRayJob Builds the service for a RayJob. Currently, there is only one service that allows
+// BuildHeadServiceForRayJob builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
-func BuildHeadServiceForRayJob(ctx context.Context, rayJob rayv1.RayJob,
-	rayCluster rayv1.RayCluster,
-) (*corev1.Service, error) {
+// RayJob controller updates the service whenever a new RayCluster serves the traffic.
+func BuildHeadServiceForRayJob(ctx context.Context, rayJob rayv1.RayJob, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
 	service, err := BuildServiceForHeadPod(ctx, rayCluster, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var clusterSpec rayv1.RayClusterSpec
-	if rayJob.Spec.RayClusterSpec != nil {
-		clusterSpec = *rayJob.Spec.RayClusterSpec
-	}
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, clusterSpec, rayJob.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, *rayJob.Spec.RayClusterSpec, rayJob.Name)
 	if err != nil {
 		return nil, err
 	}
