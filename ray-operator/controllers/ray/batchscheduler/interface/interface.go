@@ -24,6 +24,7 @@ type BatchScheduler interface {
 
 	// AddMetadataToPod enriches the pod with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
+	// This function will be removed once Rayjob Volcano scheduler integration is completed.
 	AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
 
 	// AddMetadataToChildResource enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
