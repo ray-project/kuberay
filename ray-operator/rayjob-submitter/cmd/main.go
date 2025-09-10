@@ -75,7 +75,7 @@ func main() {
 	} else {
 		fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
 	}
-	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job exits\n")
+	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job finishes:\n")
 	err = rayjobsubmitter.TailJobLogs(address, submissionId, os.Stdout)
 	exitOnError(err)
 }
