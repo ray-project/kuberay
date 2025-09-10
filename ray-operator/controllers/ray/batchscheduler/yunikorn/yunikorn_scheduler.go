@@ -48,23 +48,28 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ c
 // if the parent has the task groups annotation, it will be copied to the child
 // if the parent doesn't have the task groups annotation, a new one will be created
 func propagateTaskGroupsAnnotation(parent client.Object, child client.Object) error {
-	if child.GetAnnotations() == nil {
-		child.SetAnnotations(make(map[string]string))
-	}
+	var taskGroupsAnnotationValue string
 	if parentAnnotations, exist := parent.GetAnnotations()[YuniKornTaskGroupsAnnotationName]; exist && parentAnnotations != "" {
-		child.GetAnnotations()[YuniKornTaskGroupsAnnotationName] = parentAnnotations
-		return nil
+		taskGroupsAnnotationValue = parentAnnotations
 	}
-	taskGroupsAnnotationValue, err := getTaskGroupsAnnotationValue(parent)
-	if err != nil {
-		return err
+	if taskGroupsAnnotationValue == "" {
+		var err error
+		taskGroupsAnnotationValue, err = getTaskGroupsAnnotationValue(parent)
+		if err != nil {
+			return err
+		}
 	}
+
 	if job, ok := child.(*batchv1.Job); ok {
 		if job.Spec.Template.Annotations == nil {
 			job.Spec.Template.Annotations = make(map[string]string)
 		}
 		job.Spec.Template.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
 		return nil
+	}
+
+	if child.GetAnnotations() == nil {
+		child.SetAnnotations(make(map[string]string))
 	}
 	child.GetAnnotations()[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
 	return nil
