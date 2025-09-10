@@ -45,6 +45,9 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayJob default cluster selector key
+	RayJobClusterSelectorKey = "ray.io/cluster"
+
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
@@ -205,6 +208,9 @@ const (
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue = "headgroup"
+
+	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
+	SubmitterContainerName = "ray-job-submitter"
 
 	// KUBERAY_VERSION is the build version of KubeRay.
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable

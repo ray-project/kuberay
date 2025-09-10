@@ -86,9 +86,29 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	return pkgutils.ConvertByteSliceToString(metadataBytes), nil
 }
 
-// GetK8sJobCommand builds the K8s job command for the Ray job.
-func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
-	address := rayJobInstance.Status.DashboardURL
+// BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
+func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
+	var address string
+	port := utils.DefaultDashboardPort
+
+	switch submissionMode {
+	case rayv1.SidecarMode:
+		// The sidecar submitter shares the same network namespace as the Ray dashboard,
+		// so it uses 127.0.0.1 to connect to the Ray dashboard.
+		rayHeadContainer := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+		port = utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort)
+		address = "http://127.0.0.1:" + strconv.Itoa(port)
+	case rayv1.K8sJobMode:
+		// Submitter is a separate K8s Job; use cluster dashboard address.
+		address = rayJobInstance.Status.DashboardURL
+		if !strings.HasPrefix(address, "http://") {
+			address = "http://" + address
+		}
+	default:
+		return nil, fmt.Errorf("unsupported submission mode for job submit command: %s", submissionMode)
+	}
+
+	var cmd []string
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
 	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
@@ -96,11 +116,7 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
 
-	// add http:// if needed
-	if !strings.HasPrefix(address, "http://") {
-		address = "http://" + address
-	}
-
+	// In K8sJobMode, we need to avoid submitting the job twice, since the job submitter might retry.
 	// `ray job submit` alone doesn't handle duplicated submission gracefully. See https://github.com/ray-project/kuberay/issues/2154.
 	// In order to deal with that, we use `ray job status` first to check if the jobId has been submitted.
 	// If the jobId has been submitted, we use `ray job logs` to follow the logs.
@@ -108,19 +124,49 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 	//   if ! ray job status --address http://$RAY_ADDRESS $RAY_JOB_SUBMISSION_ID >/dev/null 2>&1 ;
 	//   then ray job submit --address http://$RAY_ADDRESS --submission-id $RAY_JOB_SUBMISSION_ID --no-wait -- ... ;
 	//   fi ; ray job logs --address http://$RAY_ADDRESS --follow $RAY_JOB_SUBMISSION_ID
+	// In Sidecar mode, the sidecar container's restart policy is set to Never, so duplicated submission won't happen.
 	jobStatusCommand := []string{"ray", "job", "status", "--address", address, jobId, ">/dev/null", "2>&1"}
+	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
-	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address, "--no-wait"}
-	k8sJobCommand := append([]string{"if", "!"}, jobStatusCommand...)
-	k8sJobCommand = append(k8sJobCommand, ";", "then")
-	k8sJobCommand = append(k8sJobCommand, jobSubmitCommand...)
+
+	if submissionMode == rayv1.SidecarMode {
+		// Wait until Ray Dashboard GCS is healthy before proceeding.
+		// Use the same Ray Dashboard GCS health check command as the readiness probe
+		rayDashboardGCSHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeFailureThreshold,
+			port,
+			utils.RayDashboardGCSHealthPath,
+		)
+
+		waitLoop := []string{
+			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		}
+		cmd = append(cmd, waitLoop...)
+	}
+
+	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
+	// so we won't have to check if the job has been submitted.
+	if submissionMode == rayv1.K8sJobMode {
+		// Only check job status in K8s mode to handle duplicated submission gracefully
+		cmd = append(cmd, "if", "!")
+		cmd = append(cmd, jobStatusCommand...)
+		cmd = append(cmd, ";", "then")
+	}
+
+	cmd = append(cmd, jobSubmitCommand...)
+
+	if submissionMode == rayv1.K8sJobMode {
+		cmd = append(cmd, "--no-wait")
+	}
 
 	runtimeEnvJson, err := getRuntimeEnvJson(rayJobInstance)
 	if err != nil {
 		return nil, err
 	}
 	if len(runtimeEnvJson) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
+		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
 	if len(metadata) > 0 {
@@ -128,54 +174,62 @@ func GetK8sJobCommand(rayJobInstance *rayv1.RayJob) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		k8sJobCommand = append(k8sJobCommand, "--metadata-json", strconv.Quote(metadataJson))
+		cmd = append(cmd, "--metadata-json", strconv.Quote(metadataJson))
 	}
 
 	if len(jobId) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--submission-id", jobId)
+		cmd = append(cmd, "--submission-id", jobId)
 	}
 
 	if entrypointNumCpus > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-cpus", fmt.Sprintf("%f", entrypointNumCpus))
+		cmd = append(cmd, "--entrypoint-num-cpus", fmt.Sprintf("%f", entrypointNumCpus))
 	}
 
 	if entrypointNumGpus > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint-num-gpus", fmt.Sprintf("%f", entrypointNumGpus))
+		cmd = append(cmd, "--entrypoint-num-gpus", fmt.Sprintf("%f", entrypointNumGpus))
 	}
 
 	if len(entrypointResources) > 0 {
-		k8sJobCommand = append(k8sJobCommand, "--entrypoint-resources", strconv.Quote(entrypointResources))
+		cmd = append(cmd, "--entrypoint-resources", strconv.Quote(entrypointResources))
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
-	k8sJobCommand = append(k8sJobCommand, "--", entrypoint, ";", "fi", ";")
-	k8sJobCommand = append(k8sJobCommand, jobFollowCommand...)
+	cmd = append(cmd, "--", entrypoint, ";")
+	if submissionMode == rayv1.K8sJobMode {
+		cmd = append(cmd, "fi", ";")
+		cmd = append(cmd, jobFollowCommand...)
+	}
 
-	return k8sJobCommand, nil
+	return cmd, nil
 }
 
 // GetDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.PodTemplateSpec {
+func GetDefaultSubmitterTemplate(rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
-				{
-					Name: "ray-job-submitter",
-					// Use the image of the Ray head to be defensive against version mismatch issues
-					Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("200Mi"),
-						},
-					},
-				},
+				GetDefaultSubmitterContainer(rayClusterSpec),
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
+		},
+	}
+}
+
+// GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
+func GetDefaultSubmitterContainer(rayClusterSpec *rayv1.RayClusterSpec) corev1.Container {
+	return corev1.Container{
+		Name: utils.SubmitterContainerName,
+		// Use the image of the Ray head to be defensive against version mismatch issues
+		Image: rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("200Mi"),
+			},
 		},
 	}
 }

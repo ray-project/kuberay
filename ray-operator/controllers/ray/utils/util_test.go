@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -826,7 +827,7 @@ env_vars:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
+			_, err := dashboardclient.UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
 			if tc.isErrorNil {
 				require.NoError(t, err)
 			} else {
