@@ -107,7 +107,7 @@ func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ client.O
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
-	_, exist := app.Labels[utils.RayClusterGangSchedulingEnabled]
+	_, exist := app.Labels[utils.RayGangSchedulingEnabled]
 	return exist
 }
 

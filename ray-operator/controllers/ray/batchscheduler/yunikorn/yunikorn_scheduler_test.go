@@ -26,9 +26,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test1",
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -38,9 +38,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test2",
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "",
 		},
 	)
 
@@ -63,9 +63,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"test1",
 		nil,
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -76,9 +76,9 @@ func TestIsGangSchedulingEnabled(t *testing.T) {
 		"test2",
 		nil,
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "",
 		},
 	)
 
@@ -241,9 +241,9 @@ func TestPopulateTaskGroupsAnnotationToPod(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test-namespace",
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -323,9 +323,9 @@ func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *test
 		"test-namespace",
 		rayCluster.Spec.DeepCopy(),
 		map[string]string{
-			RayApplicationIDLabelName:             appID,
-			RayApplicationQueueLabelName:          queue,
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 
@@ -421,9 +421,9 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 		"ray-cluster-with-gang-scheduling",
 		"test-namespace",
 		map[string]string{
-			RayApplicationIDLabelName:             "job-2",
-			RayApplicationQueueLabelName:          "root.default",
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      "job-2",
+			RayApplicationQueueLabelName:   "root.default",
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 	addHeadPodSpec(rayCluster, corev1.ResourceList{
@@ -496,9 +496,9 @@ func TestAddMetadataToChildResourceFromRayJob(t *testing.T) {
 		"test-namespace",
 		&rayCluster.Spec,
 		map[string]string{
-			RayApplicationIDLabelName:             "job-4",
-			RayApplicationQueueLabelName:          "root.default",
-			utils.RayClusterGangSchedulingEnabled: "true",
+			RayApplicationIDLabelName:      "job-4",
+			RayApplicationQueueLabelName:   "root.default",
+			utils.RayGangSchedulingEnabled: "true",
 		},
 	)
 	k8sJob = createJobTemplate()

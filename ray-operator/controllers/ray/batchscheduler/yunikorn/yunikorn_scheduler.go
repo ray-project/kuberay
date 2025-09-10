@@ -141,10 +141,10 @@ func addTaskGroupNameAnnotation(obj client.Object, groupName string) {
 func (y *YuniKornScheduler) isGangSchedulingEnabled(obj client.Object) bool {
 	switch obj := obj.(type) {
 	case *rayv1.RayCluster:
-		_, exist := obj.Labels[utils.RayClusterGangSchedulingEnabled]
+		_, exist := obj.Labels[utils.RayGangSchedulingEnabled]
 		return exist
 	case *rayv1.RayJob:
-		_, exist := obj.Labels[utils.RayClusterGangSchedulingEnabled]
+		_, exist := obj.Labels[utils.RayGangSchedulingEnabled]
 		return exist
 	default:
 		return false
