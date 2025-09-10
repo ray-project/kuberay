@@ -298,7 +298,7 @@ func TestPopulateTaskGroupsAnnotationToPod(t *testing.T) {
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
 }
 
-func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *testing.T) {
+func TestPopulateTaskGroupsAnnotationToRayClusterAndK8sJob(t *testing.T) {
 	appID := "job-1-01234"
 	queue := "root.default"
 
@@ -366,7 +366,7 @@ func TestPopulateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *test
 
 	err = propagateTaskGroupsAnnotation(rayJobWithGangScheduling, k8sJob)
 	require.NoError(t, err)
-	// verify the correctness of submitter pod template
+	// verify the correctness of k8s job
 	kk, err = getTaskGroupsFromJob(k8sJob)
 	require.NoError(t, err)
 	assert.Len(t, kk, 3) // 1 head group, 1 worker group, 1 submitter group
