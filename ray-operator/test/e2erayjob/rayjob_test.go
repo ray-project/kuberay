@@ -45,8 +45,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD,
-			*rayJob.Spec.RayClusterSpec, rayJob.Name)
+		rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, *rayJob.Spec.RayClusterSpec, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred(), "Failed to get Head Service Name: %v", rayJobHeadSvcName)
 
 		g.Eventually(func() error {
