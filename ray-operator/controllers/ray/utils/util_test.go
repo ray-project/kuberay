@@ -539,8 +539,8 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	// [RayJob]
 	// Test 5: `HeadService.Name` is empty.
 	headSvcName, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
-	require.NoError(t, err)
 	expectedGeneratedSvcName = "rayjob-sample-head-svc"
+	require.NoError(t, err)
 	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
 	// Test 6: `HeadService.Name` is not empty.
