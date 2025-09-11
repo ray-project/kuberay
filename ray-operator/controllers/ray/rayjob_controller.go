@@ -621,8 +621,7 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-
-		logger.Info("RayJob uses clusterSelector, skipping head service creation", "rayJob", rayJobInstance.Name)
+		logger.Info("RayJob uses clusterSelector, skipping head service creation", "RayJob", rayJobInstance.Name)
 		return nil
 	}
 
