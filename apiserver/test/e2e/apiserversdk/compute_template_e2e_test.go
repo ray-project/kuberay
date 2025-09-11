@@ -108,12 +108,12 @@ spec:
 	require.NoError(t, err, "No error expected when getting ray cluster")
 
 	// Verify head group has correct resources and annotations
-	verifyPodSpecResources(t, &actualCluster.Spec.HeadGroupSpec.Template.Spec, templateName, "head", computeTemplate)
+	verifyPodSpecResources(t, &actualCluster.Spec.HeadGroupSpec.Template.Spec, "head", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualCluster.Spec.HeadGroupSpec.Template.ObjectMeta, templateName)
 
 	// Verify worker group has correct resources and annotations
 	require.Len(t, actualCluster.Spec.WorkerGroupSpecs, 1, "Expected one worker group")
-	verifyPodSpecResources(t, &actualCluster.Spec.WorkerGroupSpecs[0].Template.Spec, templateName, "worker", computeTemplate)
+	verifyPodSpecResources(t, &actualCluster.Spec.WorkerGroupSpecs[0].Template.Spec, "worker", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualCluster.Spec.WorkerGroupSpecs[0].Template.ObjectMeta, templateName)
 }
 
@@ -167,12 +167,12 @@ spec:
 	require.NoError(t, err, "No error expected when getting ray job")
 
 	// Verify head group has correct resources and annotations
-	verifyPodSpecResources(t, &actualRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec, templateName, "head", computeTemplate)
+	verifyPodSpecResources(t, &actualRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec, "head", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.ObjectMeta, templateName)
 
 	// Verify worker group has correct resources and annotations
 	require.Len(t, actualRayJob.Spec.RayClusterSpec.WorkerGroupSpecs, 1, "Expected one worker group")
-	verifyPodSpecResources(t, &actualRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec, templateName, "worker", computeTemplate)
+	verifyPodSpecResources(t, &actualRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec, "worker", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualRayJob.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.ObjectMeta, templateName)
 }
 
@@ -225,17 +225,17 @@ spec:
 	require.NoError(t, err, "No error expected when getting ray service")
 
 	// Verify head group has correct resources and annotations
-	verifyPodSpecResources(t, &actualRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec, templateName, "head", computeTemplate)
+	verifyPodSpecResources(t, &actualRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec, "head", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualRayService.Spec.RayClusterSpec.HeadGroupSpec.Template.ObjectMeta, templateName)
 
 	// Verify worker group has correct resources and annotations
 	require.Len(t, actualRayService.Spec.RayClusterSpec.WorkerGroupSpecs, 1, "Expected one worker group")
-	verifyPodSpecResources(t, &actualRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec, templateName, "worker", computeTemplate)
+	verifyPodSpecResources(t, &actualRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec, "worker", computeTemplate)
 	verifyComputeTemplateAnnotation(t, actualRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.ObjectMeta, templateName)
 }
 
 // verifyPodSpecResources verifies that the PodSpec has the expected resources from the compute template
-func verifyPodSpecResources(t *testing.T, podSpec *corev1.PodSpec, _, groupType string, computeTemplate *api.ComputeTemplate) {
+func verifyPodSpecResources(t *testing.T, podSpec *corev1.PodSpec, groupType string, computeTemplate *api.ComputeTemplate) {
 	require.NotEmpty(t, podSpec.Containers, "Expected at least one container")
 
 	// Find the ray container (ray-head or ray-worker)
