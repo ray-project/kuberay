@@ -117,7 +117,7 @@ func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
 	a.Equal(int32(5), podGroup.Spec.MinMember)
 }
 
-func TestAddMetadataToPod(t *testing.T) {
+func TestAddMetadataToChildResource(t *testing.T) {
 	tests := []struct {
 		name         string
 		enableGang   bool

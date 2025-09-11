@@ -37,23 +37,25 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client
 	return nil
 }
 
-func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
-	logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
-	pod.Spec.SchedulerName = k.Name()
+func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent client.Object, _ string, child client.Object) {
+	switch parentObj := parent.(type) {
+	case *rayv1.RayCluster:
+		if pod, ok := child.(*corev1.Pod); ok {
+			logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
+			pod.Spec.SchedulerName = k.Name()
 
-	queue, ok := app.Labels[QueueLabelName]
-	if !ok || queue == "" {
-		logger.Info("Queue label missing from RayCluster; pods will remain pending",
-			"requiredLabel", QueueLabelName)
-		return
+			queue, ok := parentObj.Labels[QueueLabelName]
+			if !ok || queue == "" {
+				logger.Info("Queue label missing from RayCluster; pods will remain pending",
+					"requiredLabel", QueueLabelName)
+				return
+			}
+			if pod.Labels == nil {
+				pod.Labels = make(map[string]string)
+			}
+			pod.Labels[QueueLabelName] = queue
+		}
 	}
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels[QueueLabelName] = queue
-}
-
-func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ string, _ client.Object) {
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {

@@ -11,7 +11,7 @@ spec:
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: rayjob-sample-2
+  name: rayjob-sample-0
   labels:
     ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
