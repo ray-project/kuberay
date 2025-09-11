@@ -254,8 +254,6 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 				var tolerations []any
 				if existingTolerations, exists := spec["tolerations"].([]any); exists {
 					tolerations = existingTolerations
-				} else {
-					tolerations = make([]any, 0)
 				}
 
 				// Add new tolerations from compute template
