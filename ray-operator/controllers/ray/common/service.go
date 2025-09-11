@@ -141,7 +141,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 	return headService, nil
 }
 
-// BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
+// BuildHeadServiceForRayService builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
 func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
@@ -150,7 +150,7 @@ func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayServ
 		return nil, err
 	}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayv1.RayClusterSpec{}, rayService.Name)
 	if err != nil {
 		return nil, err
 	}
