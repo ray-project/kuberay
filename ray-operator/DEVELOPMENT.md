@@ -260,7 +260,7 @@ Run tests on your local environment
 
 We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documentation for more details.
 
-Generate API refernece:
+Generate API reference:
 
 ```bash
 make api-docs
