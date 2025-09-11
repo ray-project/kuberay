@@ -619,12 +619,11 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 
 // TODO: Move this function into a common package so that both RayJob and RayService can use it.
 func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
-	logger := ctrl.LoggerFrom(ctx)
 	if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-		logger.Info("RayJob uses clusterSelector, skipping head service creation", "RayJob", rayJobInstance.Name)
 		return nil
 	}
 
+	logger := ctrl.LoggerFrom(ctx)
 	newSvc, err := common.BuildHeadServiceForRayJob(ctx, *rayJobInstance, *rayClusterInstance)
 	if err != nil {
 		return err
