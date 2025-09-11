@@ -40,7 +40,7 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 				http.Error(w, "Failed to convert request body to Golang map object", http.StatusBadRequest)
 				return
 			}
-			spec, ok := requestMap["spec"].(map[string]interface{})
+			spec, ok := requestMap["spec"].(map[string]any)
 			if !ok {
 				klog.Infof("ComputeTemplate middleware: spec is not a map, skipping compute template processing")
 				// Continue with original request body without compute template processing
@@ -50,30 +50,30 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 			}
 
 			// Process compute templates and apply them to the request
-			var headGroupMap map[string]interface{}
-			var workerGroupMaps []interface{}
-			if rayClusterSpec, ok := spec["rayClusterSpec"].(map[string]interface{}); ok {
+			var headGroupMap map[string]any
+			var workerGroupMaps []any
+			if rayClusterSpec, ok := spec["rayClusterSpec"].(map[string]any); ok {
 				// For RayJob, get from spec.rayClusterSpec.headGroupSpec and spec.rayClusterSpec.workerGroupSpecs
-				if headGroup, ok := rayClusterSpec["headGroupSpec"].(map[string]interface{}); ok {
+				if headGroup, ok := rayClusterSpec["headGroupSpec"].(map[string]any); ok {
 					headGroupMap = headGroup
 				}
-				if workerGroups, ok := rayClusterSpec["workerGroupSpecs"].([]interface{}); ok {
+				if workerGroups, ok := rayClusterSpec["workerGroupSpecs"].([]any); ok {
 					workerGroupMaps = workerGroups
 				}
-			} else if rayClusterConfig, ok := spec["rayClusterConfig"].(map[string]interface{}); ok {
+			} else if rayClusterConfig, ok := spec["rayClusterConfig"].(map[string]any); ok {
 				// For RayService, get from spec.rayClusterConfig.headGroupSpec and spec.rayClusterConfig.workerGroupSpecs
-				if headGroup, ok := rayClusterConfig["headGroupSpec"].(map[string]interface{}); ok {
+				if headGroup, ok := rayClusterConfig["headGroupSpec"].(map[string]any); ok {
 					headGroupMap = headGroup
 				}
-				if workerGroups, ok := rayClusterConfig["workerGroupSpecs"].([]interface{}); ok {
+				if workerGroups, ok := rayClusterConfig["workerGroupSpecs"].([]any); ok {
 					workerGroupMaps = workerGroups
 				}
 			} else {
 				// For RayCluster, get from spec.headGroupSpec and spec.workerGroupSpecs
-				if headGroup, ok := spec["headGroupSpec"].(map[string]interface{}); ok {
+				if headGroup, ok := spec["headGroupSpec"].(map[string]any); ok {
 					headGroupMap = headGroup
 				}
-				if workerGroups, ok := spec["workerGroupSpecs"].([]interface{}); ok {
+				if workerGroups, ok := spec["workerGroupSpecs"].([]any); ok {
 					workerGroupMaps = workerGroups
 				}
 			}
@@ -94,7 +94,7 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 
 			// Apply compute templates to worker groups
 			for i, workerGroupSpec := range workerGroupMaps {
-				if workerGroupMap, ok := workerGroupSpec.(map[string]interface{}); ok {
+				if workerGroupMap, ok := workerGroupSpec.(map[string]any); ok {
 					computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
 					if err != nil {
 						klog.Errorf("ComputeTemplate middleware: Failed to get compute template for worker group %d: %v", i, err)
@@ -130,7 +130,7 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 
 // Convert the request body to map, handling both JSON and YAML formats
 func convertRequestBodyToMap(requestBody []byte, contentType string) (map[string]any, error) {
-	var requestMap map[string]interface{}
+	var requestMap map[string]any
 
 	// Check content type to determine format
 	if strings.Contains(contentType, "application/json") {
@@ -149,7 +149,7 @@ func convertRequestBodyToMap(requestBody []byte, contentType string) (map[string
 }
 
 // Convert YAML request map to JSON bytes for K8s API
-func convertMapToJSON(requestMap map[string]interface{}) ([]byte, error) {
+func convertMapToJSON(requestMap map[string]any) ([]byte, error) {
 	jsonBytes, err := json.Marshal(requestMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request map to JSON: %w", err)
@@ -158,7 +158,7 @@ func convertMapToJSON(requestMap map[string]interface{}) ([]byte, error) {
 }
 
 // Get the compute template by extracting the name from request and query the compute template
-func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceManager, clusterSpecMap map[string]interface{}, nameSpace string) (*api.ComputeTemplate, error) {
+func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceManager, clusterSpecMap map[string]any, nameSpace string) (*api.ComputeTemplate, error) {
 	name, ok := clusterSpecMap["computeTemplate"].(string)
 	if !ok {
 		// No compute template name found, directly return
@@ -177,51 +177,51 @@ func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceMa
 
 // Apply the computeTemplate into the clusterSpec map. The clusterSpec map is the map representation
 // for headGroupSpec or workerGroupSpec
-func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, clusterSpecMap *map[string]interface{}, group string) {
+func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, clusterSpecMap *map[string]any, group string) {
 	// calculate resources
 	cpu := fmt.Sprint(computeTemplate.GetCpu())
 	memory := fmt.Sprintf("%d%s", computeTemplate.GetMemory(), "Gi")
 
-	if template, ok := (*clusterSpecMap)["template"].(map[string]interface{}); ok {
+	if template, ok := (*clusterSpecMap)["template"].(map[string]any); ok {
 		// Add compute template name to annotation
 
-		metadata, ok := template["metadata"].(map[string]interface{})
+		metadata, ok := template["metadata"].(map[string]any)
 		if !ok {
-			metadata = make(map[string]interface{})
+			metadata = make(map[string]any)
 			template["metadata"] = metadata
 		}
-		annotations, ok := metadata["annotations"].(map[string]interface{})
+		annotations, ok := metadata["annotations"].(map[string]any)
 		if !ok {
-			annotations = make(map[string]interface{})
+			annotations = make(map[string]any)
 			metadata["annotations"] = annotations
 		}
 		annotations[util.RayClusterComputeTemplateAnnotationKey] = computeTemplate.Name
 
 		// apply resources to containers
-		if spec, ok := template["spec"].(map[string]interface{}); ok {
-			if containers, ok := spec["containers"].([]interface{}); ok {
+		if spec, ok := template["spec"].(map[string]any); ok {
+			if containers, ok := spec["containers"].([]any); ok {
 				for _, container := range containers {
-					if containerMap, ok := container.(map[string]interface{}); ok {
+					if containerMap, ok := container.(map[string]any); ok {
 						// Get or create resources section for this container
-						resources, exists := containerMap["resources"].(map[string]interface{})
+						resources, exists := containerMap["resources"].(map[string]any)
 						if !exists {
-							resources = make(map[string]interface{})
+							resources = make(map[string]any)
 							containerMap["resources"] = resources
 						}
 
 						// Set limits
-						limits, exists := resources["limits"].(map[string]interface{})
+						limits, exists := resources["limits"].(map[string]any)
 						if !exists {
-							limits = make(map[string]interface{})
+							limits = make(map[string]any)
 							resources["limits"] = limits
 						}
 						limits["cpu"] = cpu
 						limits["memory"] = memory
 
 						// Set requests
-						requests, exists := resources["requests"].(map[string]interface{})
+						requests, exists := resources["requests"].(map[string]any)
 						if !exists {
-							requests = make(map[string]interface{})
+							requests = make(map[string]any)
 							resources["requests"] = requests
 						}
 						requests["cpu"] = cpu
@@ -251,16 +251,16 @@ func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, cluster
 
 			if computeTemplate.Tolerations != nil {
 				// Get existing tolerations
-				var tolerations []interface{}
-				if existingTolerations, exists := spec["tolerations"].([]interface{}); exists {
+				var tolerations []any
+				if existingTolerations, exists := spec["tolerations"].([]any); exists {
 					tolerations = existingTolerations
 				} else {
-					tolerations = make([]interface{}, 0)
+					tolerations = make([]any, 0)
 				}
 
 				// Add new tolerations from compute template
 				for _, t := range computeTemplate.Tolerations {
-					toleration := map[string]interface{}{
+					toleration := map[string]any{
 						"key":      t.Key,
 						"operator": t.Operator,
 						"value":    t.Value,
