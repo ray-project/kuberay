@@ -26,7 +26,7 @@ func BuildHeadServiceForRayJob(ctx context.Context, rayJob rayv1.RayJob, rayClus
 		return nil, err
 	}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, *rayJob.Spec.RayClusterSpec, rayJob.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, rayv1.RayClusterSpec{}, rayJob.Name)
 	if err != nil {
 		return nil, err
 	}

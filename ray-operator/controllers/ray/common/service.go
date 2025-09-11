@@ -150,7 +150,7 @@ func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayServ
 		return nil, err
 	}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayv1.RayClusterSpec{}, rayService.Name)
 	if err != nil {
 		return nil, err
 	}
