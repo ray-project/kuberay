@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +25,7 @@ import (
 
 const (
 	PodGroupName      = "podgroups.scheduling.volcano.sh"
+	pluginName        = "volcano"
 	QueueNameLabelKey = "volcano.sh/queue-name"
 )
 
@@ -35,15 +35,13 @@ type VolcanoBatchScheduler struct {
 
 type VolcanoBatchSchedulerFactory struct{}
 
-func GetPluginName() string {
-	return "volcano"
-}
+func GetPluginName() string { return pluginName }
 
 func (v *VolcanoBatchScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error {
+func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
 	switch obj := object.(type) {
 	case *rayv1.RayCluster:
 		return v.handleRayCluster(ctx, obj)
@@ -54,75 +52,7 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 	}
 }
 
-func getAppPodGroupName(object client.Object) string {
-	// If the object is a RayCluster created by a RayJob, use the RayJob's name
-	if labels := object.GetLabels(); labels != nil {
-		if labels[utils.RayOriginatedFromCRDLabelKey] == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
-			if rayJobName, ok := labels[utils.RayOriginatedFromCRNameLabelKey]; ok {
-				return fmt.Sprintf("ray-%s-pg", rayJobName)
-			}
-		}
-	}
-	return fmt.Sprintf("ray-%s-pg", object.GetName())
-}
-
-// copySchedulingLabels copies scheduling-related labels from source to target labels map.
-func (v *VolcanoBatchScheduler) copySchedulingLabels(source client.Object, targetLabels map[string]string) {
-	if queue, ok := source.GetLabels()[QueueNameLabelKey]; ok {
-		targetLabels[QueueNameLabelKey] = queue
-	}
-	if priorityClassName, ok := source.GetLabels()[utils.RayPriorityClassName]; ok {
-		targetLabels[utils.RayPriorityClassName] = priorityClassName
-	}
-}
-
-// syncPodGroup ensures a Volcano PodGroup exists/updated for the given object
-// with the provided size (MinMember) and total resources.
-func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner client.Object, size int32, totalResource corev1.ResourceList) error {
-	logger := ctrl.LoggerFrom(ctx).WithName(v.Name())
-
-	podGroupName := getAppPodGroupName(owner)
-	podGroup := volcanoschedulingv1beta1.PodGroup{}
-	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: owner.GetNamespace(), Name: podGroupName}, &podGroup); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-
-		podGroup := createPodGroup(owner, podGroupName, size, totalResource)
-		if err := v.cli.Create(ctx, &podGroup); err != nil {
-			if errors.IsAlreadyExists(err) {
-				logger.Info("pod group already exists, no need to create")
-				return nil
-			}
-
-			logger.Error(err, "Pod group CREATE error!", "PodGroup.Error", err)
-			return err
-		}
-	} else {
-		if podGroup.Spec.MinMember != size || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
-			podGroup.Spec.MinMember = size
-			podGroup.Spec.MinResources = &totalResource
-			if err := v.cli.Update(ctx, &podGroup); err != nil {
-				logger.Error(err, "Pod group UPDATE error!", "podGroup", podGroupName)
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// calculatePodGroupParams calculates MinMember and MinResources for a RayCluster spec
-func (v *VolcanoBatchScheduler) calculatePodGroupParams(ctx context.Context, rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
-	rayCluster := &rayv1.RayCluster{Spec: *rayClusterSpec}
-
-	if !utils.IsAutoscalingEnabled(rayClusterSpec) {
-		return utils.CalculateDesiredReplicas(ctx, rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
-	}
-	return utils.CalculateMinReplicas(rayCluster) + 1, utils.CalculateMinResources(rayCluster)
-}
-
 // handleRayCluster calculates the PodGroup MinMember and MinResources for a RayCluster
-// and creates/updates the corresponding PodGroup unless the cluster originated from a RayJob.
 func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster *rayv1.RayCluster) error {
 	// Check if this RayCluster is created by a RayJob, if so, skip PodGroup creation
 	if crdType, ok := raycluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok && crdType == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
@@ -135,14 +65,12 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 }
 
 // handleRayJob calculates the PodGroup MinMember and MinResources for a RayJob
-// based on its embedded RayCluster spec and creates/updates the corresponding PodGroup.
-// Note: We intentionally do NOT include the submitter pod in MinMember since the RayCluster
-// may not be ready yet.
+// The submitter pod is intentionally excluded from MinMember calculation.
+// Including it before the RayCluster is ready may prevent the PodGroup from
+// ever meeting the MinMember requirement, leaving all pods stuck in Pending.
 func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.RayJob) error {
-	// For RayJob, we need to calculate resources based on the RayClusterSpec
-	// Not support using existing RayCluster
 	if rayJob.Spec.RayClusterSpec == nil {
-		return fmt.Errorf("RayJob %s/%s does not have RayClusterSpec defined", rayJob.Namespace, rayJob.Name)
+		return fmt.Errorf("gang scheduling does not support RayJob %s/%s referencing an existing RayCluster", rayJob.Namespace, rayJob.Name)
 	}
 
 	minMember, totalResource := v.calculatePodGroupParams(ctx, rayJob.Spec.RayClusterSpec)
@@ -150,8 +78,100 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	return v.syncPodGroup(ctx, rayJob, minMember, totalResource)
 }
 
-// createPodGroup builds a Volcano PodGroup owned by the provided owner object.
-func createPodGroup(owner client.Object, podGroupName string, size int32, totalResource corev1.ResourceList) volcanoschedulingv1beta1.PodGroup {
+func getAppPodGroupName(object metav1.Object) string {
+	// Prefer the RayJob name if this object originated from a RayJob
+	name := object.GetName()
+	if labels := object.GetLabels(); labels != nil &&
+		labels[utils.RayOriginatedFromCRDLabelKey] == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
+		if rayJobName := labels[utils.RayOriginatedFromCRNameLabelKey]; rayJobName != "" {
+			name = rayJobName
+		}
+	}
+	return fmt.Sprintf("ray-%s-pg", name)
+}
+
+func addSchedulerName(obj metav1.Object, schedulerName string) {
+	switch obj := obj.(type) {
+	case *corev1.Pod:
+		obj.Spec.SchedulerName = schedulerName
+	case *corev1.PodTemplateSpec:
+		obj.Spec.SchedulerName = schedulerName
+	}
+}
+
+func populateAnnotations(parent metav1.Object, child metav1.Object, groupName string) {
+	annotations := child.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(parent)
+
+	switch child.(type) {
+	case *corev1.Pod:
+		annotations[volcanobatchv1alpha1.TaskSpecKey] = groupName
+	case *corev1.PodTemplateSpec:
+		annotations[volcanobatchv1alpha1.TaskSpecKey] = utils.RayNodeSubmitterGroupLabelValue
+	}
+	child.SetAnnotations(annotations)
+}
+
+func populateLabelsFromObject(parent metav1.Object, child metav1.Object, key string) {
+	labels := child.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if parentLabel, exist := parent.GetLabels()[key]; exist && parentLabel != "" {
+		labels[key] = parentLabel
+	}
+	child.SetLabels(labels)
+}
+
+// syncPodGroup ensures a Volcano PodGroup exists/updated for the given object
+// with the provided size (MinMember) and total resources.
+func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.Object, size int32, totalResource corev1.ResourceList) error {
+	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
+
+	podGroupName := getAppPodGroupName(owner)
+	podGroup := volcanoschedulingv1beta1.PodGroup{}
+	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: owner.GetNamespace(), Name: podGroupName}, &podGroup); err != nil {
+		if !errors.IsNotFound(err) {
+			logger.Error(err, "failed to get PodGroup", "name", podGroupName)
+			return err
+		}
+
+		podGroup := createPodGroup(owner, podGroupName, size, totalResource)
+		if err := v.cli.Create(ctx, &podGroup); err != nil {
+			if errors.IsAlreadyExists(err) {
+				logger.Info("podGroup already exists, no need to create", "name", podGroupName)
+				return nil
+			}
+
+			logger.Error(err, "failed to create PodGroup", "name", podGroupName)
+			return err
+		}
+	} else {
+		if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
+			podGroup.Spec.MinMember = size
+			podGroup.Spec.MinResources = &totalResource
+			if err := v.cli.Update(ctx, &podGroup); err != nil {
+				logger.Error(err, "failed to update PodGroup", "name", podGroupName)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (v *VolcanoBatchScheduler) calculatePodGroupParams(ctx context.Context, rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
+	rayCluster := &rayv1.RayCluster{Spec: *rayClusterSpec}
+
+	if !utils.IsAutoscalingEnabled(rayClusterSpec) {
+		return utils.CalculateDesiredReplicas(ctx, rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
+	}
+	return utils.CalculateMinReplicas(rayCluster) + 1, utils.CalculateMinResources(rayCluster)
+}
+
+func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalResource corev1.ResourceList) volcanoschedulingv1beta1.PodGroup {
 	var ownerRef metav1.OwnerReference
 	switch obj := owner.(type) {
 	case *rayv1.RayCluster:
@@ -175,10 +195,10 @@ func createPodGroup(owner client.Object, podGroupName string, size int32, totalR
 		},
 	}
 
+	// Copy scheduling labels to PodGroup spec
 	if queue, ok := owner.GetLabels()[QueueNameLabelKey]; ok {
 		podGroup.Spec.Queue = queue
 	}
-
 	if priorityClassName, ok := owner.GetLabels()[utils.RayPriorityClassName]; ok {
 		podGroup.Spec.PriorityClassName = priorityClassName
 	}
@@ -186,45 +206,11 @@ func createPodGroup(owner client.Object, podGroupName string, size int32, totalR
 	return podGroup
 }
 
-// AddMetadataToChildResource enriches child resource with metadata necessary to tie it to the scheduler.
-// For example, setting labels for queues / priority, and setting schedulerName.
-func (v *VolcanoBatchScheduler) AddMetadataToChildResource(ctx context.Context, parent client.Object, groupName string, child client.Object) {
-	switch parentObj := parent.(type) {
-	case *rayv1.RayCluster:
-		v.AddMetadataToPod(ctx, parentObj, groupName, child.(*corev1.Pod))
-	case *rayv1.RayJob:
-		switch childObj := child.(type) {
-		case *batchv1.Job:
-			v.addMetadataToSubmitterPod(ctx, parent.(*rayv1.RayJob), groupName, childObj)
-		}
-	}
-}
-
-func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	podGroupName := getAppPodGroupName(app)
-
-	pod.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey] = podGroupName
-	pod.Annotations[volcanobatchv1alpha1.TaskSpecKey] = groupName
-
-	v.copySchedulingLabels(app, pod.Labels)
-	pod.Spec.SchedulerName = v.Name()
-}
-
-// addMetadataToSubmitterPod sets Volcano-related metadata on the submitter pod.
-func (v *VolcanoBatchScheduler) addMetadataToSubmitterPod(_ context.Context, app *rayv1.RayJob, _ string, job *batchv1.Job) {
-	submitterTemplate := &job.Spec.Template
-	if submitterTemplate.Labels == nil {
-		submitterTemplate.Labels = make(map[string]string)
-	}
-	if submitterTemplate.Annotations == nil {
-		submitterTemplate.Annotations = make(map[string]string)
-	}
-
-	submitterTemplate.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
-	submitterTemplate.Annotations[volcanobatchv1alpha1.TaskSpecKey] = utils.RayNodeSubmitterGroupLabelValue
-
-	v.copySchedulingLabels(app, submitterTemplate.Labels)
-	submitterTemplate.Spec.SchedulerName = v.Name()
+func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, groupName string) {
+	populateLabelsFromObject(parent, child, QueueNameLabelKey)
+	populateLabelsFromObject(parent, child, utils.RayPriorityClassName)
+	populateAnnotations(parent, child, groupName)
+	addSchedulerName(child, v.Name())
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {

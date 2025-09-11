@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,6 +13,7 @@ import (
 	volcanoschedulingv1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -150,18 +150,7 @@ func createTestRayJob(numOfHosts int32) rayv1.RayJob {
 	}
 }
 
-func createTestRayClusterFromRayJob(rayJobName string) rayv1.RayCluster {
-	cluster := createTestRayCluster(1)
-	cluster.Name = "raycluster-from-rayjob"
-	if cluster.Labels == nil {
-		cluster.Labels = make(map[string]string)
-	}
-	cluster.Labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
-	cluster.Labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobName
-	return cluster
-}
-
-func TestCreatePodGroup(t *testing.T) {
+func TestCreatePodGroupForRayCluster(t *testing.T) {
 	a := assert.New(t)
 
 	cluster := createTestRayCluster(1)
@@ -185,7 +174,7 @@ func TestCreatePodGroup(t *testing.T) {
 	a.Equal("2", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
 }
 
-func TestCreatePodGroup_NumOfHosts2(t *testing.T) {
+func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 	a := assert.New(t)
 
 	cluster := createTestRayCluster(2)
@@ -243,83 +232,31 @@ func TestCreatePodGroupForRayJob(t *testing.T) {
 	a.Equal(int32(3), pg.Spec.MinMember)
 }
 
-func TestAddMetadataToPod(t *testing.T) {
-	a := assert.New(t)
-	scheduler := &VolcanoBatchScheduler{}
-
-	t.Run("RayCluster from RayJob", func(_ *testing.T) {
-		cluster := createTestRayClusterFromRayJob("test-rayjob")
-		cluster.Labels[QueueNameLabelKey] = "test-queue"
-		cluster.Labels[utils.RayPriorityClassName] = "high-priority"
-
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels:      make(map[string]string),
-				Annotations: make(map[string]string),
-			},
-			Spec: corev1.PodSpec{},
-		}
-
-		scheduler.AddMetadataToPod(context.Background(), &cluster, "worker", pod)
-
-		// Should use RayJob name for pod group name
-		a.Equal("ray-test-rayjob-pg", pod.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey])
-		a.Equal("worker", pod.Annotations[volcanobatchv1alpha1.TaskSpecKey])
-		a.Equal("volcano", pod.Spec.SchedulerName)
-		a.Equal("test-queue", pod.Labels[QueueNameLabelKey])
-		a.Equal("high-priority", pod.Labels[utils.RayPriorityClassName])
-	})
-
-	t.Run("Normal RayCluster", func(_ *testing.T) {
-		cluster := createTestRayCluster(1)
-		cluster.Labels = map[string]string{
-			QueueNameLabelKey:          "test-queue",
-			utils.RayPriorityClassName: "high-priority",
-		}
-
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels:      make(map[string]string),
-				Annotations: make(map[string]string),
-			},
-			Spec: corev1.PodSpec{},
-		}
-
-		scheduler.AddMetadataToPod(context.Background(), &cluster, "head", pod)
-
-		a.Equal("ray-raycluster-sample-pg", pod.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey])
-		a.Equal("head", pod.Annotations[volcanobatchv1alpha1.TaskSpecKey])
-		a.Equal("volcano", pod.Spec.SchedulerName)
-	})
-}
-
 func TestAddMetadataToSubmitterPod(t *testing.T) {
 	a := assert.New(t)
 	scheduler := &VolcanoBatchScheduler{}
 
 	rayJob := createTestRayJob(1)
+	rayCluster := &rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec}
+	submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 
-	job := &batchv1.Job{
-		Spec: batchv1.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{},
-				Spec:       corev1.PodSpec{},
-			},
-		},
-	}
-
-	scheduler.addMetadataToSubmitterPod(context.Background(), &rayJob, "submitter", job)
+	scheduler.AddMetadataToChildResource(
+		context.Background(),
+		&rayJob,
+		&submitterTemplate,
+		utils.RayNodeSubmitterGroupLabelValue,
+	)
 
 	// Check annotations
-	a.Equal("ray-rayjob-sample-pg", job.Spec.Template.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey])
-	a.Equal(utils.RayNodeSubmitterGroupLabelValue, job.Spec.Template.Annotations[volcanobatchv1alpha1.TaskSpecKey])
+	a.Equal(getAppPodGroupName(&rayJob), submitterTemplate.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey])
+	a.Equal(utils.RayNodeSubmitterGroupLabelValue, submitterTemplate.Annotations[volcanobatchv1alpha1.TaskSpecKey])
 
-	// Check labels are copied from RayJob
-	a.Equal("test-queue", job.Spec.Template.Labels[QueueNameLabelKey])
-	a.Equal("high-priority", job.Spec.Template.Labels[utils.RayPriorityClassName])
+	// Check labels
+	a.Equal("test-queue", submitterTemplate.Labels[QueueNameLabelKey])
+	a.Equal("high-priority", submitterTemplate.Labels[utils.RayPriorityClassName])
 
 	// Check scheduler name
-	a.Equal("volcano", job.Spec.Template.Spec.SchedulerName)
+	a.Equal(pluginName, submitterTemplate.Spec.SchedulerName)
 }
 
 func TestCalculatePodGroupParams(t *testing.T) {
@@ -356,4 +293,14 @@ func TestCalculatePodGroupParams(t *testing.T) {
 		// 256Mi * 2 (requests, not limits)
 		a.Equal("512Mi", totalResource.Memory().String())
 	})
+}
+
+func TestGetAppPodGroupName(t *testing.T) {
+	a := assert.New(t)
+
+	rayCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "raycluster-sample", Namespace: "default"}}
+	a.Equal("ray-raycluster-sample-pg", getAppPodGroupName(rayCluster))
+
+	rayJob := createTestRayJob(1)
+	a.Equal("ray-rayjob-sample-pg", getAppPodGroupName(&rayJob))
 }

@@ -180,16 +180,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		if r.options.BatchSchedulerManager != nil {
-			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-				}
-			} else {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-		}
-
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
@@ -737,15 +727,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
 		return err
-	}
-
-	// Add batch scheduler metadata to submitter job
-	if r.options.BatchSchedulerManager != nil {
-		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToChildResource(ctx, rayJobInstance, utils.RayNodeSubmitterGroupLabelValue, job)
-		} else {
-			logger.Error(err, "Failed to get batch scheduler for adding metadata to submitter job")
-		}
 	}
 
 	// Create the Kubernetes Job
