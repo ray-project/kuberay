@@ -861,6 +861,67 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "SidecarMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "SidecarMode doesn't support SubmitterPodTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				SubmitterPodTemplate: &corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "SidecarMode doesn't support SubmitterConfig",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				SubmitterConfig: &rayv1.SubmitterConfig{
+					BackoffLimit: ptr.To[int32](1),
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "SidecarMode RayCluster head pod should only be Never or unset",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "failed to get cluster name in ClusterSelector map",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": ""},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is not empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -75,7 +76,7 @@ func TestGetMetadataJson(t *testing.T) {
 	assert.JSONEq(t, expected, metadataJson)
 }
 
-func TestGetK8sJobCommand(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
 		"if",
@@ -93,12 +94,51 @@ func TestGetK8sJobCommand(t *testing.T) {
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := GetK8sJobCommand(testRayJob)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
 
-func TestGetK8sJobCommandWithYAML(t *testing.T) {
+func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+		{
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.DashboardPortName,
+					ContainerPort: utils.DefaultDashboardPort,
+				},
+			},
+		},
+	}
+
+	expected := []string{
+		"until",
+		fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeFailureThreshold,
+			utils.DefaultDashboardPort,
+			utils.RayDashboardGCSHealthPath,
+		),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
+		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
+		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
+		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
+		"--submission-id", "testJobId",
+		"--entrypoint-num-cpus", "1.000000",
+		"--entrypoint-num-gpus", "0.500000",
+		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
+		"--",
+		"echo no quote 'single quote' \"double quote\"",
+		";",
+	}
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	assert.Equal(t, expected, command)
+}
+
+func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
 	rayJobWithYAML := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{
 			RuntimeEnvYAML: `
@@ -131,7 +171,7 @@ pip: ["python-multipart==0.0.6"]
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := GetK8sJobCommand(rayJobWithYAML)
+	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode)
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
@@ -194,6 +234,6 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 			},
 		},
 	}
-	template := GetDefaultSubmitterTemplate(rayCluster)
+	template := GetDefaultSubmitterTemplate(&rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 }

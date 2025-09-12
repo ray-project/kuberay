@@ -7,6 +7,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 //+kubebuilder:object:root=true
@@ -84,7 +85,7 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error) {
+func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 }
 

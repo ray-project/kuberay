@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -30,18 +31,20 @@ func TestMetricRayJobInfo(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-1",
 						Namespace: "ns1",
+						UID:       types.UID("ray-job-1-uid"),
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-2",
 						Namespace: "ns2",
+						UID:       types.UID("ray-job-2-uid"),
 					},
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_job_info{name="ray-job-1",namespace="ns1"} 1`,
-				`kuberay_job_info{name="ray-job-2",namespace="ns2"} 1`,
+				`kuberay_job_info{name="ray-job-1",namespace="ns1",uid="ray-job-1-uid"} 1`,
+				`kuberay_job_info{name="ray-job-2",namespace="ns2",uid="ray-job-2-uid"} 1`,
 			},
 		},
 	}
@@ -93,9 +96,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 
 	// Test case 1: Delete specific job metrics
 	// Manually add some metrics
-	manager.ObserveRayJobExecutionDuration("job1", "ns1", rayv1.JobDeploymentStatusComplete, 0, 10.5)
-	manager.ObserveRayJobExecutionDuration("job2", "ns2", rayv1.JobDeploymentStatusFailed, 1, 20.3)
-	manager.ObserveRayJobExecutionDuration("job3", "ns1", rayv1.JobDeploymentStatusRunning, 0, 5.7)
+	manager.ObserveRayJobExecutionDuration("job1", "ns1", "uid1", rayv1.JobDeploymentStatusComplete, 0, 10.5)
+	manager.ObserveRayJobExecutionDuration("job2", "ns2", "uid2", rayv1.JobDeploymentStatusFailed, 1, 20.3)
+	manager.ObserveRayJobExecutionDuration("job3", "ns1", "uid3", rayv1.JobDeploymentStatusRunning, 0, 5.7)
 
 	// Test deleting metrics for job1 in ns1
 	manager.DeleteRayJobMetrics("job1", "ns1")
@@ -104,9 +107,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 2: Delete with empty name
 	manager.DeleteRayJobMetrics("", "ns1")
@@ -115,9 +118,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body2, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body2, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 3: Delete with empty name and namespace
 	manager.DeleteRayJobMetrics("", "")
@@ -126,9 +129,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body3, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body3, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 
 	// Test case 4: Delete with false name and namespace
 	manager.DeleteRayJobMetrics("ns2", "job2")
@@ -137,9 +140,9 @@ func TestDeleteRayJobMetrics(t *testing.T) {
 	body4, statusCode := support.GetMetricsResponseAndCode(t, reg)
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0"}`)
-	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1"}`)
-	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0"}`)
+	assert.NotContains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Complete",name="job1",namespace="ns1",retry_count="0",uid="uid1"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Failed",name="job2",namespace="ns2",retry_count="1",uid="uid2"}`)
+	assert.Contains(t, body4, `kuberay_job_execution_duration_seconds{job_deployment_status="Running",name="job3",namespace="ns1",retry_count="0",uid="uid3"}`)
 }
 
 func TestMetricRayJobDeploymentStatus(t *testing.T) {
@@ -155,6 +158,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-1",
 						Namespace: "ns1",
+						UID:       types.UID("ray-job-1-uid"),
 					},
 					Status: rayv1.RayJobStatus{
 						JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
@@ -164,6 +168,7 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ray-job-2",
 						Namespace: "ns2",
+						UID:       types.UID("ray-job-2-uid"),
 					},
 					Status: rayv1.RayJobStatus{
 						JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
@@ -171,8 +176,8 @@ func TestMetricRayJobDeploymentStatus(t *testing.T) {
 				},
 			},
 			expectedMetrics: []string{
-				`kuberay_job_deployment_status{deployment_status="Running",name="ray-job-1",namespace="ns1"} 1`,
-				`kuberay_job_deployment_status{deployment_status="Failed",name="ray-job-2",namespace="ns2"} 1`,
+				`kuberay_job_deployment_status{deployment_status="Running",name="ray-job-1",namespace="ns1",uid="ray-job-1-uid"} 1`,
+				`kuberay_job_deployment_status{deployment_status="Failed",name="ray-job-2",namespace="ns2",uid="ray-job-2-uid"} 1`,
 			},
 		},
 	}
