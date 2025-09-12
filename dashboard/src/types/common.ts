@@ -30,23 +30,26 @@ export interface RayClusterSpec {
   headGroupSpec: {
     rayStartParams: Record<string, string>;
     template: {
+      metadata?: Record<string, any>;
       spec: {
         containers: Container[];
       };
     };
   };
   rayVersion: string;
-  workerGroupSpecs: WorkerGroupSpec[];
+  workerGroupSpecs?: WorkerGroupSpec[];
 }
 
-interface WorkerGroupSpec {
+export interface WorkerGroupSpec {
   groupName: string;
   maxReplicas: number;
   minReplicas: number;
   numOfHosts: number;
   rayStartParams: Record<string, string>;
   replicas: number;
+  scaleStrategy?: Record<string, any>;
   template: {
+    metadata?: Record<string, any>;
     spec: {
       containers: Container[];
     };

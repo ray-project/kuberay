@@ -1,4 +1,4 @@
-import { Container, RayClusterStatus } from "./common";
+import { RayClusterSpec, RayClusterStatus } from "./common";
 
 export interface RayJobListResponse {
   apiVersion: string;
@@ -27,19 +27,7 @@ export interface RayJobItem {
   };
   spec: {
     backoffLimit: number;
-    rayClusterSpec: {
-      headGroupSpec: {
-        rayStartParams: Record<string, string>;
-        template: {
-          metadata?: Record<string, any>;
-          spec: {
-            containers: Container[];
-          };
-        };
-      };
-      rayVersion: string;
-      workerGroupSpecs?: RayJobWorkerGroupSpec[];
-    };
+    rayClusterSpec: RayClusterSpec;
     submissionMode: string;
     ttlSecondsAfterFinished: number;
     entrypoint?: string;
@@ -62,22 +50,6 @@ export interface RayJobItem {
   };
 }
 
-interface RayJobWorkerGroupSpec {
-  groupName: string;
-  maxReplicas: number;
-  minReplicas: number;
-  numOfHosts: number;
-  rayStartParams: Record<string, string>;
-  replicas: number;
-  scaleStrategy?: Record<string, any>;
-  template: {
-    metadata?: Record<string, any>;
-    spec: {
-      containers: Container[];
-    };
-  };
-}
-
 export interface JobRow {
   name: string;
   namespace: string;
@@ -93,21 +65,7 @@ export interface JobRow {
   rayClusterName: string;
   submissionMode: string;
   rayVersion: string;
-  clusterSpec: {
-    headGroupSpec: {
-      rayStartParams: Record<string, string>;
-      template: {
-        metadata?: {
-          labels?: Record<string, string>;
-        };
-        spec: {
-          containers: Container[];
-        };
-      };
-    };
-    rayVersion: string;
-    workerGroupSpecs?: RayJobWorkerGroupSpec[];
-  };
+  clusterSpec: RayClusterSpec;
 }
 
 export type JobStatus =
