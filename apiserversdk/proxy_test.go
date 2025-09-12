@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	apiserverutil "github.com/ray-project/kuberay/apiserversdk/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -56,6 +58,10 @@ var _ = BeforeSuite(func(_ SpecContext) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(cfg).ToNot(BeNil())
 
+	ctrl := gomock.Controller{}
+	// mock client manager
+	mockClientManager := manager.NewMockClientManagerInterface(&ctrl)
+
 	mux, err := NewMux(MuxConfig{
 		KubernetesConfig: cfg,
 		Middleware: func(handler http.Handler) http.Handler {
@@ -64,7 +70,7 @@ var _ = BeforeSuite(func(_ SpecContext) {
 				handler.ServeHTTP(w, r)
 			})
 		},
-	})
+	}, mockClientManager)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(mux).ToNot(BeNil())
 

@@ -37,7 +37,7 @@ func TestGetRayClusterEvent(t *testing.T) {
 	_, err = rayClient.RayClusters(tCtx.GetNamespaceName()).Create(tCtx.GetCtx(), rayCluster, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	k8sClient := tCtx.GetK8sHttpClient()
+	k8sClient := tCtx.GetK8sClient()
 	g := gomega.NewWithT(t)
 	g.Eventually(func() bool {
 		events, err := k8sClient.CoreV1().Events(tCtx.GetNamespaceName()).List(tCtx.GetCtx(), metav1.ListOptions{})

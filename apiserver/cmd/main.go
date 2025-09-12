@@ -173,8 +173,8 @@ func startHttpProxy() {
 			KubernetesConfig: kubernetesConfig,
 			Middleware:       corsHandler, // Always set, even if it's a no-op
 		}
-
-		topMux, err = apiserversdk.NewMux(muxConfig)
+		clientManager := manager.NewClientManager()
+		topMux, err = apiserversdk.NewMux(muxConfig, &clientManager)
 		if err != nil {
 			klog.Fatalf("Failed to create API server mux: %v", err)
 		}
