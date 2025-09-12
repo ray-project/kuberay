@@ -231,7 +231,22 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to Failed.
+		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to ValidationFailed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
+	})
+
+	test.T().Run("RayJob name too long with 48 characters", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("rayjob-name-longgggggggggggggggggggggggggggggggg", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Rayjob name is too long, so the RayJob controller should set status to ValidationFailed.
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
 	})
