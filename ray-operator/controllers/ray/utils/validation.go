@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -171,6 +172,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("The RayJob spec is invalid: one of RayClusterSpec or ClusterSelector must be set")
 	}
+	if isClusterSelectorMode {
+		clusterName := rayJob.Spec.ClusterSelector[RayJobClusterSelectorKey]
+		if len(clusterName) == 0 {
+			return fmt.Errorf("cluster name in ClusterSelector should not be empty")
+		}
+	}
+
 	// InteractiveMode does not support backoffLimit > 1.
 	// When a RayJob fails (e.g., due to a missing script) and retries,
 	// spec.JobId remains set, causing the new job to incorrectly transition
@@ -182,6 +190,20 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("The RayJob spec is invalid: BackoffLimit is incompatible with InteractiveMode")
 	}
 
+	if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+		if rayJob.Spec.SubmitterPodTemplate != nil {
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterPodTemplate")
+		}
+
+		if rayJob.Spec.SubmitterConfig != nil {
+			return fmt.Errorf("Currently, SidecarMode doesn't support SubmitterConfig")
+		}
+
+		if rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using SidecarMode")
+		}
+	}
+
 	if rayJob.Spec.RayClusterSpec != nil {
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
@@ -190,7 +212,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
-	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
+	if _, err := dashboardclient.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
 		return err
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {

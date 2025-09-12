@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 const (
@@ -269,7 +270,7 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 // @param ownerName: The name of the CR that owns the head service.
 func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
-	case RayServiceCRD:
+	case RayServiceCRD, RayJobCRD:
 		return fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"), nil
 	case RayClusterCRD:
 		headSvcName := fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")
@@ -640,7 +641,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
@@ -757,8 +758,9 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
-	return func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+		dashboardClient := &dashboardclient.RayDashboardClient{}
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -769,20 +771,20 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 					return nil, err
 				}
 			}
-			return &RayDashboardClient{
+
+			dashboardClient.InitClient(
 				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
 				// configured to communicate with the Kubernetes API server.
-				client:       mgr.GetHTTPClient(),
-				dashboardURL: fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
-			}, nil
+				mgr.GetHTTPClient(),
+				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+			)
+			return dashboardClient, nil
 		}
 
-		return &RayDashboardClient{
-			client: &http.Client{
-				Timeout: 2 * time.Second,
-			},
-			dashboardURL: "http://" + url,
-		}, nil
+		dashboardClient.InitClient(&http.Client{
+			Timeout: 2 * time.Second,
+		}, "http://"+url)
+		return dashboardClient, nil
 	}
 }
 
@@ -799,4 +801,8 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
 		}
 	}
+}
+
+func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
+	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
 }
