@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -48,7 +49,8 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsManager *metrics.RayJobMetricsManager
+	RayJobMetricsManager  *metrics.RayJobMetricsManager
+	BatchSchedulerManager *batchscheduler.SchedulerManager
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -181,6 +183,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
+		}
+
+		if r.options.BatchSchedulerManager != nil {
+			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+			} else {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -694,6 +706,13 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			Template:     submitterTemplate,
 		},
 	}
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToChildResource(ctx, rayJobInstance, job, utils.RayNodeSubmitterGroupLabelValue)
+		} else {
+			return err
+		}
+	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
 	if err := ctrl.SetControllerReference(rayJobInstance, job, r.Scheme); err != nil {
@@ -907,6 +926,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
+			}
+			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					// Group name is only used for individual pods to specify their task group ("headgroup", "worker-group-1", etc.).
+					// RayCluster contains multiple groups, so we pass an empty string.
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, rayClusterInstance, "")
+				} else {
+					return nil, err
+				}
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)

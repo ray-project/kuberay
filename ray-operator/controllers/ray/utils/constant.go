@@ -32,9 +32,9 @@ const (
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
-	RaySchedulerName                = "ray.io/scheduler-name"
-	RayPriorityClassName            = "ray.io/priority-class-name"
-	RayClusterGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
+	RaySchedulerName         = "ray.io/scheduler-name"
+	RayPriorityClassName     = "ray.io/priority-class-name"
+	RayGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
@@ -207,7 +207,8 @@ const (
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
-	RayNodeHeadGroupLabelValue = "headgroup"
+	RayNodeHeadGroupLabelValue      = "headgroup"
+	RayNodeSubmitterGroupLabelValue = "submittergroup"
 
 	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
 	SubmitterContainerName = "ray-job-submitter"

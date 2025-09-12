@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -33,11 +34,11 @@ func newTaskGroups() *TaskGroups {
 	}
 }
 
-func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
+func newTaskGroupsFromRayCluster(rayCluster *v1.RayCluster) *TaskGroups {
 	taskGroups := newTaskGroups()
 
 	// head group
-	headGroupSpec := app.Spec.HeadGroupSpec
+	headGroupSpec := rayCluster.Spec.HeadGroupSpec
 	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
 	taskGroups.addTaskGroup(
 		TaskGroup{
@@ -50,7 +51,7 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 		})
 
 	// worker groups
-	for _, workerGroupSpec := range app.Spec.WorkerGroupSpecs {
+	for _, workerGroupSpec := range rayCluster.Spec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
 		minWorkers := workerGroupSpec.MinReplicas
 		taskGroups.addTaskGroup(
@@ -67,8 +68,56 @@ func newTaskGroupsFromApp(app *v1.RayCluster) *TaskGroups {
 	return taskGroups
 }
 
-func (t *TaskGroups) size() int {
-	return len(t.Groups)
+func newTaskGroupsFromRayJob(rayJob *v1.RayJob) *TaskGroups {
+	taskGroups := newTaskGroups()
+
+	// head group
+	headGroupSpec := rayJob.Spec.RayClusterSpec.HeadGroupSpec
+	headPodMinResource := utils.CalculatePodResource(headGroupSpec.Template.Spec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RayNodeHeadGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(headPodMinResource),
+			NodeSelector: headGroupSpec.Template.Spec.NodeSelector,
+			Tolerations:  headGroupSpec.Template.Spec.Tolerations,
+			Affinity:     headGroupSpec.Template.Spec.Affinity,
+		})
+
+	// worker groups
+	for _, workerGroupSpec := range rayJob.Spec.RayClusterSpec.WorkerGroupSpecs {
+		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
+		minWorkers := workerGroupSpec.MinReplicas
+		taskGroups.addTaskGroup(
+			TaskGroup{
+				Name:         workerGroupSpec.GroupName,
+				MinMember:    *minWorkers,
+				MinResource:  utils.ConvertResourceListToMapString(workerMinResource),
+				NodeSelector: workerGroupSpec.Template.Spec.NodeSelector,
+				Tolerations:  workerGroupSpec.Template.Spec.Tolerations,
+				Affinity:     workerGroupSpec.Template.Spec.Affinity,
+			})
+	}
+
+    // submitter group
+	var submitterGroupSpec corev1.PodSpec
+	if rayJob.Spec.SubmitterPodTemplate != nil {
+		submitterGroupSpec = rayJob.Spec.SubmitterPodTemplate.Spec
+	} else {
+		submitterGroupSpec = common.GetDefaultSubmitterTemplate(rayJob.Spec.RayClusterSpec).Spec
+	}
+
+	submitterPodMinResource := utils.CalculatePodResource(submitterGroupSpec)
+	taskGroups.addTaskGroup(
+		TaskGroup{
+			Name:         utils.RayNodeSubmitterGroupLabelValue,
+			MinMember:    1,
+			MinResource:  utils.ConvertResourceListToMapString(submitterPodMinResource),
+			NodeSelector: submitterGroupSpec.NodeSelector,
+			Tolerations:  submitterGroupSpec.Tolerations,
+			Affinity:     submitterGroupSpec.Affinity,
+		})
+	return taskGroups
 }
 
 func (t *TaskGroups) addTaskGroup(taskGroup TaskGroup) {

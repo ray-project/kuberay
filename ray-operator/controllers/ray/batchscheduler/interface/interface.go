@@ -18,13 +18,18 @@ type BatchScheduler interface {
 	// https://kubernetes.io/docs/tasks/extend-kubernetes/configure-multiple-schedulers/
 	Name() string
 
-	// DoBatchSchedulingOnSubmission handles submitting the RayCluster to the batch scheduler on creation / update
+	// DoBatchSchedulingOnSubmission handles submitting the RayCluster/RayJob to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
-	DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error
+	DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error
 
-	// AddMetadataToPod enriches Pod specs with metadata necessary to tie them to the scheduler.
+	// AddMetadataToPod enriches the pod with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod)
+	// This function will be removed once Rayjob Volcano scheduler integration is completed.
+	AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod)
+
+	// AddMetadataToChildResource enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
+	// For example, setting labels for queues / priority, and setting schedulerName.
+	AddMetadataToChildResource(ctx context.Context, parent client.Object, child client.Object, groupName string)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -53,11 +58,14 @@ func (d *DefaultBatchScheduler) Name() string {
 	return GetDefaultPluginName()
 }
 
-func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ *rayv1.RayCluster) error {
+func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
 	return nil
 }
 
 func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
+}
+
+func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {
