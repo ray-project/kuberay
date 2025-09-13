@@ -361,7 +361,6 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status rayv1.JobStatus) error {
 	// Define the required deletion order. TTLs must be non-decreasing along this sequence.
 	deletionOrder := []rayv1.DeletionPolicyType{
-		rayv1.DeleteNone,
 		rayv1.DeleteWorkers,
 		rayv1.DeleteCluster,
 		rayv1.DeleteSelf,
