@@ -84,7 +84,7 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 				computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, headGroupMap, namespace)
 				if err != nil {
 					klog.Errorf("ComputeTemplate middleware: Failed to get compute template for head group: %v", err)
-					http.Error(w, err.Error(), http.StatusInternalServerError)
+					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 					return
 				}
 				if computeTemplate != nil {
@@ -98,7 +98,7 @@ func NewComputeTemplateMiddleware(clientManager manager.ClientManagerInterface) 
 					computeTemplate, err := getComputeTemplate(context.Background(), resourceManager, workerGroupMap, namespace)
 					if err != nil {
 						klog.Errorf("ComputeTemplate middleware: Failed to get compute template for worker group %d: %v", i, err)
-						http.Error(w, err.Error(), http.StatusInternalServerError)
+						http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 						return
 					}
 					if computeTemplate != nil {
