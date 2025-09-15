@@ -162,6 +162,17 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 
 		if apiserversdkutil.IsSuccessfulStatusCode(resp.StatusCode) {
+			if resp.Body != nil {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read response body: %w", err)
+				}
+				err = resp.Body.Close()
+				if err != nil {
+					return nil, fmt.Errorf("failed to close response body: %w", err)
+				}
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+			}
 			return resp, nil
 		}
 
