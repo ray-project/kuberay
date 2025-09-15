@@ -1,6 +1,7 @@
 package e2erayjob
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -237,7 +238,7 @@ env_vars:
 	})
 
 	test.T().Run("RayJob name too long with 48 characters", func(_ *testing.T) {
-		rayJobAC := rayv1ac.RayJob("rayjob-name-longgggggggggggggggggggggggggggggggg", namespace.Name).
+		rayJobAC := rayv1ac.RayJob(strings.Repeat("a", 48), namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
