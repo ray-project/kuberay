@@ -32,6 +32,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -53,7 +54,7 @@ type RayServiceReconciler struct {
 	// Cache value is map of RayCluster name to Serve application config.
 	ServeConfigs                 *lru.Cache
 	RayClusterDeletionTimestamps cmap.ConcurrentMap[string, time.Time]
-	dashboardClientFunc          func(rayCluster *rayv1.RayCluster, url string) (utils.RayDashboardClientInterface, error)
+	dashboardClientFunc          func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	httpProxyClientFunc          func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface
 }
 
@@ -738,7 +739,7 @@ func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV
 	return false, "Current V2 Serve config matches cached Serve config."
 }
 
-func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient utils.RayDashboardClientInterface, clusterName string) error {
+func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, rayServiceInstance *rayv1.RayService, rayDashboardClient dashboardclient.RayDashboardClientInterface, clusterName string) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
@@ -772,7 +773,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 // (1) `isReady`: Whether the Serve applications are ready to serve incoming traffic or not.
 // (2) `newApplications`: The Serve applications' statuses.
 // (3) `err`: If `err` is not nil, it means that KubeRay failed to get Serve application statuses from the dashboard.
-func getAndCheckServeStatus(ctx context.Context, dashboardClient utils.RayDashboardClientInterface) (bool, map[string]rayv1.AppStatus, error) {
+func getAndCheckServeStatus(ctx context.Context, dashboardClient dashboardclient.RayDashboardClientInterface) (bool, map[string]rayv1.AppStatus, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var serveAppStatuses map[string]*utiltypes.ServeApplicationStatus
 	var err error

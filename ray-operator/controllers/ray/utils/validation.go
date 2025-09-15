@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -171,6 +172,13 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("one of RayClusterSpec or ClusterSelector must be set")
 	}
+	if isClusterSelectorMode {
+		clusterName := rayJob.Spec.ClusterSelector[RayJobClusterSelectorKey]
+		if len(clusterName) == 0 {
+			return fmt.Errorf("cluster name in ClusterSelector should not be empty")
+		}
+	}
+
 	// InteractiveMode does not support backoffLimit > 1.
 	// When a RayJob fails (e.g., due to a missing script) and retries,
 	// spec.JobId remains set, causing the new job to incorrectly transition
@@ -204,7 +212,7 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 	// Validate whether RuntimeEnvYAML is a valid YAML string. Note that this only checks its validity
 	// as a YAML string, not its adherence to the runtime environment schema.
-	if _, err := UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
+	if _, err := dashboardclient.UnmarshalRuntimeEnvYAML(rayJob.Spec.RuntimeEnvYAML); err != nil {
 		return err
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {

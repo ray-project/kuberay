@@ -1,4 +1,4 @@
-package utils
+package dashboardclient
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -24,6 +25,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
+	InitClient(client *http.Client, dashboardURL string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -40,6 +42,11 @@ type RayDashboardClientInterface interface {
 type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
+}
+
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string) {
+	r.client = client
+	r.dashboardURL = dashboardURL
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -216,6 +223,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		// If the submission_id is already used, the dashboard will return status code 500; we return the submission_id directly.
+		if resp.StatusCode == http.StatusInternalServerError && strings.Contains(string(body), "Please use a different submission_id") {
+			return request.SubmissionId, fmt.Errorf("submission ID '%s' already used, Please use a different submission_id", request.SubmissionId)
+		}
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
 	}
 

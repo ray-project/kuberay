@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 )
 
 func TestGetClusterDomainName(t *testing.T) {
@@ -535,9 +536,17 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
-	// Invalid CRD type
-	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
-	require.Error(t, err)
+	// [RayJob]
+	// Test 5: `HeadService.Name` is empty.
+	headSvcName, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
+	expectedGeneratedSvcName = "rayjob-sample-head-svc"
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
+
+	// Test 6: `HeadService.Name` is not empty.
+	headSvcName, err = GenerateHeadServiceName(RayJobCRD, *clusterSpecWithHeadService.DeepCopy(), "rayjob-sample")
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
@@ -822,7 +831,7 @@ env_vars:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
+			_, err := dashboardclient.UnmarshalRuntimeEnvYAML(tc.runtimeEnvYAML)
 			if tc.isErrorNil {
 				require.NoError(t, err)
 			} else {
