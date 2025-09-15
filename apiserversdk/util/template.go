@@ -180,7 +180,8 @@ func getComputeTemplate(ctx context.Context, resourceManager *manager.ResourceMa
 func applyComputeTemplateToRequest(computeTemplate *api.ComputeTemplate, clusterSpecMap *map[string]any, group string) {
 	// calculate resources
 	cpu := fmt.Sprint(computeTemplate.GetCpu())
-	memory := fmt.Sprintf("%d%s", computeTemplate.GetMemory(), "Gi")
+	memoryUnit := computeTemplate.GetMemoryUnit()
+	memory := fmt.Sprintf("%d%s", computeTemplate.GetMemory(), memoryUnit)
 
 	if template, ok := (*clusterSpecMap)["template"].(map[string]any); ok {
 		// Add compute template name to annotation
