@@ -177,6 +177,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if len(clusterName) == 0 {
 			return fmt.Errorf("cluster name in ClusterSelector should not be empty")
 		}
+		if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+			return fmt.Errorf("ClusterSelector is not supported in SidecarMode")
+		}
 	}
 
 	// InteractiveMode does not support backoffLimit > 1.
