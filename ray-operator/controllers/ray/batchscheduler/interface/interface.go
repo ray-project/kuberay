@@ -4,6 +4,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -20,7 +21,7 @@ type BatchScheduler interface {
 
 	// DoBatchSchedulingOnSubmission handles submitting the RayCluster/RayJob to the batch scheduler on creation / update
 	// For most batch schedulers, this results in the creation of a PodGroup.
-	DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error
+	DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error
 
 	// AddMetadataToPod enriches the pod with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
@@ -29,7 +30,7 @@ type BatchScheduler interface {
 
 	// AddMetadataToChildResource enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
-	AddMetadataToChildResource(ctx context.Context, parent client.Object, child client.Object, groupName string)
+	AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -58,14 +59,14 @@ func (d *DefaultBatchScheduler) Name() string {
 	return GetDefaultPluginName()
 }
 
-func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
+func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
 	return nil
 }
 
 func (d *DefaultBatchScheduler) AddMetadataToPod(_ context.Context, _ *rayv1.RayCluster, _ string, _ *corev1.Pod) {
 }
 
-func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {

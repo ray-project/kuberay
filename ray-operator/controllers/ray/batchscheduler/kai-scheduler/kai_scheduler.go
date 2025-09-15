@@ -11,6 +11,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,7 +34,7 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
 	return nil
 }
 
@@ -53,7 +54,7 @@ func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayClust
 	pod.Labels[QueueLabelName] = queue
 }
 
-func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {

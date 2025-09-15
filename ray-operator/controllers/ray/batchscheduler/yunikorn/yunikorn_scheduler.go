@@ -3,8 +3,8 @@ package yunikorn
 import (
 	"context"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,7 +38,7 @@ func (y *YuniKornScheduler) Name() string {
 	return GetPluginName()
 }
 
-func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ client.Object) error {
+func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
 	// yunikorn doesn't require any resources to be created upfront
 	// this is a no-opt for this implementation
 	return nil
@@ -47,7 +47,7 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ c
 // propagateTaskGroupsAnnotation is a helper function thatpropagates the task groups annotation to the child
 // if the parent has the task groups annotation, it will be copied to the child
 // if the parent doesn't have the task groups annotation, a new one will be created
-func propagateTaskGroupsAnnotation(parent client.Object, child client.Object) error {
+func propagateTaskGroupsAnnotation(parent metav1.Object, child metav1.Object) error {
 	var taskGroupsAnnotationValue string
 	if parentAnnotations, exist := parent.GetAnnotations()[YuniKornTaskGroupsAnnotationName]; exist && parentAnnotations != "" {
 		taskGroupsAnnotationValue = parentAnnotations
@@ -60,14 +60,6 @@ func propagateTaskGroupsAnnotation(parent client.Object, child client.Object) er
 		}
 	}
 
-	if job, ok := child.(*batchv1.Job); ok {
-		if job.Spec.Template.Annotations == nil {
-			job.Spec.Template.Annotations = make(map[string]string)
-		}
-		job.Spec.Template.Annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
-		return nil
-	}
-
 	if child.GetAnnotations() == nil {
 		child.SetAnnotations(make(map[string]string))
 	}
@@ -75,15 +67,7 @@ func propagateTaskGroupsAnnotation(parent client.Object, child client.Object) er
 	return nil
 }
 
-func populateLabelsFromObject(parent client.Object, child client.Object, sourceKey string, targetKey string) {
-	// If obj is a job, we need to inject the labels to the job template
-	if job, ok := child.(*batchv1.Job); ok {
-		if job.Spec.Template.Labels == nil {
-			job.Spec.Template.Labels = make(map[string]string)
-		}
-		job.Spec.Template.Labels[targetKey] = parent.GetLabels()[sourceKey]
-		return
-	}
+func populateLabelsFromObject(parent metav1.Object, child metav1.Object, sourceKey string, targetKey string) {
 	labels := child.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
@@ -94,16 +78,16 @@ func populateLabelsFromObject(parent client.Object, child client.Object, sourceK
 	}
 }
 
-func addSchedulerNameToObject(obj client.Object, schedulerName string) {
+func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
 	switch obj := obj.(type) {
 	case *corev1.Pod:
 		obj.Spec.SchedulerName = schedulerName
-	case *batchv1.Job:
-		obj.Spec.Template.Spec.SchedulerName = schedulerName
+	case *corev1.PodTemplateSpec:
+		obj.Spec.SchedulerName = schedulerName
 	}
 }
 
-func getTaskGroupsAnnotationValue(obj client.Object) (string, error) {
+func getTaskGroupsAnnotationValue(obj metav1.Object) (string, error) {
 	taskGroups := newTaskGroups()
 	switch obj := obj.(type) {
 	case *rayv1.RayCluster:
@@ -118,16 +102,7 @@ func getTaskGroupsAnnotationValue(obj client.Object) (string, error) {
 	return taskGroupsAnnotationValue, nil
 }
 
-func addTaskGroupNameAnnotation(obj client.Object, groupName string) {
-	// if the child is a job, we need to inject the annotation to the job template
-	if job, ok := obj.(*batchv1.Job); ok {
-		if job.Spec.Template.Annotations == nil {
-			job.Spec.Template.Annotations = make(map[string]string)
-		}
-		job.Spec.Template.Annotations[YuniKornTaskGroupNameAnnotationName] = groupName
-		return
-	}
-
+func addTaskGroupNameAnnotation(obj metav1.Object, groupName string) {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -136,17 +111,9 @@ func addTaskGroupNameAnnotation(obj client.Object, groupName string) {
 	obj.SetAnnotations(annotations)
 }
 
-func (y *YuniKornScheduler) isGangSchedulingEnabled(obj client.Object) bool {
-	switch obj := obj.(type) {
-	case *rayv1.RayCluster:
-		_, exist := obj.Labels[utils.RayGangSchedulingEnabled]
-		return exist
-	case *rayv1.RayJob:
-		_, exist := obj.Labels[utils.RayGangSchedulingEnabled]
-		return exist
-	default:
-		return false
-	}
+func (y *YuniKornScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
+	_, exist := obj.GetLabels()[utils.RayGangSchedulingEnabled]
+	return exist
 }
 
 // AddMetadataToPod adds essential labels and annotations to the Ray pod
@@ -175,7 +142,7 @@ func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, rayCluster *ra
 	}
 }
 
-func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, parent client.Object, child client.Object, groupName string) {
+func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 
 	populateLabelsFromObject(parent, child, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)

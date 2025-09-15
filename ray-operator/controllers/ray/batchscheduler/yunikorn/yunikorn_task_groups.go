@@ -99,7 +99,7 @@ func newTaskGroupsFromRayJob(rayJob *v1.RayJob) *TaskGroups {
 			})
 	}
 
-    // submitter group
+	// submitter group
 	var submitterGroupSpec corev1.PodSpec
 	if rayJob.Spec.SubmitterPodTemplate != nil {
 		submitterGroupSpec = rayJob.Spec.SubmitterPodTemplate.Spec

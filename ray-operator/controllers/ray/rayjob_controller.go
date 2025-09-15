@@ -561,6 +561,13 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 			if err != nil {
 				return err
 			}
+			if r.options.BatchSchedulerManager != nil {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, &submitterTemplate, utils.RayNodeSubmitterGroupLabelValue)
+				} else {
+					return err
+				}
+			}
 			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
 		return err
@@ -705,13 +712,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 			BackoffLimit: submitterBackoffLimit,
 			Template:     submitterTemplate,
 		},
-	}
-	if r.options.BatchSchedulerManager != nil {
-		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
-			scheduler.AddMetadataToChildResource(ctx, rayJobInstance, job, utils.RayNodeSubmitterGroupLabelValue)
-		} else {
-			return err
-		}
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.

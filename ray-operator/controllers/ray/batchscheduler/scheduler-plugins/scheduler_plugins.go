@@ -69,7 +69,7 @@ func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGro
 	return podGroup
 }
 
-func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object client.Object) error {
+func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
 	app, ok := object.(*rayv1.RayCluster)
 	if !ok {
 		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
@@ -103,7 +103,7 @@ func (k *KubeScheduler) AddMetadataToPod(_ context.Context, rayCluster *rayv1.Ra
 	pod.Spec.SchedulerName = k.Name()
 }
 
-func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ client.Object, _ client.Object, _ string) {
+func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
