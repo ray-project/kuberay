@@ -216,7 +216,10 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("backoffLimit must be a positive integer")
 	}
 
-	return validateDeletionStrategy(rayJob)
+	if err := validateDeletionStrategy(rayJob); err != nil {
+		return fmt.Errorf("invalid deletion strategy: %w", err)
+	}
+	return nil
 }
 
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
@@ -295,19 +298,11 @@ func validateDeletionStrategy(rayJob *rayv1.RayJob) error {
 // It performs per-rule validations, checks for uniqueness, and ensures logical TTL consistency.
 // Errors are collected and returned as a single aggregated error using errors.Join for better user feedback.
 func validateDeletionRules(rayJob *rayv1.RayJob) error {
-	type ruleKey struct {
-		Policy rayv1.DeletionPolicyType
-		Status rayv1.JobStatus
-	}
-
 	rules := rayJob.Spec.DeletionStrategy.DeletionRules
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
 
-	// Group TTLs by JobStatus for cross-rule validation.
+	// Group TTLs by JobStatus for cross-rule validation and uniqueness checking.
 	rulesByStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
-	// Track unique (Policy, JobStatus) combinations.
-	ruleUniquenessSet := make(map[ruleKey]struct{})
-
 	var errs []error
 
 	// Single pass: Validate each rule individually and group for later consistency checks.
@@ -317,14 +312,6 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSecondsAfterFinished must be non-negative", i))
 			continue
 		}
-
-		// Check uniqueness.
-		key := ruleKey{Policy: rule.Policy, Status: rule.Condition.JobStatus}
-		if _, exists := ruleUniquenessSet[key]; exists {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
-			continue
-		}
-		ruleUniquenessSet[key] = struct{}{}
 
 		// Contextual validations based on spec.
 		if isClusterSelectorMode && (rule.Policy == rayv1.DeleteCluster || rule.Policy == rayv1.DeleteWorkers) {
@@ -343,6 +330,13 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 			statusMap = make(map[rayv1.DeletionPolicyType]int32)
 			rulesByStatus[rule.Condition.JobStatus] = statusMap
 		}
+
+		// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
+		if _, exists := statusMap[rule.Policy]; exists {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
+			continue
+		}
+
 		statusMap[rule.Policy] = rule.Condition.TTLSecondsAfterFinished
 	}
 
@@ -399,7 +393,7 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 	// Both policies must be set if using the legacy API.
 	if rayJob.Spec.DeletionStrategy.OnSuccess == nil || rayJob.Spec.DeletionStrategy.OnFailure == nil {
-		return fmt.Errorf("both DeletionStrategy.OnSuccess and DeletionStrategy.OnFailure must be set when using the legacy deletion policy fields")
+		return fmt.Errorf("both DeletionStrategy.OnSuccess and DeletionStrategy.OnFailure must be set when using the legacy deletion policy fields of DeletionStrategy")
 	}
 
 	// Validate that the Policy field is set within each policy.

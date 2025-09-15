@@ -85,8 +85,6 @@ const (
 	SidecarMode     JobSubmissionMode = "SidecarMode"     // Submit job via a sidecar container in the Ray head Pod
 )
 
-type DeletionPolicyType string
-
 // DeletionStrategy defines the deletion policies for a RayJob.
 // It allows for fine-grained control over resource cleanup after a job finishes.
 //
@@ -166,6 +164,8 @@ type DeletionPolicy struct {
 	// +optional
 	Policy *DeletionPolicyType `json:"policy,omitempty"`
 }
+
+type DeletionPolicyType string
 
 const (
 	DeleteCluster DeletionPolicyType = "DeleteCluster" // To delete the entire RayCluster custom resource on job completion.
