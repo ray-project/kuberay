@@ -15,7 +15,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
-	"github.com/ray-project/kuberay/ray-operator/test/sampleyaml"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -81,7 +80,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	// Create curl pod to test traffic routing through Gateway to RayService
 	curlPodName := "curl-pod"
 	curlContainerName := "curl-container"
-	curlPod, err := CreateCurlPod(test, curlPodName, curlContainerName, namespace.Name)
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Waiting for Curl Pod %s to be ready", curlPodName)
@@ -89,7 +88,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		updatedPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedPod
-	}, TestTimeoutShort).Should(WithTransform(sampleyaml.IsPodRunningAndReady, BeTrue()))
+	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 	// Get the Gateway endpoint to send requests to
 	gatewayIP := GetGatewayIP(gateway)
