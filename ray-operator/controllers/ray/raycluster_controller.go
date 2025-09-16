@@ -1032,7 +1032,6 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 
 // configureMTLSForPod configures mTLS settings for a pod template if mTLS is enabled
 func (r *RayClusterReconciler) configureMTLSForPod(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster) {
-
 	// Determine the appropriate secret name based on node type
 	// We can determine this from the pod labels or container name
 	var secretName string
@@ -1062,7 +1061,6 @@ func (r *RayClusterReconciler) configureMTLSForPod(podTemplate *corev1.PodTempla
 
 	// Add CA volumes with proper secret references
 	r.addCAVolumes(&podTemplate.Spec, secretName)
-
 }
 
 // addTLSEnvironmentVariables adds Ray TLS environment variables to a container
@@ -1073,6 +1071,8 @@ func (r *RayClusterReconciler) addTLSEnvironmentVariables(container *corev1.Cont
 		// Worker pods only need basic TLS environment variables
 		tlsEnvVars := []corev1.EnvVar{
 			{Name: "RAY_USE_TLS", Value: "1"},
+			{Name: "RAY_TLS_SERVER_CERT", Value: "/home/ray/workspace/tls/tls.crt"},
+			{Name: "RAY_TLS_SERVER_KEY", Value: "/home/ray/workspace/tls/tls.key"},
 			{Name: "RAY_TLS_CA_CERT", Value: "/home/ray/workspace/tls/ca.crt"},
 		}
 		container.Env = append(container.Env, tlsEnvVars...)
@@ -1095,7 +1095,6 @@ func (r *RayClusterReconciler) addTLSEnvironmentVariables(container *corev1.Cont
 		{Name: "RAY_TLS_CA_CERT", Value: "/home/ray/workspace/tls/ca.crt"},
 	}
 	container.Env = append(container.Env, tlsEnvVars...)
-
 }
 
 // addCAVolumes adds CA and certificate volumes to a pod spec

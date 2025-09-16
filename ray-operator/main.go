@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	// Add cert-manager scheme
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
 	"go.uber.org/zap"
@@ -36,9 +38,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
-
-	// Add cert-manager scheme
-	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 )
 
 var (
