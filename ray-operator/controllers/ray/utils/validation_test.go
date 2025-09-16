@@ -902,6 +902,14 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "SidecarMode doesn't support ClusterSelector",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:  rayv1.SidecarMode,
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+			},
+			expectError: true,
+		},
+		{
 			name: "failed to get cluster name in ClusterSelector map",
 			spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{},
