@@ -231,7 +231,7 @@ func TestPopulateLabelsFromRayJob(t *testing.T) {
 	}
 }
 
-func TestPopulateTaskGroupsAnnotationToPod(t *testing.T) {
+func TestPropagateTaskGroupsAnnotationToPod(t *testing.T) {
 	appID := "job-1-01234"
 	queue := "root.default"
 
@@ -297,7 +297,7 @@ func TestPopulateTaskGroupsAnnotationToPod(t *testing.T) {
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
 }
 
-func TestPopulateTaskGroupsAnnotationToRayClusterAndK8sJob(t *testing.T) {
+func TestPropagateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *testing.T) {
 	appID := "job-1-01234"
 	queue := "root.default"
 

@@ -44,7 +44,7 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ m
 	return nil
 }
 
-// propagateTaskGroupsAnnotation is a helper function thatpropagates the task groups annotation to the child
+// propagateTaskGroupsAnnotation is a helper function that propagates the task groups annotation to the child
 // if the parent has the task groups annotation, it will be copied to the child
 // if the parent doesn't have the task groups annotation, a new one will be created
 func propagateTaskGroupsAnnotation(parent metav1.Object, child metav1.Object) error {
@@ -59,11 +59,12 @@ func propagateTaskGroupsAnnotation(parent metav1.Object, child metav1.Object) er
 			return err
 		}
 	}
-
-	if child.GetAnnotations() == nil {
-		child.SetAnnotations(make(map[string]string))
+	annotations := child.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
-	child.GetAnnotations()[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
+	annotations[YuniKornTaskGroupsAnnotationName] = taskGroupsAnnotationValue
+	child.SetAnnotations(annotations)
 	return nil
 }
 
@@ -72,10 +73,10 @@ func populateLabelsFromObject(parent metav1.Object, child metav1.Object, sourceK
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	if parent.GetLabels() != nil && parent.GetLabels()[sourceKey] != "" {
-		labels[targetKey] = parent.GetLabels()[sourceKey]
-		child.SetLabels(labels)
+	if parentLabel, exist := parent.GetLabels()[sourceKey]; exist && parentLabel != "" {
+		labels[targetKey] = parentLabel
 	}
+	child.SetLabels(labels)
 }
 
 func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
