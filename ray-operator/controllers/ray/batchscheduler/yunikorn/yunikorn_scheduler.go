@@ -92,9 +92,9 @@ func getTaskGroupsAnnotationValue(obj metav1.Object) (string, error) {
 	taskGroups := newTaskGroups()
 	switch obj := obj.(type) {
 	case *rayv1.RayCluster:
-		taskGroups = newTaskGroupsFromRayCluster(obj)
+		taskGroups = newTaskGroupsFromRayClusterSpec(&obj.Spec)
 	case *rayv1.RayJob:
-		taskGroups = newTaskGroupsFromRayJob(obj)
+		taskGroups = newTaskGroupsFromRayJobSpec(&obj.Spec)
 	}
 	taskGroupsAnnotationValue, err := taskGroups.marshal()
 	if err != nil {
