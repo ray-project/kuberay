@@ -31,7 +31,6 @@ export interface RayJobStatus {
 }
 
 export type JobStatus =
-  | ""
   | "PENDING"
   | "RUNNING"
   | "STOPPED"

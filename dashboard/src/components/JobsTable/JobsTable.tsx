@@ -69,7 +69,8 @@ export const JobsTable = () => {
   const snackBar = useSnackBar();
 
   const filteredItems = React.useMemo(
-    () => filterJobs(jobs, search, statusFilter, typeFilter),
+    // For the compatibility of v1 and v2, we need to force cast the type here.
+    () => filterJobs(jobs, search, statusFilter, typeFilter) as JobRow[],
     [jobs, search, statusFilter, typeFilter],
   );
 
