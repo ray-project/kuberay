@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -392,118 +393,6 @@ func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayS
 		ObservedGeneration: rayServiceInstance.Status.ObservedGeneration,
 	}
 	meta.SetStatusCondition(&rayServiceInstance.Status.Conditions, condition)
-}
-
-// Checks whether the old and new RayServiceStatus are inconsistent by comparing different fields.
-// The RayClusterStatus field is only for observability in RayService CR, and changes to it will not trigger the status update.
-func inconsistentRayServiceStatus(ctx context.Context, oldStatus rayv1.RayServiceStatus, newStatus rayv1.RayServiceStatus) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.RayClusterName != newStatus.RayClusterName {
-		logger.Info("inconsistentRayServiceStatus RayService RayClusterName", "oldRayClusterName", oldStatus.RayClusterName, "newRayClusterName", newStatus.RayClusterName)
-		return true
-	}
-
-	if len(oldStatus.Applications) != len(newStatus.Applications) {
-		return true
-	}
-
-	var ok bool
-	for appName, newAppStatus := range newStatus.Applications {
-		var oldAppStatus rayv1.AppStatus
-		if oldAppStatus, ok = oldStatus.Applications[appName]; !ok {
-			logger.Info("inconsistentRayServiceStatus RayService new application found", "appName", appName)
-			return true
-		}
-
-		if oldAppStatus.Status != newAppStatus.Status {
-			logger.Info("inconsistentRayServiceStatus RayService application status changed", "appName", appName, "oldStatus", oldAppStatus.Status, "newStatus", newAppStatus.Status)
-			return true
-		} else if oldAppStatus.Message != newAppStatus.Message {
-			logger.Info("inconsistentRayServiceStatus RayService application status message changed", "appName", appName, "oldStatus", oldAppStatus.Message, "newStatus", newAppStatus.Message)
-			return true
-		}
-
-		if len(oldAppStatus.Deployments) != len(newAppStatus.Deployments) {
-			return true
-		}
-
-		for deploymentName, newDeploymentStatus := range newAppStatus.Deployments {
-			var oldDeploymentStatus rayv1.ServeDeploymentStatus
-			if oldDeploymentStatus, ok = oldAppStatus.Deployments[deploymentName]; !ok {
-				logger.Info("inconsistentRayServiceStatus RayService new deployment found in application", "deploymentName", deploymentName, "appName", appName)
-				return true
-			}
-
-			if oldDeploymentStatus.Status != newDeploymentStatus.Status {
-				logger.Info("inconsistentRayServiceStatus RayService DeploymentStatus changed", "oldDeploymentStatus", oldDeploymentStatus.Status, "newDeploymentStatus", newDeploymentStatus.Status)
-				return true
-			} else if oldDeploymentStatus.Message != newDeploymentStatus.Message {
-				logger.Info("inconsistentRayServiceStatus RayService deployment status message changed", "oldDeploymentStatus", oldDeploymentStatus.Message, "newDeploymentStatus", newDeploymentStatus.Message)
-				return true
-			}
-		}
-	}
-
-	if features.Enabled(features.RayServiceIncrementalUpgrade) {
-		// Also check for changes in IncrementalUpgrade related Status fields.
-		if (oldStatus.TrafficRoutedPercent == nil) != (newStatus.TrafficRoutedPercent == nil) ||
-			(oldStatus.TrafficRoutedPercent != nil && newStatus.TrafficRoutedPercent != nil &&
-				*oldStatus.TrafficRoutedPercent != *newStatus.TrafficRoutedPercent) {
-			logger.Info("inconsistentRayServiceStatus RayService updated TrafficRoutedPercent",
-				"old TrafficRoutedPercent", oldStatus.TrafficRoutedPercent,
-				"new TrafficRoutedPercent", newStatus.TrafficRoutedPercent)
-			return true
-		}
-		if (oldStatus.TargetCapacity == nil) != (newStatus.TargetCapacity == nil) ||
-			(oldStatus.TargetCapacity != nil && newStatus.TargetCapacity != nil &&
-				*oldStatus.TargetCapacity != *newStatus.TargetCapacity) {
-			logger.Info("inconsistentRayServiceStatus RayService updated TargetCapacity",
-				"old TargetCapacity", oldStatus.TargetCapacity,
-				"new TargetCapacity", newStatus.TargetCapacity)
-			return true
-		}
-		if (oldStatus.LastTrafficMigratedTime == nil) != (newStatus.LastTrafficMigratedTime == nil) ||
-			(oldStatus.LastTrafficMigratedTime != nil && newStatus.LastTrafficMigratedTime != nil &&
-				!oldStatus.LastTrafficMigratedTime.Equal(newStatus.LastTrafficMigratedTime)) {
-			logger.Info("inconsistentRayServiceStatus RayService updated LastTrafficMigratedTime",
-				"old LastTrafficMigratedTime", oldStatus.LastTrafficMigratedTime,
-				"new LastTrafficMigratedTime", newStatus.LastTrafficMigratedTime)
-			return true
-		}
-	}
-
-	return false
-}
-
-// Determine whether to update the status of the RayService instance.
-func inconsistentRayServiceStatuses(ctx context.Context, oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
-		logger.Info("inconsistentRayServiceStatus RayService ServiceStatus changed", "oldServiceStatus", oldStatus.ServiceStatus, "newServiceStatus", newStatus.ServiceStatus)
-		return true
-	}
-
-	if oldStatus.NumServeEndpoints != newStatus.NumServeEndpoints {
-		logger.Info("inconsistentRayServiceStatus RayService NumServeEndpoints changed", "oldNumServeEndpoints", oldStatus.NumServeEndpoints, "newNumServeEndpoints", newStatus.NumServeEndpoints)
-		return true
-	}
-
-	if !reflect.DeepEqual(oldStatus.Conditions, newStatus.Conditions) {
-		logger.Info("inconsistentRayServiceStatus RayService Conditions changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.ActiveServiceStatus, newStatus.ActiveServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService ActiveServiceStatus changed")
-		return true
-	}
-
-	if inconsistentRayServiceStatus(ctx, oldStatus.PendingServiceStatus, newStatus.PendingServiceStatus) {
-		logger.Info("inconsistentRayServiceStatus RayService PendingServiceStatus changed")
-		return true
-	}
-
-	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -1281,7 +1170,7 @@ func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.C
 
 // reconcileServeTargetCapacity reconciles the target_capacity of the ServeConfig for a given RayCluster during
 // an IncrementalUpgrade while also updating the Status.TargetCapacity of the Active and Pending RayServices.
-func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient utils.RayDashboardClientInterface) error {
+func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient dashboardclient.RayDashboardClientInterface) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("reconcileServeTargetCapacity", "RayService", rayServiceInstance.Name)
 
