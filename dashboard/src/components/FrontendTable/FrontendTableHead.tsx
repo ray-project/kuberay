@@ -1,6 +1,5 @@
 "use client";
 // Mostly from https://mui.com/joy-ui/react-table/#sort-and-selection
-import { JobRow } from "@/types/rayjob";
 import { Order } from "@/types/table";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { Checkbox } from "@mui/joy";

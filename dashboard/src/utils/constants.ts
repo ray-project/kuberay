@@ -4,8 +4,13 @@ interface RuntimeConfig {
   url: string;
 }
 
-const defaultConfig: RuntimeConfig = {
-  url: "http://localhost:31888/apis/ray.io/v1",
+export const apiVersion = "v2";
+
+export const defaultConfig: RuntimeConfig = {
+  url:
+    apiVersion === "v2"
+      ? "http://localhost:31888/apis/ray.io/v1"
+      : "http://localhost:31888/apis/v1",
 };
 
 let runtimeConfig: RuntimeConfig | null = null;
