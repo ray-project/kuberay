@@ -1192,7 +1192,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "negative TTLSecondsAfterFinished in deletionRules",
+			name: "negative TTLSeconds in deletionRules",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
 					DeletionRules: []rayv1.DeletionRule{
@@ -1206,6 +1206,24 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					},
 				},
 				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with ClusterSelector and DeleteWorkers policy",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"key": "value"},
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
 			},
 			expectError: true,
 		},

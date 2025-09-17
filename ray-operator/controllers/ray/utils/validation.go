@@ -318,7 +318,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	for i, rule := range rules {
 		// Validate TTL is non-negative.
 		if rule.Condition.TTLSeconds < 0 {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSecondsAfterFinished must be non-negative", i))
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSeconds must be non-negative", i))
 			continue
 		}
 

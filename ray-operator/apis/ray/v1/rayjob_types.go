@@ -124,7 +124,7 @@ type DeletionStrategy struct {
 
 	// DeletionRules is a list of deletion rules, processed based on their trigger conditions.
 	// While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),
-	// the most impactful rule (e.g., DeleteCluster) will be executed first to prioritize resource cleanup and cost savings.
+	// the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup and cost savings.
 	// +optional
 	// +listType=atomic
 	DeletionRules []DeletionRule `json:"deletionRules,omitempty"`
