@@ -270,7 +270,7 @@ func GetNamespace(metaData metav1.ObjectMeta) string {
 // @param ownerName: The name of the CR that owns the head service.
 func GenerateHeadServiceName(crdType CRDType, clusterSpec rayv1.RayClusterSpec, ownerName string) (string, error) {
 	switch crdType {
-	case RayServiceCRD:
+	case RayServiceCRD, RayJobCRD:
 		return fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc"), nil
 	case RayClusterCRD:
 		headSvcName := fmt.Sprintf("%s-%s-%s", ownerName, rayv1.HeadNode, "svc")

@@ -536,9 +536,17 @@ func TestGenerateHeadServiceName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 
-	// Invalid CRD type
-	_, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
-	require.Error(t, err)
+	// [RayJob]
+	// Test 5: `HeadService.Name` is empty.
+	headSvcName, err = GenerateHeadServiceName(RayJobCRD, rayv1.RayClusterSpec{}, "rayjob-sample")
+	expectedGeneratedSvcName = "rayjob-sample-head-svc"
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
+
+	// Test 6: `HeadService.Name` is not empty.
+	headSvcName, err = GenerateHeadServiceName(RayJobCRD, *clusterSpecWithHeadService.DeepCopy(), "rayjob-sample")
+	require.NoError(t, err)
+	assert.Equal(t, expectedGeneratedSvcName, headSvcName)
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {

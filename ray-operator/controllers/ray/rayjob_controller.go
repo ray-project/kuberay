@@ -33,9 +33,8 @@ import (
 )
 
 const (
-	RayJobDefaultRequeueDuration    = 3 * time.Second
-	RayJobDefaultClusterSelectorKey = "ray.io/cluster"
-	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	RayJobDefaultRequeueDuration = 3 * time.Second
+	PythonUnbufferedEnvVarName   = "PYTHONUNBUFFERED"
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -136,29 +135,28 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if err := utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta); err != nil {
-		logger.Error(err, "The RayJob metadata is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
-			"The RayJob metadata is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if err := utils.ValidateRayJobSpec(rayJobInstance); err != nil {
-		logger.Error(err, "The RayJob spec is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
-			"The RayJob spec is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if err := utils.ValidateRayJobStatus(rayJobInstance); err != nil {
-		logger.Error(err, "The RayJob status is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobStatus),
-			"The RayJob status is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
+
+	// Perform all validations and directly fail the RayJob if any of the validation fails
+	errType, err := validateRayJob(ctx, rayJobInstance)
+	// Immediately update the status after validation
+	if err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(errType),
+			"%s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusValidationFailed
+		rayJobInstance.Status.Reason = rayv1.ValidationFailed
+		rayJobInstance.Status.Message = err.Error()
+
+		// This is the only 2 places where we update the RayJob status. This will directly
+		// update the JobDeploymentStatus to ValidationFailed if there's validation error
+		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
+			logger.Info("Failed to update RayJob status", "error", err)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
+	}
 
 	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
@@ -174,9 +172,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Set `Status.JobDeploymentStatus` to `JobDeploymentStatusInitializing`, and initialize `Status.JobId`
 		// and `Status.RayClusterName` prior to avoid duplicate job submissions and cluster creations.
 		logger.Info("JobDeploymentStatusNew")
-		if err = initRayJobStatusIfNeed(ctx, rayJobInstance); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-		}
+		initRayJobStatusIfNeed(ctx, rayJobInstance)
 	case rayv1.JobDeploymentStatusInitializing:
 		if shouldUpdate := updateStatusToSuspendingIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
@@ -238,6 +234,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		var rayClusterInstance *rayv1.RayCluster
+		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
+		// before transitioning the status from `Initializing` to `Running`.
+		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		err = r.reconcileServices(ctx, rayJobInstance, rayClusterInstance)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
 		var isSubmitterFinished bool
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
@@ -248,13 +256,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if shouldUpdate {
 				break
 			}
-		}
-
-		var rayClusterInstance *rayv1.RayCluster
-		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
-		// before transitioning the status from `Initializing` to `Running`.
-		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
 		// Check the current status of ray jobs
@@ -371,7 +372,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
-	// This is the only place where we update the RayJob status. Please do NOT add any code
+	// This is the only 2 places where we update the RayJob status. Please do NOT add any code
 	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
@@ -379,6 +380,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, rayJobInstance.UID, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+func validateRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (utils.K8sEventType, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	validationRules := []struct {
+		validate func() error
+		errType  utils.K8sEventType
+	}{
+		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata},
+		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec},
+		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus},
+	}
+
+	for _, validation := range validationRules {
+		if err := validation.validate(); err != nil {
+			logger.Error(err, err.Error())
+			return validation.errType, err
+		}
+	}
+	return "", nil
 }
 
 func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, rayJobUID types.UID, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
@@ -532,6 +553,57 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
 
 	return nil
+}
+
+// TODO: Move this function into a common package so that both RayJob and RayService can use it.
+func (r *RayJobReconciler) reconcileServices(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) error {
+	if len(rayJobInstance.Spec.ClusterSelector) != 0 {
+		return nil
+	}
+
+	logger := ctrl.LoggerFrom(ctx)
+	newSvc, err := common.BuildHeadServiceForRayJob(ctx, *rayJobInstance, *rayClusterInstance)
+	if err != nil {
+		return err
+	}
+
+	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
+	oldSvc := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: newSvc.Name, Namespace: rayJobInstance.Namespace}, oldSvc)
+
+	if err == nil {
+		// Only update the service if the RayCluster switches.
+		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
+			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster",
+				newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", utils.HeadService)
+			return nil
+		}
+		// ClusterIP is immutable. Starting from Kubernetes v1.21.5, if the new service does not specify a ClusterIP,
+		// Kubernetes will assign the ClusterIP of the old service to the new one. However, to maintain compatibility
+		// with older versions of Kubernetes, we need to assign the ClusterIP here.
+		newSvc.Spec.ClusterIP = oldSvc.Spec.ClusterIP
+		oldSvc.Spec = *newSvc.Spec.DeepCopy()
+		logger.Info("Update Kubernetes Service", "serviceType", utils.HeadService)
+		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService), "Failed to update the service %s/%s, %v", oldSvc.Namespace, oldSvc.Name, updateErr)
+			return updateErr
+		}
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.UpdatedService), "Updated the service %s/%s", oldSvc.Namespace, oldSvc.Name)
+		// Return the updated service.
+		return nil
+	} else if errors.IsNotFound(err) {
+		logger.Info("Create a Kubernetes Service", "serviceType", utils.HeadService)
+		if err := ctrl.SetControllerReference(rayJobInstance, newSvc, r.Scheme); err != nil {
+			return err
+		}
+		if err := r.Create(ctx, newSvc); err != nil {
+			r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateService), "Failed to create the service %s/%s, %v", newSvc.Namespace, newSvc.Name, err)
+			return err
+		}
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.CreatedService), "Created the service %s/%s", newSvc.Namespace, newSvc.Name)
+		return nil
+	}
+	return err
 }
 
 // createNewK8sJob creates a new Kubernetes Job. It returns an error.
@@ -700,13 +772,13 @@ func (r *RayJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurren
 // prior to job submissions and RayCluster creations. This is used to avoid duplicate job submissions and cluster creations. In addition, this
 // function also sets `Status.StartTime` to support `ActiveDeadlineSeconds`.
 // This function will set or generate JobId if SubmissionMode is not InteractiveMode.
-func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
+func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdateStatus := rayJob.Status.JobId == "" || rayJob.Status.RayClusterName == "" || rayJob.Status.JobStatus == ""
 	// Please don't update `shouldUpdateStatus` below.
 	logger.Info("initRayJobStatusIfNeed", "shouldUpdateStatus", shouldUpdateStatus, "jobId", rayJob.Status.JobId, "rayClusterName", rayJob.Status.RayClusterName, "jobStatus", rayJob.Status.JobStatus)
 	if !shouldUpdateStatus {
-		return nil
+		return
 	}
 
 	if rayJob.Spec.SubmissionMode != rayv1.InteractiveMode && rayJob.Status.JobId == "" {
@@ -718,15 +790,8 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Status.RayClusterName == "" {
-		// if the clusterSelector is not empty, default use this cluster name
-		// we assume the length of clusterSelector is one
-		if len(rayJob.Spec.ClusterSelector) != 0 {
-			var useValue string
-			var ok bool
-			if useValue, ok = rayJob.Spec.ClusterSelector[RayJobDefaultClusterSelectorKey]; !ok {
-				return fmt.Errorf("failed to get cluster name in ClusterSelector map, the default key is %v", RayJobDefaultClusterSelectorKey)
-			}
-			rayJob.Status.RayClusterName = useValue
+		if clusterName := rayJob.Spec.ClusterSelector[utils.RayJobClusterSelectorKey]; clusterName != "" {
+			rayJob.Status.RayClusterName = clusterName
 		} else {
 			rayJob.Status.RayClusterName = utils.GenerateRayClusterName(rayJob.Name)
 		}
@@ -737,7 +802,6 @@ func initRayJobStatusIfNeed(ctx context.Context, rayJob *rayv1.RayJob) error {
 	}
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusInitializing
 	rayJob.Status.StartTime = &metav1.Time{Time: time.Now()}
-	return nil
 }
 
 func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *rayv1.RayJob, newRayJob *rayv1.RayJob) error {
