@@ -273,9 +273,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 		var jobInfo *utiltypes.RayJobInfo
 		if loadedJobInfo, ok := r.JobInfoMap.Load(rayJobInstance.Status.JobId); ok {
-			logger.Info("Found jobInfo in map", "JobId", rayJobInstance.Status.JobId, "jobInfo", loadedJobInfo)
 			jobInfo = loadedJobInfo.(*utiltypes.RayJobInfo)
-			logger.Info("Casted jobInfo", "JobId", rayJobInstance.Status.JobId, "jobInfo", jobInfo)
 		} else {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {

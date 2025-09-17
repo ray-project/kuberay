@@ -173,7 +173,6 @@ func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) 
 		if err != nil {
 			fmt.Printf("AsyncGetJobInfo: error: %v\n", err)
 		}
-		fmt.Printf("AsyncGetJobInfo: jobInfo: %v\n", jobInfo)
 		if jobInfo != nil {
 			r.jobInfoMap.Store(jobId, jobInfo)
 		}
