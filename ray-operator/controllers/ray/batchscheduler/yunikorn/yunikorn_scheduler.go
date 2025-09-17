@@ -47,6 +47,11 @@ func (y *YuniKornScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ m
 // propagateTaskGroupsAnnotation is a helper function that propagates the task groups annotation to the child
 // if the parent has the task groups annotation, it will be copied to the child
 // if the parent doesn't have the task groups annotation, a new one will be created
+// TODO: remove the legacy labels, i.e "applicationId" and "queue", directly populate labels
+// RayApplicationIDLabelName and RayApplicationQueueLabelName to pod labels.
+// Currently we use this function to translate labels "yunikorn.apache.org/app-id" and "yunikorn.apache.org/queue"
+// to legacy labels "applicationId" and "queue", this is for the better compatibilities to support older yunikorn
+// versions.
 func propagateTaskGroupsAnnotation(parent metav1.Object, child metav1.Object) error {
 	var taskGroupsAnnotationValue string
 	if parentAnnotations, exist := parent.GetAnnotations()[YuniKornTaskGroupsAnnotationName]; exist && parentAnnotations != "" {
