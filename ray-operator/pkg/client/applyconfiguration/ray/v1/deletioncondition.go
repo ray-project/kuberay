@@ -9,8 +9,8 @@ import (
 // DeletionConditionApplyConfiguration represents a declarative configuration of the DeletionCondition type for use
 // with apply.
 type DeletionConditionApplyConfiguration struct {
-	JobStatus               *rayv1.JobStatus `json:"jobStatus,omitempty"`
-	TTLSecondsAfterFinished *int32           `json:"ttlSecondsAfterFinished,omitempty"`
+	JobStatus  *rayv1.JobStatus `json:"jobStatus,omitempty"`
+	TTLSeconds *int32           `json:"ttlSeconds,omitempty"`
 }
 
 // DeletionConditionApplyConfiguration constructs a declarative configuration of the DeletionCondition type for use with
@@ -27,10 +27,10 @@ func (b *DeletionConditionApplyConfiguration) WithJobStatus(value rayv1.JobStatu
 	return b
 }
 
-// WithTTLSecondsAfterFinished sets the TTLSecondsAfterFinished field in the declarative configuration to the given value
+// WithTTLSeconds sets the TTLSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TTLSecondsAfterFinished field is set to the value of the last call.
-func (b *DeletionConditionApplyConfiguration) WithTTLSecondsAfterFinished(value int32) *DeletionConditionApplyConfiguration {
-	b.TTLSecondsAfterFinished = &value
+// If called multiple times, the TTLSeconds field is set to the value of the last call.
+func (b *DeletionConditionApplyConfiguration) WithTTLSeconds(value int32) *DeletionConditionApplyConfiguration {
+	b.TTLSeconds = &value
 	return b
 }

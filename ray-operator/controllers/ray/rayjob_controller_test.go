@@ -3192,22 +3192,22 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 0,
 						},
 					},
 				},
@@ -3220,22 +3220,22 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 0,
 							},
 						},
 					},
@@ -3351,22 +3351,22 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 0,
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 0,
 						},
 					},
 				},
@@ -3379,22 +3379,22 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 0,
 							},
 						},
 					},
@@ -3510,22 +3510,22 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 0, // Stage 1: Delete workers after 0 seconds
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 0, // Stage 1: Delete workers after 0 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 5, // Stage 2: Delete cluster after 5 seconds
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 5, // Stage 2: Delete cluster after 5 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusSucceeded,
-							TTLSecondsAfterFinished: 10, // Stage 3: Delete self after 10 seconds
+							JobStatus:  rayv1.JobStatusSucceeded,
+							TTLSeconds: 10, // Stage 3: Delete self after 10 seconds
 						},
 					},
 				},
@@ -3538,22 +3538,22 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 5,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 5,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusSucceeded,
-								TTLSecondsAfterFinished: 10,
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
 							},
 						},
 					},
@@ -3718,22 +3718,22 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 0, // Stage 1: Delete workers after 0 seconds
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 0, // Stage 1: Delete workers after 0 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 5, // Stage 2: Delete cluster after 5 seconds
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 5, // Stage 2: Delete cluster after 5 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:               rayv1.JobStatusFailed,
-							TTLSecondsAfterFinished: 10, // Stage 3: Delete self after 10 seconds
+							JobStatus:  rayv1.JobStatusFailed,
+							TTLSeconds: 10, // Stage 3: Delete self after 10 seconds
 						},
 					},
 				},
@@ -3746,22 +3746,22 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 0,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 5,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 5,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:               rayv1.JobStatusFailed,
-								TTLSecondsAfterFinished: 10,
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 10,
 							},
 						},
 					},

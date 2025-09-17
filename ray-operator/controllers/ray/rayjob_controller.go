@@ -1071,7 +1071,7 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 			continue
 		}
 
-		deletionTime := rayJob.Status.EndTime.Add(time.Duration(rule.Condition.TTLSecondsAfterFinished) * time.Second)
+		deletionTime := rayJob.Status.EndTime.Add(time.Duration(rule.Condition.TTLSeconds) * time.Second)
 		// Track the earliest requeue time to re-check later.
 		if nowTime.Before(deletionTime) {
 			if nextRequeueTime == nil || deletionTime.Before(*nextRequeueTime) {

@@ -308,7 +308,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	// Single pass: Validate each rule individually and group for later consistency checks.
 	for i, rule := range rules {
 		// Validate TTL is non-negative.
-		if rule.Condition.TTLSecondsAfterFinished < 0 {
+		if rule.Condition.TTLSeconds < 0 {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSecondsAfterFinished must be non-negative", i))
 			continue
 		}
@@ -325,19 +325,19 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 		}
 
 		// Group valid rule for consistency check.
-		statusMap, ok := rulesByStatus[rule.Condition.JobStatus]
+		policyTTLs, ok := rulesByStatus[rule.Condition.JobStatus]
 		if !ok {
-			statusMap = make(map[rayv1.DeletionPolicyType]int32)
-			rulesByStatus[rule.Condition.JobStatus] = statusMap
+			policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
+			rulesByStatus[rule.Condition.JobStatus] = policyTTLs
 		}
 
 		// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
-		if _, exists := statusMap[rule.Policy]; exists {
+		if _, exists := policyTTLs[rule.Policy]; exists {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
 			continue
 		}
 
-		statusMap[rule.Policy] = rule.Condition.TTLSecondsAfterFinished
+		policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
 	}
 
 	// Second pass: Validate TTL consistency per JobStatus.

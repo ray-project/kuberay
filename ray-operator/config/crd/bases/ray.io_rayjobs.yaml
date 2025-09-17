@@ -70,7 +70,7 @@ spec:
                               - SUCCEEDED
                               - FAILED
                               type: string
-                            ttlSecondsAfterFinished:
+                            ttlSeconds:
                               default: 0
                               format: int32
                               minimum: 0

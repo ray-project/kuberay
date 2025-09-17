@@ -90,6 +90,7 @@ const (
 //
 // Legacy fields `onSuccess` and `onFailure` are still supported for backward compatibility,
 // but it is highly recommended to migrate to the new `deletionRules` field.
+// `onSuccess` and `onFailure` will be removed in release 1.16.0.
 //
 // Notes:
 //   - When this block is set, you must configure **either**
@@ -109,13 +110,13 @@ const (
 type DeletionStrategy struct {
 	// OnSuccess is the deletion policy for a successful RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in a future release.
+	// This field will be removed in release 1.16.0.
 	// +optional
 	OnSuccess *DeletionPolicy `json:"onSuccess,omitempty"`
 
 	// OnFailure is the deletion policy for a failed RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in a future release.
+	// This field will be removed in release 1.16.0.
 	// +optional
 	OnFailure *DeletionPolicy `json:"onFailure,omitempty"`
 
@@ -145,13 +146,13 @@ type DeletionCondition struct {
 	// +kubebuilder:validation:Enum=SUCCEEDED;FAILED
 	JobStatus JobStatus `json:"jobStatus"`
 
-	// TTLSecondsAfterFinished is the time in seconds from when the JobStatus
+	// TTLSeconds is the time in seconds from when the JobStatus
 	// reaches the specified terminal state to when this deletion action should be triggered.
 	// The value must be a non-negative integer.
 	// +kubebuilder:default=0
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	TTLSeconds int32 `json:"ttlSeconds,omitempty"`
 }
 
 // DeletionPolicy is the legacy single-stage deletion policy.
