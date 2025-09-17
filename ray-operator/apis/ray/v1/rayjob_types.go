@@ -92,7 +92,7 @@ const (
 //
 // Legacy fields `onSuccess` and `onFailure` are still supported for backward compatibility,
 // but it is highly recommended to migrate to the new `deletionRules` field.
-// `onSuccess` and `onFailure` will be removed in release 1.16.0.
+// `onSuccess` and `onFailure` will be removed in release 1.6.0.
 //
 // Notes:
 //   - When this block is set, you must configure **either**
@@ -112,13 +112,13 @@ const (
 type DeletionStrategy struct {
 	// OnSuccess is the deletion policy for a successful RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in release 1.16.0.
+	// This field will be removed in release 1.6.0.
 	// +optional
 	OnSuccess *DeletionPolicy `json:"onSuccess,omitempty"`
 
 	// OnFailure is the deletion policy for a failed RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in release 1.16.0.
+	// This field will be removed in release 1.6.0.
 	// +optional
 	OnFailure *DeletionPolicy `json:"onFailure,omitempty"`
 

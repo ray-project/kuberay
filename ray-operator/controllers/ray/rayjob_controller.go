@@ -365,7 +365,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
 		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
-		return r.handleFinishedRayJob(ctx, rayJobInstance)
+		// If the RayJob uses an existing RayCluster, we must not delete it.
+		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+			logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJobInstance.Spec.ClusterSelector)
+			return ctrl.Result{}, nil
+		}
+
+		if features.Enabled(features.RayJobDeletionPolicy) && rayJobInstance.Spec.DeletionStrategy != nil {
+			// The previous validation logic ensures that either DeletionRules or the legacy policies are set, but not both.
+			if len(rayJobInstance.Spec.DeletionStrategy.DeletionRules) > 0 {
+				return r.handleDeletionRules(ctx, rayJobInstance)
+			}
+			return r.handleLegacyDeletionPolicy(ctx, rayJobInstance)
+		}
+
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+			return r.handleShutdownAfterJobFinishes(ctx, rayJobInstance)
+		}
+
+		// Default: No deletion policy is configured. The reconciliation is complete for this RayJob.
+		return ctrl.Result{}, nil
 	default:
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -1087,33 +1106,6 @@ func isSubmitterContainerFinished(pod *corev1.Pod) bool {
 		}
 	}
 	return false
-}
-
-// handleFinishedRayJob is the main entry point for handling cleanup of a completed or failed RayJob.
-// It acts as a dispatcher, selecting the appropriate deletion mechanism based on the RayJob spec.
-func (r *RayJobReconciler) handleFinishedRayJob(ctx context.Context, rayJob *rayv1.RayJob) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	// If the RayJob uses an existing RayCluster, we must not delete it.
-	if len(rayJob.Spec.ClusterSelector) > 0 {
-		logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJob.Spec.ClusterSelector)
-		return ctrl.Result{}, nil
-	}
-
-	if features.Enabled(features.RayJobDeletionPolicy) && rayJob.Spec.DeletionStrategy != nil {
-		// The previous validation logic ensures that either DeletionRules or the legacy policies are set, but not both.
-		if len(rayJob.Spec.DeletionStrategy.DeletionRules) > 0 {
-			return r.handleDeletionRules(ctx, rayJob)
-		}
-		return r.handleLegacyDeletionPolicy(ctx, rayJob)
-	}
-
-	if rayJob.Spec.ShutdownAfterJobFinishes {
-		return r.handleShutdownAfterJobFinishes(ctx, rayJob)
-	}
-
-	// Default: No deletion policy is configured. The reconciliation is complete for this RayJob.
-	return ctrl.Result{}, nil
 }
 
 // handleDeletionRules processes the DeletionRules with a impact-aware strategy.
