@@ -142,11 +142,12 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	//   memory: 10Gi
 	//   nvidia.com/gpu: 1
 	addWorkerPodSpec(rayClusterWithGangScheduling,
-		"worker-group-1", 1, 1, 2, v1.ResourceList{
+		"worker-group-1", 2, 2, 2, v1.ResourceList{
 			v1.ResourceCPU:    resource.MustParse("2"),
 			v1.ResourceMemory: resource.MustParse("10Gi"),
 			"nvidia.com/gpu":  resource.MustParse("1"),
 		})
+	rayClusterWithGangScheduling.Spec.WorkerGroupSpecs[0].NumOfHosts = 3
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
 	rayPod := createPod("ray-pod", "default")
@@ -173,7 +174,7 @@ func TestPopulateGangSchedulingAnnotations(t *testing.T) {
 	// verify the correctness of worker group
 	workerGroup := taskGroups.getTaskGroup("worker-group-1")
 	assert.NotNil(t, workerGroup)
-	assert.Equal(t, int32(1), workerGroup.MinMember)
+	assert.Equal(t, int32(6), workerGroup.MinMember)
 	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[v1.ResourceCPU.String()])
 	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[v1.ResourceMemory.String()])
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
