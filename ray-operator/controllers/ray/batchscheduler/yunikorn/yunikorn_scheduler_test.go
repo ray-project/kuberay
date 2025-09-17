@@ -259,11 +259,12 @@ func TestPropagateTaskGroupsAnnotationToPod(t *testing.T) {
 	//   memory: 10Gi
 	//   nvidia.com/gpu: 1
 	addWorkerPodSpec(rayClusterWithGangScheduling,
-		corev1.ResourceList{
+		"worker-group-1", 2, 2, 2, corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("2"),
 			corev1.ResourceMemory: resource.MustParse("10Gi"),
 			"nvidia.com/gpu":      resource.MustParse("1"),
 		})
+	rayClusterWithGangScheduling.Spec.WorkerGroupSpecs[0].NumOfHosts = 3
 
 	// gang-scheduling enabled case, the plugin should populate the taskGroup annotation to the app
 	rayPod := createPod("ray-pod", "default")
@@ -291,7 +292,7 @@ func TestPropagateTaskGroupsAnnotationToPod(t *testing.T) {
 	// verify the correctness of worker group
 	workerGroup := taskGroups.getTaskGroup("worker-group-1")
 	assert.NotNil(t, workerGroup)
-	assert.Equal(t, int32(1), workerGroup.MinMember)
+	assert.Equal(t, int32(6), workerGroup.MinMember)
 	assert.Equal(t, resource.MustParse("2"), workerGroup.MinResource[corev1.ResourceCPU.String()])
 	assert.Equal(t, resource.MustParse("10Gi"), workerGroup.MinResource[corev1.ResourceMemory.String()])
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
@@ -312,7 +313,7 @@ func TestPropagateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *tes
 		corev1.ResourceMemory: resource.MustParse("5Gi"),
 	})
 
-	addWorkerPodSpec(rayCluster, corev1.ResourceList{
+	addWorkerPodSpec(rayCluster, "worker-group-1", 1, 1, 1, corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("2"),
 		corev1.ResourceMemory: resource.MustParse("10Gi"),
 	})
@@ -429,7 +430,7 @@ func TestAddMetadataToChildResourceFromRayCluster(t *testing.T) {
 		corev1.ResourceCPU:    resource.MustParse("1"),
 		corev1.ResourceMemory: resource.MustParse("1Gi"),
 	})
-	addWorkerPodSpec(rayCluster, corev1.ResourceList{
+	addWorkerPodSpec(rayCluster, "worker-group-1", 1, 1, 1, corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("1"),
 		corev1.ResourceMemory: resource.MustParse("1Gi"),
 	})
@@ -485,7 +486,7 @@ func TestAddMetadataToChildResourceFromRayJob(t *testing.T) {
 		corev1.ResourceCPU:    resource.MustParse("1"),
 		corev1.ResourceMemory: resource.MustParse("1Gi"),
 	})
-	addWorkerPodSpec(rayCluster, corev1.ResourceList{
+	addWorkerPodSpec(rayCluster, "worker-group", 1, 1, 1, corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("1"),
 		corev1.ResourceMemory: resource.MustParse("1Gi"),
 	})
@@ -506,14 +507,14 @@ func TestAddMetadataToChildResourceFromRayJob(t *testing.T) {
 
 	assert.Equal(t, "job-4", rayCluster.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", rayCluster.Labels[YuniKornPodQueueLabelName])
-	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"500m","memory":"200Mi"},"name":"submittergroup","minMember":1}]`, rayCluster.Annotations[YuniKornTaskGroupsAnnotationName])
+	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group","minMember":1},{"minResource":{"cpu":"500m","memory":"200Mi"},"name":"submittergroup","minMember":1}]`, rayCluster.Annotations[YuniKornTaskGroupsAnnotationName])
 
 	yk.AddMetadataToChildResource(ctx, rayJob, submitterPodTemplate, utils.RayNodeSubmitterGroupLabelValue)
 	assert.Equal(t, utils.RayNodeSubmitterGroupLabelValue, submitterPodTemplate.Annotations[YuniKornTaskGroupNameAnnotationName])
 	assert.Equal(t, "job-4", submitterPodTemplate.Labels[YuniKornPodApplicationIDLabelName])
 	assert.Equal(t, "root.default", submitterPodTemplate.Labels[YuniKornPodQueueLabelName])
 	assert.Equal(t, "yunikorn", submitterPodTemplate.Spec.SchedulerName)
-	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group-1","minMember":1},{"minResource":{"cpu":"500m","memory":"200Mi"},"name":"submittergroup","minMember":1}]`, submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName])
+	assert.JSONEq(t, `[{"minResource":{"cpu":"1","memory":"1Gi"},"name":"headgroup","minMember":1},{"minResource":{"cpu":"1","memory":"1Gi"},"name":"worker-group","minMember":1},{"minResource":{"cpu":"500m","memory":"200Mi"},"name":"submittergroup","minMember":1}]`, submitterPodTemplate.Annotations[YuniKornTaskGroupsAnnotationName])
 }
 
 func createRayClusterWithLabels(name string, namespace string, labels map[string]string) *rayv1.RayCluster {
@@ -558,7 +559,8 @@ func addHeadPodSpec(rayCluster *rayv1.RayCluster, resource corev1.ResourceList) 
 	rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = headContainers
 }
 
-func addWorkerPodSpec(rayCluster *rayv1.RayCluster, resources corev1.ResourceList,
+func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
+	replicas int32, minReplicas int32, maxReplicas int32, resources corev1.ResourceList,
 ) {
 	workerContainers := []corev1.Container{
 		{
@@ -571,11 +573,11 @@ func addWorkerPodSpec(rayCluster *rayv1.RayCluster, resources corev1.ResourceLis
 		},
 	}
 
-	rayCluster.Spec.WorkerGroupSpecs = append(rayCluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
-		GroupName:   "worker-group-1",
-		Replicas:    &[]int32{1}[0],
-		MinReplicas: &[]int32{1}[0],
-		MaxReplicas: &[]int32{1}[0],
+	app.Spec.WorkerGroupSpecs = append(app.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+		GroupName:   workerGroupName,
+		Replicas:    &replicas,
+		MinReplicas: &minReplicas,
+		MaxReplicas: &maxReplicas,
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: workerContainers,

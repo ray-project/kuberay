@@ -1,8 +1,8 @@
 package e2erayjob
 
 import (
+	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -232,9 +232,24 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller will not do anything with the CR.
-		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 5*time.Second).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
+		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to ValidationFailed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
+	})
+
+	test.T().Run("RayJob name too long with 48 characters", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob(strings.Repeat("a", 48), namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Rayjob name is too long, so the RayJob controller should set status to ValidationFailed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
 	})
 
 	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
