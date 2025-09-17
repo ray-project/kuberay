@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"sync/atomic"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -19,7 +20,7 @@ type FakeRayDashboardClient struct {
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string) {
+func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ chan func(), _ *sync.Map) {
 }
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {
@@ -44,6 +45,9 @@ func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (
 		return (*mock)(ctx, jobId)
 	}
 	return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusRunning}, nil
+}
+
+func (r *FakeRayDashboardClient) AsyncGetJobInfo(_ context.Context, _ string) {
 }
 
 func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -29,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -40,11 +42,12 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-
+	Scheme              *runtime.Scheme
+	Recorder            record.EventRecorder
+	JobInfoMap          *sync.Map
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
+	workerPool          *dashboardclient.WorkerPool
 }
 
 type RayJobReconcilerOptions struct {
@@ -53,13 +56,18 @@ type RayJobReconcilerOptions struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	dashboardClientFunc := provider.GetDashboardClient(mgr)
+	taskQueue := make(chan func(), 1000)
+	JobInfoMap := &sync.Map{}
+	workerPool := dashboardclient.NewWorkerPool(taskQueue)
+	dashboardClientFunc := provider.GetDashboardClient(mgr, taskQueue, JobInfoMap)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
+		JobInfoMap:          JobInfoMap,
 		dashboardClientFunc: dashboardClientFunc,
 		options:             options,
+		workerPool:          workerPool,
 	}
 }
 
@@ -263,9 +271,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-
-		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-		if err != nil {
+		var jobInfo *utiltypes.RayJobInfo
+		if loadedJobInfo, ok := r.JobInfoMap.Load(rayJobInstance.Status.JobId); ok {
+			logger.Info("Found jobInfo in map", "JobId", rayJobInstance.Status.JobId, "jobInfo", loadedJobInfo)
+			jobInfo = loadedJobInfo.(*utiltypes.RayJobInfo)
+			logger.Info("Casted jobInfo", "JobId", rayJobInstance.Status.JobId, "jobInfo", jobInfo)
+		} else {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
 				logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
@@ -275,10 +286,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				}
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
-			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+			logger.Info("Job info not found in map", "JobId", rayJobInstance.Status.JobId)
+			rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
+		rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
+		if jobInfo == nil {
+			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
