@@ -578,6 +578,7 @@ func addWorkerPodSpec(app *rayv1.RayCluster, workerGroupName string,
 		Replicas:    &replicas,
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
+		NumOfHosts:  1,
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: workerContainers,
