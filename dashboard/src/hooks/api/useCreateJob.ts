@@ -52,7 +52,7 @@ async function _createJob(
   //       ]
   //     }
   //   }'
-  const url = `${config.url}/namespaces/${namespace}/jobs`;
+  const url = `${config.url}/namespaces/${namespace}/rayjobs`;
   const data = {
     name: jobName,
     namespace: "default",
@@ -138,7 +138,7 @@ export const useCreateJob = () => {
       // We don't want to use the result of creation to populate cache. Just
       // fetch from remote.
       await mutate(
-        `/namespaces/${namespace}/jobs`,
+        `/namespaces/${namespace}/rayjobs`,
         _createJob(namespace, jobName, dockerImage, entrypoint),
         { populateCache: false },
       );
