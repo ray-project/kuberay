@@ -71,13 +71,7 @@ func newTaskGroupsFromRayClusterSpec(rayClusterSpec *v1.RayClusterSpec) *TaskGro
 func newTaskGroupsFromRayJobSpec(rayJobSpec *v1.RayJobSpec) *TaskGroups {
 	taskGroups := newTaskGroupsFromRayClusterSpec(rayJobSpec.RayClusterSpec)
 
-	// submitter group
-	var submitterGroupSpec corev1.PodSpec
-	if rayJobSpec.SubmitterPodTemplate != nil {
-		submitterGroupSpec = rayJobSpec.SubmitterPodTemplate.Spec
-	} else {
-		submitterGroupSpec = common.GetDefaultSubmitterTemplate(rayJobSpec.RayClusterSpec).Spec
-	}
+	submitterGroupSpec := common.GetSubmitterTemplate(rayJobSpec, rayJobSpec.RayClusterSpec).Spec
 
 	submitterPodMinResource := utils.CalculatePodResource(submitterGroupSpec)
 	taskGroups.addTaskGroup(
