@@ -85,6 +85,20 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 		options := instance.Spec.GcsFaultToleranceOptions
 		container := &podTemplate.Spec.Containers[utils.RayContainerIndex]
 
+		// Configure lifecycle preStop hook for graceful shutdown when GCS FT is enabled
+		if rayNodeType == rayv1.HeadNode {
+			if container.Lifecycle == nil {
+				container.Lifecycle = &corev1.Lifecycle{}
+			}
+			if container.Lifecycle.PreStop == nil {
+				container.Lifecycle.PreStop = &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/bin/sh", "-c", "ray stop --force"},
+					},
+				}
+			}
+		}
+
 		// Configure the GCS RPC server reconnect timeout for GCS FT.
 		if !utils.EnvVarExists(utils.RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S, container.Env) && rayNodeType == rayv1.WorkerNode {
 			// If GCS FT is enabled and RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S is not set, set the worker's
