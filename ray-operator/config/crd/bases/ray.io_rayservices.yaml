@@ -4304,6 +4304,10 @@ spec:
                     type: string
                   suspend:
                     type: boolean
+                  ttlSeconds:
+                    default: 0
+                    format: int32
+                    type: integer
                   workerGroupSpecs:
                     items:
                       properties:
@@ -8366,6 +8370,10 @@ spec:
                           format: date-time
                           type: string
                         type: object
+                      ttlExpirationTime:
+                        format: date-time
+                        nullable: true
+                        type: string
                     type: object
                 type: object
               conditions:
@@ -8549,6 +8557,10 @@ spec:
                           format: date-time
                           type: string
                         type: object
+                      ttlExpirationTime:
+                        format: date-time
+                        nullable: true
+                        type: string
                     type: object
                 type: object
               serviceStatus:
