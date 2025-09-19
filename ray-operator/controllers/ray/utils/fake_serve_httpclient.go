@@ -12,9 +12,10 @@ import (
 )
 
 type FakeRayDashboardClient struct {
-	multiAppStatuses map[string]*utiltypes.ServeApplicationStatus
-	GetJobInfoMock   atomic.Pointer[func(context.Context, string) (*utiltypes.RayJobInfo, error)]
-	serveDetails     utiltypes.ServeDetails
+	multiAppStatuses  map[string]*utiltypes.ServeApplicationStatus
+	GetJobInfoMock    atomic.Pointer[func(context.Context, string) (*utiltypes.RayJobInfo, error)]
+	serveDetails      utiltypes.ServeDetails
+	LastUpdatedConfig []byte
 }
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
@@ -22,7 +23,8 @@ var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(ni
 func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string) {
 }
 
-func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {
+func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, configJson []byte) error {
+	r.LastUpdatedConfig = configJson
 	fmt.Print("UpdateDeployments fake succeeds.")
 	return nil
 }

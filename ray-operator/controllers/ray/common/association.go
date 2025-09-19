@@ -203,3 +203,31 @@ func RayClusterNetworkResourcesOptions(instance *rayv1.RayCluster) AssociationOp
 		},
 	}
 }
+
+func RayServiceGatewayNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	var gatewayName string
+	if rayService.Spec.Gateway != "" {
+		gatewayName = rayService.Spec.Gateway
+	} else {
+		gatewayName = fmt.Sprintf("%s-gateway", rayService.Name)
+	}
+	gatewayName = utils.CheckGatewayName(gatewayName)
+	return types.NamespacedName{
+		Name:      gatewayName,
+		Namespace: rayService.Namespace,
+	}
+}
+
+func RayServiceHTTPRouteNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	var httpRouteName string
+	if rayService.Spec.HTTPRoute != "" {
+		httpRouteName = rayService.Spec.HTTPRoute
+	} else {
+		httpRouteName = fmt.Sprintf("httproute-%s", rayService.Name)
+	}
+	httpRouteName = utils.CheckHTTPRouteName(httpRouteName)
+	return types.NamespacedName{
+		Name:      httpRouteName,
+		Namespace: rayService.Namespace,
+	}
+}
