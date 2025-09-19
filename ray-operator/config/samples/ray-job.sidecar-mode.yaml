@@ -7,7 +7,7 @@ spec:
   # This will avoid inter-Pod communication, which may cause network issues. For example, some users face WebSocket hangs.
   # For more details, see https://github.com/ray-project/kuberay/issues/3928#issuecomment-3187164736.
   submissionMode: "SidecarMode"
-  entrypoint: python -c "import time; [time.sleep(1) or print(i) for i in range(1000)]"
+  entrypoint: python /home/ray/samples/sample_code.py
   runtimeEnvYAML: |
     pip:
       - requests==2.26.0
