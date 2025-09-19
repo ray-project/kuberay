@@ -1045,7 +1045,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			shouldUpdate = true
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 			rayJob.Status.Reason = rayv1.AppFailed
-			rayJob.Status.Message = "Ray head pod not found."
+			rayJob.Status.Message = "Ray head pod is terminated, and sidecar mode's restart policy is never."
 			return
 		}
 
