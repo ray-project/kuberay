@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -641,7 +642,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetDashboardClient(mgr manager.Manager, taskQueue chan func(), jobInfoMap *sync.Map) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
@@ -758,7 +759,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, taskQueue chan func(), jobInfoMap *sync.Map) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		if useKubernetesProxy {
@@ -777,13 +778,15 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				// configured to communicate with the Kubernetes API server.
 				mgr.GetHTTPClient(),
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+				taskQueue,
+				jobInfoMap,
 			)
 			return dashboardClient, nil
 		}
 
 		dashboardClient.InitClient(&http.Client{
 			Timeout: 2 * time.Second,
-		}, "http://"+url)
+		}, "http://"+url, taskQueue, jobInfoMap)
 		return dashboardClient, nil
 	}
 }
