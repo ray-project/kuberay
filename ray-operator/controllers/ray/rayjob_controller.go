@@ -278,7 +278,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				}
 				if isSubmitterFinished {
 					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-					rayJobInstance.Status.Message = "Submitter is completed but the job is not found in the RayCluster"
+					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
 					break
 				}
 			}

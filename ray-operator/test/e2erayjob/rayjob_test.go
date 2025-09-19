@@ -278,7 +278,7 @@ env_vars:
 		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
-				WithEntrypoint("python -c \"import os, time; print(os.environ.get('HOSTNAME')); time.sleep(60)\"").
+				WithEntrypoint("python -c \"import time; time.sleep(60)\"").
 				WithShutdownAfterJobFinishes(true).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -306,8 +306,10 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				ContainSubstring("Submitter is completed but the job is not found in the RayCluster")))
+				ContainSubstring("Submitter completed but Ray job not found in RayCluster.")))
 
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
