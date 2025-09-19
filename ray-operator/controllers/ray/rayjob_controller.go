@@ -291,7 +291,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			isJobTerminal = isJobTerminal && isSubmitterFinished
 		}
 
-		if isJobTerminal {
+		if isJobTerminal || isSubmitterFinished {
 			jobDeploymentStatus = rayv1.JobDeploymentStatusComplete
 			if jobInfo.JobStatus == rayv1.JobStatusFailed {
 				jobDeploymentStatus = rayv1.JobDeploymentStatusFailed
