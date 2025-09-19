@@ -268,6 +268,14 @@ tests:
               operator: Exists
               effect: NoSchedule
 
+  - it: Should add priorityClassName if `priorityClassName` is set
+    set:
+      priorityClassName: high-priority
+    asserts:
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: high-priority
+
   - it: Should use custom reconcile concurrency when set
     set:
       reconcileConcurrency: 5
