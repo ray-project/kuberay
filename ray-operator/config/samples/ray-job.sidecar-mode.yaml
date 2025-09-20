@@ -76,6 +76,7 @@ data:
 
     ray.init()
 
+
     @ray.remote
     class Counter:
         def __init__(self):
