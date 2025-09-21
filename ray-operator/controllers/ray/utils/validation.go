@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	errstd "errors"
 	"fmt"
 
@@ -356,7 +355,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 		}
 	}
 
-	return errors.Join(errs...)
+	return errstd.Join(errs...)
 }
 
 // validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
@@ -393,7 +392,7 @@ func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, statu
 		hasPrev = true
 	}
 
-	return errors.Join(errs...)
+	return errstd.Join(errs...)
 }
 
 // validateLegacyDeletionPolicies handles validation for the old `onSuccess` and `onFailure` fields.
