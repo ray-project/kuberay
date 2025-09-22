@@ -279,6 +279,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
+		// if shouldUpdate := checkJobRunningTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+		// 	break
+		// }
+
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
@@ -462,6 +466,45 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, rayJobInstance.UID, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
+
+// func checkJobRunningTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *rayv1.RayJobStatusInfo) bool {
+// 	logger := ctrl.LoggerFrom(ctx)
+
+// 	if jobInfo.JobStatus != rayv1.JobStatusRunning {
+// 		return false
+// 	}
+
+// 	timeoutSeconds := int32(30)
+// 	if rayJob.Spec.JobRunningTimeoutSeconds != nil {
+// 		timeoutSeconds = *rayJob.Spec.JobRunningTimeoutSeconds
+// 	}
+
+// 	var jobStartTime time.Time
+// 	if jobInfo.StartTime != 0 {
+// 		jobStartTime = time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.StartTime))
+// 	} else if rayJob.Status.RayJobStatusInfo.StartTime != nil {
+// 		jobStartTime = rayJob.Status.RayJobStatusInfo.StartTime.Time
+// 	} else {
+// 		jobStartTime = rayJob.Status.StartTime.Time
+// 	}
+
+// 	timeoutTime := jobStartTime.Add(time.Duration(timeoutSeconds) * time.Second)
+
+// 	if time.Now().After(timeoutTime) {
+// 		logger.Info("JobRunningTimeout exceeded. Forcing JobDeploymentStatus to Failed.",
+// 			"JobStartTime", jobStartTime,
+// 			"TimeoutSeconds", timeoutSeconds,
+// 			"JobStatus", jobInfo.JobStatus)
+
+// 		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+// 		rayJob.Status.Reason = rayv1.JobRunningTimeoutExceeded
+// 		rayJob.Status.Message = fmt.Sprintf("JobRunningTimeout exceeded. JobStartTime: %v, TimeoutSeconds: %d, JobStatus: %s",
+// 			jobStartTime, timeoutSeconds, jobInfo.JobStatus)
+// 		return true
+// 	}
+
+// 	return false
+// }
 
 func validateRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (utils.K8sEventType, error) {
 	logger := ctrl.LoggerFrom(ctx)
