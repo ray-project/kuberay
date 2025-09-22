@@ -308,7 +308,7 @@ env_vars:
 			Should(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				ContainSubstring("Submitter completed but Ray job not found in RayCluster.")))
+				Equal("Submitter completed but Ray job not found in RayCluster.")))
 
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
