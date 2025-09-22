@@ -234,6 +234,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if shouldUpdate := checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
 		// before transitioning the status from `Initializing` to `Running`.
@@ -253,6 +257,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
+
+			// Record SubmitterFinishedTime when submitter first finishes
+			if isSubmitterFinished && rayJobInstance.Status.SubmitterFinishedTime == nil {
+				rayJobInstance.Status.SubmitterFinishedTime = &metav1.Time{Time: time.Now()}
+				logger.Info("Submitter has finished, recording SubmitterFinishedTime", "SubmitterFinishedTime", rayJobInstance.Status.SubmitterFinishedTime)
+			}
+
 			if shouldUpdate {
 				break
 			}
@@ -1125,6 +1136,37 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
+	return true
+}
+
+func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Check if timeout is configured and submitter has finished
+	if rayJob.Spec.SubmitterFinishedTimeoutSeconds == nil || rayJob.Status.SubmitterFinishedTime == nil {
+		return false
+	}
+
+	// Check if timeout has been exceeded
+	timeoutDuration := time.Duration(*rayJob.Spec.SubmitterFinishedTimeoutSeconds) * time.Second
+	if time.Now().Before(rayJob.Status.SubmitterFinishedTime.Add(timeoutDuration)) {
+		return false
+	}
+
+	logger.Info("The RayJob has passed the submitterFinishedTimeoutSeconds. Transition the status to terminal.",
+		"SubmitterFinishedTime", rayJob.Status.SubmitterFinishedTime,
+		"SubmitterFinishedTimeoutSeconds", *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
+
+	// Determine the appropriate terminal status based on current job status
+	if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded {
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
+	} else {
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	}
+
+	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
+	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished but job did not reach terminal state within timeout. SubmitterFinishedTime: %v. SubmitterFinishedTimeoutSeconds: %d",
+		rayJob.Status.SubmitterFinishedTime, *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
 	return true
 }
 
