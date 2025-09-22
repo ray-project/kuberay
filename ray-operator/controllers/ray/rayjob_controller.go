@@ -1040,7 +1040,6 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		}
 
 		if headPod == nil {
-			logger.Info("Ray head pod not found, skipping sidecar container status check")
 			// If head pod is deleted, mark the RayJob as failed
 			shouldUpdate = true
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed

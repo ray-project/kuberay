@@ -2,7 +2,6 @@ package e2erayjob
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -157,8 +156,8 @@ env_vars:
 		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
-	test.T().Run("RayJob fails when head Pod is deleted after submission", func(_ *testing.T) {
-		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
+	test.T().Run("RayJob fails when head Pod is deleted when job is running", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("delete-head-after-submit-sidecar-mode", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.SidecarMode).
 				WithRayClusterSpec(NewRayClusterSpec()).
@@ -169,13 +168,10 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// Wait until the RayJob transitions to Running (submitter created and job submitted)
+		// Wait until the RayJob's job status transitions to Running
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
-
-		// Wait for submitter container to submit job
-		time.Sleep(30 * time.Second)
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
 
 		// Fetch RayCluster and delete the head Pod
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
