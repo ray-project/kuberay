@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +20,7 @@ import (
 var (
 	// Multi-application URL paths
 	ServeDetailsPath = "/api/serve/applications/"
-	APITypeParam = "declarative"
+	APITypeParam     = "declarative"
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
@@ -89,7 +89,6 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 
 // GetServeDetails gets details on all declarative applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
-
 	serveDetailsURL, err := url.Parse(r.dashboardURL + ServeDetailsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse dashboard URL: %w", err)
@@ -99,7 +98,6 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.Se
 	serveDetailsURL.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", serveDetailsURL.String(), nil)
-
 	if err != nil {
 		return nil, err
 	}
