@@ -83,7 +83,7 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface
 	return factory, nil
 }
 
-func (batch *SchedulerManager) GetSchedulerForCluster() (schedulerinterface.BatchScheduler, error) {
+func (batch *SchedulerManager) GetScheduler() (schedulerinterface.BatchScheduler, error) {
 	return batch.scheduler, nil
 }
 
