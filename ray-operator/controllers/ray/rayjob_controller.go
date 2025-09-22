@@ -258,6 +258,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
+		// if shouldUpdate := checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+		// 	break
+		// }
+
 		// Check the current status of ray jobs
 		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
 		if err != nil {
@@ -278,10 +282,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-
-		// if shouldUpdate := checkJobRunningTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
-		// 	break
-		// }
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
@@ -467,7 +467,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 }
 
-// func checkJobRunningTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *rayv1.RayJobStatusInfo) bool {
+// func updateStatusIfNeededAfterSubmitterFinished(ctx context.Context, rayJob *rayv1.RayJob, jobInfo *rayv1.RayJobStatusInfo) bool {
 // 	logger := ctrl.LoggerFrom(ctx)
 
 // 	if jobInfo.JobStatus != rayv1.JobStatusRunning {
