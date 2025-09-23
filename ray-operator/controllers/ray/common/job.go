@@ -198,8 +198,11 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	return cmd, nil
 }
 
-// GetDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
+// GetSubmitterTemplate creates a default submitter template for the Ray job.
+func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
+	if rayJobSpec.SubmitterPodTemplate != nil {
+		return *rayJobSpec.SubmitterPodTemplate.DeepCopy()
+	}
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{

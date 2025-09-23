@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -48,7 +49,8 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsManager *metrics.RayJobMetricsManager
+	RayJobMetricsManager  *metrics.RayJobMetricsManager
+	BatchSchedulerManager *batchscheduler.SchedulerManager
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -135,29 +137,28 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 
-	if err := utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta); err != nil {
-		logger.Error(err, "The RayJob metadata is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobMetadata),
-			"The RayJob metadata is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if err := utils.ValidateRayJobSpec(rayJobInstance); err != nil {
-		logger.Error(err, "The RayJob spec is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobSpec),
-			"The RayJob spec is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
-	if err := utils.ValidateRayJobStatus(rayJobInstance); err != nil {
-		logger.Error(err, "The RayJob status is invalid")
-		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayJobStatus),
-			"The RayJob status is invalid %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-	}
-
 	// Please do NOT modify `originalRayJobInstance` in the following code.
 	originalRayJobInstance := rayJobInstance.DeepCopy()
+
+	// Perform all validations and directly fail the RayJob if any of the validation fails
+	errType, err := validateRayJob(ctx, rayJobInstance)
+	// Immediately update the status after validation
+	if err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(errType),
+			"%s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+
+		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusValidationFailed
+		rayJobInstance.Status.Reason = rayv1.ValidationFailed
+		rayJobInstance.Status.Message = err.Error()
+
+		// This is the only 2 places where we update the RayJob status. This will directly
+		// update the JobDeploymentStatus to ValidationFailed if there's validation error
+		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
+			logger.Info("Failed to update RayJob status", "error", err)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
+	}
 
 	logger.Info("RayJob", "JobStatus", rayJobInstance.Status.JobStatus, "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus, "SubmissionMode", rayJobInstance.Spec.SubmissionMode)
 	switch rayJobInstance.Status.JobDeploymentStatus {
@@ -181,6 +182,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
+		}
+
+		if r.options.BatchSchedulerManager != nil {
+			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+			} else {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
 		}
 
 		var rayClusterInstance *rayv1.RayCluster
@@ -454,7 +465,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
-	// This is the only place where we update the RayJob status. Please do NOT add any code
+	// This is the only 2 places where we update the RayJob status. Please do NOT add any code
 	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
@@ -462,6 +473,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	emitRayJobMetrics(r.options.RayJobMetricsManager, rayJobInstance.Name, rayJobInstance.Namespace, rayJobInstance.UID, originalRayJobInstance.Status, rayJobInstance.Status)
 	return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+}
+
+func validateRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (utils.K8sEventType, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	validationRules := []struct {
+		validate func() error
+		errType  utils.K8sEventType
+	}{
+		{func() error { return utils.ValidateRayJobMetadata(rayJobInstance.ObjectMeta) }, utils.InvalidRayJobMetadata},
+		{func() error { return utils.ValidateRayJobSpec(rayJobInstance) }, utils.InvalidRayJobSpec},
+		{func() error { return utils.ValidateRayJobStatus(rayJobInstance) }, utils.InvalidRayJobStatus},
+	}
+
+	for _, validation := range validationRules {
+		if err := validation.validate(); err != nil {
+			logger.Error(err, err.Error())
+			return validation.errType, err
+		}
+	}
+	return "", nil
 }
 
 func emitRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, rayJobName, rayJobNamespace string, rayJobUID types.UID, originalRayJobStatus, rayJobStatus rayv1.RayJobStatus) {
@@ -545,9 +576,16 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
-			submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
+			submitterTemplate, err := getSubmitterTemplate(rayJobInstance, rayClusterInstance)
 			if err != nil {
 				return err
+			}
+			if r.options.BatchSchedulerManager != nil {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, &submitterTemplate, utils.RayNodeSubmitterGroupLabelValue)
+				} else {
+					return err
+				}
 			}
 			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
@@ -559,18 +597,9 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
-	logger := ctrl.LoggerFrom(ctx)
-	var submitterTemplate corev1.PodTemplateSpec
-
+func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
-	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitterTemplate = common.GetDefaultSubmitterTemplate(&rayClusterInstance.Spec)
-		logger.Info("default submitter template is used")
-	} else {
-		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
-		logger.Info("user-provided submitter template is used; the first container is assumed to be the submitter")
-	}
+	submitterTemplate := common.GetSubmitterTemplate(&rayJobInstance.Spec, &rayClusterInstance.Spec)
 
 	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayv1.K8sJobMode); err != nil {
 		return corev1.PodTemplateSpec{}, err
@@ -907,6 +936,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
+			}
+			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					// Group name is only used for individual pods to specify their task group ("headgroup", "worker-group-1", etc.).
+					// RayCluster contains multiple groups, so we pass an empty string.
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, rayClusterInstance, "")
+				} else {
+					return nil, err
+				}
 			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
