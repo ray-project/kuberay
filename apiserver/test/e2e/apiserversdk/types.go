@@ -106,10 +106,14 @@ func withContext() contextOption {
 }
 
 func withBaseURL() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
 		baseURL := os.Getenv("E2E_API_SERVER_URL")
 		if strings.TrimSpace(baseURL) == "" {
-			baseURL = "http://localhost:8888"
+			// Default: use ProxyRoundTripper with Kubernetes API server URL
+			// The ProxyRoundTripper will route to the kuberay-apiserver service
+			kubernetesConfig, err := config.GetConfig()
+			require.NoError(t, err)
+			baseURL = kubernetesConfig.Host
 		}
 		testingContext.apiServerBaseURL = baseURL
 		return nil
@@ -192,8 +196,15 @@ func (e2etc *End2EndTestingContext) GetRayImage() string {
 }
 
 func withAPIServerClient() contextOption {
-	return func(_ *testing.T, testingContext *End2EndTestingContext) error {
-		testingContext.apiServerHttpClient = &http.Client{Timeout: time.Duration(10) * time.Second}
+	return func(t *testing.T, testingContext *End2EndTestingContext) error {
+		kubernetesConfig, err := config.GetConfig()
+		require.NoError(t, err)
+
+		rt, err := newProxyRoundTripper(kubernetesConfig)
+		require.NoError(t, err)
+		httpClient := &http.Client{Transport: rt, Timeout: time.Duration(10) * time.Second}
+
+		testingContext.apiServerHttpClient = httpClient
 
 		retryCfg := util.RetryConfig{
 			MaxRetry:       util.HTTPClientDefaultMaxRetry,
@@ -204,13 +215,6 @@ func withAPIServerClient() contextOption {
 		}
 
 		testingContext.kuberayAPIServerClient = kuberayHTTP.NewKuberayAPIServerClient(testingContext.apiServerBaseURL, testingContext.apiServerHttpClient, retryCfg)
-
-		remoteExecClient, err := newRemoteExecuteClient()
-		if err != nil {
-			return err
-		}
-
-		testingContext.kuberayAPIServerClient.SetExecuteHttpRequest(remoteExecClient.executeRequest)
 
 		return nil
 	}
