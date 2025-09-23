@@ -756,6 +756,7 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
+			return nil, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
 	}
