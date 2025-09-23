@@ -533,6 +533,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 		existingGateway.Spec = desiredGateway.Spec
 		if err := r.Update(ctx, existingGateway); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), "Failed to update the Gateway %s/%s: %v", existingGateway.Namespace, existingGateway.Name, err)
+			return nil, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedGateway), "Updated the Gateway %s/%s", existingGateway.Namespace, existingGateway.Name)
 	}
