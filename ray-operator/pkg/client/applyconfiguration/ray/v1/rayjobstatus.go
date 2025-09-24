@@ -10,20 +10,21 @@ import (
 // RayJobStatusApplyConfiguration represents a declarative configuration of the RayJobStatus type for use
 // with apply.
 type RayJobStatusApplyConfiguration struct {
-	RayJobStatusInfo    *RayJobStatusInfoApplyConfiguration `json:"rayJobInfo,omitempty"`
-	JobId               *string                             `json:"jobId,omitempty"`
-	RayClusterName      *string                             `json:"rayClusterName,omitempty"`
-	DashboardURL        *string                             `json:"dashboardURL,omitempty"`
-	JobStatus           *rayv1.JobStatus                    `json:"jobStatus,omitempty"`
-	JobDeploymentStatus *rayv1.JobDeploymentStatus          `json:"jobDeploymentStatus,omitempty"`
-	Reason              *rayv1.JobFailedReason              `json:"reason,omitempty"`
-	Message             *string                             `json:"message,omitempty"`
-	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
-	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
-	Succeeded           *int32                              `json:"succeeded,omitempty"`
-	Failed              *int32                              `json:"failed,omitempty"`
-	RayClusterStatus    *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
-	ObservedGeneration  *int64                              `json:"observedGeneration,omitempty"`
+	RayJobStatusInfo      *RayJobStatusInfoApplyConfiguration `json:"rayJobInfo,omitempty"`
+	JobId                 *string                             `json:"jobId,omitempty"`
+	RayClusterName        *string                             `json:"rayClusterName,omitempty"`
+	DashboardURL          *string                             `json:"dashboardURL,omitempty"`
+	JobStatus             *rayv1.JobStatus                    `json:"jobStatus,omitempty"`
+	JobDeploymentStatus   *rayv1.JobDeploymentStatus          `json:"jobDeploymentStatus,omitempty"`
+	Reason                *rayv1.JobFailedReason              `json:"reason,omitempty"`
+	Message               *string                             `json:"message,omitempty"`
+	StartTime             *metav1.Time                        `json:"startTime,omitempty"`
+	EndTime               *metav1.Time                        `json:"endTime,omitempty"`
+	Succeeded             *int32                              `json:"succeeded,omitempty"`
+	Failed                *int32                              `json:"failed,omitempty"`
+	RayClusterStatus      *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
+	ObservedGeneration    *int64                              `json:"observedGeneration,omitempty"`
+	SubmitterFinishedTime *metav1.Time                        `json:"submitterFinishedTime,omitempty"`
 }
 
 // RayJobStatusApplyConfiguration constructs a declarative configuration of the RayJobStatus type for use with
@@ -141,5 +142,13 @@ func (b *RayJobStatusApplyConfiguration) WithRayClusterStatus(value *RayClusterS
 // If called multiple times, the ObservedGeneration field is set to the value of the last call.
 func (b *RayJobStatusApplyConfiguration) WithObservedGeneration(value int64) *RayJobStatusApplyConfiguration {
 	b.ObservedGeneration = &value
+	return b
+}
+
+// WithSubmitterFinishedTime sets the SubmitterFinishedTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmitterFinishedTime field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithSubmitterFinishedTime(value metav1.Time) *RayJobStatusApplyConfiguration {
+	b.SubmitterFinishedTime = &value
 	return b
 }

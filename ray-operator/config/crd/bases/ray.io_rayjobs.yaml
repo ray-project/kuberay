@@ -8102,6 +8102,9 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              submitterFinishedTimeoutSeconds:
+                format: int32
+                type: integer
               submitterPodTemplate:
                 properties:
                   metadata:
@@ -11925,6 +11928,9 @@ spec:
               reason:
                 type: string
               startTime:
+                format: date-time
+                type: string
+              submitterFinishedTime:
                 format: date-time
                 type: string
               succeeded:
