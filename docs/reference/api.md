@@ -142,6 +142,25 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
 
 
+#### IncrementalUpgradeOptions
+
+
+
+
+
+
+
+_Appears in:_
+- [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
+| `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent. |  |  |
+| `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
+| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
+
+
 
 
 #### JobSubmissionMode
@@ -300,6 +319,8 @@ _Appears in:_
 | `serveService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics. |  |  |
 | `upgradeStrategy` _[RayServiceUpgradeStrategy](#rayserviceupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayService. |  |  |
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
+| `gateway` _string_ | Gateway is the name of the Gateway object for the RayService to serve traffics during an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled set the Gateway name. |  |  |
+| `httpRoute` _string_ | HTTPRoute is the name of the HTTPRoute object for the RayService to split traffics during an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set the HTTPRoute name. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
 
@@ -320,6 +341,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`. |  |  |
+| `incrementalUpgradeOptions` _[IncrementalUpgradeOptions](#incrementalupgradeoptions)_ | IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set IncrementalUpgradeOptions. |  |  |
 
 
 #### RayServiceUpgradeType

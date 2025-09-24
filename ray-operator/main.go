@@ -27,6 +27,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -190,6 +191,10 @@ func main() {
 		exitOnError(err, "Unable to set flag gates for known features")
 	}
 	features.LogFeatureGates(setupLog)
+
+	if features.Enabled(features.RayServiceIncrementalUpgrade) {
+		utilruntime.Must(gwv1.AddToScheme(scheme))
+	}
 
 	// Manager options
 	options := ctrl.Options{
