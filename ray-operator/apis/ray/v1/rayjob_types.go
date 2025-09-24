@@ -100,7 +100,11 @@ const (
 //     OR
 //     (b) the `deletionRules` field (which may be empty, in which case no deletion will occur).
 //   - `onSuccess` / `onFailure` must NOT be used together with `deletionRules`.
-//   - `onSuccess` and `onFailure` are **deprecated** and planned for removal in a future release.
+//   - `onSuccess` and `onFailure` are **deprecated** and planned for removal in release 1.6.0.
+//   - `deletionStrategy` is mutually exclusive with `spec.shutdownAfterJobFinishes`.
+//   - If both are set, the controller will report an error and stop processing the RayJob.
+//   - If the `RayJobDeletionPolicy` feature gate is disabled but `deletionStrategy` is set,
+//     the controller will report an error and stop processing the RayJob.
 //
 // Validation rules:
 //  1. Prevent mixing legacy and new fields
