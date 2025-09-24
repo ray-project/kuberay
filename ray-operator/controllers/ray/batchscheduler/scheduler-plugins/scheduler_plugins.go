@@ -93,32 +93,21 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, objec
 	return nil
 }
 
-// AddMetadataToPod adds essential labels and annotations to the child resource.
+// AddMetadataToPod adds essential labels and annotations to the Ray pod
 // the scheduler needs these labels and annotations in order to do the scheduling properly
-func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
-	// when gang scheduling is enabled, extra labels need to be added to all child resources
-	if k.isGangSchedulingEnabled(parent) {
-		labels := child.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[kubeSchedulerPodGroupLabelKey] = parent.GetName()
-		child.SetLabels(labels)
+func (k *KubeScheduler) AddMetadataToPod(_ context.Context, rayCluster *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+	// when gang scheduling is enabled, extra labels need to be added to all pods
+	if k.isGangSchedulingEnabled(rayCluster) {
+		pod.Labels[kubeSchedulerPodGroupLabelKey] = rayCluster.Name
 	}
-	addSchedulerNameToObject(child, k.Name())
+	pod.Spec.SchedulerName = k.Name()
 }
 
-func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
-	switch obj := obj.(type) {
-	case *corev1.Pod:
-		obj.Spec.SchedulerName = schedulerName
-	case *corev1.PodTemplateSpec:
-		obj.Spec.SchedulerName = schedulerName
-	}
+func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
 }
 
-func (k *KubeScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
-	_, exist := obj.GetLabels()[utils.RayGangSchedulingEnabled]
+func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
+	_, exist := app.Labels[utils.RayGangSchedulingEnabled]
 	return exist
 }
 

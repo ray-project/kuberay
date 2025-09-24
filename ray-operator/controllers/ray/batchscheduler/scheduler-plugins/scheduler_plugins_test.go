@@ -117,7 +117,7 @@ func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
 	a.Equal(int32(5), podGroup.Spec.MinMember)
 }
 
-func TestAddMetadataToChildResource(t *testing.T) {
+func TestAddMetadataToPod(t *testing.T) {
 	tests := []struct {
 		name         string
 		enableGang   bool
@@ -150,7 +150,7 @@ func TestAddMetadataToChildResource(t *testing.T) {
 			}
 
 			scheduler := &KubeScheduler{}
-			scheduler.AddMetadataToChildResource(context.TODO(), &cluster, pod, "worker")
+			scheduler.AddMetadataToPod(context.TODO(), &cluster, "worker", pod)
 
 			if tt.enableGang {
 				a.Equal(cluster.Name, pod.Labels[kubeSchedulerPodGroupLabelKey])

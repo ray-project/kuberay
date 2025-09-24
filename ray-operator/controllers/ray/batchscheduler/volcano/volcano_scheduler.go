@@ -213,6 +213,19 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
+// This function will be removed in interface migration PR
+func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
+	pod.Annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(app)
+	pod.Annotations[volcanobatchv1alpha1.TaskSpecKey] = groupName
+	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
+		pod.Labels[QueueNameLabelKey] = queue
+	}
+	if priorityClassName, ok := app.ObjectMeta.Labels[utils.RayPriorityClassName]; ok {
+		pod.Spec.PriorityClassName = priorityClassName
+	}
+	pod.Spec.SchedulerName = v.Name()
+}
+
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
 	if err := volcanoschedulingv1beta1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to add volcano to scheme with error %w", err)
