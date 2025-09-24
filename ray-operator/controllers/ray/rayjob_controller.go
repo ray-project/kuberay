@@ -33,8 +33,9 @@ import (
 )
 
 const (
-	RayJobDefaultRequeueDuration = 3 * time.Second
-	PythonUnbufferedEnvVarName   = "PYTHONUNBUFFERED"
+	RayJobDefaultRequeueDuration    = 3 * time.Second
+	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	DefaultSubmitterFinishedTimeout = 30 * time.Second
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -1157,13 +1158,7 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 		"SubmitterFinishedTime", rayJob.Status.SubmitterFinishedTime,
 		"SubmitterFinishedTimeoutSeconds", *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
 
-	// Determine the appropriate terminal status based on current job status
-	if rayJob.Status.JobStatus == rayv1.JobStatusSucceeded {
-		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusComplete
-	} else {
-		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-	}
-
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished but job did not reach terminal state within timeout. SubmitterFinishedTime: %v. SubmitterFinishedTimeoutSeconds: %d",
 		rayJob.Status.SubmitterFinishedTime, *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
