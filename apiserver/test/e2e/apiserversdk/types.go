@@ -107,15 +107,11 @@ func withContext() contextOption {
 
 func withBaseURL() contextOption {
 	return func(t *testing.T, testingContext *End2EndTestingContext) error {
-		baseURL := os.Getenv("E2E_API_SERVER_URL")
-		if strings.TrimSpace(baseURL) == "" {
-			// Default: use ProxyRoundTripper with Kubernetes API server URL
-			// The ProxyRoundTripper will route to the kuberay-apiserver service
-			kubernetesConfig, err := config.GetConfig()
-			require.NoError(t, err)
-			baseURL = kubernetesConfig.Host
-		}
-		testingContext.apiServerBaseURL = baseURL
+		// Use ProxyRoundTripper with Kubernetes API server URL. The
+		// ProxyRoundTripper will route to the kuberay-apiserver service
+		kubernetesConfig, err := config.GetConfig()
+		require.NoError(t, err)
+		testingContext.apiServerBaseURL = kubernetesConfig.Host
 		return nil
 	}
 }
