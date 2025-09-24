@@ -880,7 +880,7 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 	if err == nil {
 		// Only update the service if the RayCluster switches.
 		if newSvc.Spec.Selector[utils.RayClusterLabelKey] == oldSvc.Spec.Selector[utils.RayClusterLabelKey] {
-			logger.Info("Service has already exists in the RayCluster, skip Update", "rayCluster", newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", serviceType)
+			logger.Info("Service already exists in the RayCluster, skipping Update", "rayCluster", newSvc.Spec.Selector[utils.RayClusterLabelKey], "serviceType", serviceType)
 			return oldSvc, nil
 		}
 
