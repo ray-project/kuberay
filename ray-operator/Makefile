@@ -88,6 +88,14 @@ test-sampleyaml: WHAT ?= ./test/sampleyaml
 test-sampleyaml: manifests fmt vet
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-rayjob: WHAT ?= ./test/e2erayjob
+test-e2e-rayjob: manifests fmt vet ## Run e2e tests.
+	go test -timeout 30m -v $(WHAT)
+
+test-e2e-rayservice: WHAT ?= ./test/e2erayservice
+test-e2e-rayservice: manifests fmt vet ## Run e2e tests.
+	go test -timeout 30m -v $(WHAT)
+
 sync: helm api-docs
 	./hack/update-codegen.sh
 

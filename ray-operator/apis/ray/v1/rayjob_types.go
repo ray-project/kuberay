@@ -232,9 +232,10 @@ type RayJobSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
-	// DeletionStrategy indicates what resources of the RayJob and how they are deleted upon job completion.
-	// If unset, deletion policy is based on 'spec.shutdownAfterJobFinishes'.
-	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
+	// DeletionStrategy defines resource cleanup policies after job completion.
+	// Use either legacy fields (onSuccess/onFailure) OR deletionRules, not both.
+	// Mutually exclusive with spec.shutdownAfterJobFinishes.
+	// Requires RayJobDeletionPolicy feature gate to be enabled.
 	// +optional
 	DeletionStrategy *DeletionStrategy `json:"deletionStrategy,omitempty"`
 	// Entrypoint represents the command to start execution.
