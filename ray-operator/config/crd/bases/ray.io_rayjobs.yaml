@@ -8102,9 +8102,6 @@ spec:
                     format: int32
                     type: integer
                 type: object
-              submitterFinishedTimeoutSeconds:
-                format: int32
-                type: integer
               submitterPodTemplate:
                 properties:
                   metadata:

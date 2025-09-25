@@ -253,7 +253,6 @@ _Appears in:_
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
-| `submitterFinishedTimeoutSeconds` _integer_ | SubmitterFinishedTimeoutSeconds specifies the timeout in seconds after the submitter finishes<br />before the RayJob is marked as failed if it hasn't reached a terminal state.<br />If not specified, a default timeout is used. |  |  |
 
 
 

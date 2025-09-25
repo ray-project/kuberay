@@ -1144,24 +1144,23 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Check if timeout is configured and submitter has finished
-	if rayJob.Spec.SubmitterFinishedTimeoutSeconds == nil || rayJob.Status.SubmitterFinishedTime == nil {
+	if rayJob.Status.SubmitterFinishedTime == nil {
 		return false
 	}
 
 	// Check if timeout has been exceeded
-	timeoutDuration := time.Duration(*rayJob.Spec.SubmitterFinishedTimeoutSeconds) * time.Second
-	if time.Now().Before(rayJob.Status.SubmitterFinishedTime.Add(timeoutDuration)) {
+	if time.Now().Before(rayJob.Status.SubmitterFinishedTime.Add(DefaultSubmitterFinishedTimeout)) {
 		return false
 	}
 
 	logger.Info("The RayJob has passed the submitterFinishedTimeoutSeconds. Transition the status to terminal.",
 		"SubmitterFinishedTime", rayJob.Status.SubmitterFinishedTime,
-		"SubmitterFinishedTimeoutSeconds", *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
+		"SubmitterFinishedTimeoutSeconds", DefaultSubmitterFinishedTimeout.Seconds())
 
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
-	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished but job did not reach terminal state within timeout. SubmitterFinishedTime: %v. SubmitterFinishedTimeoutSeconds: %d",
-		rayJob.Status.SubmitterFinishedTime, *rayJob.Spec.SubmitterFinishedTimeoutSeconds)
+	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished but job did not reach terminal state within timeout. SubmitterFinishedTime: %v. SubmitterFinishedTimeoutSeconds: %v",
+		rayJob.Status.SubmitterFinishedTime, DefaultSubmitterFinishedTimeout)
 	return true
 }
 

@@ -10,26 +10,25 @@ import (
 // RayJobSpecApplyConfiguration represents a declarative configuration of the RayJobSpec type for use
 // with apply.
 type RayJobSpecApplyConfiguration struct {
-	ActiveDeadlineSeconds           *int32                                    `json:"activeDeadlineSeconds,omitempty"`
-	BackoffLimit                    *int32                                    `json:"backoffLimit,omitempty"`
-	RayClusterSpec                  *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
-	SubmitterPodTemplate            *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
-	Metadata                        map[string]string                         `json:"metadata,omitempty"`
-	ClusterSelector                 map[string]string                         `json:"clusterSelector,omitempty"`
-	SubmitterConfig                 *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
-	ManagedBy                       *string                                   `json:"managedBy,omitempty"`
-	DeletionStrategy                *DeletionStrategyApplyConfiguration       `json:"deletionStrategy,omitempty"`
-	Entrypoint                      *string                                   `json:"entrypoint,omitempty"`
-	RuntimeEnvYAML                  *string                                   `json:"runtimeEnvYAML,omitempty"`
-	JobId                           *string                                   `json:"jobId,omitempty"`
-	SubmissionMode                  *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
-	EntrypointResources             *string                                   `json:"entrypointResources,omitempty"`
-	EntrypointNumCpus               *float32                                  `json:"entrypointNumCpus,omitempty"`
-	EntrypointNumGpus               *float32                                  `json:"entrypointNumGpus,omitempty"`
-	TTLSecondsAfterFinished         *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
-	ShutdownAfterJobFinishes        *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
-	Suspend                         *bool                                     `json:"suspend,omitempty"`
-	SubmitterFinishedTimeoutSeconds *int32                                    `json:"submitterFinishedTimeoutSeconds,omitempty"`
+	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
+	BackoffLimit             *int32                                    `json:"backoffLimit,omitempty"`
+	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
+	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	Metadata                 map[string]string                         `json:"metadata,omitempty"`
+	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
+	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
+	ManagedBy                *string                                   `json:"managedBy,omitempty"`
+	DeletionStrategy         *DeletionStrategyApplyConfiguration       `json:"deletionStrategy,omitempty"`
+	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
+	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
+	JobId                    *string                                   `json:"jobId,omitempty"`
+	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
+	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
+	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
+	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
+	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
+	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
+	Suspend                  *bool                                     `json:"suspend,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs a declarative configuration of the RayJobSpec type for use with
@@ -199,13 +198,5 @@ func (b *RayJobSpecApplyConfiguration) WithShutdownAfterJobFinishes(value bool) 
 // If called multiple times, the Suspend field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithSuspend(value bool) *RayJobSpecApplyConfiguration {
 	b.Suspend = &value
-	return b
-}
-
-// WithSubmitterFinishedTimeoutSeconds sets the SubmitterFinishedTimeoutSeconds field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SubmitterFinishedTimeoutSeconds field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithSubmitterFinishedTimeoutSeconds(value int32) *RayJobSpecApplyConfiguration {
-	b.SubmitterFinishedTimeoutSeconds = &value
 	return b
 }

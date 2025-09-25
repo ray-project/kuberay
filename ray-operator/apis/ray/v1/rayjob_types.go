@@ -163,11 +163,6 @@ type RayJobSpec struct {
 	// This field requires the RayJobDeletionPolicy feature gate to be enabled.
 	// +optional
 	DeletionStrategy *DeletionStrategy `json:"deletionStrategy,omitempty"`
-	// SubmitterFinishedTimeoutSeconds specifies the timeout in seconds after the submitter finishes
-	// before the RayJob is marked as failed if it hasn't reached a terminal state.
-	// If not specified, a default timeout is used.
-	// +optional
-	SubmitterFinishedTimeoutSeconds *int32 `json:"submitterFinishedTimeoutSeconds,omitempty"`
 	// Entrypoint represents the command to start execution.
 	// +optional
 	Entrypoint string `json:"entrypoint,omitempty"`
