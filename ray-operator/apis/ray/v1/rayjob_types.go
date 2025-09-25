@@ -232,9 +232,6 @@ type RayJobStatus struct {
 	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
-	// SubmitterFinishedTime records the time when the job submitter process finished.
-	// +optional
-	SubmitterFinishedTime *metav1.Time `json:"submitterFinishedTime,omitempty"`
 	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
 	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
 	// or the submitter Job has failed.
@@ -251,6 +248,7 @@ type RayJobStatus struct {
 	// RayClusterStatus is the status of the RayCluster running the job.
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
+
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	// +optional

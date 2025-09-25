@@ -11927,9 +11927,6 @@ spec:
               startTime:
                 format: date-time
                 type: string
-              submitterFinishedTime:
-                format: date-time
-                type: string
               succeeded:
                 default: 0
                 format: int32
