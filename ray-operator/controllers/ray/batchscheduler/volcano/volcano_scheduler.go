@@ -20,6 +20,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -65,17 +66,25 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 }
 
 // handleRayJob calculates the PodGroup MinMember and MinResources for a RayJob
-// The submitter pod is intentionally excluded from MinMember calculation.
-// Including it before the RayCluster is ready may prevent the PodGroup from
-// ever meeting the MinMember requirement, leaving all pods stuck in Pending.
 func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.RayClusterSpec == nil {
 		return fmt.Errorf("gang scheduling does not support RayJob %s/%s referencing an existing RayCluster", rayJob.Namespace, rayJob.Name)
 	}
 
+	totalResourceList := []corev1.ResourceList{{}}
 	minMember, totalResource := v.calculatePodGroupParams(ctx, rayJob.Spec.RayClusterSpec)
+	totalResourceList = append(totalResourceList, totalResource)
 
-	return v.syncPodGroup(ctx, rayJob, minMember, totalResource)
+	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
+	// (submitter waits for cluster; gang would wait for submitter). We still add the
+	// submitter's resource requests into MinResources so capacity is reserved.
+	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode {
+		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
+		submitResource := utils.CalculatePodResource(submitterTemplate.Spec)
+		totalResourceList = append(totalResourceList, submitResource)
+	}
+
+	return v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
 }
 
 func getAppPodGroupName(object metav1.Object) string {
@@ -195,7 +204,6 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 		},
 	}
 
-	// Copy scheduling labels to PodGroup spec
 	if queue, ok := owner.GetLabels()[QueueNameLabelKey]; ok {
 		podGroup.Spec.Queue = queue
 	}

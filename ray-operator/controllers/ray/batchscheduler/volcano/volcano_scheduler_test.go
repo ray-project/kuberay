@@ -5,10 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	volcanobatchv1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
 	volcanoschedulingv1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
@@ -124,7 +128,7 @@ func createTestRayJob(numOfHosts int32) rayv1.RayJob {
 			Namespace: "default",
 			Labels: map[string]string{
 				QueueNameLabelKey:          "test-queue",
-				utils.RayPriorityClassName: "high-priority",
+				utils.RayPriorityClassName: "test-priority",
 			},
 		},
 		Spec: rayv1.RayJobSpec{
@@ -204,32 +208,120 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 func TestCreatePodGroupForRayJob(t *testing.T) {
 	a := assert.New(t)
+	ctx := context.Background()
 
-	rayJob := createTestRayJob(1)
+	scheme := runtime.NewScheme()
+	a.NoError(rayv1.AddToScheme(scheme))
+	a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+	fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+	scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
-	// Create RayCluster from RayJob spec for calculation
-	rayCluster := &rayv1.RayCluster{
-		Spec: *rayJob.Spec.RayClusterSpec,
-	}
+	t.Run("No submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Spec.SubmissionMode = rayv1.HTTPMode
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), rayCluster) + 1
-	totalResource := utils.CalculateDesiredResources(rayCluster)
-	pg := createPodGroup(&rayJob, getAppPodGroupName(&rayJob), minMember, totalResource)
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
 
-	a.Equal(rayJob.Namespace, pg.Namespace)
-	a.Equal("ray-rayjob-sample-pg", pg.Name)
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
 
-	// Verify owner reference is set to RayJob
-	a.Len(pg.OwnerReferences, 1)
-	a.Equal("RayJob", pg.OwnerReferences[0].Kind)
-	a.Equal(rayJob.Name, pg.OwnerReferences[0].Name)
+		// 1 head + 2 workers (desired, not min replicas)
+		a.Equal(int32(3), pg.Spec.MinMember)
+		// 256m * 3 (requests, not limits)
+		a.Equal("768m", pg.Spec.MinResources.Cpu().String())
+		// 256m * 3 (requests, not limits)
+		a.Equal("768Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
 
-	// Verify queue and priority class are set from RayJob labels
-	a.Equal("test-queue", pg.Spec.Queue)
-	a.Equal("high-priority", pg.Spec.PriorityClassName)
+	t.Run("K8sJobMode includes submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Spec.SubmissionMode = rayv1.K8sJobMode
 
-	// 1 head + 2 workers (desired, not min replicas)
-	a.Equal(int32(3), pg.Spec.MinMember)
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		// 1 head + 2 workers (desired, not min replicas)
+		a.Equal(int32(3), pg.Spec.MinMember)
+		// 768m + 500m = 1268m
+		a.Equal("1268m", pg.Spec.MinResources.Cpu().String())
+		// 768Mi + 200Mi = 968Mi
+		a.Equal("968Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
+}
+
+func TestCreatePodGroupForRayJob_NumOfHosts2(t *testing.T) {
+	a := assert.New(t)
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	a.NoError(rayv1.AddToScheme(scheme))
+	a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+	fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+	scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+	t.Run("No submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(2)
+		rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		// 2 workers (desired, not min replicas) * 2 (num of hosts) + 1 head
+		// 2 * 2 + 1 = 5
+		a.Equal(int32(5), pg.Spec.MinMember)
+		// 256m * (2 (requests, not limits) * 2 (num of hosts) + 1 head)
+		// 256m * 5 = 1280m
+		a.Equal("1280m", pg.Spec.MinResources.Cpu().String())
+		// 256Mi * (2 (requests, not limits) * 2 (num of hosts) + 1 head)
+		// 256Mi * 5 = 1280Mi
+		a.Equal("1280Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
+
+	t.Run("K8sJobMode includes submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(2)
+		rayJob.Spec.SubmissionMode = rayv1.K8sJobMode
+
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		// 2 workers (desired, not min replicas) * 2 (num of hosts) + 1 head
+		// 2 * 2 + 1 = 5
+		a.Equal(int32(5), pg.Spec.MinMember)
+		// 1280m + 500m = 1780m
+		a.Equal("1780m", pg.Spec.MinResources.Cpu().String())
+		// 1280Mi + 200Mi = 1480Mi
+		a.Equal("1480Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
 }
 
 func TestAddMetadataToSubmitterPod(t *testing.T) {
@@ -253,7 +345,7 @@ func TestAddMetadataToSubmitterPod(t *testing.T) {
 
 	// Check labels
 	a.Equal("test-queue", submitterTemplate.Labels[QueueNameLabelKey])
-	a.Equal("high-priority", submitterTemplate.Labels[utils.RayPriorityClassName])
+	a.Equal("test-priority", submitterTemplate.Labels[utils.RayPriorityClassName])
 
 	// Check scheduler name
 	a.Equal(pluginName, submitterTemplate.Spec.SchedulerName)
