@@ -123,21 +123,23 @@ export const ClustersTable = () => {
               />
             </IconButton>
           )}
-          <IconButton
-            variant="plain"
-            size="sm"
-            sx={{
-              minHeight: "1rem",
-              minWidth: "1rem",
-              px: 0.5,
-            }}
-            title="Grafana Metrics"
-            href={row.links.rayGrafanaDashboardLink}
-            target="_blank"
-            component="a"
-          >
-            <Image priority src={GrafanaIcon} alt="Grafana Metrics" />
-          </IconButton>
+          {row.links.rayGrafanaDashboardLink && (
+            <IconButton
+              variant="plain"
+              size="sm"
+              sx={{
+                minHeight: "1rem",
+                minWidth: "1rem",
+                px: 0.5,
+              }}
+              title="Grafana Metrics"
+              href={row.links.rayGrafanaDashboardLink}
+              target="_blank"
+              component="a"
+            >
+              <Image priority src={GrafanaIcon} alt="Grafana Metrics" />
+            </IconButton>
+          )}
         </td>
       </>
     );
