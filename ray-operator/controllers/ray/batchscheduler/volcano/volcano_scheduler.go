@@ -71,7 +71,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 		return fmt.Errorf("gang scheduling does not support RayJob %s/%s referencing an existing RayCluster", rayJob.Namespace, rayJob.Name)
 	}
 
-	totalResourceList := []corev1.ResourceList{{}}
+	var totalResourceList []corev1.ResourceList
 	minMember, totalResource := v.calculatePodGroupParams(ctx, rayJob.Spec.RayClusterSpec)
 	totalResourceList = append(totalResourceList, totalResource)
 
