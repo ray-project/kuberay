@@ -223,7 +223,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 		// Test 400 Bad Request (might happen with older Ray versions)
 		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				return httpmock.NewStringResponse(400, "Bad Request: unknown parameter api_type"), nil
 			})
 
@@ -238,7 +238,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		defer httpmock.DeactivateAndReset()
 
 		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				return httpmock.NewStringResponse(500, "Internal Server Error"), nil
 			})
 
@@ -252,7 +252,7 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		defer httpmock.DeactivateAndReset()
 
 		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
-			func(req *http.Request) (*http.Response, error) {
+			func(_ *http.Request) (*http.Response, error) {
 				return httpmock.NewStringResponse(200, "invalid json response"), nil
 			})
 
