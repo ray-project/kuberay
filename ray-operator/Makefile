@@ -143,6 +143,15 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply --server-side=true -f -
 
+# NOTE FOR CONTRIBUTORS:
+# deploy-with-override is an e2e/CI-only deployment path. It applies a Kustomize overlay that
+# enables test-only feature gates (e.g. RayJobDeletionPolicy) without changing the default
+# behavior of the base Helm chart or the standard 'make deploy'. Add additional test overrides
+# to the overlay (config/overlays/rayjob-deletion-policy) rather than modifying the base.
+deploy-with-override: manifests kustomize ## Deploy controller with test-only feature gate overrides (does NOT affect default chart).
+	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	$(KUSTOMIZE) build config/overlays/test-overrides | kubectl apply --server-side=true -f -
+
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
