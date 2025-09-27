@@ -456,13 +456,13 @@ env_vars:
 env_vars:
   counter_name: test_counter
 `).
-				WithShutdownAfterJobFinishes(false).
+				WithShutdownAfterJobFinishes(true).
 				WithTTLSecondsAfterFinished(10). // Legacy TTL for backward compatibility
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithOnSuccess(rayv1ac.DeletionPolicy().
 						WithPolicy(rayv1.DeleteCluster)).
 					WithOnFailure(rayv1ac.DeletionPolicy().
-						WithPolicy(rayv1.DeleteNone))).
+						WithPolicy(rayv1.DeleteCluster))).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
@@ -500,58 +500,5 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Eventually(func() error { _, err := GetRayJob(test, job.Namespace, job.Name); return err }, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 		LogWithTimestamp(test.T(), "Cleanup after legacy success scenario complete")
-	})
-
-	test.T().Run("Legacy OnFailure DeleteNone should still work", func(_ *testing.T) {
-		rayJobAC := rayv1ac.RayJob("legacy-failure-test", namespace.Name).
-			WithSpec(rayv1ac.RayJobSpec().
-				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
-				WithEntrypoint("python /home/ray/jobs/fail.py"). // Use failing script
-				WithShutdownAfterJobFinishes(false).
-				WithTTLSecondsAfterFinished(10).
-				WithDeletionStrategy(rayv1ac.DeletionStrategy().
-					WithOnSuccess(rayv1ac.DeletionPolicy().
-						WithPolicy(rayv1.DeleteCluster)).
-					WithOnFailure(rayv1ac.DeletionPolicy().
-						WithPolicy(rayv1.DeleteNone))).
-				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
-
-		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
-		g.Expect(err).NotTo(HaveOccurred())
-		LogWithTimestamp(test.T(), "Created legacy failure RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
-
-		// Wait for job to fail
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
-		LogWithTimestamp(test.T(), "RayJob %s/%s failed as expected", rayJob.Namespace, rayJob.Name)
-
-		// Get the associated RayCluster name
-		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		rayClusterName := rayJob.Status.RayClusterName
-		g.Expect(rayClusterName).NotTo(BeEmpty())
-
-		// Wait past the TTL and verify everything is preserved due to OnFailure=DeleteNone
-		LogWithTimestamp(test.T(), "Waiting past TTL to verify resources preserved by OnFailure=DeleteNone...")
-		g.Consistently(func(gg Gomega) {
-			jobObj, err := GetRayJob(test, rayJob.Namespace, rayJob.Name)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(jobObj).NotTo(BeNil())
-			cluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(cluster).NotTo(BeNil())
-		}, 15*time.Second, 2*time.Second).Should(Succeed())
-		LogWithTimestamp(test.T(), "Legacy OnFailure=DeleteNone policy working correctly")
-
-		// Cleanup: delete legacy failure RayJob (will also GC cluster)
-		LogWithTimestamp(test.T(), "Cleaning up legacy failure RayJob %s/%s", rayJob.Namespace, rayJob.Name)
-		err = test.Client().Ray().RayV1().RayJobs(rayJob.Namespace).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Eventually(func() error { _, err := GetRayJob(test, rayJob.Namespace, rayJob.Name); return err }, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
-		g.Eventually(func() error {
-			_, err := GetRayCluster(test, namespace.Name, rayClusterName)
-			return err
-		}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
-		LogWithTimestamp(test.T(), "Cleanup after legacy failure scenario complete")
 	})
 }

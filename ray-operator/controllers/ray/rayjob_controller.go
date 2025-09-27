@@ -373,7 +373,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if features.Enabled(features.RayJobDeletionPolicy) && rayJobInstance.Spec.DeletionStrategy != nil {
 			// The previous validation logic ensures that either DeletionRules or the legacy policies are set, but not both.
-			if len(rayJobInstance.Spec.DeletionStrategy.DeletionRules) > 0 {
+			if rayJobInstance.Spec.DeletionStrategy.DeletionRules != nil {
 				return r.handleDeletionRules(ctx, rayJobInstance)
 			}
 			return r.handleLegacyDeletionPolicy(ctx, rayJobInstance)

@@ -266,87 +266,45 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 
 // validateDeletionConfiguration validates both deletion strategy and TTL configuration
 func validateDeletionConfiguration(rayJob *rayv1.RayJob) error {
-	// Get deletion mode flags
-	usingShutdownAfterJobFinishes := rayJob.Spec.ShutdownAfterJobFinishes
-	usingDeletionRules := rayJob.Spec.DeletionStrategy != nil && len(rayJob.Spec.DeletionStrategy.DeletionRules) > 0
-	usingLegacyAPI := rayJob.Spec.DeletionStrategy != nil &&
-		(rayJob.Spec.DeletionStrategy.OnSuccess != nil || rayJob.Spec.DeletionStrategy.OnFailure != nil)
-
-	// Validate feature gate requirements
-	if (usingDeletionRules || usingLegacyAPI) && !features.Enabled(features.RayJobDeletionPolicy) {
-		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature")
+	if !rayJob.Spec.ShutdownAfterJobFinishes && rayJob.Spec.TTLSecondsAfterFinished > 0 {
+		return fmt.Errorf("The RayJob spec is invalid: a RayJob with shutdownAfterJobFinishes set to false cannot have TTLSecondsAfterFinished")
 	}
 
-	// Validate mutual exclusivity
-	if err := validateDeletionMutualExclusivity(usingShutdownAfterJobFinishes, usingDeletionRules, usingLegacyAPI); err != nil {
-		return err
+	// No strategy block: nothing else to validate.
+	if rayJob.Spec.DeletionStrategy == nil {
+		return nil
 	}
 
-	// Validate TTL requirements
-	if rayJob.Spec.TTLSecondsAfterFinished > 0 {
-		if err := validateTTLRequirements(usingShutdownAfterJobFinishes, usingDeletionRules, usingLegacyAPI); err != nil {
+	// Feature gate must be enabled for any strategy usage.
+	if !features.Enabled(features.RayJobDeletionPolicy) {
+		return fmt.Errorf("RayJobDeletionPolicy feature gate must be enabled to use DeletionStrategy")
+	}
+
+	legacyConfigured := rayJob.Spec.DeletionStrategy.OnSuccess != nil || rayJob.Spec.DeletionStrategy.OnFailure != nil
+	rulesConfigured := rayJob.Spec.DeletionStrategy.DeletionRules != nil // explicit empty slice counts as rules mode
+
+	// Mutual exclusivity: rules mode forbids shutdown & legacy. (TTL+rules is implicitly invalid because TTL requires shutdown.)
+	if rulesConfigured && rayJob.Spec.ShutdownAfterJobFinishes {
+		return fmt.Errorf("The RayJob spec is invalid: spec.shutdownAfterJobFinishes and spec.deletionStrategy.deletionRules are mutually exclusive")
+	}
+	if rulesConfigured && legacyConfigured {
+		return fmt.Errorf("The RayJob spec is invalid: Cannot use both legacy onSuccess/onFailure fields and deletionRules simultaneously")
+	}
+
+	// Detailed content validation
+	if legacyConfigured {
+		if err := validateLegacyDeletionPolicies(rayJob); err != nil {
 			return err
 		}
-	}
-
-	// Validate deletion strategy configuration
-	if rayJob.Spec.DeletionStrategy != nil && !usingDeletionRules && !usingLegacyAPI {
-		return fmt.Errorf("deletionStrategy is specified, but no policies are defined")
-	}
-
-	// Validate specific deletion modes
-	if usingDeletionRules {
-		return validateDeletionRules(rayJob)
-	}
-	if usingLegacyAPI {
-		return validateLegacyDeletionPolicies(rayJob)
+	} else if rulesConfigured {
+		if err := validateDeletionRules(rayJob); err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("The RayJob spec is invalid: DeletionStrategy requires either BOTH onSuccess and onFailure, OR the deletionRules field (which may be empty list)")
 	}
 
 	return nil
-}
-
-// validateDeletionMutualExclusivity ensures only one deletion approach is used
-func validateDeletionMutualExclusivity(usingShutdownAfterJobFinishes, usingDeletionRules, usingLegacyAPI bool) error {
-	activeCount := 0
-	var activeModes []string
-
-	if usingShutdownAfterJobFinishes {
-		activeCount++
-		activeModes = append(activeModes, "spec.shutdownAfterJobFinishes=true")
-	}
-	if usingDeletionRules {
-		activeCount++
-		activeModes = append(activeModes, "spec.deletionStrategy.deletionRules")
-	}
-	if usingLegacyAPI {
-		activeCount++
-		activeModes = append(activeModes, "spec.deletionStrategy.onSuccess/onFailure")
-	}
-
-	if activeCount > 1 {
-		return fmt.Errorf("multiple deletion approaches are configured simultaneously: %v. Please use only one deletion strategy", activeModes)
-	}
-
-	return nil
-}
-
-// validateTTLRequirements ensures TTL is only used with valid cleanup mechanisms
-func validateTTLRequirements(usingShutdownAfterJobFinishes, usingDeletionRules, usingLegacyAPI bool) error {
-	// ShutdownAfterJobFinishes is always a valid cleanup mechanism
-	if usingShutdownAfterJobFinishes {
-		return nil
-	}
-
-	// Deletion strategy provides cleanup, but only if feature gate is enabled
-	if features.Enabled(features.RayJobDeletionPolicy) && (usingDeletionRules || usingLegacyAPI) {
-		return nil
-	}
-
-	// No valid cleanup mechanism found
-	if features.Enabled(features.RayJobDeletionPolicy) {
-		return fmt.Errorf("The RayJob spec is invalid: TTLSecondsAfterFinished requires either ShutdownAfterJobFinishes=true or a configured deletion strategy")
-	}
-	return fmt.Errorf("The RayJob spec is invalid: a RayJob with shutdownAfterJobFinishes set to false cannot have TTLSecondsAfterFinished")
 }
 
 // validateDeletionRules validates the deletion rules in the RayJob spec.
@@ -474,6 +432,10 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 	if (*onSuccessPolicy.Policy == rayv1.DeleteWorkers || *onFailurePolicy.Policy == rayv1.DeleteWorkers) && IsAutoscalingEnabled(rayJob.Spec.RayClusterSpec) {
 		// TODO (rueian): This can be supported in a future Ray version. We should check the RayVersion once we know it.
 		return fmt.Errorf("DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled")
+	}
+
+	if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
+		return fmt.Errorf("The RayJob spec is invalid: shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
 	}
 
 	return nil

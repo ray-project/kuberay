@@ -1159,12 +1159,22 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "empty DeletionStrategy",
+			name: "nil DeletionStrategy",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{},
 				RayClusterSpec:   createBasicRayClusterSpec(),
 			},
 			expectError: true,
+		},
+		{
+			name: "empty DeletionStrategy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
 		},
 		{
 			name: "duplicate rule in deletionRules",
