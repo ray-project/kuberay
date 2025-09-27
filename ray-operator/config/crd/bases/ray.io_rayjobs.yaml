@@ -89,6 +89,7 @@ spec:
                       - condition
                       - policy
                       type: object
+                    minItems: 1
                     type: array
                     x-kubernetes-list-type: atomic
                   onFailure:
@@ -118,8 +119,7 @@ spec:
                   rule: '!((has(self.onSuccess) || has(self.onFailure)) && has(self.deletionRules))'
                 - message: deletionStrategy requires either BOTH onSuccess and onFailure,
                     OR the deletionRules field (cannot be empty)
-                  rule: ((has(self.onSuccess) && has(self.onFailure)) || (has(self.deletionRules)
-                    && size(self.deletionRules) > 0))
+                  rule: ((has(self.onSuccess) && has(self.onFailure)) || has(self.deletionRules))
               entrypoint:
                 type: string
               entrypointNumCpus:

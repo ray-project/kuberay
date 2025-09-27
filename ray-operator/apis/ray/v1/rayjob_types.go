@@ -101,11 +101,11 @@ const (
 //
 // Validation:
 //   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
-//   - Webhook/controller logic enforces rules vs shutdown exclusivity and TTL constraints.
+//   - Controller logic enforces rules vs shutdown exclusivity and TTL constraints.
 //   - onSuccess/onFailure are deprecated; migration to deletionRules is encouraged.
 //
 // +kubebuilder:validation:XValidation:rule="!((has(self.onSuccess) || has(self.onFailure)) && has(self.deletionRules))",message="legacy policies (onSuccess/onFailure) and deletionRules cannot be used together within the same deletionStrategy"
-// +kubebuilder:validation:XValidation:rule="((has(self.onSuccess) && has(self.onFailure)) || (has(self.deletionRules) && size(self.deletionRules) > 0))",message="deletionStrategy requires either BOTH onSuccess and onFailure, OR the deletionRules field (cannot be empty)"
+// +kubebuilder:validation:XValidation:rule="((has(self.onSuccess) && has(self.onFailure)) || has(self.deletionRules))",message="deletionStrategy requires either BOTH onSuccess and onFailure, OR the deletionRules field (cannot be empty)"
 type DeletionStrategy struct {
 	// OnSuccess is the deletion policy for a successful RayJob.
 	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
@@ -121,9 +121,10 @@ type DeletionStrategy struct {
 
 	// DeletionRules is a list of deletion rules, processed based on their trigger conditions.
 	// While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),
-	// the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup and cost savings.
+	// the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup.
 	// +optional
 	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
 	DeletionRules []DeletionRule `json:"deletionRules,omitempty"`
 }
 
