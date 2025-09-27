@@ -1120,11 +1120,6 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 	var overdueRules []rayv1.DeletionRule
 	var nextRequeueTime *time.Time
 
-	if len(rayJob.Spec.DeletionStrategy.DeletionRules) == 0 {
-		logger.Info("No deletion rules are defined; skipping deletion handling.")
-		return ctrl.Result{}, nil
-	}
-
 	// Categorize all applicable and incomplete rules into "overdue" or "pending".
 	for _, rule := range rayJob.Spec.DeletionStrategy.DeletionRules {
 		// Skip rules that don't match the current job status.

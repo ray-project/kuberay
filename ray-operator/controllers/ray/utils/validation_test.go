@@ -1012,7 +1012,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-				}, ShutdownAfterJobFinishes: false,
+				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: false,
@@ -1048,7 +1048,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-				}, ShutdownAfterJobFinishes: false,
+				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: true,
@@ -1060,7 +1060,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-				}, ShutdownAfterJobFinishes: false,
+				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: true,
@@ -1072,7 +1072,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-				}, ShutdownAfterJobFinishes: false,
+				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: true,
@@ -1085,7 +1085,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 					OnFailure: &rayv1.DeletionPolicy{},
-				}, ShutdownAfterJobFinishes: false,
+				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: true,
@@ -1174,7 +1174,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 				},
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
-			expectError: false,
+			expectError: true,
 		},
 		{
 			name: "duplicate rule in deletionRules",

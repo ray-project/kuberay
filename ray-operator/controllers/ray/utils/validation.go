@@ -281,7 +281,7 @@ func validateDeletionConfiguration(rayJob *rayv1.RayJob) error {
 	}
 
 	legacyConfigured := rayJob.Spec.DeletionStrategy.OnSuccess != nil || rayJob.Spec.DeletionStrategy.OnFailure != nil
-	rulesConfigured := rayJob.Spec.DeletionStrategy.DeletionRules != nil // explicit empty slice counts as rules mode
+	rulesConfigured := len(rayJob.Spec.DeletionStrategy.DeletionRules) > 0
 
 	// Mutual exclusivity: rules mode forbids shutdown & legacy. (TTL+rules is implicitly invalid because TTL requires shutdown.)
 	if rulesConfigured && rayJob.Spec.ShutdownAfterJobFinishes {
@@ -301,7 +301,7 @@ func validateDeletionConfiguration(rayJob *rayv1.RayJob) error {
 			return err
 		}
 	} else {
-		return fmt.Errorf("The RayJob spec is invalid: DeletionStrategy requires either BOTH onSuccess and onFailure, OR the deletionRules field (which may be empty list)")
+		return fmt.Errorf("The RayJob spec is invalid: DeletionStrategy requires either BOTH onSuccess and onFailure, OR the deletionRules field (cannot be empty)")
 	}
 
 	return nil
