@@ -80,8 +80,8 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// submitter's resource requests into MinResources so capacity is reserved.
 	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode {
 		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
-		submitResource := utils.CalculatePodResource(submitterTemplate.Spec)
-		totalResourceList = append(totalResourceList, submitResource)
+		submitterResource := utils.CalculatePodResource(submitterTemplate.Spec)
+		totalResourceList = append(totalResourceList, submitterResource)
 	}
 
 	return v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
