@@ -1091,7 +1091,9 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			}
 		}
 		_, isSubmitterFinished = utils.IsJobFinished(job)
-		finishedAt = &job.Status.CompletionTime.Time
+		if isSubmitterFinished && !job.Status.CompletionTime.IsZero() {
+			finishedAt = &job.Status.CompletionTime.Time
+		}
 
 		return
 	default:
