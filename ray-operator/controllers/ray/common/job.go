@@ -164,7 +164,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
-	if len(metadata) > 0 {
+	if len(metadata) > 0 && rayJobInstance.Spec.RayClusterSpec != nil {
 		metadataJson, err := GetMetadataJson(metadata, rayJobInstance.Spec.RayClusterSpec.RayVersion)
 		if err != nil {
 			return nil, err
