@@ -3,8 +3,10 @@ package e2erayjob
 import (
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -12,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -363,10 +366,19 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Successfully marked submitter job as completed at %v", now.Time)
 
+		// Record the start time for timeout measurement
+		timeoutStartTime := time.Now()
+
 		// Wait for the timeout to trigger
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to exceed SubmitterFinishedTimeout", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+
+		// Measure the actual timeout duration and verify the timeout duration is close to DefaultSubmitterFinishedTimeout
+		actualTimeoutDuration := time.Since(timeoutStartTime)
+		expectedTimeout := ray.DefaultSubmitterFinishedTimeout
+		assert.InDelta(test.T(), expectedTimeout.Seconds(), actualTimeoutDuration.Seconds(), 5.0,
+			"Actual timeout duration should be close to DefaultSubmitterFinishedTimeout")
 
 		// Get the updated rayJob
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
