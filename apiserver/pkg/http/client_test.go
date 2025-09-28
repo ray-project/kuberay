@@ -62,7 +62,7 @@ func TestUnmarshalHttpResponseOK(t *testing.T) {
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
-	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
+	client.ExecuteHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		resp := &api.ListClustersResponse{
 			Clusters: []*api.Cluster{
 				{
@@ -98,7 +98,7 @@ func TestUnmarshalHttpResponseFails(t *testing.T) {
 	}
 
 	client := NewKuberayAPIServerClient("baseurl", nil /*httpClient*/, retryCfg)
-	client.executeHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
+	client.ExecuteHttpRequest = func(_ *http.Request, _ string) ([]byte, *rpcStatus.Status, error) {
 		// Intentionall returning a bad response.
 		return []byte("helloworld"), nil, nil
 	}
