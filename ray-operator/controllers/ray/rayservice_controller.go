@@ -1137,15 +1137,15 @@ func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.C
 	// Validate Gateway and HTTPRoute objects are ready
 	gatewayInstance := &gwv1.Gateway{}
 	if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gatewayInstance); err != nil {
-		return false, fmt.Errorf("Failed to retrieve Gateway for RayService: %w", err)
-}
+		return false, fmt.Sprintf("Failed to retrieve Gateway for RayService: %v", err)
+	}
 	if !utils.IsGatewayReady(gatewayInstance) {
 		return false, "Gateway for RayService IncrementalUpgrade is not ready."
 	}
 
 	httpRouteInstance := &gwv1.HTTPRoute{}
 	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRouteInstance); err != nil {
-		return false, "Failed to retrieve HTTPRoute for RayService."
+		return false, fmt.Sprintf("Failed to retrieve HTTPRoute for RayService: %v", err)
 	}
 	if !utils.IsHTTPRouteReady(gatewayInstance, httpRouteInstance) {
 		return false, "HTTPRoute for RayService IncrementalUpgrade is not ready."
