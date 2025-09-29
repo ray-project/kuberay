@@ -229,12 +229,8 @@ rules:
   - httproutes
   verbs:
   - create
-  - delete
   - get
-  - list
-  - patch
   - update
-  - watch
 - apiGroups:
   - networking.k8s.io
   resources:
