@@ -93,8 +93,8 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;create;update;delete
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;create;update;delete
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;create;update;
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;create;update;
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 

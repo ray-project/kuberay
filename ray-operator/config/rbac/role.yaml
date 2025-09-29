@@ -114,7 +114,6 @@ rules:
   - httproutes
   verbs:
   - create
-  - delete
   - get
   - update
 - apiGroups:
