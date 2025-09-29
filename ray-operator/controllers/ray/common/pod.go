@@ -409,7 +409,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultRayEnvs []corev1.EnvVar) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -483,7 +483,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
+	setContainerEnvVars(&pod, rayNodeType, fqdnRayIP, headPort, rayStartCmd, creatorCRDType, defaultRayEnvs)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -642,11 +642,18 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType, defaultRayEnvs []corev1.EnvVar) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
+	}
+
+	// Inject default Ray environment variables from configuration
+	for _, defaultEnv := range defaultRayEnvs {
+		if !utils.EnvVarExists(defaultEnv.Name, container.Env) {
+			container.Env = append(container.Env, defaultEnv)
+		}
 	}
 
 	// case 1: head   => Use LOCAL_HOST

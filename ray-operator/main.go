@@ -267,6 +267,7 @@ func main() {
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
+		DefaultRayEnvs:           config.DefaultRayEnvs,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
