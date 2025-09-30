@@ -230,6 +230,8 @@ rules:
   verbs:
   - create
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - networking.k8s.io
