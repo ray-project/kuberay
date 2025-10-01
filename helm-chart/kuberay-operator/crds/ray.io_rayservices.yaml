@@ -40,10 +40,6 @@ spec:
                 type: integer
               excludeHeadPodFromServeSvc:
                 type: boolean
-              gateway:
-                type: string
-              httpRoute:
-                type: string
               rayClusterConfig:
                 properties:
                   autoscalerOptions:

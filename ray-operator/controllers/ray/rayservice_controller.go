@@ -150,29 +150,23 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Check if IncrementalUpgrade is enabled, if so reconcile Gateway objects.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// Ensure per-cluster Serve service exists for the active and pending RayClusters.
-		if _, err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
+		if err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		if _, err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, pendingRayClusterInstance); err != nil {
+		if err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, pendingRayClusterInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
-		// Creates a Gateway CR that points to the Serve services of
+		// Creates or updates a Gateway CR that points to the Serve services of
 		// the active and pending (if it exists) RayClusters. For incremental upgrades,
 		// the Gateway endpoint is used rather than the Serve service.
-		gateway, err := r.reconcileGateway(ctx, rayServiceInstance)
+		err = r.reconcileGateway(ctx, rayServiceInstance)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
-		}
-		if gateway != nil {
-			rayServiceInstance.Spec.Gateway = gateway.Name
 		}
 		// Create or update the HTTPRoute attached to this RayService's Gateway
-		httpRoute, err := r.reconcileHTTPRoute(ctx, rayServiceInstance)
+		err = r.reconcileHTTPRoute(ctx, rayServiceInstance)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
-		}
-		if httpRoute != nil {
-			rayServiceInstance.Spec.HTTPRoute = httpRoute.Name
 		}
 	}
 
@@ -495,13 +489,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
 	}
 
-	var gatewayName string
-	if rayServiceInstance.Spec.Gateway != "" {
-		gatewayName = rayServiceInstance.Spec.Gateway
-	} else {
-		gatewayName = rayServiceInstance.Name + "-gateway"
-	}
-	gatewayName = utils.CheckGatewayName(gatewayName)
+	gatewayName := utils.CheckGatewayName(rayServiceInstance.Name + "-gateway")
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
@@ -520,7 +508,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 
 // `reconcileGateway` reconciles a Gateway resource for a RayService. The possible cases are:
 // (1) Create a new Gateway instance. (2) Update the Gateway instance if RayService has updated. (3) Do nothing.
-func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
+func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
@@ -528,11 +516,11 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	desiredGateway, err := r.createGateway(rayServiceInstance)
 	if err != nil {
 		logger.Error(err, "Failed to build Gateway object for Rayservice")
-		return nil, err
+		return err
 	}
 	if desiredGateway == nil {
 		logger.Info("Skipping Gateway reconciliation: desired Gateway is nil")
-		return nil, nil
+		return nil
 	}
 
 	// Check for existing RayService Gateway, create the desired Gateway if none is found
@@ -541,17 +529,17 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 		if errors.IsNotFound(err) {
 			// Set the ownership in order to do the garbage collection by k8s.
 			if err := ctrl.SetControllerReference(rayServiceInstance, desiredGateway, r.Scheme); err != nil {
-				return nil, err
+				return err
 			}
 			logger.Info("Creating a new Gateway instance", "Gateway Listeners", desiredGateway.Spec.Listeners)
 			if err := r.Create(ctx, desiredGateway); err != nil {
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
-				return nil, err
+				return err
 			}
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
-			return desiredGateway, nil
+			return nil
 		}
-		return nil, err
+		return err
 	}
 
 	// If Gateway already exists, check if update is needed to reach desired state
@@ -560,12 +548,12 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 		existingGateway.Spec = desiredGateway.Spec
 		if err := r.Update(ctx, existingGateway); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), "Failed to update the Gateway %s/%s: %v", existingGateway.Namespace, existingGateway.Name, err)
-			return nil, err
+			return err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedGateway), "Updated the Gateway %s/%s", existingGateway.Namespace, existingGateway.Name)
 	}
 
-	return existingGateway, nil
+	return nil
 }
 
 // createHTTPRoute creates a desired HTTPRoute object based on a given RayService instance with
@@ -580,13 +568,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	}
 
 	// Define the desired HTTPRoute name and basic object
-	var httpRouteName string
-	if rayServiceInstance.Spec.HTTPRoute != "" {
-		httpRouteName = rayServiceInstance.Spec.HTTPRoute
-	} else {
-		httpRouteName = fmt.Sprintf("httproute-%s", gatewayInstance.Name)
-	}
-	httpRouteName = utils.CheckHTTPRouteName(httpRouteName)
+	httpRouteName := utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s", gatewayInstance.Name))
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      httpRouteName,
@@ -746,18 +728,18 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 }
 
 // reconcileHTTPRoute reconciles a HTTPRoute resource for a RayService to route traffic during an IncrementalUpgrade.
-func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
+func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
 	desiredHTTPRoute, err := r.createHTTPRoute(ctx, rayServiceInstance)
 	if err != nil {
 		logger.Error(err, "Failed to build HTTPRoute for RayService upgrade")
-		return nil, err
+		return err
 	}
 	if desiredHTTPRoute == nil {
 		logger.Info("Skipping HTTPRoute reconciliation: desired HTTPRoute is nil")
-		return nil, nil
+		return nil
 	}
 
 	// Check for existing HTTPRoute for RayService
@@ -766,16 +748,16 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		if errors.IsNotFound(err) {
 			// Set the ownership in order to do the garbage collection by k8s.
 			if err := ctrl.SetControllerReference(rayServiceInstance, desiredHTTPRoute, r.Scheme); err != nil {
-				return nil, err
+				return err
 			}
 			if err = r.Create(ctx, desiredHTTPRoute); err != nil {
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
-				return nil, err
+				return err
 			}
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.FailedToCreateHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
-			return desiredHTTPRoute, nil
+			return nil
 		}
-		return nil, err
+		return err
 	}
 
 	// If HTTPRoute already exists, check if update is needed
@@ -784,12 +766,12 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
-			return nil, err
+			return err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
 	}
 
-	return existingHTTPRoute, nil
+	return nil
 }
 
 // `reconcileRayCluster` reconciles the active and pending Ray clusters. There are 4 possible cases:
@@ -1600,9 +1582,9 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 }
 
 // reconcilePerClusterServeService reconciles a load-balancing serve service for a given RayCluster.
-func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, error) {
+func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) error {
 	if rayClusterInstance == nil {
-		return nil, nil
+		return nil
 	}
 
 	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
@@ -1614,23 +1596,18 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 	desiredSvc, err := common.BuildServeService(ctx, *rayServiceInstance, *rayClusterInstance, true)
 	if err != nil {
 		logger.Error(err, "Failed to build per-cluster serve service spec")
-		return nil, err
+		return err
 	}
 	if err := ctrl.SetControllerReference(rayClusterInstance, desiredSvc, r.Scheme); err != nil {
-		return nil, err
+		return err
 	}
 
 	existingSvc := &corev1.Service{}
 	err = r.Get(ctx, client.ObjectKey{Name: desiredSvc.Name, Namespace: desiredSvc.Namespace}, existingSvc)
 	if errors.IsNotFound(err) {
 		logger.Info("Creating new per-cluster serve service for incremental upgrade.", "Service", desiredSvc.Name)
-		if createErr := r.Create(ctx, desiredSvc); createErr != nil {
-			return nil, createErr
-		}
-		return desiredSvc, nil
-	} else if err != nil {
-		return nil, err
+		return r.Create(ctx, desiredSvc)
 	}
 
-	return existingSvc, nil
+	return err
 }

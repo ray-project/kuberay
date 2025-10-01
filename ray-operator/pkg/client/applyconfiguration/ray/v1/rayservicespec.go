@@ -15,8 +15,6 @@ type RayServiceSpecApplyConfiguration struct {
 	ServeService                       *corev1.Service                              `json:"serveService,omitempty"`
 	UpgradeStrategy                    *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
 	ServeConfigV2                      *string                                      `json:"serveConfigV2,omitempty"`
-	Gateway                            *string                                      `json:"gateway,omitempty"`
-	HTTPRoute                          *string                                      `json:"httpRoute,omitempty"`
 	RayClusterSpec                     *RayClusterSpecApplyConfiguration            `json:"rayClusterConfig,omitempty"`
 	ExcludeHeadPodFromServeSvc         *bool                                        `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
@@ -72,22 +70,6 @@ func (b *RayServiceSpecApplyConfiguration) WithUpgradeStrategy(value *RayService
 // If called multiple times, the ServeConfigV2 field is set to the value of the last call.
 func (b *RayServiceSpecApplyConfiguration) WithServeConfigV2(value string) *RayServiceSpecApplyConfiguration {
 	b.ServeConfigV2 = &value
-	return b
-}
-
-// WithGateway sets the Gateway field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Gateway field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithGateway(value string) *RayServiceSpecApplyConfiguration {
-	b.Gateway = &value
-	return b
-}
-
-// WithHTTPRoute sets the HTTPRoute field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the HTTPRoute field is set to the value of the last call.
-func (b *RayServiceSpecApplyConfiguration) WithHTTPRoute(value string) *RayServiceSpecApplyConfiguration {
-	b.HTTPRoute = &value
 	return b
 }
 

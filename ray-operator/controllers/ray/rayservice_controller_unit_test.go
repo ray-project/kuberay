@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1673,21 +1674,24 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				Recorder: record.NewFakeRecorder(10),
 			}
 
-			route, err := reconciler.reconcileHTTPRoute(ctx, rayService)
+			err := reconciler.reconcileHTTPRoute(ctx, rayService)
 			require.NoError(t, err)
-			require.NotNil(t, route)
 
-			assert.Equal(t, tt.expectedRouteName, route.Name)
-			assert.Equal(t, namespace, route.Namespace)
+			reconciledRoute := &gwv1.HTTPRoute{}
+			err = fakeClient.Get(ctx, client.ObjectKey{Name: tt.expectedRouteName, Namespace: namespace}, reconciledRoute)
+			require.NoError(t, err, "Failed to fetch the reconciled HTTPRoute")
 
-			assert.Equal(t, gwv1.ObjectName(activeServeService.Name), route.Spec.Rules[0].BackendRefs[0].Name)
-			assert.Equal(t, gwv1.ObjectName(pendingServeService.Name), route.Spec.Rules[0].BackendRefs[1].Name)
+			assert.Equal(t, tt.expectedRouteName, reconciledRoute.Name)
+			assert.Equal(t, namespace, reconciledRoute.Namespace)
 
-			require.Len(t, route.Spec.Rules[0].BackendRefs, 2)
-			assert.Equal(t, tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[0].Weight)
-			assert.Equal(t, 100-tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[1].Weight)
+			assert.Equal(t, gwv1.ObjectName(activeServeService.Name), reconciledRoute.Spec.Rules[0].BackendRefs[0].Name)
+			assert.Equal(t, gwv1.ObjectName(pendingServeService.Name), reconciledRoute.Spec.Rules[0].BackendRefs[1].Name)
 
-			parent := route.Spec.ParentRefs[0]
+			require.Len(t, reconciledRoute.Spec.Rules[0].BackendRefs, 2)
+			assert.Equal(t, tt.expectedWeight, *reconciledRoute.Spec.Rules[0].BackendRefs[0].Weight)
+			assert.Equal(t, 100-tt.expectedWeight, *reconciledRoute.Spec.Rules[0].BackendRefs[1].Weight)
+
+			parent := reconciledRoute.Spec.ParentRefs[0]
 			assert.Equal(t, gwv1.ObjectName("incremental-ray-service-gateway"), parent.Name)
 			assert.Equal(t, ptr.To(gwv1.Namespace(namespace)), parent.Namespace)
 		})
@@ -1749,14 +1753,17 @@ func TestReconcileGateway(t *testing.T) {
 				Recorder: record.NewFakeRecorder(10),
 			}
 
-			gw, err := reconciler.reconcileGateway(ctx, rayService)
+			err := reconciler.reconcileGateway(ctx, rayService)
 			require.NoError(t, err)
-			require.NotNil(t, gw)
 
-			assert.Equal(t, tt.expectedGatewayName, gw.Name)
-			assert.Equal(t, namespace, gw.Namespace)
-			assert.Equal(t, gwv1.ObjectName(tt.expectedClass), gw.Spec.GatewayClassName)
-			assert.Len(t, gw.Spec.Listeners, tt.expectedNumListeners)
+			reconciledGateway := &gwv1.Gateway{}
+			err = fakeClient.Get(ctx, client.ObjectKey{Name: tt.expectedGatewayName, Namespace: namespace}, reconciledGateway)
+			require.NoError(t, err, "Failed to get the reconciled Gateway")
+
+			assert.Equal(t, tt.expectedGatewayName, reconciledGateway.Name)
+			assert.Equal(t, namespace, reconciledGateway.Namespace)
+			assert.Equal(t, gwv1.ObjectName(tt.expectedClass), reconciledGateway.Spec.GatewayClassName)
+			assert.Len(t, reconciledGateway.Spec.Listeners, tt.expectedNumListeners)
 		})
 	}
 }
@@ -2111,7 +2118,7 @@ func TestReconcilePerClusterServeService(t *testing.T) {
 				Recorder: record.NewFakeRecorder(1),
 			}
 
-			reconciledSvc, err := reconciler.reconcilePerClusterServeService(ctx, rayService, tt.rayCluster)
+			err := reconciler.reconcilePerClusterServeService(ctx, rayService, tt.rayCluster)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -2119,11 +2126,17 @@ func TestReconcilePerClusterServeService(t *testing.T) {
 			}
 			require.NoError(t, err)
 
+			reconciledSvc := &corev1.Service{}
+			err = fakeClient.Get(ctx, client.ObjectKey{Name: expectedServeSvcName, Namespace: namespace}, reconciledSvc)
+
 			// No-op case, no service should be created when RayCluster is nil.
 			if tt.rayCluster == nil {
-				assert.Nil(t, reconciledSvc)
+				assert.True(t, errors.IsNotFound(err))
 				return
 			}
+
+			// Otherwise, a valid serve service should be created for the RayCluster.
+			require.NoError(t, err, "The Serve service should exist in the client")
 
 			// Validate the expected Serve service exists for the RayCluster.
 			require.NotNil(t, reconciledSvc)
