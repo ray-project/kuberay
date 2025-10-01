@@ -19,6 +19,9 @@ spec:
     # and decides whether to request scaling the cluster up or down. The default value is 5 seconds.
     # - name: AUTOSCALER_UPDATE_INTERVAL_S
     #   value: "5"
+    # RAY_LOGGER_LEVEL is used to control autoscaler and ray logging verbosity (info|debug|warning|error|critical). The default value is "info".
+    # - name: RAY_LOGGER_LEVEL
+    #   value: "debug"
     envFrom: []
     resources:
       limits:
