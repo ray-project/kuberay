@@ -486,7 +486,7 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
 	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 	if options == nil {
-		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade")
+		return nil, errstd.New("Missing RayService IncrementalUpgradeOptions during upgrade.")
 	}
 
 	gatewayName := utils.CheckGatewayName(rayServiceInstance.Name + "-gateway")
