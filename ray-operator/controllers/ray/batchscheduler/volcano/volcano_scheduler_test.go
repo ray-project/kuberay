@@ -86,7 +86,7 @@ func TestCreatePodGroup(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, _ := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -110,7 +110,7 @@ func TestCreatePodGroup_NumOfHosts2(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, _ := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -153,10 +153,48 @@ func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	a.NoError(err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 	a.Equal(volcanov1beta1.NetworkTopologyMode("soft"), pg.Spec.NetworkTopology.Mode)
 	a.NotNil(pg.Spec.NetworkTopology.HighestTierAllowed)
 	a.Equal(3, *pg.Spec.NetworkTopology.HighestTierAllowed)
+}
+
+func TestCreatePodGroup_NetworkTopologyOnlyModeLabel(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with only network topology mode set
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey: "hard",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	a.NoError(err)
+
+	a.Equal(cluster.Namespace, pg.Namespace)
+	a.NotNil(pg.Spec.NetworkTopology)
+	a.Equal(volcanov1beta1.NetworkTopologyMode("hard"), pg.Spec.NetworkTopology.Mode)
+	a.Nil(pg.Spec.NetworkTopology.HighestTierAllowed)
+}
+
+func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with network topology mode set and highest tier allowed is not an int
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey:               "soft",
+		NetworkTopologyHighestTierAllowedLabelKey: "not-an-int",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+
+	a.Error(err)
+	a.Contains(err.Error(), "failed to convert "+NetworkTopologyHighestTierAllowedLabelKey+" label to int")
+	a.Equal(cluster.Namespace, pg.Namespace)
 }
