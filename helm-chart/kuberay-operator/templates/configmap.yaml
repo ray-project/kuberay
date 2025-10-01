@@ -1,0 +1,15 @@
+{{- if .Values.defaultRayEnvs }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kuberay-operator.deployment.name" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    apiVersion: config.ray.io/v1alpha1
+    kind: Configuration
+    defaultRayEnvs:
+    {{- toYaml .Values.defaultRayEnvs | nindent 4 }}
+{{- end }}

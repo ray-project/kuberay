@@ -1,0 +1,65 @@
+suite: Test ConfigMap
+
+templates:
+  - configmap.yaml
+
+release:
+  name: kuberay-operator
+  namespace: default
+
+tests:
+  - it: Should not create ConfigMap when defaultRayEnvs is not set
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should not create ConfigMap when defaultRayEnvs is empty
+    set:
+      defaultRayEnvs: []
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should create ConfigMap when defaultRayEnvs is set
+    set:
+      defaultRayEnvs:
+        - name: RAY_enable_open_telemetry
+          value: "true"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - containsDocument:
+          apiVersion: v1
+          kind: ConfigMap
+          name: kuberay-operator-config
+          namespace: default
+
+  - it: Should include defaultRayEnvs in Configuration
+    set:
+      defaultRayEnvs:
+        - name: RAY_enable_open_telemetry
+          value: "true"
+        - name: RAY_metric_cardinality_level
+          value: "recommended"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "apiVersion: config.ray.io/v1alpha1"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "kind: Configuration"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultRayEnvs:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: RAY_enable_open_telemetry"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'value: "true"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: RAY_metric_cardinality_level"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "value: recommended"
