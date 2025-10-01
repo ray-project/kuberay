@@ -786,8 +786,9 @@ func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gw
 	listenerName := fmt.Sprintf("%s-listener", rayServiceInstance.Name)
 	listener := gwv1.Listener{
 		Name:     gwv1.SectionName(listenerName),
-		Protocol: gwv1.HTTPProtocolType,      // only support HTTP
-		Port:     utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort)
+		Protocol: gwv1.HTTPProtocolType, // only support HTTP
+		Port:     gwv1.PortNumber(int32(80)),
+	}
 	listeners = append(listeners, listener)
 
 	return listeners
