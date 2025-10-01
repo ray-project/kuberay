@@ -318,7 +318,7 @@ func ValidateIncrementalUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("IncrementalUpgradeOptions are required for IncrementalUpgrade")
 	}
 
-	if options.MaxSurgePercent != nil && (*options.MaxSurgePercent < 0 || *options.MaxSurgePercent > 100) {
+	if *options.MaxSurgePercent < 0 || *options.MaxSurgePercent > 100 {
 		return fmt.Errorf("maxSurgePercent must be between 0 and 100")
 	}
 
