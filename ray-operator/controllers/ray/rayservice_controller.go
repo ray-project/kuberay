@@ -149,7 +149,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// Check if IncrementalUpgrade is enabled, if so reconcile Gateway objects.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		// Creates a Gateway CR that points to the head services of
+		// Ensure per-cluster Serve service exists for the active and pending RayClusters.
+		if _, err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		if _, err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, pendingRayClusterInstance); err != nil {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		// Creates a Gateway CR that points to the Serve services of
 		// the active and pending (if it exists) RayClusters. For incremental upgrades,
 		// the Gateway endpoint is used rather than the Serve service.
 		gateway, err := r.reconcileGateway(ctx, rayServiceInstance)
@@ -330,7 +337,12 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	}
 
 	serveEndPoints := &corev1.Endpoints{}
-	if err := r.Get(ctx, common.RayServiceServeServiceNamespacedName(rayServiceInstance), serveEndPoints); err != nil && !errors.IsNotFound(err) {
+	serveServiceName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
+	// For IncrementalUpgrade, the Serve service name is based on the RayCluster.
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeCluster != nil {
+		serveServiceName.Name = utils.GenerateServeServiceName(activeCluster.Name)
+	}
+	if err := r.Get(ctx, serveServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
@@ -343,6 +355,21 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	if numServeEndpoints > math.MaxInt32 {
 		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
+
+	// During an IncrementalUpgrade, the pending RayCluster is also serving.
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && pendingCluster != nil {
+		pendingServeServiceName := common.RayClusterServeServiceNamespacedName(pendingCluster)
+		if err := r.Get(ctx, pendingServeServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		for _, subset := range serveEndPoints.Subsets {
+			numServeEndpoints += len(subset.Addresses)
+		}
+		if numServeEndpoints > math.MaxInt32 {
+			return errstd.New("numServeEndpoints exceeds math.MaxInt32")
+		}
+	}
+
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	calculateConditions(rayServiceInstance)
 
@@ -583,20 +610,21 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		logger.Error(err, "Failed to retrieve active RayCluster")
 		return nil, err
 	}
-	if activeRayCluster == nil || activeRayCluster.Status.Head.ServiceName == "" {
+	if activeRayCluster == nil {
 		logger.Info("Active RayCluster not found, skipping HTTPRoute creation.")
 		return nil, nil
 	}
-	oldClusterHeadSvcName := activeRayCluster.Status.Head.ServiceName
-	oldHeadSvc := &corev1.Service{}
-	if err := r.Get(ctx, client.ObjectKey{Name: oldClusterHeadSvcName, Namespace: rayServiceInstance.Namespace}, oldHeadSvc); err != nil {
-		logger.Error(err, "Failed to retrieve active RayCluster head service")
+	// Serve service points to the active RayCluster until the upgrade is complete.
+	oldClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
+	oldServeSvc := &corev1.Service{}
+	if err := r.Get(ctx, client.ObjectKey{Name: oldClusterServeSvcName, Namespace: rayServiceInstance.Namespace}, oldServeSvc); err != nil {
+		logger.Error(err, "Failed to retrieve active RayCluster serve service.")
 		return nil, err
 	}
 
 	// Attempt to retrieve pending RayCluster
 	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
-	hasPendingCluster := (err == nil && pendingRayCluster != nil && pendingRayCluster.Status.Head.ServiceName != "")
+	hasPendingCluster := (err == nil && pendingRayCluster != nil)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Info("Failed to retrieve pending RayCluster.")
 	}
@@ -607,16 +635,16 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// Configure HTTPRoute to split traffic between active and pending clusters during an incremental upgrade
 	if hasPendingCluster {
-		newClusterHeadSvcName := pendingRayCluster.Status.Head.ServiceName
-		newHeadSvc := &corev1.Service{}
-		if err := r.Get(ctx, client.ObjectKey{Name: newClusterHeadSvcName, Namespace: rayServiceInstance.Namespace}, newHeadSvc); err != nil {
-			logger.Error(err, "Failed to retrieve pending RayCluster head service")
+		newClusterServeSvcName := utils.GenerateServeServiceName(pendingRayCluster.Name)
+		newServeSvc := &corev1.Service{}
+		if err := r.Get(ctx, client.ObjectKey{Name: newClusterServeSvcName, Namespace: rayServiceInstance.Namespace}, newServeSvc); err != nil {
+			logger.Error(err, "Failed to retrieve pending RayCluster serve service.")
 			return nil, err
 		}
 
 		options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 		if options == nil {
-			return nil, errstd.New("Missing RayService IncrementalUpgradeOptions")
+			return nil, errstd.New("Missing RayService IncrementalUpgradeOptions.")
 		}
 
 		// Retrieve TrafficRoutedPercent for old and upgraded RayClusters.
@@ -631,7 +659,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		if (newClusterWeight != nil && oldClusterWeight != nil) && (lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= intervalSeconds) {
 			// Wait an initial iteration before migrating StepSizePercent.
 			if lastTrafficMigratedTime != nil {
-				logger.Info("Updating cluster weights by StepSizePercent each")
+				logger.Info("Updating active and pending cluster weights each by StepSizePercent.")
 				oldClusterWeight = ptr.To(max(*oldClusterWeight-*options.StepSizePercent, 0))
 				newClusterWeight = ptr.To(min(*newClusterWeight+*options.StepSizePercent, 100))
 			}
@@ -662,7 +690,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			{
 				BackendRef: gwv1.BackendRef{
 					BackendObjectReference: gwv1.BackendObjectReference{
-						Name:      gwv1.ObjectName(oldClusterHeadSvcName),
+						Name:      gwv1.ObjectName(oldClusterServeSvcName),
 						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
 						Port:      ptr.To(gwv1.PortNumber(8000)), // set to Serve port
 					},
@@ -672,7 +700,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			{
 				BackendRef: gwv1.BackendRef{
 					BackendObjectReference: gwv1.BackendObjectReference{
-						Name:      gwv1.ObjectName(newClusterHeadSvcName),
+						Name:      gwv1.ObjectName(newClusterServeSvcName),
 						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
 						Port:      ptr.To(gwv1.PortNumber(8000)),
 					},
@@ -689,7 +717,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			{
 				BackendRef: gwv1.BackendRef{
 					BackendObjectReference: gwv1.BackendObjectReference{
-						Name:      gwv1.ObjectName(oldClusterHeadSvcName),
+						Name:      gwv1.ObjectName(oldClusterServeSvcName),
 						Namespace: ptr.To(gwv1.Namespace(rayServiceInstance.Namespace)),
 						Port:      ptr.To(gwv1.PortNumber(8000)),
 					},
@@ -1569,4 +1597,40 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
+}
+
+// reconcilePerClusterServeService reconciles a load-balancing serve service for a given RayCluster.
+func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, error) {
+	if rayClusterInstance == nil {
+		return nil, nil
+	}
+
+	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
+
+	logger.Info("Building per-cluster RayService")
+
+	// Create a serve service for the RayCluster associated with this RayService. During an incremental
+	// upgrade, this will be called for the pending RayCluster instance.
+	desiredSvc, err := common.BuildServeService(ctx, *rayServiceInstance, *rayClusterInstance, true)
+	if err != nil {
+		logger.Error(err, "Failed to build per-cluster serve service spec")
+		return nil, err
+	}
+	if err := ctrl.SetControllerReference(rayClusterInstance, desiredSvc, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	existingSvc := &corev1.Service{}
+	err = r.Get(ctx, client.ObjectKey{Name: desiredSvc.Name, Namespace: desiredSvc.Namespace}, existingSvc)
+	if errors.IsNotFound(err) {
+		logger.Info("Creating new per-cluster serve service for incremental upgrade.", "Service", desiredSvc.Name)
+		if createErr := r.Create(ctx, desiredSvc); createErr != nil {
+			return nil, createErr
+		}
+		return desiredSvc, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	return existingSvc, nil
 }

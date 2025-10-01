@@ -104,7 +104,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests["CPU"] = resource.MustParse("500m")
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
 	serveConfig := rayService.Spec.ServeConfigV2
 	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
 	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
@@ -119,6 +119,36 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
+	LogWithTimestamp(test.T(), "Verifying temporary service creation and HTTPRoute backends")
+	upgradingRaySvc, err := GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	activeClusterName := upgradingRaySvc.Status.ActiveServiceStatus.RayClusterName
+	g.Expect(activeClusterName).NotTo(BeEmpty(), "The active cluster should be set when a RayService is ready.")
+	pendingClusterName := upgradingRaySvc.Status.PendingServiceStatus.RayClusterName
+	g.Expect(pendingClusterName).NotTo(BeEmpty(), "The controller should have created a pending cluster.")
+
+	// Validate serve service for the active cluster exists.
+	activeServeSvcName := utils.GenerateServeServiceName(activeClusterName)
+	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), activeServeSvcName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred(), "The serve service for the active cluster should be created.")
+
+	// Validate serve service for the pending cluster has been created for the upgrade.
+	pendingServeSvcName := utils.GenerateServeServiceName(pendingClusterName)
+	g.Eventually(func(g Gomega) {
+		_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), pendingServeSvcName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "The serve service for the pending cluster should be created.")
+	}, TestTimeoutShort).Should(Succeed())
+
+	// Verify HTTPRoute is pointing to the correct two backends.
+	g.Eventually(func(g Gomega) {
+		route, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(route.Spec.Rules).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(2))
+		g.Expect(string(route.Spec.Rules[0].BackendRefs[0].Name)).To(Equal(activeServeSvcName))
+		g.Expect(string(route.Spec.Rules[0].BackendRefs[1].Name)).To(Equal(pendingServeSvcName))
+	}, TestTimeoutShort).Should(Succeed())
+
 	LogWithTimestamp(test.T(), "Validating stepwise traffic and capacity migration")
 	stepSizeVal := *stepSize
 	intervalVal := *interval
@@ -126,7 +156,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 
 	var lastPendingCapacity, lastPendingTraffic, lastActiveCapacity, lastActiveTraffic int32
 
-	// Validate expected behavior during IncrementalUpgrade
+	// Validate expected behavior during an IncrementalUpgrade. The following checks ensures
+	// that no requests are dropped throughout the upgrade process.
 	for {
 		// Wait IntervalSeconds in between updates
 		time.Sleep(time.Duration(intervalVal) * time.Second)

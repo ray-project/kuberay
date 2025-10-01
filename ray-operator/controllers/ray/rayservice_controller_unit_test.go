@@ -1451,67 +1451,55 @@ func TestCreateGateway(t *testing.T) {
 
 func TestCreateHTTPRoute(t *testing.T) {
 	// Create re-used runtime objects for test cases
-	activeService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "active-service",
-			Namespace: "test-ns",
-		},
-	}
-	pendingService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pending-service",
-			Namespace: "test-ns",
-		},
-	}
+	namespace := "test-ns"
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-ray-cluster",
-			Namespace: "test-ns",
-		},
-		Status: rayv1.RayClusterStatus{
-			Head: rayv1.HeadInfo{
-				ServiceName: "active-service",
-			},
+			Namespace: namespace,
 		},
 	}
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pending-ray-cluster",
-			Namespace: "test-ns",
-		},
-		Status: rayv1.RayClusterStatus{
-			Head: rayv1.HeadInfo{
-				ServiceName: "pending-service",
-			},
+			Namespace: namespace,
 		},
 	}
 	gateway := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "incremental-ray-service-gateway",
-			Namespace: "test-ns",
+			Namespace: namespace,
+		},
+	}
+	activeServeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServeServiceName(activeCluster.Name),
+			Namespace: namespace,
+		},
+	}
+	pendingServeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServeServiceName(pendingCluster.Name),
+			Namespace: namespace,
 		},
 	}
 
 	tests := []struct {
-		name           string
-		rayService     *rayv1.RayService
-		runtimeObjects []runtime.Object
-		routedPercent  int32
-		expectError    bool
+		rayService    *rayv1.RayService
+		name          string
+		routedPercent int32
+		expectError   bool
 	}{
 		{
-			name:           "valid HTTPRoute creation",
-			routedPercent:  int32(80),
-			rayService:     makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(1000)), ptr.To(int32(80)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster, gateway},
-			expectError:    false,
+			name:          "valid HTTPRoute creation",
+			routedPercent: int32(80),
+			rayService:    makeIncrementalUpgradeRayService(true, "gateway-class", ptr.To(int32(50)), ptr.To(int32(1000)), ptr.To(int32(80)), &metav1.Time{Time: time.Now()}),
+			expectError:   false,
 		},
 		{
-			name:           "missing IncrementalUpgradeOptions",
-			routedPercent:  int32(50),
-			rayService:     makeIncrementalUpgradeRayService(false, "gateway-class", ptr.To(int32(50)), ptr.To(int32(120)), ptr.To(int32(50)), &metav1.Time{Time: time.Now()}),
-			runtimeObjects: []runtime.Object{activeService, pendingService, pendingCluster, activeCluster, gateway},
-			expectError:    true,
+			name:          "missing IncrementalUpgradeOptions",
+			routedPercent: int32(50),
+			rayService:    makeIncrementalUpgradeRayService(false, "gateway-class", ptr.To(int32(50)), ptr.To(int32(120)), ptr.To(int32(50)), &metav1.Time{Time: time.Now()}),
+			expectError:   true,
 		},
 	}
 
@@ -1522,7 +1510,13 @@ func TestCreateHTTPRoute(t *testing.T) {
 			_ = rayv1.AddToScheme(newScheme)
 			_ = gwv1.AddToScheme(newScheme)
 
-			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
+			// Setup runtime test objects.
+			runtimeObjects := []runtime.Object{
+				tt.rayService, activeServeService, pendingServeService,
+				pendingCluster, activeCluster, gateway,
+			}
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			reconciler := RayServiceReconciler{
 				Client:   fakeClient,
 				Scheme:   newScheme,
@@ -1545,8 +1539,8 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rule := route.Spec.Rules[0]
 				require.Len(t, rule.BackendRefs, 2)
 
-				assert.Equal(t, gwv1.ObjectName("active-service"), rule.BackendRefs[0].BackendRef.Name)
-				assert.Equal(t, gwv1.ObjectName("pending-service"), rule.BackendRefs[1].BackendRef.Name)
+				assert.Equal(t, gwv1.ObjectName(activeServeService.Name), rule.BackendRefs[0].BackendRef.Name)
+				assert.Equal(t, gwv1.ObjectName(pendingServeService.Name), rule.BackendRefs[1].BackendRef.Name)
 
 				assert.Equal(t, tt.routedPercent, *rule.BackendRefs[0].Weight)
 				assert.Equal(t, int32(100)-tt.routedPercent, *rule.BackendRefs[1].Weight)
@@ -1573,27 +1567,10 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		ptr.To(metav1.Now()),
 	)
 
-	activeService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "active-service",
-			Namespace: namespace,
-		},
-	}
-	pendingService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pending-service",
-			Namespace: namespace,
-		},
-	}
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "active-ray-cluster",
 			Namespace: namespace,
-		},
-		Status: rayv1.RayClusterStatus{
-			Head: rayv1.HeadInfo{
-				ServiceName: "active-service",
-			},
 		},
 	}
 	pendingCluster := &rayv1.RayCluster{
@@ -1601,10 +1578,17 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			Name:      "pending-ray-cluster",
 			Namespace: namespace,
 		},
-		Status: rayv1.RayClusterStatus{
-			Head: rayv1.HeadInfo{
-				ServiceName: "pending-service",
-			},
+	}
+	activeServeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServeServiceName(activeCluster.Name),
+			Namespace: namespace,
+		},
+	}
+	pendingServeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateServeServiceName(pendingCluster.Name),
+			Namespace: namespace,
 		},
 	}
 	gateway := &gwv1.Gateway{
@@ -1628,7 +1612,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				{
 					BackendRef: gwv1.BackendRef{
 						BackendObjectReference: gwv1.BackendObjectReference{
-							Name:      "active-service",
+							Name:      gwv1.ObjectName(activeServeService.Name),
 							Namespace: ptr.To(gwv1.Namespace(namespace)),
 							Port:      ptr.To(gwv1.PortNumber(8000)),
 						},
@@ -1638,7 +1622,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				{
 					BackendRef: gwv1.BackendRef{
 						BackendObjectReference: gwv1.BackendObjectReference{
-							Name:      "pending-service",
+							Name:      gwv1.ObjectName(pendingServeService.Name),
 							Namespace: ptr.To(gwv1.Namespace(namespace)),
 							Port:      ptr.To(gwv1.PortNumber(8000)),
 						},
@@ -1658,7 +1642,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		{
 			name: "creates new HTTPRoute if not present",
 			runtimeObjects: []runtime.Object{
-				rayService, activeService, pendingService,
+				rayService, activeServeService, pendingServeService,
 				activeCluster, pendingCluster, gateway,
 			},
 			expectedRouteName: "httproute-incremental-ray-service",
@@ -1667,7 +1651,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		{
 			name: "updates HTTPRoute if spec differs",
 			runtimeObjects: []runtime.Object{
-				rayService, activeService, pendingService,
+				rayService, activeServeService, pendingServeService,
 				activeCluster, pendingCluster, gateway,
 				existingHTTPRoute,
 			},
@@ -1695,6 +1679,9 @@ func TestReconcileHTTPRoute(t *testing.T) {
 
 			assert.Equal(t, tt.expectedRouteName, route.Name)
 			assert.Equal(t, namespace, route.Namespace)
+
+			assert.Equal(t, gwv1.ObjectName(activeServeService.Name), route.Spec.Rules[0].BackendRefs[0].Name)
+			assert.Equal(t, gwv1.ObjectName(pendingServeService.Name), route.Spec.Rules[0].BackendRefs[1].Name)
 
 			require.Len(t, route.Spec.Rules[0].BackendRefs, 2)
 			assert.Equal(t, tt.expectedWeight, *route.Spec.Rules[0].BackendRefs[0].Weight)
@@ -2028,6 +2015,139 @@ func TestCheckIfNeedIncrementalUpgradeUpdate(t *testing.T) {
 			needsUpdate, reason := r.checkIfNeedIncrementalUpgradeUpdate(ctx, rayService)
 			assert.Equal(t, tt.expectedNeedsUpdate, needsUpdate)
 			assert.Equal(t, tt.expectedReason, reason)
+		})
+	}
+}
+
+func TestReconcilePerClusterServeService(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	ctx := context.TODO()
+	namespace := "test-ns"
+
+	// Minimal RayCluster with at least one container.
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-ray-cluster",
+			Namespace: namespace,
+			UID:       "test-uid",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "ray-head"},
+						},
+					},
+				},
+			},
+		},
+	}
+	rayService := makeIncrementalUpgradeRayService(
+		true,
+		"gateway-class",
+		ptr.To(int32(20)),
+		ptr.To(int32(30)),
+		ptr.To(int32(80)),
+		ptr.To(metav1.Now()),
+	)
+
+	// The expected pending RayCluster serve service.
+	expectedServeSvcName := utils.GenerateServeServiceName(rayCluster.Name)
+	expectedServeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      expectedServeSvcName,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				utils.RayClusterLabelKey:               rayCluster.Name,
+				utils.RayClusterServingServiceLabelKey: "true",
+			},
+		},
+	}
+
+	tests := []struct {
+		name                 string
+		rayCluster           *rayv1.RayCluster
+		runtimeObjects       []runtime.Object
+		expectServiceCreated bool
+		expectError          bool
+	}{
+		{
+			name:                 "RayCluster is nil, no-op.",
+			rayCluster:           nil,
+			runtimeObjects:       []runtime.Object{rayService},
+			expectServiceCreated: false,
+			expectError:          false,
+		},
+		{
+			name:                 "Create a new Serve service for the RayCluster.",
+			rayCluster:           rayCluster,
+			runtimeObjects:       []runtime.Object{rayService, rayCluster},
+			expectServiceCreated: true,
+			expectError:          false,
+		},
+		{
+			name:                 "Pending RayCluster serve service already exists, no-op.",
+			rayCluster:           rayCluster,
+			runtimeObjects:       []runtime.Object{rayService, rayCluster, expectedServeService},
+			expectServiceCreated: false,
+			expectError:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
+			reconciler := RayServiceReconciler{
+				Client:   fakeClient,
+				Scheme:   newScheme,
+				Recorder: record.NewFakeRecorder(1),
+			}
+
+			reconciledSvc, err := reconciler.reconcilePerClusterServeService(ctx, rayService, tt.rayCluster)
+
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			// No-op case, no service should be created when RayCluster is nil.
+			if tt.rayCluster == nil {
+				assert.Nil(t, reconciledSvc)
+				return
+			}
+
+			// Validate the expected Serve service exists for the RayCluster.
+			require.NotNil(t, reconciledSvc)
+			assert.Equal(t, expectedServeSvcName, reconciledSvc.Name)
+
+			createdSvc := &corev1.Service{}
+			err = fakeClient.Get(ctx, client.ObjectKey{Name: expectedServeSvcName, Namespace: namespace}, createdSvc)
+			require.NoError(t, err, "The Serve service should exist in the client")
+
+			// Verify the Serve service selector.
+			expectedSelector := map[string]string{
+				utils.RayClusterLabelKey:               rayCluster.Name,
+				utils.RayClusterServingServiceLabelKey: "true",
+			}
+			assert.Equal(t, expectedSelector, createdSvc.Spec.Selector)
+
+			// Validate owner ref is set to the expected RayCluster.
+			if tt.expectServiceCreated {
+				require.Len(t, createdSvc.OwnerReferences, 1)
+				ownerRef := createdSvc.OwnerReferences[0]
+				assert.Equal(t, rayCluster.Name, ownerRef.Name)
+				assert.Equal(t, "RayCluster", ownerRef.Kind)
+				assert.Equal(t, rayCluster.UID, ownerRef.UID)
+			}
 		})
 	}
 }
