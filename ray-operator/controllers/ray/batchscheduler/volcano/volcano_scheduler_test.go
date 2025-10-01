@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -128,4 +129,34 @@ func TestCreatePodGroup_NumOfHosts2(t *testing.T) {
 	// 2 GPUs * 2 (num of hosts) total
 	// 2 GPUs * 2 = 4 GPUs
 	a.Equal("4", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+}
+
+func createTestRayClusterWithLabels(labels map[string]string) rayv1.RayCluster {
+	cluster := createTestRayCluster(1)
+	if cluster.ObjectMeta.Labels == nil {
+		cluster.ObjectMeta.Labels = make(map[string]string)
+	}
+	for k, v := range labels {
+		cluster.ObjectMeta.Labels[k] = v
+	}
+	return cluster
+}
+
+func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with both network topology mode and highest tier allowed
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey:               "soft",
+		NetworkTopologyHighestTierAllowedLabelKey: "3",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+
+	a.Equal(cluster.Namespace, pg.Namespace)
+	a.Equal(volcanov1beta1.NetworkTopologyMode("soft"), pg.Spec.NetworkTopology.Mode)
+	a.NotNil(pg.Spec.NetworkTopology.HighestTierAllowed)
+	a.Equal(3, *pg.Spec.NetworkTopology.HighestTierAllowed)
 }

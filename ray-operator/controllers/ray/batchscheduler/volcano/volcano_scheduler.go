@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -24,8 +25,10 @@ import (
 )
 
 const (
-	PodGroupName      = "podgroups.scheduling.volcano.sh"
-	QueueNameLabelKey = "volcano.sh/queue-name"
+	PodGroupName                              = "podgroups.scheduling.volcano.sh"
+	QueueNameLabelKey                         = "volcano.sh/queue-name"
+	NetworkTopologyModeLabelKey               = "volcano.sh/network-topology-mode"
+	NetworkTopologyHighestTierAllowedLabelKey = "volcano.sh/network-topology-highest-tier-allowed"
 )
 
 type VolcanoBatchScheduler struct {
@@ -118,6 +121,18 @@ func createPodGroup(
 		Status: volcanov1beta1.PodGroupStatus{
 			Phase: volcanov1beta1.PodGroupPending,
 		},
+	}
+
+	mode, modeOk := app.ObjectMeta.Labels[NetworkTopologyModeLabelKey]
+	highestTier, tierOk := app.ObjectMeta.Labels[NetworkTopologyHighestTierAllowedLabelKey]
+	if modeOk && tierOk {
+		highestTierInt, err := strconv.Atoi(highestTier)
+		if err == nil {
+			podGroup.Spec.NetworkTopology = &volcanov1beta1.NetworkTopologySpec{
+				Mode:               volcanov1beta1.NetworkTopologyMode(mode),
+				HighestTierAllowed: &highestTierInt,
+			}
+		}
 	}
 
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
