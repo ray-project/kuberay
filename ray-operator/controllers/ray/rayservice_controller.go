@@ -557,7 +557,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	if rayServiceInstance.Spec.HTTPRoute != "" {
 		httpRouteName = rayServiceInstance.Spec.HTTPRoute
 	} else {
-		httpRouteName = fmt.Sprintf("httproute-%s", rayServiceInstance.Name)
+		httpRouteName = fmt.Sprintf("httproute-%s", gatewayInstance.Name)
 	}
 	httpRouteName = utils.CheckHTTPRouteName(httpRouteName)
 	desiredHTTPRoute := &gwv1.HTTPRoute{
