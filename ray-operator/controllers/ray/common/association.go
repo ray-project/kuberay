@@ -213,7 +213,7 @@ func RayServiceGatewayNamespacedName(rayService *rayv1.RayService) types.Namespa
 }
 
 func RayServiceHTTPRouteNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
-	httpRouteName := utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s", rayService.Name))
+	httpRouteName := utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s-gateway", rayService.Name))
 	return types.NamespacedName{
 		Name:      httpRouteName,
 		Namespace: rayService.Namespace,

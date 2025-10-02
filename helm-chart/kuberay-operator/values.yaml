@@ -89,7 +89,7 @@ featureGates:
 - name: RayJobDeletionPolicy
   enabled: false
 - name: RayServiceIncrementalUpgrade
-  enabled: true
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:
