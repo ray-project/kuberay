@@ -76,10 +76,12 @@ type HeadGroupSpec struct {
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// Resources specifies the resource quantities for the head group.
+	// These values override the resources passed to `rayStartParams` for the group.
 	// +optional
 	Resources corev1.ResourceList `json:"resources,omitempty"`
 	// Labels specifies the Ray node labels for the head group.
-	// These labels will also be added to the Pods of this head group.
+	// These labels will also be added to the Pods of this head group and override the `--labels`
+	// argument passed to `rayStartParams`.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 	// RayStartParams are the params of the start command: node-manager-port, object-store-memory, ...
@@ -114,10 +116,12 @@ type WorkerGroupSpec struct {
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// Resources specifies the resource quantities for this worker group.
+	// These values override the resources passed to `rayStartParams` for the group.
 	// +optional
 	Resources corev1.ResourceList `json:"resources,omitempty"`
 	// Labels specifies the Ray node labels for this worker group.
-	// These labels will also be added to the Pods of this worker group.
+	// These labels will also be added to the Pods of this worker group and override the `--labels`
+	// argument passed to `rayStartParams`.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 	// RayStartParams are the params of the start command: address, object-store-memory, ...
