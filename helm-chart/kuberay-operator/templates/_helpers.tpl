@@ -231,8 +231,8 @@ rules:
   - create
   - get
   - list
-  - watch
   - update
+  - watch
 - apiGroups:
   - networking.k8s.io
   resources:
