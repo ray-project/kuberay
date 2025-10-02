@@ -387,6 +387,6 @@ env_vars:
 		reason := rayJob.Status.Reason
 		message := rayJob.Status.Message
 		g.Expect(reason).To(Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded))
-		g.Expect(message).To(ContainSubstring("The RayJob submitter finished but job did not reach terminal state within timeout"))
+		g.Expect(message).To(MatchRegexp(`The RayJob submitter finished at .* but the job did not reach terminal state within .*`))
 	})
 }
