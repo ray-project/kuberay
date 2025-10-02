@@ -1687,6 +1687,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "missing autoscaler",
+			maxSurgePercent:   ptr.To(int32(50)),
 			stepSizePercent:   ptr.To(int32(50)),
 			intervalSeconds:   ptr.To(int32(10)),
 			gatewayClassName:  "istio",
@@ -1709,6 +1710,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "missing StepSizePercent",
+			maxSurgePercent:   ptr.To(int32(50)),
 			intervalSeconds:   ptr.To(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
@@ -1716,6 +1718,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "invalid IntervalSeconds",
+			maxSurgePercent:   ptr.To(int32(50)),
 			stepSizePercent:   ptr.To(int32(50)),
 			intervalSeconds:   ptr.To(int32(0)),
 			gatewayClassName:  "istio",
@@ -1724,6 +1727,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "missing GatewayClassName",
+			maxSurgePercent:   ptr.To(int32(50)),
 			stepSizePercent:   ptr.To(int32(50)),
 			intervalSeconds:   ptr.To(int32(10)),
 			enableAutoscaling: true,
