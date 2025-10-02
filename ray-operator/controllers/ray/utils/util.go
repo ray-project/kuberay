@@ -428,13 +428,28 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	desiredResourcesList := []corev1.ResourceList{{}}
-	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	var headPodResource corev1.ResourceList
+	// Prioritize the top-level head group `Resources` field if specified.
+	if len(cluster.Spec.HeadGroupSpec.Resources) > 0 {
+		headPodResource = cluster.Spec.HeadGroupSpec.Resources
+	} else {
+		// Otherwise, calculate resources from the pod template spec.
+		headPodResource = CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	}
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
+
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		// Prioritize the top-level worker group `Resources` field if specified.
+		var podResource corev1.ResourceList
+		if len(nodeGroup.Resources) > 0 {
+			podResource = nodeGroup.Resources.DeepCopy()
+		} else {
+			// Otherwise, calculate resources from the pod template spec.
+			podResource = CalculatePodResource(nodeGroup.Template.Spec)
+		}
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.Replicas; i++ {
 			desiredResourcesList = append(desiredResourcesList, podResource)
@@ -445,10 +460,25 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	minResourcesList := []corev1.ResourceList{{}}
-	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	var headPodResource corev1.ResourceList
+	// Prioritize the top-level head group `Resources` field if specified.
+	if len(cluster.Spec.HeadGroupSpec.Resources) > 0 {
+		headPodResource = cluster.Spec.HeadGroupSpec.Resources
+	} else {
+		// Otherwise, calculate resources from the pod template spec.
+		headPodResource = CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
+	}
 	minResourcesList = append(minResourcesList, headPodResource)
+
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		podResource := CalculatePodResource(nodeGroup.Template.Spec)
+		// Prioritize the top-level worker group `Resources` field if specified.
+		var podResource corev1.ResourceList
+		if len(nodeGroup.Resources) > 0 {
+			podResource = nodeGroup.Resources.DeepCopy()
+		} else {
+			// Otherwise, calculate resources from the pod template spec.
+			podResource = CalculatePodResource(nodeGroup.Template.Spec)
+		}
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)

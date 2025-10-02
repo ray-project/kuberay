@@ -1888,3 +1888,169 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeLabels(t *testing.T) {
+	tests := map[string]struct {
+		templateSpecLabels map[string]string
+		workerGroupLabels  map[string]string
+		expectedLabels     map[string]string
+	}{
+		"Non-overlapping labels don't override.": {
+			templateSpecLabels: map[string]string{"pod-label-key": "pod-label-value"},
+			workerGroupLabels:  map[string]string{"ray/io:some-label": "ray-node-label-value"},
+			expectedLabels:     map[string]string{"pod-label-key": "pod-label-value", "ray/io:some-label": "ray-node-label-value"},
+		},
+		"Overlapping labels override with precedence for group `Labels`.": {
+			templateSpecLabels: map[string]string{"accelerator-type": "GPU", "market-type": "spot"},
+			workerGroupLabels:  map[string]string{"accelerator-type": "TPU-V6E"},
+			expectedLabels:     map[string]string{"accelerator-type": "TPU-V6E", "market-type": "spot"},
+		},
+		"Empty Pod Spec labels.": {
+			templateSpecLabels: map[string]string{},
+			workerGroupLabels:  map[string]string{"group-labels": "group-label-value"},
+			expectedLabels:     map[string]string{"group-labels": "group-label-value"},
+		},
+		"Empty `Labels` field for group.": {
+			templateSpecLabels: map[string]string{"pod-label": "pod-label-value"},
+			workerGroupLabels:  map[string]string{},
+			expectedLabels:     map[string]string{"pod-label": "pod-label-value"},
+		},
+		"Both `Labels` and labels in Pod spec nil.": {
+			templateSpecLabels: nil,
+			workerGroupLabels:  nil,
+			expectedLabels:     map[string]string{},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			merged := mergeLabels(tc.templateSpecLabels, tc.workerGroupLabels)
+			assert.Equal(t, tc.expectedLabels, merged)
+		})
+	}
+}
+
+func TestReconcileRayStartParamsLabels(t *testing.T) {
+	tests := map[string]struct {
+		initialRayStartParams  map[string]string
+		groupLabels            map[string]string
+		expectedRayStartParams map[string]string
+	}{
+		"Set labels in group `Labels` to `--labels` empty rayStartParams.": {
+			initialRayStartParams: map[string]string{},
+			groupLabels: map[string]string{
+				"topology.kubernetes.io/zone": "us-central2",
+				"ray.io/node-group":           "worker-group-1",
+				"cloud.google.com/gke-spot":   "true",
+			},
+			// The output string is sorted alphabetically by key.
+			expectedRayStartParams: map[string]string{
+				"labels": "cloud.google.com/gke-spot=true,ray.io/node-group=worker-group-1,topology.kubernetes.io/zone=us-central2",
+			},
+		},
+		" group `Labels overwrites an existing '--labels' parameter in rayStartParams": {
+			initialRayStartParams: map[string]string{
+				"labels":    "old=label,to-be=replaced",
+				"resources": "some-resources", // should be retained
+			},
+			groupLabels: map[string]string{
+				"new": "label",
+			},
+			expectedRayStartParams: map[string]string{
+				"labels":    "new=label",
+				"resources": "some-resources",
+			},
+		},
+		"No-op when group `Labels` is nil": {
+			initialRayStartParams:  map[string]string{"labels": "some=labels"},
+			groupLabels:            nil,
+			expectedRayStartParams: map[string]string{"labels": "some=labels"},
+		},
+		"No-op when group `Labels` is empty": {
+			initialRayStartParams:  map[string]string{"labels": "some=labels"},
+			groupLabels:            map[string]string{},
+			expectedRayStartParams: map[string]string{"labels": "some=labels"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// copy of rayStartParams for test
+			rayStartParams := make(map[string]string)
+			for k, v := range tc.initialRayStartParams {
+				rayStartParams[k] = v
+			}
+
+			reconcileRayStartParamsLabels(rayStartParams, tc.groupLabels)
+
+			assert.Equal(t, tc.expectedRayStartParams, rayStartParams)
+		})
+	}
+}
+
+func TestReconcileRayStartParamsResources(t *testing.T) {
+	tests := map[string]struct {
+		initialRayStartParams  map[string]string
+		groupResources         corev1.ResourceList
+		expectedRayStartParams map[string]string
+		expectedK8sResources   corev1.ResourceList
+	}{
+		"No-op when group `Resources` is nil or empty": {
+			initialRayStartParams:  map[string]string{"existing": "true"},
+			groupResources:         nil,
+			expectedRayStartParams: map[string]string{"existing": "true"},
+		},
+		"Basic CPU and Memory set in `Resources` override rayStartParams": {
+			initialRayStartParams: map[string]string{},
+			groupResources: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			},
+			expectedRayStartParams: map[string]string{
+				"num-cpus": "2",
+				"memory":   "4294967296", // 4Gi in bytes
+			},
+		},
+		"GPU and custom TPU resource set in `Resources` override rayStartParams": {
+			initialRayStartParams: map[string]string{},
+			groupResources: corev1.ResourceList{
+				"nvidia.com/gpu": resource.MustParse("1"),
+				"TPU":            resource.MustParse("4"),
+			},
+			expectedRayStartParams: map[string]string{
+				"num-gpus":  "1",
+				"resources": "'{\"TPU\":4}'",
+			},
+		},
+		"Top-level `Resources` should override existing resource params": {
+			initialRayStartParams: map[string]string{
+				"num-cpus":  "1",
+				"memory":    "1000",
+				"resources": "'{\"Custom-Resource\": 10}'",
+			},
+			groupResources: corev1.ResourceList{
+				corev1.ResourceCPU: resource.MustParse("4"),
+				"Custom-Resource":  resource.MustParse("5"),
+			},
+			expectedRayStartParams: map[string]string{
+				"num-cpus":  "4",
+				"memory":    "1000", // preserved
+				"resources": "'{\"Custom-Resource\":5}'",
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			rayStartParams := make(map[string]string)
+			for k, v := range tc.initialRayStartParams {
+				rayStartParams[k] = v
+			}
+
+			reconcileRayStartParamsResources(rayStartParams, tc.groupResources)
+
+			// Verify rayStartParams are updated based on the top-level Resources values.
+			assert.Equal(t, tc.expectedRayStartParams, rayStartParams)
+		})
+	}
+}

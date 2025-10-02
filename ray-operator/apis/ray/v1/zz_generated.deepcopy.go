@@ -179,6 +179,20 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = make(corev1.ResourceList, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val.DeepCopy()
+		}
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams
 		*out = make(map[string]string, len(*in))
@@ -826,6 +840,20 @@ func (in *WorkerGroupSpec) DeepCopyInto(out *WorkerGroupSpec) {
 		in, out := &in.IdleTimeoutSeconds, &out.IdleTimeoutSeconds
 		*out = new(int32)
 		**out = **in
+	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = make(corev1.ResourceList, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val.DeepCopy()
+		}
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.RayStartParams != nil {
 		in, out := &in.RayStartParams, &out.RayStartParams

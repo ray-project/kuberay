@@ -1051,13 +1051,15 @@ func createPodSpec(cpu, memory string) corev1.PodSpec {
 
 func createRayClusterTemplate(
 	head struct {
-		cpu    string
-		memory string
+		resources corev1.ResourceList
+		cpu       string
+		memory    string
 	},
 	workers []struct {
 		replicas    *int32
 		minReplicas *int32
 		suspend     *bool
+		resources   corev1.ResourceList
 		cpu         string
 		memory      string
 		numOfHosts  int32
@@ -1066,6 +1068,7 @@ func createRayClusterTemplate(
 	cluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Resources: head.resources,
 				Template: corev1.PodTemplateSpec{
 					Spec: createPodSpec(head.cpu, head.memory),
 				},
@@ -1079,6 +1082,7 @@ func createRayClusterTemplate(
 			Replicas:    w.replicas,
 			MinReplicas: w.minReplicas,
 			Suspend:     w.suspend,
+			Resources:   w.resources,
 			Template: corev1.PodTemplateSpec{
 				Spec: createPodSpec(w.cpu, w.memory),
 			},
@@ -1090,8 +1094,9 @@ func createRayClusterTemplate(
 
 func TestCalculateResources(t *testing.T) {
 	headStruct := struct {
-		cpu    string
-		memory string
+		resources corev1.ResourceList
+		cpu       string
+		memory    string
 	}{
 		cpu:    "1",
 		memory: "100Mi",
@@ -1128,6 +1133,7 @@ func TestCalculateResources(t *testing.T) {
 				replicas    *int32
 				minReplicas *int32
 				suspend     *bool
+				resources   corev1.ResourceList
 				cpu         string
 				memory      string
 				numOfHosts  int32
@@ -1161,6 +1167,7 @@ func TestCalculateResources(t *testing.T) {
 				replicas    *int32
 				minReplicas *int32
 				suspend     *bool
+				resources   corev1.ResourceList
 				cpu         string
 				memory      string
 				numOfHosts  int32
@@ -1202,6 +1209,7 @@ func TestCalculateResources(t *testing.T) {
 				replicas    *int32
 				minReplicas *int32
 				suspend     *bool
+				resources   corev1.ResourceList
 				cpu         string
 				memory      string
 				numOfHosts  int32
@@ -1226,6 +1234,96 @@ func TestCalculateResources(t *testing.T) {
 				minResources: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),
 					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
+		{
+			name: "Top-level Head Resources should take precedence",
+			cluster: createRayClusterTemplate(
+				struct {
+					resources corev1.ResourceList
+					cpu       string
+					memory    string
+				}{
+					cpu:    "1",
+					memory: "100Mi",
+					resources: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("5"),
+						corev1.ResourceMemory: resource.MustParse("500Mi"),
+					},
+				},
+				[]struct {
+					replicas    *int32
+					minReplicas *int32
+					suspend     *bool
+					resources   corev1.ResourceList
+					cpu         string
+					memory      string
+					numOfHosts  int32
+				}{
+					{
+						numOfHosts:  1,
+						replicas:    ptr.To[int32](2),
+						minReplicas: ptr.To[int32](1),
+						cpu:         "1",
+						memory:      "1Gi",
+					},
+				},
+			),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("7"),
+					corev1.ResourceMemory: resource.MustParse("2548Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("6"),
+					corev1.ResourceMemory: resource.MustParse("1524Mi"),
+				},
+			},
+		},
+		{
+			name: "Top-level Worker Resources should take precedence",
+			cluster: createRayClusterTemplate(
+				headStruct,
+				[]struct {
+					replicas    *int32
+					minReplicas *int32
+					suspend     *bool
+					resources   corev1.ResourceList
+					cpu         string
+					memory      string
+					numOfHosts  int32
+				}{
+					{
+						numOfHosts:  1,
+						replicas:    ptr.To[int32](3),
+						minReplicas: ptr.To[int32](2),
+						cpu:         "1",
+						memory:      "1Gi",
+						resources: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("4"),
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
+							"TPU":                 resource.MustParse("4"),
+						},
+					},
+				},
+			),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("13"),
+					corev1.ResourceMemory: resource.MustParse("12388Mi"),
+					"TPU":                 resource.MustParse("12"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("9"),
+					corev1.ResourceMemory: resource.MustParse("8292Mi"),
+					"TPU":                 resource.MustParse("8"),
 				},
 			},
 		},

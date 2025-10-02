@@ -172,10 +172,16 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
-	if podTemplate.Labels == nil {
-		podTemplate.Labels = make(map[string]string)
-	}
-	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	// Reconcile top-level Resources for head group with rayStartParams.
+	reconcileRayStartParamsResources(headSpec.RayStartParams, headSpec.Resources)
+
+	// Reconcile top-level Labels for head group with `--labels` in rayStartParams.
+	reconcileRayStartParamsLabels(headSpec.RayStartParams, headSpec.Labels)
+
+	// Merge K8s labels from the Pod template and the top-level `Labels` field.
+	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
+	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
+
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -311,10 +317,17 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""
-	if podTemplate.Labels == nil {
-		podTemplate.Labels = make(map[string]string)
-	}
-	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
+
+	// Reconcile top-level Resources for worker group with rayStartParams.
+	reconcileRayStartParamsResources(workerSpec.RayStartParams, workerSpec.Resources)
+
+	// Reconcile top-level Labels for worker group with `--labels` in rayStartParams.
+	reconcileRayStartParamsLabels(workerSpec.RayStartParams, workerSpec.Labels)
+
+	// Merge K8s labels from the Pod template and the top-level `Labels` field.
+	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
+	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
+
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -1025,4 +1038,61 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+// reconcileRayStartParamsLabels reconciles `--labels` in rayStartParams based on group `Labels`.
+func reconcileRayStartParamsLabels(rayStartParams map[string]string, groupLabels map[string]string) {
+	if len(groupLabels) > 0 {
+		var labels []string
+		// Sort label keys for deterministic output.
+		keys := make([]string, 0, len(groupLabels))
+		for k := range groupLabels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			labels = append(labels, fmt.Sprintf("%s=%s", k, groupLabels[k]))
+		}
+		// When provided this will override any `--labels` value specified in rayStartParams.
+		rayStartParams["labels"] = strings.Join(labels, ",")
+	}
+}
+
+// reconcileRayStartParamsResources reconciles rayStartParams based on the top-level `Resources` field.
+func reconcileRayStartParamsResources(rayStartParams map[string]string, topLevelResources corev1.ResourceList) {
+	if len(topLevelResources) > 0 {
+		// Override relevant rayStartParams fields to ensure consistency.
+		rayResourcesJson := make(map[string]float64)
+		for name, quantity := range topLevelResources {
+			strName := string(name)
+			if name == corev1.ResourceCPU {
+				rayStartParams["num-cpus"] = strconv.FormatInt(quantity.Value(), 10)
+			} else if name == corev1.ResourceMemory {
+				rayStartParams["memory"] = strconv.FormatInt(quantity.Value(), 10)
+			} else if utils.IsGPUResourceKey(strName) {
+				rayStartParams["num-gpus"] = strconv.FormatInt(quantity.Value(), 10)
+			} else {
+				rayResourcesJson[strName] = quantity.AsApproximateFloat64()
+			}
+		}
+
+		if len(rayResourcesJson) > 0 {
+			jsonBytes, _ := json.Marshal(rayResourcesJson)
+			rayStartParams["resources"] = fmt.Sprintf("'%s'", string(jsonBytes))
+		}
+	}
+}
+
+// mergeLabels combines labels from a pod template and a top-level `labels` spec,
+// with the top-level labels field taking precedence.
+func mergeLabels(templateLabels map[string]string, topLevelLabels map[string]string) map[string]string {
+	merged := make(map[string]string)
+	for k, v := range templateLabels {
+		merged[k] = v
+	}
+	for k, v := range topLevelLabels {
+		merged[k] = v
+	}
+	return merged
 }
