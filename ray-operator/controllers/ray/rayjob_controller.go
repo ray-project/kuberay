@@ -6,10 +6,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,10 +44,9 @@ type RayJobReconciler struct {
 	client.Client
 	Scheme              *runtime.Scheme
 	Recorder            record.EventRecorder
-	JobInfoMap          *sync.Map
+	JobInfoMap          *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
-	workerPool          *dashboardclient.WorkerPool
 }
 
 type RayJobReconcilerOptions struct {
@@ -56,18 +55,15 @@ type RayJobReconcilerOptions struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	taskQueue := make(chan func(), 1000)
-	JobInfoMap := &sync.Map{}
-	workerPool := dashboardclient.NewWorkerPool(taskQueue)
-	dashboardClientFunc := provider.GetDashboardClient(mgr, taskQueue, JobInfoMap)
+	JobInfoMap := cmap.New[*utiltypes.RayJobInfo]()
+	dashboardClientFunc := provider.GetDashboardClient(mgr, &JobInfoMap)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
-		JobInfoMap:          JobInfoMap,
+		JobInfoMap:          &JobInfoMap,
 		dashboardClientFunc: dashboardClientFunc,
 		options:             options,
-		workerPool:          workerPool,
 	}
 }
 
@@ -272,8 +268,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		var jobInfo *utiltypes.RayJobInfo
-		if loadedJobInfo, ok := r.JobInfoMap.Load(rayJobInstance.Status.JobId); ok {
-			jobInfo = loadedJobInfo.(*utiltypes.RayJobInfo)
+		if loadedJobInfo, ok := r.JobInfoMap.Get(rayJobInstance.Status.JobId); ok {
+			logger.Info("Job info found in map", "JobId", rayJobInstance.Status.JobId, "JobInfo", loadedJobInfo)
+			jobInfo = loadedJobInfo
 		} else {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {

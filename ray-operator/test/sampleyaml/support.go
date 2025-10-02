@@ -75,7 +75,7 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		g.Expect(err).ToNot(HaveOccurred())
 		url := fmt.Sprintf("127.0.0.1:%d", localPort)
-		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(nil, false, nil, nil)
+		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(nil, false, nil)
 		rayDashboardClient, err := rayDashboardClientFunc(rayCluster, url)
 		g.Expect(err).ToNot(HaveOccurred())
 		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())

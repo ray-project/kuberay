@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"sync/atomic"
+
+	cmap "github.com/orcaman/concurrent-map/v2"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
@@ -20,7 +21,7 @@ type FakeRayDashboardClient struct {
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ chan func(), _ *sync.Map) {
+func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ *dashboardclient.WorkerPool, _ *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) {
 }
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {

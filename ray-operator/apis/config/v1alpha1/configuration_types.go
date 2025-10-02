@@ -1,8 +1,7 @@
 package v1alpha1
 
 import (
-	"sync"
-
+	cmap "github.com/orcaman/concurrent-map/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -10,6 +9,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 //+kubebuilder:object:root=true
@@ -87,8 +87,8 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager, taskQueue chan func(), jobInfoMap *sync.Map) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, taskQueue, jobInfoMap)
+func (config Configuration) GetDashboardClient(mgr manager.Manager, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, jobInfoMap)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {

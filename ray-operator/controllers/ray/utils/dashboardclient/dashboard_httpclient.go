@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -26,7 +26,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(client *http.Client, dashboardURL string, taskQueue chan func(), jobInfoMap *sync.Map)
+	InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo])
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -43,15 +43,15 @@ type RayDashboardClientInterface interface {
 
 type RayDashboardClient struct {
 	client       *http.Client
-	taskQueue    chan func()
-	jobInfoMap   *sync.Map
+	workerPool   *WorkerPool
+	jobInfoMap   *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]
 	dashboardURL string
 }
 
-func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, taskQueue chan func(), jobInfoMap *sync.Map) {
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) {
 	r.client = client
 	r.dashboardURL = dashboardURL
-	r.taskQueue = taskQueue
+	r.workerPool = workerPool
 	r.jobInfoMap = jobInfoMap
 }
 
@@ -168,13 +168,19 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 }
 
 func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) {
-	r.taskQueue <- func() {
+	if _, ok := r.workerPool.channelContent.Get(jobId); ok {
+		return
+	}
+	r.workerPool.channelContent.Set(jobId, struct{}{})
+	r.workerPool.taskQueue <- func() {
 		jobInfo, err := r.GetJobInfo(ctx, jobId)
+		r.workerPool.channelContent.Remove(jobId)
 		if err != nil {
 			fmt.Printf("AsyncGetJobInfo: error: %v\n", err)
+			return
 		}
 		if jobInfo != nil {
-			r.jobInfoMap.Store(jobId, jobInfo)
+			r.jobInfoMap.Set(jobId, jobInfo)
 		}
 	}
 }
