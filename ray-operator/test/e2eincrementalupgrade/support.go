@@ -6,7 +6,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -156,4 +158,88 @@ func GetGatewayIP(gateway *gwv1.Gateway) string {
 	}
 
 	return ""
+}
+
+func GetPendingCapacity(rs *rayv1.RayService) int32 {
+	return ptr.Deref(rs.Status.PendingServiceStatus.TargetCapacity, 0)
+}
+
+func GetPendingTraffic(rs *rayv1.RayService) int32 {
+	return ptr.Deref(rs.Status.PendingServiceStatus.TrafficRoutedPercent, 0)
+}
+
+func GetActiveCapacity(rs *rayv1.RayService) int32 {
+	return ptr.Deref(rs.Status.ActiveServiceStatus.TargetCapacity, 100)
+}
+
+func GetActiveTraffic(rs *rayv1.RayService) int32 {
+	return ptr.Deref(rs.Status.ActiveServiceStatus.TrafficRoutedPercent, 100)
+}
+
+func GetLastTrafficMigratedTime(rs *rayv1.RayService) *metav1.Time {
+	return rs.Status.ActiveServiceStatus.LastTrafficMigratedTime
+}
+
+// testStep defines a validation condition to wait for during the upgrade.
+type testStep struct {
+	getValue      func(rs *rayv1.RayService) int32
+	name          string
+	expectedValue int32
+}
+
+// generateUpgradeSteps is a helper function for testing that the controller follows the expected
+// sequence of updates to TrafficRoutedPercent and TargetCapacity during an incremental upgrade.
+func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
+	var steps []testStep
+
+	pendingCapacity := int32(0)
+	pendingTraffic := int32(0)
+	activeCapacity := int32(100)
+	activeTraffic := int32(100)
+
+	for pendingTraffic < 100 {
+		// Scale up the pending cluster's TargetCapacity.
+		if pendingTraffic == pendingCapacity {
+			nextPendingCapacity := min(pendingCapacity+maxSurge, 100)
+			if nextPendingCapacity > pendingCapacity {
+				steps = append(steps, testStep{
+					name:          fmt.Sprintf("Waiting for pending capacity to scale up to %d", nextPendingCapacity),
+					getValue:      GetPendingCapacity,
+					expectedValue: nextPendingCapacity,
+				})
+				pendingCapacity = nextPendingCapacity
+			}
+		}
+
+		// Shift traffic over from the active to the pending cluster by StepSizePercent.
+		for pendingTraffic < pendingCapacity {
+			nextPendingTraffic := min(pendingTraffic+stepSize, 100)
+			steps = append(steps, testStep{
+				name:          fmt.Sprintf("Waiting for pending traffic to shift to %d", nextPendingTraffic),
+				getValue:      GetPendingTraffic,
+				expectedValue: nextPendingTraffic,
+			})
+			pendingTraffic = nextPendingTraffic
+
+			nextActiveTraffic := max(activeTraffic-stepSize, 0)
+			steps = append(steps, testStep{
+				name:          fmt.Sprintf("Waiting for active traffic to shift down to %d", nextActiveTraffic),
+				getValue:      GetActiveTraffic,
+				expectedValue: nextActiveTraffic,
+			})
+			activeTraffic = nextActiveTraffic
+		}
+
+		// Scale down the active cluster's target capacity.
+		nextActiveCapacity := max(activeCapacity-maxSurge, 0)
+		if nextActiveCapacity < activeCapacity {
+			steps = append(steps, testStep{
+				name:          fmt.Sprintf("Waiting for active capacity to scale down to %d", nextActiveCapacity),
+				getValue:      GetActiveCapacity,
+				expectedValue: nextActiveCapacity,
+			})
+			activeCapacity = nextActiveCapacity
+		}
+	}
+	return steps
 }
