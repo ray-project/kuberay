@@ -346,9 +346,6 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	for _, subset := range serveEndPoints.Subsets {
 		numServeEndpoints += len(subset.Addresses)
 	}
-	if numServeEndpoints > math.MaxInt32 {
-		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
-	}
 
 	// During an IncrementalUpgrade, the pending RayCluster is also serving.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && pendingCluster != nil {
@@ -359,9 +356,10 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		for _, subset := range serveEndPoints.Subsets {
 			numServeEndpoints += len(subset.Addresses)
 		}
-		if numServeEndpoints > math.MaxInt32 {
-			return errstd.New("numServeEndpoints exceeds math.MaxInt32")
-		}
+	}
+
+	if numServeEndpoints > math.MaxInt32 {
+		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
 
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
@@ -650,14 +648,11 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// Attempt to retrieve pending RayCluster
 	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
-	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
-	hasPendingCluster = false
-	if err != nil && !errors.IsNotFound(err){
-	    logger.Error(err, "Failed to retrieve pending RayCluster")
-	    return nil, err
-	 
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Failed to retrieve pending RayCluster.")
+		return nil, err
 	}
-	hasPendingCluster = pendingRayCluster != nil
+	hasPendingCluster := pendingRayCluster != nil
 
 	activeClusterWeight, pendingClusterWeight, err := r.reconcileTrafficRoutedPercent(ctx, rayServiceInstance, hasPendingCluster)
 	if err != nil {
