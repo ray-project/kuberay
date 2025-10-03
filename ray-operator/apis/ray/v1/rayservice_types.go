@@ -74,7 +74,8 @@ type IncrementalUpgradeOptions struct {
 }
 
 type RayServiceUpgradeStrategy struct {
-	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
+	// Type represents the strategy used when upgrading the RayService. Currently supports
+	// `NewCluster`, `IncrementalUpgrade`, and `None`.
 	// +optional
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
 	// IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.
@@ -187,6 +188,8 @@ const (
 	RayServiceReady RayServiceConditionType = "Ready"
 	// UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.
 	UpgradeInProgress RayServiceConditionType = "UpgradeInProgress"
+	// RollbackInProgress means the RayService is currently rolling back an in-progress upgrade to the original cluster state.
+	RollbackInProgress RayServiceConditionType = "RollbackInProgress"
 )
 
 const (
@@ -196,6 +199,7 @@ const (
 	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
+	GoalClusterChanged             RayServiceConditionReason = "GoalClusterChanged"
 )
 
 // +kubebuilder:object:root=true

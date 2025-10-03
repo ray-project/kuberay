@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
@@ -65,15 +66,17 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
 		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
 
+	// Get the Gateway endpoint to send requests to
 	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
 
-	httpRouteName := fmt.Sprintf("%s-%s", "httproute", rayServiceName)
+	httpRouteName := fmt.Sprintf("%s-%s", "httproute", gatewayName)
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
 	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
 		Should(Not(BeNil()))
-	httpRoute, err := GetHTTPRoute(test, namespace.Name, fmt.Sprintf("%s-%s", "httproute", rayServiceName))
+
+	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
 
@@ -90,7 +93,6 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		return updatedPod
 	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
-	// Get the Gateway endpoint to send requests to
 	gatewayIP := GetGatewayIP(gateway)
 	g.Expect(gatewayIP).NotTo(BeEmpty())
 
@@ -150,78 +152,40 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Validating stepwise traffic and capacity migration")
-	stepSizeVal := *stepSize
-	intervalVal := *interval
-	maxSurgeVal := *maxSurge
-
-	var lastPendingCapacity, lastPendingTraffic, lastActiveCapacity, lastActiveTraffic int32
+	intervalSeconds := *interval
+	var lastMigratedTime *metav1.Time
 
 	// Validate expected behavior during an IncrementalUpgrade. The following checks ensures
 	// that no requests are dropped throughout the upgrade process.
-	for {
-		// Wait IntervalSeconds in between updates
-		time.Sleep(time.Duration(intervalVal) * time.Second)
-
-		// Fetch updated RayService
-		rayService, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-
-		pending := rayService.Status.PendingServiceStatus
-		active := rayService.Status.ActiveServiceStatus
-
-		if pending.RayClusterName == "" {
-			// No pending cluster - upgrade has completed
-			break
-		}
-
-		// Incremental Upgrade related status fields should be set
-		g.Expect(pending.TrafficRoutedPercent).NotTo(BeNil())
-		g.Expect(pending.TargetCapacity).NotTo(BeNil())
-		g.Expect(active.TrafficRoutedPercent).NotTo(BeNil())
-		g.Expect(active.TargetCapacity).NotTo(BeNil())
-
-		pendingTraffic := *pending.TrafficRoutedPercent
-		pendingCapacity := *pending.TargetCapacity
-		activeTraffic := *active.TrafficRoutedPercent
-		activeCapacity := *active.TargetCapacity
-
-		LogWithTimestamp(test.T(), "pendingTraffic: %d, pendingCapacity: %d, activeTraffic: %d, activeCapacity: %d", pendingTraffic, pendingCapacity, activeTraffic, activeCapacity)
-
-		// Initial iteration - set weights
-		if pendingTraffic == 0 && pendingCapacity == 0 && activeTraffic == 100 && activeCapacity == 100 {
-			lastPendingCapacity = pendingCapacity
-			lastPendingTraffic = pendingTraffic
-			lastActiveCapacity = activeCapacity
-			lastActiveTraffic = activeTraffic
-			continue
-		}
-
-		// Validate that pending TargetCapacity increases by MaxSurgePercent
-		if pendingCapacity > lastPendingCapacity {
-			g.Expect(pendingCapacity - lastPendingCapacity).To(Equal(maxSurgeVal))
-			lastPendingCapacity = pendingCapacity
-		}
-
-		// Incremental traffic migration steps
-		if pendingTraffic < pendingCapacity {
-			if lastPendingTraffic != 0 {
-				g.Expect(pendingTraffic - lastPendingTraffic).To(Equal(stepSizeVal))
-				g.Expect(lastActiveTraffic - activeTraffic).To(Equal(stepSizeVal))
-			}
-			lastPendingTraffic = pendingTraffic
-			lastActiveTraffic = activeTraffic
-			continue
-		}
-
-		// Once pending TrafficRoutedPercent equals TargetCapacity, active
-		// TargetCapacity can be reduced by MaxSurgePercent.
-		if pendingTraffic == pendingCapacity && activeCapacity > 0 {
-			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
+	for _, step := range upgradeSteps {
+		LogWithTimestamp(test.T(), "%s", step.name)
+		g.Eventually(func(g Gomega) int32 {
+			// Fetch updated RayService.
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
-			newActiveCapacity := *rayService.Status.ActiveServiceStatus.TargetCapacity
-			g.Expect(lastActiveCapacity - newActiveCapacity).To(Equal(maxSurgeVal))
-			lastActiveCapacity = newActiveCapacity
-			continue
+
+			// Send a request to the RayService to validate no requests are dropped.
+			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+			g.Expect(stdout.String()).To(Equal("6"))
+
+			return step.getValue(svc)
+		}, TestTimeoutShort).Should(Equal(step.expectedValue))
+
+		if strings.Contains(step.name, "pending traffic to shift") {
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			currentMigratedTime := svc.Status.PendingServiceStatus.LastTrafficMigratedTime
+			g.Expect(currentMigratedTime).NotTo(BeNil())
+
+			// Verify IntervalSeconds have passed since last TrafficRoutedPercent update.
+			if lastMigratedTime != nil {
+				duration := currentMigratedTime.Sub(lastMigratedTime.Time)
+				g.Expect(duration).To(BeNumerically(">=", intervalSeconds),
+					"Time between traffic steps should be >= IntervalSeconds")
+			}
+			lastMigratedTime = currentMigratedTime
 		}
 	}
 	// Check that RayService completed upgrade
@@ -231,4 +195,126 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
 	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("8"))
+}
+
+func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+	rayServiceName := "rollback-rayservice"
+
+	// Create a RayService with IncrementalUpgrade enabled
+	stepSize := ptr.To(int32(25))
+	interval := ptr.To(int32(10))
+	maxSurge := ptr.To(int32(50))
+
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
+		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
+	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(rayService).NotTo(BeNil())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	// Copy original spec to use to trigger a rollback later.
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalSpec := rayService.Spec.DeepCopy()
+
+	// Verify Gateway and HTTPRoute are ready.
+	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
+	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
+	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(gateway).NotTo(BeNil())
+
+	httpRouteName := fmt.Sprintf("%s-%s", "httproute", gatewayName)
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
+	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
+		Should(Not(BeNil()))
+
+	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
+
+	// Trigger an incremental upgrade through a change to the RayCluster spec.
+	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+	// Wait for the upgrade to be underway with traffic partially migrated.
+	LogWithTimestamp(test.T(), "Waiting for upgrade to be partially complete")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(BeNumerically(">", 0))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Trigger a rollback by updating the spec back to the original version.
+	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec = *originalSpec
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Verify that the controller enters the rollback state.
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+
+	// Verify that traffic gradually shifts back to the active cluster.
+	LogWithTimestamp(test.T(), "Verifying traffic shifts back to the active cluster")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(svc.Status.ActiveServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.ActiveServiceStatus.TrafficRoutedPercent).Should(Equal(int32(100)))
+		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(Equal(int32(0)))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify that the rollback completes and the pending cluster is cleaned up.
+	LogWithTimestamp(test.T(), "Waiting for rollback to complete and pending cluster to be deleted")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		// Rollback is done when both conditions are false and pending status is empty.
+		g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
+		g.Expect(IsRayServiceUpgrading(svc)).To(BeFalse())
+		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Check that the pending RayCluster resource is deleted.
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	pendingClusterName := rayService.Status.PendingServiceStatus.RayClusterName
+	if pendingClusterName != "" {
+		g.Eventually(func() error {
+			_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
+			return err
+		}, TestTimeoutShort).Should(WithTransform(errors.IsNotFound, BeTrue()))
+	}
+
+	// The HTTPRoute should now only have one backend after the rollback completes.
+	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutShort).
+		Should(WithTransform(func(route *gwv1.HTTPRoute) int {
+			if route == nil || len(route.Spec.Rules) == 0 {
+				return 0
+			}
+			return len(route.Spec.Rules[0].BackendRefs)
+		}, Equal(1)))
 }

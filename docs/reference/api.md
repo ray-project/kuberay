@@ -338,7 +338,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`. |  |  |
+| `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports<br />`NewCluster`, `IncrementalUpgrade`, and `None`. |  |  |
 | `incrementalUpgradeOptions` _[IncrementalUpgradeOptions](#incrementalupgradeoptions)_ | IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set IncrementalUpgradeOptions. |  |  |
 
 
