@@ -595,8 +595,9 @@ func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context
 			pendingClusterWeight = min(100, proposedPendingWeight, pendingClusterTargetCapacity)
 			activeClusterWeight = 100 - pendingClusterWeight
 
-			pendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
-			activeServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
+			now := metav1.Time{Time: time.Now()}
+			pendingServiceStatus.LastTrafficMigratedTime = &now
+			activeServiceStatus.LastTrafficMigratedTime = &now
 		}
 	}
 
