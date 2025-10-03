@@ -315,14 +315,17 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 			"clusterName", rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
 
 		if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-			// Set IncrementalUpgrade related Status fields for new pending RayCluster if enabled
+			// Set IncrementalUpgrade related Status fields for new pending RayCluster if enabled.
 			if rayServiceInstance.Status.ActiveServiceStatus.RayClusterName == "" {
 				// If no Active RayCluster exists - default to starting with 100% TargetCapacity.
+				// This is the case when a RayCluster is first starting for a RayService, so we should
+				// immediately scale it to full target capacity.
 				if rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity == nil {
 					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(100))
 				}
 			} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
-				// Pending RayCluster during an upgrade should start with 0% TargetCapacity.
+				// Pending RayCluster during an upgrade should start with 0% TargetCapacity, since
+				// traffic will be gradually migrated to the new cluster.
 				if rayServiceInstance.Status.PendingServiceStatus.TargetCapacity == nil {
 					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(0))
 				}
@@ -332,8 +335,9 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 
 	serveEndPoints := &corev1.Endpoints{}
 	serveServiceName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
-	// For IncrementalUpgrade, the Serve service name is based on the RayCluster.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeCluster != nil {
+		// The Serve service name is based on the unique RayCluster name, since we use the
+		// per-cluster Serve services for traffic routing during an incremental upgrade.
 		serveServiceName.Name = utils.GenerateServeServiceName(activeCluster.Name)
 	}
 	if err := r.Get(ctx, serveServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
