@@ -633,11 +633,14 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// Attempt to retrieve pending RayCluster
 	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
-	hasPendingCluster := (err == nil && pendingRayCluster != nil)
-	if err != nil && !errors.IsNotFound(err) {
-		logger.Info("Failed to retrieve pending RayCluster.")
-		return nil, err
+	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
+	hasPendingCluster = false
+	if err != nil && !errors.IsNotFound(err){
+	    logger.Error(err, "Failed to retrieve pending RayCluster")
+	    return nil, err
+	 
 	}
+	hasPendingCluster = pendingRayCluster != nil
 
 	activeClusterWeight, pendingClusterWeight, err := r.reconcileTrafficRoutedPercent(ctx, rayServiceInstance, hasPendingCluster)
 	if err != nil {
