@@ -483,6 +483,7 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 	return true
 }
 
+// `createGateway` creates a Gateway for a RayService or updates an existing Gateway.
 func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayService) (*gwv1.Gateway, error) {
 	options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 	if options == nil {
@@ -556,8 +557,17 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	return nil
 }
 
-// reconcileTrafficRoutedPercent determines the traffic split between the active and pending clusters during an upgrade,
-// returning the weights for the old and new clusters respectively, or an error if misconfigured.
+// reconcileTrafficRoutedPercent determines the traffic split between the active and pending RayClusters.
+//
+// The function calculates the HTTPRoute weights for the active and pending RayClusters respectively,
+// and updates the RayService status with new TrafficRoutedPercent values.
+//
+// The new weights are calculated using:
+// - Current TrafficRoutedPercent values
+// - Time-based migration using StepSizePercent and IntervalSeconds
+// - TargetCapacity constraints
+//
+// Returns the active cluster traffic weight, pending cluster traffic weight, and an error if any.
 func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context, rayServiceInstance *rayv1.RayService, hasPendingCluster bool) (activeClusterWeight, pendingClusterWeight int32, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	activeServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
@@ -609,8 +619,15 @@ func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context
 	return activeClusterWeight, pendingClusterWeight, nil
 }
 
-// createHTTPRoute creates a desired HTTPRoute object based on a given RayService instance with
-// weights based on TrafficRoutedPercent.
+// createHTTPRoute creates a desired HTTPRoute object for RayService incremental upgrade.
+//
+// The function performs the following operations:
+// 1. Retrieves Gateway instance to attach the HTTPRoute
+// 2. Gets active and pending RayCluster instances and their Serve services
+// 3. Calls `reconcileTrafficRoutedPercent` to calculate the new traffic weights
+// 4. Configures HTTPRoute with appropriate backend references and weights
+//
+// Returns the configured HTTPRoute object or error if any step fails.
 func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
