@@ -1930,7 +1930,7 @@ func TestMergeLabels(t *testing.T) {
 	}
 }
 
-func TestReconcileRayStartParamsLabels(t *testing.T) {
+func TestUpdateRayStartParamsLabels(t *testing.T) {
 	tests := map[string]struct {
 		initialRayStartParams  map[string]string
 		groupLabels            map[string]string
@@ -1981,17 +1981,19 @@ func TestReconcileRayStartParamsLabels(t *testing.T) {
 				rayStartParams[k] = v
 			}
 
-			reconcileRayStartParamsLabels(rayStartParams, tc.groupLabels)
+			updateRayStartParamsLabels(rayStartParams, tc.groupLabels)
 
 			assert.Equal(t, tc.expectedRayStartParams, rayStartParams)
 		})
 	}
 }
 
-func TestReconcileRayStartParamsResources(t *testing.T) {
+func TestUpdateRayStartParamsResources(t *testing.T) {
+	ctx := context.Background()
+
 	tests := map[string]struct {
 		initialRayStartParams  map[string]string
-		groupResources         corev1.ResourceList
+		groupResources         map[string]string
 		expectedRayStartParams map[string]string
 		expectedK8sResources   corev1.ResourceList
 	}{
@@ -2002,9 +2004,9 @@ func TestReconcileRayStartParamsResources(t *testing.T) {
 		},
 		"Basic CPU and Memory set in `Resources` override rayStartParams": {
 			initialRayStartParams: map[string]string{},
-			groupResources: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("2"),
-				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			groupResources: map[string]string{
+				string(corev1.ResourceCPU):    "2",
+				string(corev1.ResourceMemory): "4Gi",
 			},
 			expectedRayStartParams: map[string]string{
 				"num-cpus": "2",
@@ -2013,9 +2015,9 @@ func TestReconcileRayStartParamsResources(t *testing.T) {
 		},
 		"GPU and custom TPU resource set in `Resources` override rayStartParams": {
 			initialRayStartParams: map[string]string{},
-			groupResources: corev1.ResourceList{
-				"nvidia.com/gpu": resource.MustParse("1"),
-				"TPU":            resource.MustParse("4"),
+			groupResources: map[string]string{
+				"nvidia.com/gpu": "1",
+				"TPU":            "4",
 			},
 			expectedRayStartParams: map[string]string{
 				"num-gpus":  "1",
@@ -2028,9 +2030,9 @@ func TestReconcileRayStartParamsResources(t *testing.T) {
 				"memory":    "1000",
 				"resources": "'{\"Custom-Resource\": 10}'",
 			},
-			groupResources: corev1.ResourceList{
-				corev1.ResourceCPU: resource.MustParse("4"),
-				"Custom-Resource":  resource.MustParse("5"),
+			groupResources: map[string]string{
+				string(corev1.ResourceCPU): "4",
+				"Custom-Resource":          "5",
 			},
 			expectedRayStartParams: map[string]string{
 				"num-cpus":  "4",
@@ -2047,7 +2049,7 @@ func TestReconcileRayStartParamsResources(t *testing.T) {
 				rayStartParams[k] = v
 			}
 
-			reconcileRayStartParamsResources(rayStartParams, tc.groupResources)
+			updateRayStartParamsResources(ctx, rayStartParams, tc.groupResources)
 
 			// Verify rayStartParams are updated based on the top-level Resources values.
 			assert.Equal(t, tc.expectedRayStartParams, rayStartParams)

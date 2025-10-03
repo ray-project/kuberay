@@ -181,9 +181,9 @@ func (in *HeadGroupSpec) DeepCopyInto(out *HeadGroupSpec) {
 	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
-		*out = make(corev1.ResourceList, len(*in))
+		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
+			(*out)[key] = val
 		}
 	}
 	if in.Labels != nil {
@@ -843,9 +843,9 @@ func (in *WorkerGroupSpec) DeepCopyInto(out *WorkerGroupSpec) {
 	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
-		*out = make(corev1.ResourceList, len(*in))
+		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
+			(*out)[key] = val
 		}
 	}
 	if in.Labels != nil {

@@ -3,25 +3,24 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	applyconfigurationscorev1 "k8s.io/client-go/applyconfigurations/core/v1"
+	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
 // WorkerGroupSpecApplyConfiguration represents a declarative configuration of the WorkerGroupSpec type for use
 // with apply.
 type WorkerGroupSpecApplyConfiguration struct {
-	Suspend            *bool                                                        `json:"suspend,omitempty"`
-	GroupName          *string                                                      `json:"groupName,omitempty"`
-	Replicas           *int32                                                       `json:"replicas,omitempty"`
-	MinReplicas        *int32                                                       `json:"minReplicas,omitempty"`
-	MaxReplicas        *int32                                                       `json:"maxReplicas,omitempty"`
-	IdleTimeoutSeconds *int32                                                       `json:"idleTimeoutSeconds,omitempty"`
-	Resources          *corev1.ResourceList                                         `json:"resources,omitempty"`
-	Labels             map[string]string                                            `json:"labels,omitempty"`
-	RayStartParams     map[string]string                                            `json:"rayStartParams,omitempty"`
-	Template           *applyconfigurationscorev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
-	ScaleStrategy      *ScaleStrategyApplyConfiguration                             `json:"scaleStrategy,omitempty"`
-	NumOfHosts         *int32                                                       `json:"numOfHosts,omitempty"`
+	Suspend            *bool                                     `json:"suspend,omitempty"`
+	GroupName          *string                                   `json:"groupName,omitempty"`
+	Replicas           *int32                                    `json:"replicas,omitempty"`
+	MinReplicas        *int32                                    `json:"minReplicas,omitempty"`
+	MaxReplicas        *int32                                    `json:"maxReplicas,omitempty"`
+	IdleTimeoutSeconds *int32                                    `json:"idleTimeoutSeconds,omitempty"`
+	Resources          map[string]string                         `json:"resources,omitempty"`
+	Labels             map[string]string                         `json:"labels,omitempty"`
+	RayStartParams     map[string]string                         `json:"rayStartParams,omitempty"`
+	Template           *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
+	ScaleStrategy      *ScaleStrategyApplyConfiguration          `json:"scaleStrategy,omitempty"`
+	NumOfHosts         *int32                                    `json:"numOfHosts,omitempty"`
 }
 
 // WorkerGroupSpecApplyConfiguration constructs a declarative configuration of the WorkerGroupSpec type for use with
@@ -78,11 +77,17 @@ func (b *WorkerGroupSpecApplyConfiguration) WithIdleTimeoutSeconds(value int32) 
 	return b
 }
 
-// WithResources sets the Resources field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Resources field is set to the value of the last call.
-func (b *WorkerGroupSpecApplyConfiguration) WithResources(value corev1.ResourceList) *WorkerGroupSpecApplyConfiguration {
-	b.Resources = &value
+// WithResources puts the entries into the Resources field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Resources field,
+// overwriting an existing map entries in Resources field with the same key.
+func (b *WorkerGroupSpecApplyConfiguration) WithResources(entries map[string]string) *WorkerGroupSpecApplyConfiguration {
+	if b.Resources == nil && len(entries) > 0 {
+		b.Resources = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Resources[k] = v
+	}
 	return b
 }
 
@@ -117,7 +122,7 @@ func (b *WorkerGroupSpecApplyConfiguration) WithRayStartParams(entries map[strin
 // WithTemplate sets the Template field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Template field is set to the value of the last call.
-func (b *WorkerGroupSpecApplyConfiguration) WithTemplate(value *applyconfigurationscorev1.PodTemplateSpecApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
+func (b *WorkerGroupSpecApplyConfiguration) WithTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
 	b.Template = value
 	return b
 }

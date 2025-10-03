@@ -76,9 +76,10 @@ type HeadGroupSpec struct {
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
 	// Resources specifies the resource quantities for the head group.
-	// These values override the resources passed to `rayStartParams` for the group.
+	// These values override the resources passed to `rayStartParams` for the group, but
+	// have no effect on the resources set at the K8s Pod container level.
 	// +optional
-	Resources corev1.ResourceList `json:"resources,omitempty"`
+	Resources map[string]string `json:"resources,omitempty"`
 	// Labels specifies the Ray node labels for the head group.
 	// These labels will also be added to the Pods of this head group and override the `--labels`
 	// argument passed to `rayStartParams`.
@@ -116,9 +117,10 @@ type WorkerGroupSpec struct {
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// Resources specifies the resource quantities for this worker group.
-	// These values override the resources passed to `rayStartParams` for the group.
+	// These values override the resources passed to `rayStartParams` for the group, but
+	// have no effect on the resources set at the K8s Pod container level.
 	// +optional
-	Resources corev1.ResourceList `json:"resources,omitempty"`
+	Resources map[string]string `json:"resources,omitempty"`
 	// Labels specifies the Ray node labels for this worker group.
 	// These labels will also be added to the Pods of this worker group and override the `--labels`
 	// argument passed to `rayStartParams`.
