@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -24,8 +25,10 @@ import (
 )
 
 const (
-	PodGroupName      = "podgroups.scheduling.volcano.sh"
-	QueueNameLabelKey = "volcano.sh/queue-name"
+	PodGroupName                              = "podgroups.scheduling.volcano.sh"
+	QueueNameLabelKey                         = "volcano.sh/queue-name"
+	NetworkTopologyModeLabelKey               = "volcano.sh/network-topology-mode"
+	NetworkTopologyHighestTierAllowedLabelKey = "volcano.sh/network-topology-highest-tier-allowed"
 )
 
 type VolcanoBatchScheduler struct {
@@ -74,7 +77,11 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, app *rayv1.Ray
 			return err
 		}
 
-		podGroup := createPodGroup(app, podGroupName, size, totalResource)
+		podGroup, err := createPodGroup(app, podGroupName, size, totalResource)
+		if err != nil {
+			logger.Error(err, "Failed to create pod group specification", "PodGroup.Error", err)
+			return err
+		}
 		if err := v.cli.Create(ctx, &podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
 				logger.Info("pod group already exists, no need to create")
@@ -102,7 +109,7 @@ func createPodGroup(
 	podGroupName string,
 	size int32,
 	totalResource corev1.ResourceList,
-) volcanov1beta1.PodGroup {
+) (volcanov1beta1.PodGroup, error) {
 	podGroup := volcanov1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: app.Namespace,
@@ -120,6 +127,21 @@ func createPodGroup(
 		},
 	}
 
+	mode, modeOk := app.ObjectMeta.Labels[NetworkTopologyModeLabelKey]
+	if modeOk {
+		podGroup.Spec.NetworkTopology = &volcanov1beta1.NetworkTopologySpec{
+			Mode: volcanov1beta1.NetworkTopologyMode(mode),
+		}
+		highestTier, tierOk := app.ObjectMeta.Labels[NetworkTopologyHighestTierAllowedLabelKey]
+		if tierOk {
+			highestTierInt, err := strconv.Atoi(highestTier)
+			if err != nil {
+				return podGroup, fmt.Errorf("failed to convert %s label to int: %w for podgroup %s in namespace %s", NetworkTopologyHighestTierAllowedLabelKey, err, podGroupName, app.Namespace)
+			}
+			podGroup.Spec.NetworkTopology.HighestTierAllowed = &highestTierInt
+		}
+	}
+
 	if queue, ok := app.ObjectMeta.Labels[QueueNameLabelKey]; ok {
 		podGroup.Spec.Queue = queue
 	}
@@ -128,7 +150,7 @@ func createPodGroup(
 		podGroup.Spec.PriorityClassName = priorityClassName
 	}
 
-	return podGroup
+	return podGroup, nil
 }
 
 func (v *VolcanoBatchScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
