@@ -19,6 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -920,6 +922,9 @@ var _ = Context("Inside the default namespace", func() {
 		numWorkerPods := 3 * int(numOfHosts)
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
+		// Checks if the multi-host indexing is enabled
+		multihostIndexingEnabled := features.Enabled(features.RayMulithostIndexing)
+
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
 			// (1) Ray Autoscaler is enabled.
@@ -961,6 +966,27 @@ var _ = Context("Inside the default namespace", func() {
 
 			Eventually(
 				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("All multi-host pods are properly labeled", func() {
+			if multihostIndexingEnabled {
+				workerGrpReplicaMap := make(map[string][]string)
+				for _, pod := range workerPods.Items {
+					hostIndex := pod.Labels[utils.RayHostIndexKey]
+					hostGrpId := pod.Labels[utils.RayWorkerReplicaIndexKey]
+
+					grpReplicaIndexList, grpIdExists := workerGrpReplicaMap[hostGrpId]
+					if grpIdExists {
+						Expect(strconv.Atoi(hostIndex)).Should(BeNumerically("<", numOfHosts))
+						Expect(strconv.Atoi(hostIndex)).Should(BeNumerically(">=", 0))
+						Expect(slices.Contains(grpReplicaIndexList, hostIndex)).To(BeFalse())
+						workerGrpReplicaMap[hostGrpId] = append(grpReplicaIndexList, hostIndex)
+					} else {
+						workerGrpReplicaMap[hostGrpId] = []string{}
+						Expect(len(workerGrpReplicaMap)).Should(BeNumerically("<", replicas))
+					}
+				}
+			}
 		})
 
 		It("RayCluster's .status.state transitions to 'ready' when all worker Pods are Running and check pod counts are correct", func() {
@@ -1033,6 +1059,12 @@ var _ = Context("Inside the default namespace", func() {
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
+			if multihostIndexingEnabled {
+				// Number of pods should go down by num of hosts but then be re-created
+				Eventually(
+					listResourceFunc(ctx, &workerPods, workerFilters...),
+					time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods-int(numOfHosts)), fmt.Sprintf("workerGroup %v", workerPods.Items))
+			}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
