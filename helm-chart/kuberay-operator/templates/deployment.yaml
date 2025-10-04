@@ -35,7 +35,7 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
-      {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.defaultRayEnvs }}
+      {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
       volumes:
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
         - name: kuberay-logs
@@ -46,7 +46,7 @@ spec:
           emptyDir: {}
           {{- end }}
       {{- end }}
-      {{- if .Values.defaultRayEnvs }}
+      {{- if .Values.configuration.enabled }}
         - name: operator-config
           configMap:
             name: {{ include "kuberay-operator.deployment.name" . }}-config
@@ -66,13 +66,13 @@ spec:
           {{- with .Values.image.pullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
-          {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.defaultRayEnvs }}
+          {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
           volumeMounts:
           {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
             - name: kuberay-logs
               mountPath: "{{ .Values.logging.baseDir }}"
           {{- end }}
-          {{- if .Values.defaultRayEnvs }}
+          {{- if .Values.configuration.enabled }}
             - name: operator-config
               mountPath: /etc/kuberay
               readOnly: true
@@ -82,7 +82,7 @@ spec:
             - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
-            {{- if .Values.defaultRayEnvs -}}
+            {{- if .Values.configuration.enabled -}}
             {{- $argList = append $argList "--config" -}}
             {{- $argList = append $argList "/etc/kuberay/config.yaml" -}}
             {{- end -}}

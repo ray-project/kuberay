@@ -289,13 +289,15 @@ tests:
         path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
         content: "--burst=150"
 
-  - it: Should add config volume and volumeMount when defaultRayEnvs is set
+  - it: Should add config volume and volumeMount when configuration is enabled
     set:
-      defaultRayEnvs:
-        - name: RAY_enable_open_telemetry
-          value: "true"
-        - name: RAY_metric_cardinality_level
-          value: "recommended"
+      configuration:
+        enabled: true
+        defaultRayEnvs:
+          - name: RAY_enable_open_telemetry
+            value: "true"
+          - name: RAY_metric_cardinality_level
+            value: "recommended"
     asserts:
       - contains:
           path: spec.template.spec.volumes
@@ -310,11 +312,13 @@ tests:
             mountPath: /etc/kuberay
             readOnly: true
 
-  - it: Should add --config arg when defaultRayEnvs is set
+  - it: Should add --config arg when configuration is enabled
     set:
-      defaultRayEnvs:
-        - name: RAY_enable_open_telemetry
-          value: "true"
+      configuration:
+        enabled: true
+        defaultRayEnvs:
+          - name: RAY_enable_open_telemetry
+            value: "true"
     asserts:
       - contains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
@@ -323,7 +327,7 @@ tests:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "/etc/kuberay/config.yaml"
 
-  - it: Should not add config volume when defaultRayEnvs is not set
+  - it: Should not add config volume when configuration is not enabled
     asserts:
       - notExists:
           path: spec.template.spec.volumes[?(@.name=="operator-config")]

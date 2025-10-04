@@ -83,15 +83,19 @@ batchScheduler:
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
-# -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
-# This allows user to set feature flags across all Ray pods.
-# Example:
-# defaultRayEnvs:
-#  - name: RAY_enable_open_telemetry
-#    value: "true"
-#  - name: RAY_metric_cardinality_level
-#    value: "recommended"
-defaultRayEnvs: []
+# Configuration for the KubeRay operator.
+configuration:
+  # -- Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator.
+  enabled: false
+  # -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
+  # This allows user to set feature flags across all Ray pods.
+  # Example:
+  # defaultRayEnvs:
+  # - name: RAY_enable_open_telemetry
+  #   value: "true"
+  # - name: RAY_metric_cardinality_level
+  #   value: "recommended"
+  defaultRayEnvs: []
 
 featureGates:
 - name: RayClusterStatusConditions
