@@ -1,9 +1,9 @@
-import { ALL_NAMESPACES } from "@/utils/constants";
 import { useNamespace } from "@/components/NamespaceProvider";
 import fetcher from "@/utils/fetch";
 import useSWR from "swr";
 import { RayJobListResponse, RayJobItem } from "@/types/v2/api/rayjob";
 import { JobRow } from "@/types/table";
+import { ALL_NAMESPACES } from "@/utils/config-defaults";
 
 export const useListJobs = (
   refreshInterval: number = 5000,

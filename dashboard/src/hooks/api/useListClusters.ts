@@ -1,4 +1,3 @@
-import { ALL_NAMESPACES } from "@/utils/constants";
 import { useNamespace } from "@/components/NamespaceProvider";
 import fetcher from "@/utils/fetch";
 import useSWR from "swr";
@@ -7,6 +6,7 @@ import { RayClusterListResponse } from "@/types/v2/api/raycluster";
 import { ClusterRow } from "@/types/table";
 import { ClusterStatus } from "@/types/v2/raycluster";
 import { V1Condition } from "@kubernetes/client-node";
+import { ALL_NAMESPACES } from "@/utils/config-defaults";
 
 export const useListClusters = (
   refreshInterval: number = 5000,
