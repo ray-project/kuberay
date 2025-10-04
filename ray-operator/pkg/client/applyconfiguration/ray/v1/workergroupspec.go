@@ -15,6 +15,8 @@ type WorkerGroupSpecApplyConfiguration struct {
 	MinReplicas        *int32                                    `json:"minReplicas,omitempty"`
 	MaxReplicas        *int32                                    `json:"maxReplicas,omitempty"`
 	IdleTimeoutSeconds *int32                                    `json:"idleTimeoutSeconds,omitempty"`
+	Resources          map[string]string                         `json:"resources,omitempty"`
+	Labels             map[string]string                         `json:"labels,omitempty"`
 	RayStartParams     map[string]string                         `json:"rayStartParams,omitempty"`
 	Template           *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 	ScaleStrategy      *ScaleStrategyApplyConfiguration          `json:"scaleStrategy,omitempty"`
@@ -72,6 +74,34 @@ func (b *WorkerGroupSpecApplyConfiguration) WithMaxReplicas(value int32) *Worker
 // If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
 func (b *WorkerGroupSpecApplyConfiguration) WithIdleTimeoutSeconds(value int32) *WorkerGroupSpecApplyConfiguration {
 	b.IdleTimeoutSeconds = &value
+	return b
+}
+
+// WithResources puts the entries into the Resources field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Resources field,
+// overwriting an existing map entries in Resources field with the same key.
+func (b *WorkerGroupSpecApplyConfiguration) WithResources(entries map[string]string) *WorkerGroupSpecApplyConfiguration {
+	if b.Resources == nil && len(entries) > 0 {
+		b.Resources = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Resources[k] = v
+	}
+	return b
+}
+
+// WithLabels puts the entries into the Labels field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Labels field,
+// overwriting an existing map entries in Labels field with the same key.
+func (b *WorkerGroupSpecApplyConfiguration) WithLabels(entries map[string]string) *WorkerGroupSpecApplyConfiguration {
+	if b.Labels == nil && len(entries) > 0 {
+		b.Labels = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Labels[k] = v
+	}
 	return b
 }
 
