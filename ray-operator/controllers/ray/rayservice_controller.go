@@ -1139,7 +1139,7 @@ func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.C
 	pendingRayServiceStatus := rayServiceInstance.Status.PendingServiceStatus
 
 	if activeRayServiceStatus.RayClusterName == "" || pendingRayServiceStatus.RayClusterName == "" {
-		return false, "Both active and pending RayCluster instances required for incremental upgrade."
+		return false, "Both active and pending RayCluster instances are required for incremental upgrade."
 	}
 
 	// Validate Gateway and HTTPRoute objects are ready
