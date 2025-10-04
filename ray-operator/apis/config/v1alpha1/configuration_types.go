@@ -65,6 +65,9 @@ type Configuration struct {
 	// to inject into every Head pod.
 	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
 
+	// DefaultRayEnvs specifies default environment variables to inject into all Ray containers
+	DefaultRayEnvs []corev1.EnvVar `json:"defaultRayEnvs,omitempty"`
+
 	// ReconcileConcurrency is the max concurrency for each reconciler.
 	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
 

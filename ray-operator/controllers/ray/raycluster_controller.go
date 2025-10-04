@@ -84,6 +84,7 @@ type RayClusterReconcilerOptions struct {
 	BatchSchedulerManager    *batchscheduler.SchedulerManager
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
+	DefaultRayEnvs           []corev1.EnvVar
 	IsOpenShift              bool
 }
 
@@ -983,7 +984,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
-	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
+	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultRayEnvs)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1010,7 +1011,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
 	creatorCRDType := getCreatorCRDType(instance)
-	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
+	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultRayEnvs)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
