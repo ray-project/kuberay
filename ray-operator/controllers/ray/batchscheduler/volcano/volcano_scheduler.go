@@ -114,13 +114,7 @@ func populateAnnotations(parent metav1.Object, child metav1.Object, groupName st
 		annotations = make(map[string]string)
 	}
 	annotations[volcanoschedulingv1beta1.KubeGroupNameAnnotationKey] = getAppPodGroupName(parent)
-
-	switch child.(type) {
-	case *corev1.Pod:
-		annotations[volcanobatchv1alpha1.TaskSpecKey] = groupName
-	case *corev1.PodTemplateSpec:
-		annotations[volcanobatchv1alpha1.TaskSpecKey] = utils.RayNodeSubmitterGroupLabelValue
-	}
+	annotations[volcanobatchv1alpha1.TaskSpecKey] = groupName
 	child.SetAnnotations(annotations)
 }
 
@@ -144,7 +138,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	podGroup := volcanoschedulingv1beta1.PodGroup{}
 	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: owner.GetNamespace(), Name: podGroupName}, &podGroup); err != nil {
 		if !errors.IsNotFound(err) {
-			logger.Error(err, "failed to get PodGroup", "name", podGroupName)
+			logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
 			return err
 		}
 
