@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	RayJobDefaultRequeueDuration = 3 * time.Second
-	PythonUnbufferedEnvVarName   = "PYTHONUNBUFFERED"
+	RayJobDefaultRequeueDuration    = 3 * time.Second
+	PythonUnbufferedEnvVarName      = "PYTHONUNBUFFERED"
+	DefaultSubmitterFinishedTimeout = 30 * time.Second
 )
 
 // RayJobReconciler reconciles a RayJob object
@@ -259,12 +260,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		var isSubmitterFinished bool
+		var finishedAt *time.Time
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
-			shouldUpdate, isSubmitterFinished, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
+			shouldUpdate, isSubmitterFinished, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
+
+			if shouldUpdate := checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt); shouldUpdate {
+				break
+			}
+
 			if shouldUpdate {
 				break
 			}
@@ -1034,10 +1041,11 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	return true
 }
 
-func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate, isSubmitterFinished bool, err error) {
+func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate, isSubmitterFinished bool, finishedAt *time.Time, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
 	isSubmitterFinished = false
+	finishedAt = nil
 	var submitterContainerStatus *corev1.ContainerStatus
 	var condition *batchv1.JobCondition
 
@@ -1084,7 +1092,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			}
 		}
 
-		isSubmitterFinished = isSubmitterContainerFinished(headPod)
+		isSubmitterFinished, finishedAt = getSubmitterContainerFinishedTime(headPod)
 		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
@@ -1098,6 +1106,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			logger.Error(err, "Failed to get the submitter Kubernetes Job for RayJob", "NamespacedName", namespacedName)
 			return
 		}
+
 		shouldUpdate, condition = checkK8sJobStatus(job)
 		if shouldUpdate {
 			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.",
@@ -1114,6 +1123,10 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			}
 		}
 		_, isSubmitterFinished = utils.IsJobFinished(job)
+		if isSubmitterFinished && !job.Status.CompletionTime.IsZero() {
+			finishedAt = &job.Status.CompletionTime.Time
+		}
+
 		return
 	default:
 		// This means that the KubeRay logic is wrong, and it's better to panic as a system error than to allow the operator to
@@ -1160,6 +1173,31 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	return true
 }
 
+func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, finishedAt *time.Time) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Check if timeout is configured and submitter has finished
+	if finishedAt == nil {
+		return false
+	}
+
+	// Check if timeout has been exceeded
+	if time.Now().Before(finishedAt.Add(DefaultSubmitterFinishedTimeout)) {
+		return false
+	}
+
+	logger.Info("The RayJob has passed the submitterFinishedTimeoutSeconds. Transition the status to terminal.",
+		"SubmitterFinishedTime", finishedAt,
+		"SubmitterFinishedTimeoutSeconds", DefaultSubmitterFinishedTimeout.String())
+
+	rayJob.Status.JobStatus = rayv1.JobStatusFailed
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
+	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished at %v but the job did not reach terminal state within %v",
+		finishedAt, DefaultSubmitterFinishedTimeout)
+	return true
+}
+
 func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
 	logger := ctrl.LoggerFrom(ctx)
 	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
@@ -1190,14 +1228,14 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 	return false
 }
 
-func isSubmitterContainerFinished(pod *corev1.Pod) bool {
+func getSubmitterContainerFinishedTime(pod *corev1.Pod) (bool, *time.Time) {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			if containerStatus.State.Terminated != nil {
-				return true
+				return true, &containerStatus.State.Terminated.FinishedAt.Time
 			}
 			break
 		}
 	}
-	return false
+	return false, nil
 }
