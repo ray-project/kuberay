@@ -440,7 +440,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			desiredResourcesList = append(desiredResourcesList, podResource)
 		}
 	}
-	return sumResourceList(desiredResourcesList)
+	return SumResourceList(desiredResourcesList)
 }
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
@@ -454,7 +454,7 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
-	return sumResourceList(minResourcesList)
+	return SumResourceList(minResourcesList)
 }
 
 // calculateReplicaResource adjusts the resource quantities in a given ResourceList
@@ -503,7 +503,7 @@ func ConvertResourceListToMapString(resourceList corev1.ResourceList) map[string
 	return result
 }
 
-func sumResourceList(list []corev1.ResourceList) corev1.ResourceList {
+func SumResourceList(list []corev1.ResourceList) corev1.ResourceList {
 	totalResource := corev1.ResourceList{}
 	for _, l := range list {
 		for name, quantity := range l {
