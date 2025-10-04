@@ -52,7 +52,7 @@ async function _createJob(
   //       ]
   //     }
   //   }'
-  const url = `${config.url}/namespaces/${namespace}/rayjobs`;
+  const url = `${config.rayApiUrl}/namespaces/${namespace}/rayjobs`;
   const data = {
     name: jobName,
     namespace: "default",
