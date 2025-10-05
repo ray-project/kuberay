@@ -149,7 +149,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 				return nil
 			}
 
-			logger.Error(err, "failed to create PodGroup", "name", podGroupName)
+			logger.Error(err, "failed to create PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
 			return err
 		}
 	} else {
@@ -157,7 +157,7 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 			podGroup.Spec.MinMember = size
 			podGroup.Spec.MinResources = &totalResource
 			if err := v.cli.Update(ctx, &podGroup); err != nil {
-				logger.Error(err, "failed to update PodGroup", "name", podGroupName)
+				logger.Error(err, "failed to update PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
 				return err
 			}
 		}
