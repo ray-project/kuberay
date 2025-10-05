@@ -79,6 +79,10 @@ const (
 	MetricsPortName   = "metrics"
 	ServingPortName   = "serve"
 
+	// Gateway defaults for HTTP protocol
+	GatewayListenerPortName    = "http"
+	DefaultGatewayListenerPort = 80
+
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
 

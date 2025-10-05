@@ -20,6 +20,7 @@ import (
 func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,
+	hostname string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
 	rayServicePath,
@@ -30,7 +31,8 @@ func CurlRayServiceGateway(
 		"--max-time", "10",
 		"-X", "POST",
 		"-H", "Content-Type: application/json",
-		fmt.Sprintf("%s:80%s", gatewayIP, rayServicePath),
+		"-H", fmt.Sprintf("Host: %s", hostname),
+		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
 		"-d", body,
 	}
 

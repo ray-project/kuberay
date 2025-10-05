@@ -1450,6 +1450,29 @@ func TestCreateGateway(t *testing.T) {
 	}
 }
 
+// createReadyHeadPod is a helper function to create a running and ready head pod for a given RayCluster.
+func createReadyHeadPod(clusterName, namespace string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName + "-head-pod",
+			Namespace: namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  clusterName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+}
+
 func TestCreateHTTPRoute(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -1487,6 +1510,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			},
 		},
 	}
+	readyHeadPod := createReadyHeadPod(pendingCluster.Name, namespace)
 
 	tests := []struct {
 		name                  string
@@ -1497,11 +1521,20 @@ func TestCreateHTTPRoute(t *testing.T) {
 		expectedPendingWeight int32
 	}{
 		{
+			name: "Incremental upgrade, but pending cluster is not ready, so no traffic shift.",
+			modifier: func(rs *rayv1.RayService) {
+				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
+			},
+			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+		},
+		{
 			name: "Incremental upgrade, time since LastTrafficMigratedTime < IntervalSeconds.",
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
 			},
-			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService, readyHeadPod},
 			expectedActiveWeight:  100,
 			expectedPendingWeight: 0,
 		},
@@ -1511,7 +1544,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(60))
 			},
-			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService, readyHeadPod},
 			expectedActiveWeight:  90,
 			expectedPendingWeight: 10,
 		},
@@ -1521,7 +1554,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(5))
 			},
-			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService, readyHeadPod},
 			expectedActiveWeight:  95,
 			expectedPendingWeight: 5, // can only migrate 5% to pending until TargetCapacity reached
 		},
@@ -1530,7 +1563,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			modifier: func(rs *rayv1.RayService) {
 				rs.Spec.UpgradeStrategy.IncrementalUpgradeOptions = nil
 			},
-			runtimeObjects: []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			runtimeObjects: []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService, readyHeadPod},
 			expectError:    true,
 		},
 		{
@@ -1610,6 +1643,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	activeServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(activeCluster.Name), Namespace: namespace}}
 	pendingServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(pendingCluster.Name), Namespace: namespace}}
 	gateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: namespace}}
+	readyHeadPod := createReadyHeadPod(pendingCluster.Name, namespace)
 
 	baseRayService := &rayv1.RayService{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
@@ -1643,14 +1677,29 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		name                  string
 		expectedActiveWeight  int32
 		expectedPendingWeight int32
+		pendingClusterIsReady bool
 	}{
 		{
-			name:                  "Create new HTTPRoute with weights.",
+			name:                  "Update HTTPRoute when pending cluster is ready.",
+			pendingClusterIsReady: true,
 			expectedActiveWeight:  70,
 			expectedPendingWeight: 30,
 		},
 		{
-			name: "Existing HTTPRoute, time since LastTrafficMigratedTime >= IntervalSeconds so updates HTTPRoute.",
+			name:                  "Do not split traffic when pending cluster is NOT ready.",
+			pendingClusterIsReady: false,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+		},
+		{
+			name:                  "Create new HTTPRoute with weights.",
+			pendingClusterIsReady: true,
+			expectedActiveWeight:  70,
+			expectedPendingWeight: 30,
+		},
+		{
+			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime >= IntervalSeconds so updates HTTPRoute.",
+			pendingClusterIsReady: true,
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 			},
@@ -1662,7 +1711,8 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			expectedPendingWeight: 30,
 		},
 		{
-			name: "Existing HTTPRoute, time since LastTrafficMigratedTime < IntervalSeconds so no update.",
+			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime < IntervalSeconds so no update.",
+			pendingClusterIsReady: true,
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
 			},
@@ -1682,6 +1732,9 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			if tt.existingRoute != nil {
 				runtimeObjects = append(runtimeObjects, tt.existingRoute)
 			}
+			if tt.pendingClusterIsReady {
+				runtimeObjects = append(runtimeObjects, readyHeadPod)
+			}
 
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
@@ -1695,13 +1748,18 @@ func TestReconcileHTTPRoute(t *testing.T) {
 
 			require.Len(t, reconciledRoute.Spec.Rules, 1)
 			rule := reconciledRoute.Spec.Rules[0]
-			require.Len(t, rule.BackendRefs, 2)
+			if tt.pendingClusterIsReady {
+				require.Len(t, rule.BackendRefs, 2)
+				// Assert weights are set as expected.
+				assert.Equal(t, tt.expectedActiveWeight, *rule.BackendRefs[0].Weight)
+				assert.Equal(t, tt.expectedPendingWeight, *rule.BackendRefs[1].Weight)
+			} else {
+				require.Len(t, rule.BackendRefs, 1)
 
-			// Assert weights are set as expected.
-			assert.Equal(t, tt.expectedActiveWeight, *rule.BackendRefs[0].Weight)
-			assert.Equal(t, tt.expectedPendingWeight, *rule.BackendRefs[1].Weight)
-
-			// Assert ParentRef namespace is now correctly set.
+				// Assert active weight is as expected.
+				assert.Equal(t, tt.expectedActiveWeight, *rule.BackendRefs[0].Weight)
+			}
+			// Assert ParentRef namespace is correctly set.
 			parent := reconciledRoute.Spec.ParentRefs[0]
 			assert.Equal(t, gwv1.ObjectName(gatewayName), parent.Name)
 			assert.Equal(t, ptr.To(gwv1.Namespace(namespace)), parent.Namespace)
@@ -1952,7 +2010,7 @@ func TestCheckIfNeedIncrementalUpgradeUpdate(t *testing.T) {
 		{
 			name:                "Missing RayClusterNames",
 			expectedNeedsUpdate: false,
-			expectedReason:      "Both active and pending RayCluster instances required for incremental upgrade.",
+			expectedReason:      "Both active and pending RayCluster instances are required for incremental upgrade.",
 		},
 		{
 			name:          "Gateway not ready",

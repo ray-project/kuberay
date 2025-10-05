@@ -780,20 +780,6 @@ func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.I
 	return nil
 }
 
-// addGatewayListenersForRayService is a helper function to returns Gateway Listeners
-func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
-	listeners := make([]gwv1.Listener, 0, 1)
-	listenerName := fmt.Sprintf("%s-listener", rayServiceInstance.Name)
-	listener := gwv1.Listener{
-		Name:     gwv1.SectionName(listenerName),
-		Protocol: gwv1.HTTPProtocolType, // only support HTTP
-		Port:     gwv1.PortNumber(int32(80)),
-	}
-	listeners = append(listeners, listener)
-
-	return listeners
-}
-
 // Check where we are running. We are trying to distinguish here whether
 // this is vanilla kubernetes cluster or Openshift
 func GetClusterType() bool {

@@ -504,7 +504,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		},
 	}
 
-	rayServiceGateway.Spec.Listeners = utils.GetGatewayListenersForRayService(rayServiceInstance)
+	rayServiceGateway.Spec.Listeners = common.GetGatewayListenersForRayService(rayServiceInstance)
 
 	return rayServiceGateway, nil
 }
@@ -559,10 +559,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	return nil
 }
 
-// reconcileTrafficRoutedPercent determines the traffic split between the active and pending RayClusters.
-//
-// The function calculates the HTTPRoute weights for the active and pending RayClusters respectively,
-// and updates the RayService status with new TrafficRoutedPercent values.
+// calculateTrafficRoutedPercent determines the HTTPRoute traffic split between the active and pending RayClusters.
 //
 // The new weights are calculated using:
 // - Current TrafficRoutedPercent values
@@ -570,7 +567,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 // - TargetCapacity constraints
 //
 // Returns the active cluster traffic weight, pending cluster traffic weight, and an error if any.
-func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context, rayServiceInstance *rayv1.RayService, hasPendingCluster bool) (activeClusterWeight, pendingClusterWeight int32, err error) {
+func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) (activeClusterWeight, pendingClusterWeight int32, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	activeServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 	pendingServiceStatus := &rayServiceInstance.Status.PendingServiceStatus
@@ -579,7 +576,7 @@ func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context
 	activeClusterWeight = 100
 	pendingClusterWeight = 0
 
-	if hasPendingCluster {
+	if isPendingClusterReady {
 		// Zero-downtime upgrade in progress.
 		options := utils.GetRayServiceIncrementalUpgradeOptions(&rayServiceInstance.Spec)
 		if options == nil {
@@ -613,11 +610,6 @@ func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context
 		}
 	}
 
-	// Update the RayService status with the calculated traffic weights.
-	activeServiceStatus.TrafficRoutedPercent = ptr.To(activeClusterWeight)
-	pendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingClusterWeight)
-	logger.Info("Updated TrafficRoutedPercent", "activeClusterWeight", activeClusterWeight, "pendingClusterWeight", pendingClusterWeight)
-
 	return activeClusterWeight, pendingClusterWeight, nil
 }
 
@@ -626,8 +618,9 @@ func (r *RayServiceReconciler) reconcileTrafficRoutedPercent(ctx context.Context
 // The function performs the following operations:
 // 1. Retrieves Gateway instance to attach the HTTPRoute
 // 2. Gets active and pending RayCluster instances and their Serve services
-// 3. Calls `reconcileTrafficRoutedPercent` to calculate the new traffic weights
+// 3. Calls `calculateTrafficRoutedPercent` to calculate the new traffic weights
 // 4. Configures HTTPRoute with appropriate backend references and weights
+// 5. Updates the active and pending RayServiceStatus.TrafficRoutedPercent based on the new weights.
 //
 // Returns the configured HTTPRoute object or error if any step fails.
 func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService) (*gwv1.HTTPRoute, error) {
@@ -656,15 +649,26 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		logger.Error(err, "Failed to retrieve pending RayCluster.")
 		return nil, err
 	}
-	hasPendingCluster := pendingRayCluster != nil
 
-	activeClusterWeight, pendingClusterWeight, err := r.reconcileTrafficRoutedPercent(ctx, rayServiceInstance, hasPendingCluster)
+	isPendingClusterReady := false
+	if pendingRayCluster != nil {
+		isReady, err := r.isHeadPodRunningAndReady(ctx, pendingRayCluster)
+		if err != nil {
+			logger.Error(err, "Failed to check readiness of pending RayCluster's head pod.", "RayCluster", pendingRayCluster.Name)
+		} else if isReady {
+			isPendingClusterReady = true
+			logger.Info("Pending RayCluster is ready. Including it in HTTPRoute.", "RayCluster", pendingRayCluster.Name)
+		}
+	}
+
+	activeClusterWeight, pendingClusterWeight, err := r.calculateTrafficRoutedPercent(ctx, rayServiceInstance, isPendingClusterReady)
 	if err != nil {
 		logger.Info("Failed to reconcile TrafficRoutedPercent for active and pending clusters.")
 		return nil, err
 	}
 
 	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
+	activeServePort := common.GetServePort(activeRayCluster)
 
 	backendRefs := []gwv1.HTTPBackendRef{
 		{
@@ -672,26 +676,33 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(activeClusterServeSvcName),
 					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(gwv1.PortNumber(8000)),
+					Port:      ptr.To(activeServePort),
 				},
 				Weight: ptr.To(activeClusterWeight),
 			},
 		},
 	}
+	// Update the RayService status with the calculated traffic weights.
+	rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = ptr.To(activeClusterWeight)
+	logger.Info("Updated TrafficRoutedPercent", "activeClusterWeight", activeClusterWeight)
 
-	if hasPendingCluster {
+	if isPendingClusterReady {
 		pendingClusterServeSvcName := utils.GenerateServeServiceName(pendingRayCluster.Name)
+		pendingServePort := common.GetServePort(pendingRayCluster)
 
 		backendRefs = append(backendRefs, gwv1.HTTPBackendRef{
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
 					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(gwv1.PortNumber(8000)),
+					Port:      ptr.To(pendingServePort),
 				},
 				Weight: ptr.To(pendingClusterWeight),
 			},
 		})
+
+		rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingClusterWeight)
+		logger.Info("Updated TrafficRoutedPercent", "pendingClusterWeight", pendingClusterWeight)
 	}
 
 	httpRouteName := utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s", gatewayInstance.Name))

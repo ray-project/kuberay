@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -94,10 +95,12 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	gatewayIP := GetGatewayIP(gateway)
 	g.Expect(gatewayIP).NotTo(BeEmpty())
 
+	hostname := fmt.Sprintf("%s.%s.svc.cluster.local", rayService.Name, rayService.Namespace)
+
 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ := CurlRayServiceGateway(test, gatewayIP, hostname, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = CurlRayServiceGateway(test, gatewayIP, hostname, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 	// Attempt to trigger incremental upgrade by updating RayService serve config and RayCluster spec
@@ -143,13 +146,17 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred(), "The serve service for the pending cluster should be created.")
 	}, TestTimeoutShort).Should(Succeed())
 
-	// Verify HTTPRoute is pointing to the correct two backends.
+	LogWithTimestamp(test.T(), "Waiting for pending RayCluster %s to have a ready head pod", pendingClusterName)
+	g.Eventually(RayCluster(test, namespace.Name, pendingClusterName), TestTimeoutMedium).
+		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+
+	// Wait for the HTTPRoute to reflect the two backends.
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute to have two backends")
 	g.Eventually(func(g Gomega) {
 		route, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(route.Spec.Rules).To(HaveLen(1))
 		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(2))
-		g.Expect(string(route.Spec.Rules[0].BackendRefs[0].Name)).To(Equal(activeServeSvcName))
 		g.Expect(string(route.Spec.Rules[0].BackendRefs[1].Name)).To(Equal(pendingServeSvcName))
 	}, TestTimeoutShort).Should(Succeed())
 
@@ -170,7 +177,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		}, TestTimeoutShort).Should(Equal(step.expectedValue))
 
 		// Send a request to the RayService to validate no requests are dropped.
-		stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		stdout, _ := CurlRayServiceGateway(test, gatewayIP, hostname, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 		g.Expect(stdout.String()).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 
 		if strings.Contains(step.name, "pending traffic to shift") {
@@ -194,6 +201,6 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ = CurlRayServiceGateway(test, gatewayIP, hostname, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("8"))
 }

@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -318,6 +319,38 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Serv
 	}
 
 	return headlessService
+}
+
+// GetServePort finds the container port named "serve" in the RayCluster's head group spec.
+// It returns the default Ray Serve port 8000 if not explicitly defined.
+func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
+	if cluster == nil || len(cluster.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+		return utils.DefaultServingPort
+	}
+
+	// Find the port named "serve" in the head group's container spec.
+	headContainer := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+	for _, port := range headContainer.Ports {
+		if port.Name == utils.ServingPortName {
+			return gwv1.PortNumber(port.ContainerPort)
+		}
+	}
+
+	return utils.DefaultServingPort
+}
+
+// GetGatewayListenersForRayService constructs the default HTTP listener for a RayService Gateway.
+func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
+	hostname := fmt.Sprintf("%s.%s.svc.cluster.local", rayServiceInstance.Name, rayServiceInstance.Namespace)
+
+	return []gwv1.Listener{
+		{
+			Name:     gwv1.SectionName(utils.GatewayListenerPortName),
+			Protocol: gwv1.HTTPProtocolType,
+			Port:     utils.DefaultGatewayListenerPort,
+			Hostname: (*gwv1.Hostname)(&hostname), // backwards compatibility with Serve service
+		},
+	}
 }
 
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
