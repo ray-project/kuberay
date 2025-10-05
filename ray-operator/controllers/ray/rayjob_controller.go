@@ -1162,7 +1162,7 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished at %v but the job did not reach terminal state within %v",
-		finishedAt, DefaultSubmitterFinishedTimeout)
+		finishedAt.Format(time.DateTime), DefaultSubmitterFinishedTimeout)
 	return true
 }
 
