@@ -80,11 +80,12 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricsManager *metrics.RayClusterMetricsManager
-	BatchSchedulerManager    *batchscheduler.SchedulerManager
-	HeadSidecarContainers    []corev1.Container
-	WorkerSidecarContainers  []corev1.Container
-	IsOpenShift              bool
+	RayClusterMetricsManager     *metrics.RayClusterMetricsManager
+	BatchSchedulerManager        *batchscheduler.SchedulerManager
+	HeadSidecarContainers        []corev1.Container
+	WorkerSidecarContainers      []corev1.Container
+	IsOpenShift                  bool
+	ControlledNetworkEnvironment bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -981,6 +982,24 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
+
+	if r.shouldEnableOAuth() {
+		logger.Info("Injecting OAuth proxy sidecar", "cluster", instance.Name)
+		oauthSidecar := GetOAuthProxySidecar(&instance)
+		oauthVolumes := GetOAuthProxyVolumes(&instance)
+
+		podConf.Spec.Containers = append(podConf.Spec.Containers, oauthSidecar)
+		podConf.Spec.Volumes = append(podConf.Spec.Volumes, oauthVolumes...)
+
+		// Set service account for OAuth
+		podConf.Spec.ServiceAccountName = instance.Name + "-oauth-proxy-sa"
+
+		logger.Info("OAuth sidecar injected successfully",
+			"cluster", instance.Name,
+			"serviceAccount", podConf.Spec.ServiceAccountName,
+			"containerCount", len(podConf.Spec.Containers))
+	}
+
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
@@ -994,6 +1013,16 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 
 func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
 	return utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
+}
+
+// shouldEnableOAuth checks if OAuth should be enabled for the given RayCluster
+func (r *RayClusterReconciler) shouldEnableOAuth() bool {
+	// If ControlledNetworkEnvironment is enabled globally on OpenShift, apply OAuth to all clusters
+	if r.options.ControlledNetworkEnvironment {
+		return true
+	}
+
+	return false
 }
 
 // Build worker instance pods.
