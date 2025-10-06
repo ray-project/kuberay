@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/zapr"
+	configv1 "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -27,6 +28,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -48,8 +50,11 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	utilruntime.Must(routev1.Install(scheme))
+	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -72,6 +77,7 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var controlledNetworkEnvironment bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -105,6 +111,7 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.BoolVar(&controlledNetworkEnvironment, "controlled-network-environment", false, "Enable OAuth proxy for all RayClusters on OpenShift (automatically enabled when OpenShift is detected).")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -137,6 +144,14 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
+
+		if utils.GetClusterType() {
+			setupLog.Info("Openshift Detected, enabling controlled network environment")
+			config.ControlledNetworkEnvironment = true
+		} else {
+			config.ControlledNetworkEnvironment = controlledNetworkEnvironment
+		}
+
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -262,11 +277,12 @@ func main() {
 	batchSchedulerManager.AddToScheme(mgr.GetScheme())
 
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
-		HeadSidecarContainers:    config.HeadSidecarContainers,
-		WorkerSidecarContainers:  config.WorkerSidecarContainers,
-		IsOpenShift:              utils.GetClusterType(),
-		RayClusterMetricsManager: rayClusterMetricsManager,
-		BatchSchedulerManager:    batchSchedulerManager,
+		HeadSidecarContainers:        config.HeadSidecarContainers,
+		WorkerSidecarContainers:      config.WorkerSidecarContainers,
+		IsOpenShift:                  utils.GetClusterType(),
+		RayClusterMetricsManager:     rayClusterMetricsManager,
+		BatchSchedulerManager:        batchSchedulerManager,
+		ControlledNetworkEnvironment: config.ControlledNetworkEnvironment,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
@@ -281,6 +297,11 @@ func main() {
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
+	if config.ControlledNetworkEnvironment {
+		exitOnError(ray.NewAuthenticationController(mgr, rayClusterOptions).SetupWithManager(mgr),
+			"unable to create authentication controller", "controller", "Authentication")
+		setupLog.Info("Authentication controller enabled")
+	}
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")

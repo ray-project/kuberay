@@ -80,11 +80,12 @@ type RayClusterReconciler struct {
 }
 
 type RayClusterReconcilerOptions struct {
-	RayClusterMetricsManager *metrics.RayClusterMetricsManager
-	BatchSchedulerManager    *batchscheduler.SchedulerManager
-	HeadSidecarContainers    []corev1.Container
-	WorkerSidecarContainers  []corev1.Container
-	IsOpenShift              bool
+	RayClusterMetricsManager     *metrics.RayClusterMetricsManager
+	BatchSchedulerManager        *batchscheduler.SchedulerManager
+	HeadSidecarContainers        []corev1.Container
+	WorkerSidecarContainers      []corev1.Container
+	IsOpenShift                  bool
+	ControlledNetworkEnvironment bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -981,6 +982,58 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
+
+	// Detect authentication mode and inject appropriate sidecar
+	authMode := utils.DetectAuthenticationMode(ctx, r.Client, r.options.IsOpenShift)
+	logger.Info("Detected authentication mode for pod creation", "mode", authMode, "cluster", instance.Name)
+
+	namer := utils.NewResourceNamer(&instance)
+
+	// Inject OAuth sidecar if enabled
+	if utils.ShouldEnableOAuth(r.options.ControlledNetworkEnvironment, authMode) {
+		logger.Info("Injecting OAuth proxy sidecar", "cluster", instance.Name)
+
+		result := utils.InjectAuthSidecar(
+			&podConf.Spec,
+			&instance,
+			authMode,
+			r.options.ControlledNetworkEnvironment,
+			GetOAuthProxySidecar,
+			GetOAuthProxyVolumes,
+			namer.ServiceAccountName(utils.ModeIntegratedOAuth),
+		)
+
+		if result.Injected {
+			logger.Info("OAuth sidecar injected successfully",
+				"cluster", instance.Name,
+				"authType", result.AuthType,
+				"serviceAccount", result.ServiceAccountName,
+				"containerCount", result.ContainerCount)
+		}
+	}
+
+	// Inject OIDC sidecar if enabled
+	if utils.ShouldEnableOIDC(r.options.ControlledNetworkEnvironment, authMode) {
+		logger.Info("Injecting OIDC proxy sidecar", "cluster", instance.Name)
+
+		result := utils.InjectAuthSidecar(
+			&podConf.Spec,
+			&instance,
+			authMode,
+			r.options.ControlledNetworkEnvironment,
+			GetOIDCProxySidecar,
+			GetOIDCProxyVolumes,
+			"", // OIDC doesn't need special service account
+		)
+
+		if result.Injected {
+			logger.Info("OIDC sidecar injected successfully",
+				"cluster", instance.Name,
+				"authType", result.AuthType,
+				"containerCount", result.ContainerCount)
+		}
+	}
+
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP)
