@@ -50,7 +50,7 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 	var minMember int32
 	var totalResource corev1.ResourceList
 	if !utils.IsAutoscalingEnabled(&app.Spec) {
-		minMember = utils.CalculateDesiredReplicas(ctx, app) + 1
+		minMember = utils.CalculateDesiredReplicas(app) + 1
 		totalResource = utils.CalculateDesiredResources(app)
 	} else {
 		minMember = utils.CalculateMinReplicas(app) + 1
