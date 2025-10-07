@@ -1266,9 +1266,6 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("reconcileServeTargetCapacity", "RayService", rayServiceInstance.Name)
 
-	if !utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		return nil
-	}
 
 	activeRayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 	pendingRayServiceStatus := &rayServiceInstance.Status.PendingServiceStatus
