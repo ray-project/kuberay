@@ -336,7 +336,7 @@ func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
 		}
 	}
 
-	return utils.DefaultServingPort
+	return gwv1.PortNumber(utils.DefaultServingPort)
 }
 
 // GetGatewayListenersForRayService constructs the default HTTP listener for a RayService Gateway.
