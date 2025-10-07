@@ -1245,9 +1245,12 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	}
 
 	logger.Info("Applying new target_capacity to Ray cluster.", "goal", goalTargetCapacity)
-	if err := rayDashboardClient.UpdateDeployments(ctx, configJson); err != nil {
-		return fmt.Errorf("failed to update target_capacity for Serve applications: %w", err)
-	}
+		err = fmt.Errorf(
+			"fail to create / update Serve applications. If you observe this error consistently, "+
+				"please check \"Issue 5: Fail to create / update Serve applications.\" in "+
+				"https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting/rayservice-troubleshooting.html#kuberay-raysvc-troubleshoot for more details. "+
+				"err: %v", err)
+		return err
 
 	// Update the status fields and cache new Serve config.
 	if rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName {
