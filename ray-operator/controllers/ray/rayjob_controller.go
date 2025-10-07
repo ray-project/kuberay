@@ -247,11 +247,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		var isSubmitterFinished bool
 		var finishedAt *time.Time
 		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
-			shouldUpdate, isSubmitterFinished, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
+			shouldUpdate, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
@@ -292,10 +291,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		jobDeploymentStatus := rayv1.JobDeploymentStatusRunning
 		reason := rayv1.JobFailedReason("")
 		isJobTerminal := rayv1.IsJobTerminal(jobInfo.JobStatus)
-		// If in K8sJobMode, further refine the terminal condition by checking if the submitter Job has finished.
+		// If in K8sJobMode or SidecarMode, further refine the terminal condition by checking if the submitter has finished.
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if utils.HasSubmitter(rayJobInstance) {
-			isJobTerminal = isJobTerminal && isSubmitterFinished
+			isJobTerminal = isJobTerminal && finishedAt != nil
 		}
 
 		if isJobTerminal {
@@ -1013,10 +1012,9 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	return true
 }
 
-func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate, isSubmitterFinished bool, finishedAt *time.Time, err error) {
+func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate bool, finishedAt *time.Time, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
-	isSubmitterFinished = false
 	finishedAt = nil
 	var submitterContainerStatus *corev1.ContainerStatus
 	var condition *batchv1.JobCondition
@@ -1060,7 +1058,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			}
 		}
 
-		isSubmitterFinished, finishedAt = getSubmitterContainerFinishedTime(headPod)
+		finishedAt = getSubmitterContainerFinishedTime(headPod)
 		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
@@ -1090,9 +1088,12 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", condition.Reason, condition.Message)
 			}
 		}
-		_, isSubmitterFinished = utils.IsJobFinished(job)
-		if isSubmitterFinished && !job.Status.CompletionTime.IsZero() {
-			finishedAt = &job.Status.CompletionTime.Time
+
+		var jobFinishedCondition *batchv1.JobCondition
+		// Find the terminal condition to get its LastTransitionTime
+		jobFinishedCondition = getJobFinishedCondition(job)
+		if jobFinishedCondition != nil && !jobFinishedCondition.LastTransitionTime.IsZero() {
+			finishedAt = &jobFinishedCondition.LastTransitionTime.Time
 		}
 
 		return
@@ -1111,6 +1112,15 @@ func checkK8sJobStatus(job *batchv1.Job) (bool, *batchv1.JobCondition) {
 		}
 	}
 	return false, nil
+}
+
+func getJobFinishedCondition(job *batchv1.Job) *batchv1.JobCondition {
+	for _, condition := range job.Status.Conditions {
+		if (condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed) && condition.Status == corev1.ConditionTrue {
+			return &condition
+		}
+	}
+	return nil
 }
 
 func checkSidecarContainerStatus(headPod *corev1.Pod) (bool, *corev1.ContainerStatus) {
@@ -1196,14 +1206,14 @@ func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJ
 	return false
 }
 
-func getSubmitterContainerFinishedTime(pod *corev1.Pod) (bool, *time.Time) {
+func getSubmitterContainerFinishedTime(pod *corev1.Pod) *time.Time {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			if containerStatus.State.Terminated != nil {
-				return true, &containerStatus.State.Terminated.FinishedAt.Time
+				return &containerStatus.State.Terminated.FinishedAt.Time
 			}
 			break
 		}
 	}
-	return false, nil
+	return nil
 }
