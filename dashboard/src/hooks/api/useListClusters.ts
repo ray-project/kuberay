@@ -1,4 +1,3 @@
-import { ALL_NAMESPACES } from "@/utils/constants";
 import { useNamespace } from "@/components/NamespaceProvider";
 import fetcher from "@/utils/fetch";
 import useSWR from "swr";
@@ -7,6 +6,8 @@ import { RayClusterListResponse } from "@/types/v2/api/raycluster";
 import { ClusterRow } from "@/types/table";
 import { ClusterStatus } from "@/types/v2/raycluster";
 import { V1Condition } from "@kubernetes/client-node";
+import { ALL_NAMESPACES } from "@/utils/config-defaults";
+import { config } from "@/utils/constants";
 
 export const useListClusters = (
   refreshInterval: number = 5000,
@@ -74,18 +75,28 @@ const transformRayClusterResponse = (
 ): ClusterRow[] => {
   return response.items.map((item) => {
     const clusterState = parseClusterStatus(item.status.conditions ?? []);
+    const namespace = item.metadata.namespace!;
 
     const generateLinks = () => {
-      const serviceIP = item.status.head?.serviceIP ?? "";
-      const dashboardPort = item.status.endpoints?.dashboard ?? "";
+      const serviceName = item.status.head?.serviceName ?? "";
+      const dashboardPort =
+        item.spec.headGroupSpec?.template?.spec?.containers?.[0].ports?.find(
+          (port) => port.name === "dashboard",
+        )?.containerPort;
+
+      if (!serviceName || !dashboardPort) {
+        return {
+          rayHeadDashboardLink: "",
+        };
+      }
       return {
-        rayHeadDashboardLink: `http://${serviceIP}:${dashboardPort}`,
+        rayHeadDashboardLink: `${config.coreApiUrl}/namespaces/${namespace}/services/${serviceName}:${dashboardPort}/proxy/#/cluster`,
       };
     };
 
     return {
       name: item.metadata.name!,
-      namespace: item.metadata.namespace!,
+      namespace,
       rayVersion: item.spec.rayVersion,
       clusterState,
       createdAt: item.metadata.creationTimestamp,

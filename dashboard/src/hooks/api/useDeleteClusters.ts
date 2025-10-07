@@ -5,7 +5,7 @@ import { useNamespace } from "@/components/NamespaceProvider";
 import { config } from "@/utils/constants";
 
 async function _deleteCluster(namespace: string, clusterName: string) {
-  const baseUrl = `${config.url}/namespaces/${namespace}/rayclusters/`;
+  const baseUrl = `${config.rayApiUrl}/namespaces/${namespace}/rayclusters/`;
   const response = await fetch(`${baseUrl}${clusterName}`, {
     method: "DELETE",
   });

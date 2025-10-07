@@ -16,7 +16,7 @@ export default async function fetcher(
   endpoint: string,
   ...args: RequestInit[]
 ) {
-  const baseUrl = await config.getUrl();
+  const baseUrl = await config.getRayApiUrl();
   const res = await fetch(`${baseUrl}${endpoint}`, ...args);
   if (!res.ok) {
     const error = new FetchError("An error occurred while fetching the data");

@@ -1,17 +1,7 @@
-export const ALL_NAMESPACES = "all";
+import { RuntimeConfig, defaultConfig, apiVersion } from "./config-defaults";
 
-interface RuntimeConfig {
-  url: string;
-}
-
-export const apiVersion = "v2";
-
-export const defaultConfig: RuntimeConfig = {
-  url:
-    apiVersion === "v2"
-      ? "http://localhost:31888/apis/ray.io/v1"
-      : "http://localhost:31888/apis/v1",
-};
+export { defaultConfig, apiVersion };
+export type { RuntimeConfig };
 
 let runtimeConfig: RuntimeConfig | null = null;
 
@@ -23,9 +13,14 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   try {
     const response = await fetch("/api/config");
     if (response.ok) {
-      const data = await response.json();
+      const data: RuntimeConfig = await response.json();
       runtimeConfig = {
-        url: data.apiUrl || defaultConfig.url,
+        domain: data.domain || defaultConfig.domain,
+        rayApiPath: data.rayApiPath || defaultConfig.rayApiPath,
+        coreApiPath:
+          data.coreApiPath !== undefined
+            ? data.coreApiPath
+            : defaultConfig.coreApiPath,
       };
       return runtimeConfig;
     }
@@ -33,19 +28,35 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
     console.warn("Failed to fetch runtime config, using default:", error);
   }
 
-  // Fallback to default config
   runtimeConfig = defaultConfig;
   return runtimeConfig;
 }
 
 export const config = {
-  async getUrl(): Promise<string> {
+  async getRayApiUrl(): Promise<string> {
     const cfg = await fetchRuntimeConfig();
-    return cfg.url;
+    return `${cfg.domain}${cfg.rayApiPath}`;
   },
 
-  get url(): string {
-    return runtimeConfig?.url || defaultConfig.url;
+  async getCoreApiUrl(): Promise<string | undefined> {
+    const cfg = await fetchRuntimeConfig();
+    return cfg.coreApiPath ? `${cfg.domain}${cfg.coreApiPath}` : undefined;
+  },
+
+  get rayApiUrl(): string {
+    if (runtimeConfig) {
+      return `${runtimeConfig.domain}${runtimeConfig.rayApiPath}`;
+    }
+    return `${defaultConfig.domain}${defaultConfig.rayApiPath}`;
+  },
+
+  get coreApiUrl(): string | undefined {
+    if (runtimeConfig?.coreApiPath) {
+      return `${runtimeConfig.domain}${runtimeConfig.coreApiPath}`;
+    }
+    return defaultConfig.coreApiPath
+      ? `${defaultConfig.domain}${defaultConfig.coreApiPath}`
+      : undefined;
   },
 };
 
