@@ -1145,6 +1145,29 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 
 // checkIfNeedIncrementalUpgradeUpdate returns whether the controller should adjust the target_capacity
 // of the Serve config associated with a RayCluster during an IncrementalUpgrade.
+//
+// This function implements the incremental upgrade state machine as defined in the design document:
+// https://github.com/ray-project/enhancements/blob/main/reps/2024-12-4-ray-service-incr-upgrade.md
+//
+// The upgrade process follows these phases:
+// 1. Phase 1 (Steps 7-8): New cluster scales up to target capacity
+//    - pendingTargetCapacity: 0% → 100%
+//    - Returns true: "Pending RayCluster has not finished scaling up."
+//
+// 2. Phase 2 (Step 9): Traffic gradually migrates to new cluster
+//    - pendingTrafficRoutedPercent: 0% → 100%
+//    - Returns true: "Pending RayCluster has not finished scaling up."
+//
+// 3. Phase 3 (Step 10): Old cluster scales down after new cluster is ready
+//    - activeTargetCapacity: 100% → 0%
+//    - Returns true: "Active RayCluster TargetCapacity has not finished scaling down."
+//
+// 4. Phase 4 (Step 11): Upgrade completion
+//    - Both clusters reach final state: active=0%, pending=100%
+//    - Returns false: "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete."
+//
+// The function ensures that traffic migration only proceeds when the target cluster has reached
+// its capacity limit, preventing resource conflicts and ensuring upgrade stability.
 func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, string) {
 	activeRayServiceStatus := rayServiceInstance.Status.ActiveServiceStatus
 	pendingRayServiceStatus := rayServiceInstance.Status.PendingServiceStatus
