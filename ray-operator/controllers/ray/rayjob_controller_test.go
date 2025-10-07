@@ -290,7 +290,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -515,7 +515,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -680,7 +680,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -775,7 +775,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1002,7 +1002,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1141,7 +1141,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1280,7 +1280,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1436,7 +1436,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1580,7 +1580,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1696,7 +1696,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1824,7 +1824,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
@@ -1985,7 +1985,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				// Update the submitter Kubernetes Job to Complete.
 				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
 				}
 				job.Status.Conditions = conditions
 				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
