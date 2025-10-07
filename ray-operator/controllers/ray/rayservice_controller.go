@@ -1181,10 +1181,12 @@ func (r *RayServiceReconciler) checkIfNeedIncrementalUpgradeUpdate(ctx context.C
 	pendingTargetCapacity := int(*pendingRayServiceStatus.TargetCapacity)
 	pendingTrafficRoutedPercent := int(*pendingRayServiceStatus.TrafficRoutedPercent)
 
-	if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
-		return true, "Pending RayCluster has not finished scaling up."
-	} else if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
+	if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
 		return false, "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete."
+	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
+		return true, "Pending RayCluster has not finished scaling up."
+	}
+	return true, "Active RayCluster TargetCapacity has not finished scaling down."
 	}
 	return true, "Active RayCluster TargetCapacity has not finished scaling down."
 }
