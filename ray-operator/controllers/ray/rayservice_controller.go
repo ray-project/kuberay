@@ -589,7 +589,7 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 		activeClusterWeight = ptr.Deref(activeServiceStatus.TrafficRoutedPercent, 100)
 
 		if pendingClusterWeight == pendingClusterTargetCapacity {
-			// return without changing current traffic weights since cluster being migrated to is at capacity.
+			// Stop traffic migration because the pending cluster's current traffic weight has reached its target capacity limit.
 			return activeClusterWeight, pendingClusterWeight, nil
 		}
 
