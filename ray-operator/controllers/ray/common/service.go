@@ -325,7 +325,7 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Serv
 // It returns the default Ray Serve port 8000 if not explicitly defined.
 func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
 	if cluster == nil || len(cluster.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
-		return utils.DefaultServingPort
+		return gwv1.PortNumber(utils.DefaultServingPort)
 	}
 
 	// Find the port named "serve" in the head group's container spec.
