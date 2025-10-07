@@ -1305,6 +1305,11 @@ func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob
 			return false, err
 		}
 
+		if !cluster.DeletionTimestamp.IsZero() {
+			// If the cluster is being deleted, we consider the action complete.
+			return true, nil
+		}
+
 		// If the cluster exists, check if all worker groups are suspended.
 		for _, wg := range cluster.Spec.WorkerGroupSpecs {
 			if wg.Suspend == nil || !*wg.Suspend {
@@ -1316,12 +1321,20 @@ func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob
 		return true, nil
 
 	case rayv1.DeleteCluster:
-		err := r.Get(ctx, clusterIdentifier, cluster)
-		if errors.IsNotFound(err) {
-			// Cluster not found means the deletion is complete.
+		if err := r.Get(ctx, clusterIdentifier, cluster); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			// For any other error, we can't be sure of the state, so report the error.
+			return false, err
+		}
+
+		if !cluster.DeletionTimestamp.IsZero() {
+			// If the cluster is being deleted, we consider the action complete.
 			return true, nil
 		}
-		return false, err
+
+		return false, nil
 
 	case rayv1.DeleteSelf:
 		// This action is terminal. If this function is running, the RayJob still exists,
