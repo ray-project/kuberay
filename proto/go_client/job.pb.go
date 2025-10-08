@@ -545,7 +545,7 @@ type RayJob struct {
 	// If not set, the job may run indefinitely until it completes, fails, or is manually stopped.
 	ActiveDeadlineSeconds int32 `protobuf:"varint,25,opt,name=activeDeadlineSeconds,proto3" json:"activeDeadlineSeconds,omitempty"`
 	// Optional waitingTtlSeconds is the duration in seconds before RayJob must come into active state
-	WaitingTTLSeconds int32 `protobuf:"varint,60,opt,name=waiting_ttl_seconds,json=waitingTtlSeconds,proto3" json:"waiting_ttl_seconds,omitempty"`
+	WaitingTtlSeconds int32 `protobuf:"varint,60,opt,name=waiting_ttl_seconds,json=waitingTtlSeconds,proto3" json:"waiting_ttl_seconds,omitempty"`
 	// Output. The time that the job created.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Output. The time that the job deleted.
@@ -715,9 +715,13 @@ func (x *RayJob) GetActiveDeadlineSeconds() int32 {
 	return 0
 }
 
-func (x *RayJob) GetWaitingTTLSeconds() int32 {
+/* <<<<<<<<<<<<<<  ✨ Windsurf Command ⭐ >>>>>>>>>>>>>>>> */
+// GetWaitingTtlSeconds returns the waitingTtlSeconds of the Ray job.
+// If the ray job is nil, it returns 0.
+/* <<<<<<<<<<  ad50ff48-1fce-40c2-ab17-65e3badaee66  >>>>>>>>>>> */
+func (x *RayJob) GetWaitingTtlSeconds() int32 {
 	if x != nil {
-		return x.WaitingTTLSeconds
+		return x.WaitingTtlSeconds
 	}
 
 	return 0

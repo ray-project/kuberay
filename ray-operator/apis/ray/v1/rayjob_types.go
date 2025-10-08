@@ -131,7 +131,7 @@ type RayJobSpec struct {
 	// +optional
 	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 	// Time to wait for the job to come into a running state after the job is submitted.
-	WaitingTTLSeconds *int32 `json:"waitingTTLSeconds,omitempty"`
+	WaitingTtlSeconds *int32 `json:"waitingTtlSeconds,omitempty"`
 	// Specifies the number of retries before marking this job failed.
 	// Each retry creates a new RayCluster.
 	// +kubebuilder:default:=0

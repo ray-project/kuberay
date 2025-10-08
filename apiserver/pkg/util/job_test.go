@@ -21,6 +21,7 @@ var apiJobNewCluster = &api.RayJob{
 	ShutdownAfterJobFinishes: true,
 	ClusterSpec:              rayCluster.ClusterSpec,
 	ActiveDeadlineSeconds:    120,
+	WaitingTtlSeconds:        120,
 }
 
 var apiJobExistingCluster = &api.RayJob{

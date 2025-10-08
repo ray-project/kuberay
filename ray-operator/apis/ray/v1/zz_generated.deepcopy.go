@@ -439,8 +439,8 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(int32)
 		**out = **in
 	}
-	if in.WaitingTTLSeconds != nil {
-		in, out := &in.WaitingTTLSeconds, &out.WaitingTTLSeconds
+	if in.WaitingTtlSeconds != nil {
+		in, out := &in.WaitingTtlSeconds, &out.WaitingTtlSeconds
 		*out = new(int32)
 		**out = **in
 	}

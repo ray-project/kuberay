@@ -1170,14 +1170,14 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 
 func checkWaitingTtlSecondsAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
 	logger := ctrl.LoggerFrom(ctx)
-	if rayJob.Spec.WaitingTTLSeconds == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.WaitingTTLSeconds)*time.Second)) {
+	if rayJob.Spec.WaitingTtlSeconds == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.WaitingTtlSeconds)*time.Second)) {
 		return false
 	}
 
-	logger.Info("The RayJob has passed the waitingTTLSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "WaitingTTLSeconds", *rayJob.Spec.WaitingTTLSeconds)
+	logger.Info("The RayJob has passed the waitingTTLSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "WaitingTtlSeconds", *rayJob.Spec.WaitingTtlSeconds)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.JobDeploymentFailed
-	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the waitingTTLSeconds. StartTime: %v. WaitingTTLSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.WaitingTTLSeconds)
+	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the waitingTTLSeconds. StartTime: %v. WaitingTtlSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.WaitingTtlSeconds)
 	return true
 }
 
