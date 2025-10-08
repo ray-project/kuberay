@@ -83,6 +83,9 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// ControlledNetworkEnvironment enables openshift platform security features
+	ControlledNetworkEnvironment bool `json:"controlledNetworkEnvironment,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
