@@ -5,10 +5,9 @@ import Select, { SelectProps, SelectStaticProps } from "@mui/joy/Select";
 import React from "react";
 
 // ClearableSelect is a single select component that offers a clear button
-export default function ClearableSelect<
-  OptionValue extends object,
-  D extends React.ElementType = "button",
->(props: SelectProps<OptionValue, false, D>) {
+export default function ClearableSelect<D extends React.ElementType = "button">(
+  props: SelectProps<string, false, D>,
+) {
   const action: SelectStaticProps["action"] = React.useRef(null);
   return (
     <Select

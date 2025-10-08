@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -49,7 +50,8 @@ type RayJobReconciler struct {
 }
 
 type RayJobReconcilerOptions struct {
-	RayJobMetricsManager *metrics.RayJobMetricsManager
+	RayJobMetricsManager  *metrics.RayJobMetricsManager
+	BatchSchedulerManager *batchscheduler.SchedulerManager
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
@@ -183,6 +185,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if r.options.BatchSchedulerManager != nil {
+			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				}
+			} else {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		if rayClusterInstance, err = r.getOrCreateRayClusterInstance(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -273,14 +285,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
-			if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode && errors.IsBadRequest(err) {
-				logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-				if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
-					logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
-					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			if errors.IsBadRequest(err) {
+				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
+					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
+					if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
+						logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
+						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+					}
+					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+				if isSubmitterFinished {
+					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
+					break
+				}
 			}
+
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
@@ -570,9 +591,16 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
-			submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
+			submitterTemplate, err := getSubmitterTemplate(rayJobInstance, rayClusterInstance)
 			if err != nil {
 				return err
+			}
+			if r.options.BatchSchedulerManager != nil {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, &submitterTemplate, utils.RayNodeSubmitterGroupLabelValue)
+				} else {
+					return err
+				}
 			}
 			return r.createNewK8sJob(ctx, rayJobInstance, submitterTemplate)
 		}
@@ -584,18 +612,9 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
-	logger := ctrl.LoggerFrom(ctx)
-	var submitterTemplate corev1.PodTemplateSpec
-
+func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
-	if rayJobInstance.Spec.SubmitterPodTemplate == nil {
-		submitterTemplate = common.GetDefaultSubmitterTemplate(&rayClusterInstance.Spec)
-		logger.Info("default submitter template is used")
-	} else {
-		submitterTemplate = *rayJobInstance.Spec.SubmitterPodTemplate.DeepCopy()
-		logger.Info("user-provided submitter template is used; the first container is assumed to be the submitter")
-	}
+	submitterTemplate := common.GetSubmitterTemplate(&rayJobInstance.Spec, &rayClusterInstance.Spec)
 
 	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayv1.K8sJobMode); err != nil {
 		return corev1.PodTemplateSpec{}, err
@@ -933,6 +952,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			if err != nil {
 				return nil, err
 			}
+			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
+				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+					// Group name is only used for individual pods to specify their task group ("headgroup", "worker-group-1", etc.).
+					// RayCluster contains multiple groups, so we pass an empty string.
+					scheduler.AddMetadataToChildResource(ctx, rayJobInstance, rayClusterInstance, "")
+				} else {
+					return nil, err
+				}
+			}
 			if err := r.Create(ctx, rayClusterInstance); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 				return nil, err
@@ -1037,7 +1065,11 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		}
 
 		if headPod == nil {
-			logger.Info("Ray head pod not found, skipping sidecar container status check")
+			// If head pod is deleted, mark the RayJob as failed
+			shouldUpdate = true
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+			rayJob.Status.Reason = rayv1.AppFailed
+			rayJob.Status.Message = "Ray head pod not found."
 			return
 		}
 

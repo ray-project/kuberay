@@ -357,7 +357,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			namespace := "default"
 			rayJob := rayJobTemplate("rayjob-invalid-test", namespace)
 			rayCluster := &rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec}
-			template := common.GetDefaultSubmitterTemplate(&rayCluster.Spec)
+			template := common.GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 			template.Spec.RestartPolicy = "" // Make it invalid to create a submitter. Ref: https://github.com/ray-project/kuberay/pull/2389#issuecomment-2359564334
 			rayJob.Spec.SubmitterPodTemplate = &template
 
