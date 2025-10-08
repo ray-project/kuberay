@@ -294,7 +294,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
-				if isSubmitterFinished {
+				// finishedAt will only be set if submitter finished
+				if finishedAt != nil {
 					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 					rayJobInstance.Status.Reason = rayv1.AppFailed
 					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
@@ -1203,7 +1204,7 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	rayJob.Status.JobStatus = rayv1.JobStatusFailed
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.JobDeploymentStatusTransitionGracePeriodExceeded
-	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished at %v but the job did not reach terminal state within %v",
+	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished at %v but the ray job did not reach terminal state within %v",
 		finishedAt.Format(time.DateTime), DefaultSubmitterFinishedTimeout)
 	return true
 }
