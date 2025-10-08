@@ -184,6 +184,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if shouldUpdate := checkWaitingTtlSecondsAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
 		if r.options.BatchSchedulerManager != nil {
 			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
@@ -239,6 +243,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		if shouldUpdate := checkActiveDeadlineAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
+		if shouldUpdate := checkWaitingTtlSecondsAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
 
@@ -1157,6 +1165,19 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
+	return true
+}
+
+func checkWaitingTtlSecondsAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	if rayJob.Spec.WaitingTTLSeconds == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.WaitingTTLSeconds)*time.Second)) {
+		return false
+	}
+
+	logger.Info("The RayJob has passed the waitingTTLSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "WaitingTTLSeconds", *rayJob.Spec.WaitingTTLSeconds)
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	rayJob.Status.Reason = rayv1.JobDeploymentFailed
+	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the waitingTTLSeconds. StartTime: %v. WaitingTTLSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.WaitingTTLSeconds)
 	return true
 }
 

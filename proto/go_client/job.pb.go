@@ -544,6 +544,8 @@ type RayJob struct {
 	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
 	// If not set, the job may run indefinitely until it completes, fails, or is manually stopped.
 	ActiveDeadlineSeconds int32 `protobuf:"varint,25,opt,name=activeDeadlineSeconds,proto3" json:"activeDeadlineSeconds,omitempty"`
+	// Optional waitingTtlSeconds is the duration in seconds before RayJob must come into active state
+	WaitingTTLSeconds int32 `protobuf:"varint,60,opt,name=waiting_ttl_seconds,json=waitingTtlSeconds,proto3" json:"waiting_ttl_seconds,omitempty"`
 	// Output. The time that the job created.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Output. The time that the job deleted.
@@ -710,6 +712,14 @@ func (x *RayJob) GetActiveDeadlineSeconds() int32 {
 	if x != nil {
 		return x.ActiveDeadlineSeconds
 	}
+	return 0
+}
+
+func (x *RayJob) GetWaitingTTLSeconds() int32 {
+	if x != nil {
+		return x.WaitingTTLSeconds
+	}
+
 	return 0
 }
 

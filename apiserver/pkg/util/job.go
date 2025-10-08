@@ -100,6 +100,10 @@ func NewRayJob(apiJob *api.RayJob, computeTemplateMap map[string]*api.ComputeTem
 		rayJob.Spec.ActiveDeadlineSeconds = &apiJob.ActiveDeadlineSeconds
 	}
 
+	if apiJob.WaitingTTLSeconds > 0 {
+		rayJob.Spec.WaitingTTLSeconds = &apiJob.WaitingTTLSeconds
+	}
+
 	return &RayJob{rayJob}, nil
 }
 

@@ -73,6 +73,7 @@ type JobFailedReason string
 const (
 	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
 	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	JobDeploymentFailed                              JobFailedReason = "JobDeploymentFailed"
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
@@ -129,6 +130,8 @@ type RayJobSpec struct {
 	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
 	// +optional
 	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
+	// Time to wait for the job to come into a running state after the job is submitted.
+	WaitingTTLSeconds *int32 `json:"waitingTTLSeconds,omitempty"`
 	// Specifies the number of retries before marking this job failed.
 	// Each retry creates a new RayCluster.
 	// +kubebuilder:default:=0

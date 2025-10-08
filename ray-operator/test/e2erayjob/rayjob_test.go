@@ -274,6 +274,29 @@ env_vars:
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
 	})
 
+	test.T().Run("RayJob has passed WaitingTTLSeconds", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("long-running", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithTTLSecondsAfterFinished(600).
+				WithActiveDeadlineSeconds(5).
+				WithWaitingTTLSeconds(5).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// The RayJob will transition to `Complete` because it has passed `ActiveDeadlineSeconds`.
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Complete'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+	})
+
 	test.T().Run("RayJob fails when head Pod is deleted when job is running", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
