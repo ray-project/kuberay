@@ -78,7 +78,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
 	// (submitter waits for cluster; gang would wait for submitter). We still add the
 	// submitter's resource requests into MinResources so capacity is reserved.
-	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode {
+	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode || rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
 		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
 		submitterResource := utils.CalculatePodResource(submitterTemplate.Spec)
 		totalResourceList = append(totalResourceList, submitterResource)

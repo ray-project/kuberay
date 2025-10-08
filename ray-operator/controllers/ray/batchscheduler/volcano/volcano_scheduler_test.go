@@ -261,6 +261,29 @@ func TestCreatePodGroupForRayJob(t *testing.T) {
 		a.Len(pg.OwnerReferences, 1)
 		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
 	})
+
+	t.Run("SidecarMode includes submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		// 1 head + 2 workers (desired, not min replicas)
+		a.Equal(int32(3), pg.Spec.MinMember)
+		// 768m + 500m = 1268m
+		a.Equal("1268m", pg.Spec.MinResources.Cpu().String())
+		// 768Mi + 200Mi = 968Mi
+		a.Equal("968Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
 }
 
 func TestCreatePodGroupForRayJob_NumOfHosts2(t *testing.T) {
@@ -302,6 +325,30 @@ func TestCreatePodGroupForRayJob_NumOfHosts2(t *testing.T) {
 	t.Run("K8sJobMode includes submitter pod resources", func(_ *testing.T) {
 		rayJob := createTestRayJob(2)
 		rayJob.Spec.SubmissionMode = rayv1.K8sJobMode
+
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		// 2 workers (desired, not min replicas) * 2 (num of hosts) + 1 head
+		// 2 * 2 + 1 = 5
+		a.Equal(int32(5), pg.Spec.MinMember)
+		// 1280m + 500m = 1780m
+		a.Equal("1780m", pg.Spec.MinResources.Cpu().String())
+		// 1280Mi + 200Mi = 1480Mi
+		a.Equal("1480Mi", pg.Spec.MinResources.Memory().String())
+		a.Equal("test-queue", pg.Spec.Queue)
+		a.Equal("test-priority", pg.Spec.PriorityClassName)
+		a.Len(pg.OwnerReferences, 1)
+		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
+	})
+
+	t.Run("SidecarMode includes submitter pod resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(2)
+		rayJob.Spec.SubmissionMode = rayv1.SidecarMode
 
 		err := scheduler.handleRayJob(ctx, &rayJob)
 		require.NoError(t, err)
