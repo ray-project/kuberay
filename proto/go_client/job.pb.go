@@ -715,15 +715,12 @@ func (x *RayJob) GetActiveDeadlineSeconds() int32 {
 	return 0
 }
 
-/* <<<<<<<<<<<<<<  ✨ Windsurf Command ⭐ >>>>>>>>>>>>>>>> */
 // GetWaitingTtlSeconds returns the waitingTtlSeconds of the Ray job.
 // If the ray job is nil, it returns 0.
-/* <<<<<<<<<<  ad50ff48-1fce-40c2-ab17-65e3badaee66  >>>>>>>>>>> */
 func (x *RayJob) GetWaitingTtlSeconds() int32 {
 	if x != nil {
 		return x.WaitingTtlSeconds
 	}
-
 	return 0
 }
 
