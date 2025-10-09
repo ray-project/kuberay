@@ -89,10 +89,13 @@ func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
 		return utils.CalculatePodResource(submitterTemplate.Spec)
 	} else if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
 		submitterContainer := common.GetDefaultSubmitterContainer(rayJob.Spec.RayClusterSpec)
-		return corev1.ResourceList{
-			corev1.ResourceCPU:    submitterContainer.Resources.Requests[corev1.ResourceCPU],
-			corev1.ResourceMemory: submitterContainer.Resources.Requests[corev1.ResourceMemory],
+		containerResource := submitterContainer.Resources.Requests
+		for name, quantity := range submitterContainer.Resources.Limits {
+			if _, ok := containerResource[name]; !ok {
+				containerResource[name] = quantity
+			}
 		}
+		return containerResource
 	}
 	return corev1.ResourceList{}
 }
