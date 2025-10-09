@@ -163,6 +163,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Validating stepwise traffic and capacity migration")
 	intervalSeconds := *interval
 	var lastMigratedTime *metav1.Time
+	oldVersionServed := false
+	newVersionServed := false
 
 	// Validate expected behavior during an IncrementalUpgrade. The following checks ensures
 	// that no requests are dropped throughout the upgrade process.
@@ -176,9 +178,17 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			return step.getValue(svc)
 		}, TestTimeoutShort).Should(Equal(step.expectedValue))
 
-		// Send a request to the RayService to validate no requests are dropped.
+		// Send a request to the RayService to validate no requests are dropped. Check that
+		// both endpoints are serving requests.
 		stdout, _ := CurlRayServiceGateway(test, gatewayIP, hostname, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-		g.Expect(stdout.String()).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
+		response := stdout.String()
+		g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
+		if response == "6" {
+			oldVersionServed = true
+		}
+		if response == "8" {
+			newVersionServed = true
+		}
 
 		if strings.Contains(step.name, "pending traffic to shift") {
 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
@@ -196,6 +206,10 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			lastMigratedTime = currentMigratedTime
 		}
 	}
+	LogWithTimestamp(test.T(), "Verifying both old and new versions served traffic during the upgrade")
+	g.Expect(oldVersionServed).To(BeTrue(), "The old version of the service should have served traffic during the upgrade.")
+	g.Expect(newVersionServed).To(BeTrue(), "The new version of the service should have served traffic during the upgrade.")
+
 	// Check that RayService completed upgrade
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
