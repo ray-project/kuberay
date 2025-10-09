@@ -30,6 +30,7 @@ func CurlRayServiceGateway(
 		"curl",
 		"--max-time", "10",
 		"-X", "POST",
+		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
 		"-H", fmt.Sprintf("Host: %s", hostname),
 		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
@@ -232,9 +233,10 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 			activeTraffic = nextActiveTraffic
 		}
 
-		// Scale down the active cluster's target capacity.
+		// Scale down the active cluster's target capacity. The final scale
+		// down is when the pending cluster is promoted to active.
 		nextActiveCapacity := max(activeCapacity-maxSurge, 0)
-		if nextActiveCapacity < activeCapacity {
+		if nextActiveCapacity < activeCapacity && nextActiveCapacity > 0 {
 			steps = append(steps, testStep{
 				name:          fmt.Sprintf("Waiting for active capacity to scale down to %d", nextActiveCapacity),
 				getValue:      GetActiveCapacity,
