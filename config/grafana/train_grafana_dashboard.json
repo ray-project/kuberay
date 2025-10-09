@@ -1,42 +1,45 @@
 {
-    "annotations": {
-        "list": [
-            {
-                "builtIn": 1,
-                "datasource": "-- Grafana --",
-                "enable": true,
-                "hide": true,
-                "iconColor": "rgba(0, 211, 255, 1)",
-                "name": "Annotations & Alerts",
-                "type": "dashboard"
-            }
-        ]
-    },
+    "title": "Train Dashboard",
+    "uid": "rayTrainDashboard",
+    "version": 1,
+    "schemaVersion": 27,
+    "style": "dark",
     "editable": true,
-    "gnetId": null,
-    "graphTooltip": 0,
-    "iteration": 1667344411089,
-    "links": [],
+    "graphTooltip": 1,
+    "refresh": false,
     "panels": [
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 14,
+            "title": "Train Metrics",
+            "type": "row",
+            "panels": []
+        },
         {
             "aliasColors": {},
             "bars": false,
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
-            "description": "Time taken to report a checkpoint to storage.",
+            "description": "Current state of the train controller.",
             "fieldConfig": {
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 0
+                "y": 1
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 1,
             "legend": {
@@ -56,7 +59,133 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": "connected",
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": true,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(ray_train_controller_state{ray_train_run_name=~\"$TrainRunName\", ray_train_run_id=~\"$TrainRunId\", SessionName=~\"$SessionName\"}) by (ray_train_run_name, ray_train_controller_state)",
+                    "interval": "",
+                    "legendFormat": "Run Name: {{ray_train_run_name}}, Controller State: {{ray_train_controller_state}}",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Controller State",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "Time taken by the controller for worker group operations.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 1
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "hiddenSeries": false,
+            "id": 2,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -94,7 +223,141 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_train_report_total_blocked_time_s{SessionName=~\"$SessionName\",ray_train_run_name=~\"$TrainRunName\",}) by (ray_train_run_name, ray_train_worker_world_rank)",
+                    "expr": "sum(ray_train_worker_group_start_total_time_s{ray_train_run_name=~\"$TrainRunName\", ray_train_run_id=~\"$TrainRunId\", SessionName=~\"$SessionName\"}) by (ray_train_run_name)",
+                    "interval": "",
+                    "legendFormat": "Run Name: {{ray_train_run_name}}, Worker Group Start Time",
+                    "queryType": "randomWalk",
+                    "refId": "A"
+                },
+                {
+                    "exemplar": true,
+                    "expr": "sum(ray_train_worker_group_shutdown_total_time_s{ray_train_run_name=~\"$TrainRunName\", ray_train_run_id=~\"$TrainRunId\", SessionName=~\"$SessionName\"}) by (ray_train_run_name)",
+                    "interval": "",
+                    "legendFormat": "Run Name: {{ray_train_run_name}}, Worker Group Shutdown Time",
+                    "queryType": "randomWalk",
+                    "refId": "B"
+                }
+            ],
+            "thresholds": [],
+            "timeFrom": null,
+            "timeRegions": [],
+            "timeShift": null,
+            "title": "Controller Operation Time",
+            "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+            },
+            "type": "graph",
+            "xaxis": {
+                "buckets": null,
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+            },
+            "yaxes": [
+                {
+                    "$$hashKey": "object:628",
+                    "format": "seconds",
+                    "label": "",
+                    "logBase": 1,
+                    "max": null,
+                    "min": "0",
+                    "show": true
+                },
+                {
+                    "$$hashKey": "object:629",
+                    "format": "short",
+                    "label": null,
+                    "logBase": 1,
+                    "max": null,
+                    "min": null,
+                    "show": true
+                }
+            ],
+            "yaxis": {
+                "align": false,
+                "alignLevel": null
+            }
+        },
+        {
+            "aliasColors": {},
+            "bars": false,
+            "dashLength": 10,
+            "dashes": false,
+            "datasource": "${datasource}",
+            "description": "Time taken to report a checkpoint to storage.",
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 9
+            },
+            "fill": 0,
+            "fillGradient": 0,
+            "hiddenSeries": false,
+            "id": 3,
+            "legend": {
+                "alignAsTable": true,
+                "avg": false,
+                "current": true,
+                "hideEmpty": false,
+                "hideZero": true,
+                "max": false,
+                "min": false,
+                "rightSide": false,
+                "show": true,
+                "sort": "current",
+                "sortDesc": true,
+                "total": false,
+                "values": true
+            },
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": null,
+            "options": {
+                "alertThreshold": true
+            },
+            "percentage": false,
+            "pluginVersion": "7.5.17",
+            "pointradius": 2,
+            "points": false,
+            "renderer": "flot",
+            "seriesOverrides": [
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX",
+                    "dashes": true,
+                    "color": "#1F60C4",
+                    "fill": 0,
+                    "stack": false
+                },
+                {
+                    "$$hashKey": "object:78",
+                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                    "hiddenSeries": true
+                },
+                {
+                    "$$hashKey": "object:2987",
+                    "alias": "MAX + PENDING",
+                    "dashes": true,
+                    "color": "#777777",
+                    "fill": 0,
+                    "stack": false
+                }
+            ],
+            "spaceLength": 10,
+            "stack": false,
+            "steppedLine": false,
+            "targets": [
+                {
+                    "exemplar": true,
+                    "expr": "sum(ray_train_report_total_blocked_time_s{ray_train_run_name=~\"$TrainRunName\", ray_train_run_id=~\"$TrainRunId\", ray_train_worker_world_rank=~\"$TrainWorkerWorldRank\", ray_train_worker_actor_id=~\"$TrainWorkerActorId\", SessionName=~\"$SessionName\"}) by (ray_train_run_name, ray_train_worker_world_rank, ray_train_worker_actor_id)",
                     "interval": "",
                     "legendFormat": "Run Name: {{ray_train_run_name}}, World Rank: {{ray_train_worker_world_rank}}",
                     "queryType": "randomWalk",
@@ -145,233 +408,1639 @@
             }
         },
         {
-            "aliasColors": {},
-            "bars": false,
-            "dashLength": 10,
-            "dashes": false,
-            "datasource": "${datasource}",
-            "description": "Time taken by the controller to perform various operations.",
-            "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-            },
-            "fill": 0,
-            "fillGradient": 0,
+            "collapsed": true,
             "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 0
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 17
             },
-            "hiddenSeries": false,
-            "id": 2,
-            "legend": {
-                "alignAsTable": true,
-                "avg": false,
-                "current": true,
-                "hideEmpty": false,
-                "hideZero": true,
-                "max": false,
-                "min": false,
-                "rightSide": false,
-                "show": true,
-                "sort": "current",
-                "sortDesc": true,
-                "total": false,
-                "values": true
-            },
-            "lines": true,
-            "linewidth": 1,
-            "nullPointMode": "null",
-            "options": {
-                "alertThreshold": true
-            },
-            "percentage": false,
-            "pluginVersion": "7.5.17",
-            "pointradius": 2,
-            "points": false,
-            "renderer": "flot",
-            "seriesOverrides": [
+            "id": 15,
+            "title": "Resource Utilization",
+            "type": "row",
+            "panels": [
                 {
-                    "$$hashKey": "object:2987",
-                    "alias": "MAX",
-                    "dashes": true,
-                    "color": "#1F60C4",
-                    "fill": 0,
-                    "stack": false
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "CPU core utilization across all workers.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 18
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 4,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_cpu_utilization{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"} * ray_node_cpu_count{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"} / 100) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "CPU Usage: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_cpu_count{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"})",
+                            "interval": "",
+                            "legendFormat": "MAX",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "CPU Usage",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "cores",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
                 },
                 {
-                    "$$hashKey": "object:78",
-                    "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
-                    "hiddenSeries": true
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Total physical memory used vs total available memory.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 18
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 5,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_mem_used{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Memory Used: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_mem_total{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"})",
+                            "interval": "",
+                            "legendFormat": "MAX",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Total Memory Usage",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "bytes",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
                 },
                 {
-                    "$$hashKey": "object:2987",
-                    "alias": "MAX + PENDING",
-                    "dashes": true,
-                    "color": "#777777",
-                    "fill": 0,
-                    "stack": false
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Memory allocation details including available and shared memory.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 26
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 6,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_mem_available{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Available Memory: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_mem_shared_bytes{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Shared Memory: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Memory Allocation Details",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "bytes",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "GPU utilization across all workers.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 26
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 7,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_gpus_utilization{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", GpuIndex=~\"$GpuIndex\", GpuDeviceName=~\"$GpuDeviceName\", SessionName=~\"$SessionName\"} / 100) by (instance, RayNodeType, GpuIndex, GpuDeviceName)",
+                            "interval": "",
+                            "legendFormat": "GPU Usage: {{instance}} ({{RayNodeType}}), gpu.{{GpuIndex}}, {{GpuDeviceName}}",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_gpus_available{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", GpuIndex=~\"$GpuIndex\", GpuDeviceName=~\"$GpuDeviceName\", SessionName=~\"$SessionName\"})",
+                            "interval": "",
+                            "legendFormat": "MAX",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "GPU Usage",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "GPUs",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "GPU memory usage across all workers.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 34
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 8,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_gram_used{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", GpuIndex=~\"$GpuIndex\", GpuDeviceName=~\"$GpuDeviceName\", SessionName=~\"$SessionName\"} * 1024 * 1024) by (instance, RayNodeType, GpuIndex, GpuDeviceName)",
+                            "interval": "",
+                            "legendFormat": "Used GRAM: {{instance}} ({{RayNodeType}}), gpu.{{GpuIndex}}, {{GpuDeviceName}}",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "(sum(ray_node_gram_available{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", GpuIndex=~\"$GpuIndex\", GpuDeviceName=~\"$GpuDeviceName\", SessionName=~\"$SessionName\"}) + sum(ray_node_gram_used{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", GpuIndex=~\"$GpuIndex\", GpuDeviceName=~\"$GpuDeviceName\", SessionName=~\"$SessionName\"})) * 1024 * 1024",
+                            "interval": "",
+                            "legendFormat": "MAX",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "GPU Memory Usage",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "bytes",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Disk space usage across all workers.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 34
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 9,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_usage{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Disk Used: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_free{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) + sum(ray_node_disk_usage{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"})",
+                            "interval": "",
+                            "legendFormat": "MAX",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Disk Space Usage",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "bytes",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Current disk read/write throughput.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 42
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 10,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_io_read_speed{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Read Speed: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_io_write_speed{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Write Speed: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Disk Throughput",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "Bps",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Current disk read/write operations per second.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 42
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 11,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_read_iops{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Read IOPS: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_disk_write_iops{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Write IOPS: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Disk Operations",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "ops/s",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Current network send/receive throughput.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 0,
+                        "y": 50
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 12,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_network_receive_speed{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Receive Speed: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_network_send_speed{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Send Speed: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Network Throughput",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "Bps",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
+                },
+                {
+                    "aliasColors": {},
+                    "bars": false,
+                    "dashLength": 10,
+                    "dashes": false,
+                    "datasource": "${datasource}",
+                    "description": "Total network traffic sent/received.",
+                    "fieldConfig": {
+                        "defaults": {},
+                        "overrides": []
+                    },
+                    "gridPos": {
+                        "h": 8,
+                        "w": 12,
+                        "x": 12,
+                        "y": 50
+                    },
+                    "fill": 10,
+                    "fillGradient": 0,
+                    "hiddenSeries": false,
+                    "id": 13,
+                    "legend": {
+                        "alignAsTable": true,
+                        "avg": false,
+                        "current": true,
+                        "hideEmpty": false,
+                        "hideZero": true,
+                        "max": false,
+                        "min": false,
+                        "rightSide": false,
+                        "show": true,
+                        "sort": "current",
+                        "sortDesc": true,
+                        "total": false,
+                        "values": true
+                    },
+                    "lines": true,
+                    "linewidth": 1,
+                    "nullPointMode": "connected",
+                    "options": {
+                        "alertThreshold": true
+                    },
+                    "percentage": false,
+                    "pluginVersion": "7.5.17",
+                    "pointradius": 2,
+                    "points": false,
+                    "renderer": "flot",
+                    "seriesOverrides": [
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX",
+                            "dashes": true,
+                            "color": "#1F60C4",
+                            "fill": 0,
+                            "stack": false
+                        },
+                        {
+                            "$$hashKey": "object:78",
+                            "alias": "/FINISHED|FAILED|DEAD|REMOVED|Failed Nodes:/",
+                            "hiddenSeries": true
+                        },
+                        {
+                            "$$hashKey": "object:2987",
+                            "alias": "MAX + PENDING",
+                            "dashes": true,
+                            "color": "#777777",
+                            "fill": 0,
+                            "stack": false
+                        }
+                    ],
+                    "spaceLength": 10,
+                    "stack": true,
+                    "steppedLine": false,
+                    "targets": [
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_network_sent{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Total Sent: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "A"
+                        },
+                        {
+                            "exemplar": true,
+                            "expr": "sum(ray_node_network_received{instance=~\"$Instance\", RayNodeType=~\"$RayNodeType\", SessionName=~\"$SessionName\"}) by (instance, RayNodeType)",
+                            "interval": "",
+                            "legendFormat": "Total Received: {{instance}} ({{RayNodeType}})",
+                            "queryType": "randomWalk",
+                            "refId": "B"
+                        }
+                    ],
+                    "thresholds": [],
+                    "timeFrom": null,
+                    "timeRegions": [],
+                    "timeShift": null,
+                    "title": "Network Total Traffic",
+                    "tooltip": {
+                        "shared": true,
+                        "sort": 0,
+                        "value_type": "individual"
+                    },
+                    "type": "graph",
+                    "xaxis": {
+                        "buckets": null,
+                        "mode": "time",
+                        "name": null,
+                        "show": true,
+                        "values": []
+                    },
+                    "yaxes": [
+                        {
+                            "$$hashKey": "object:628",
+                            "format": "bytes",
+                            "label": "",
+                            "logBase": 1,
+                            "max": null,
+                            "min": "0",
+                            "show": true
+                        },
+                        {
+                            "$$hashKey": "object:629",
+                            "format": "short",
+                            "label": null,
+                            "logBase": 1,
+                            "max": null,
+                            "min": null,
+                            "show": true
+                        }
+                    ],
+                    "yaxis": {
+                        "align": false,
+                        "alignLevel": null
+                    }
                 }
-            ],
-            "spaceLength": 10,
-            "stack": false,
-            "steppedLine": false,
-            "targets": [
-                {
-                    "exemplar": true,
-                    "expr": "sum(ray_train_worker_group_start_total_time_s{SessionName=~\"$SessionName\",ray_train_run_name=~\"$TrainRunName\",}) by (ray_train_run_name)",
-                    "interval": "",
-                    "legendFormat": "Run Name: {{ray_train_run_name}}, Worker Group Start Time",
-                    "queryType": "randomWalk",
-                    "refId": "A"
-                },
-                {
-                    "exemplar": true,
-                    "expr": "sum(ray_train_worker_group_shutdown_total_time_s{SessionName=~\"$SessionName\",ray_train_run_name=~\"$TrainRunName\",}) by (ray_train_run_name)",
-                    "interval": "",
-                    "legendFormat": "Run Name: {{ray_train_run_name}}, Worker Group Shutdown Time",
-                    "queryType": "randomWalk",
-                    "refId": "B"
-                }
-            ],
-            "thresholds": [],
-            "timeFrom": null,
-            "timeRegions": [],
-            "timeShift": null,
-            "title": "Train Controller Operation Time",
-            "tooltip": {
-                "shared": true,
-                "sort": 0,
-                "value_type": "individual"
-            },
-            "type": "graph",
-            "xaxis": {
-                "buckets": null,
-                "mode": "time",
-                "name": null,
-                "show": true,
-                "values": []
-            },
-            "yaxes": [
-                {
-                    "$$hashKey": "object:628",
-                    "format": "seconds",
-                    "label": "",
-                    "logBase": 1,
-                    "max": null,
-                    "min": "0",
-                    "show": true
-                },
-                {
-                    "$$hashKey": "object:629",
-                    "format": "short",
-                    "label": null,
-                    "logBase": 1,
-                    "max": null,
-                    "min": null,
-                    "show": true
-                }
-            ],
-            "yaxis": {
-                "align": false,
-                "alignLevel": null
-            }
+            ]
         }
     ],
-    "refresh": false,
-    "schemaVersion": 27,
-    "style": "dark",
-    "tags": [
-        "rayVersion:2.46.0"
-    ],
-    "templating": {
-        "list": [
-            {
-                "current": {
-                    "selected": false
-                },
-                "description": "Filter queries of a specific Prometheus type.",
-                "hide": 2,
-                "includeAll": false,
-                "multi": false,
-                "name": "datasource",
-                "options": [],
-                "query": "prometheus",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "type": "datasource"
-            },
-            {
-                "allValue": ".+",
-                "current": {
-                    "selected": false
-                },
-                "datasource": "${datasource}",
-                "definition": "label_values(ray_train_report_total_blocked_time_s{}, SessionName)",
-                "description": "Filter queries to specific ray sessions.",
-                "error": null,
-                "hide": 0,
-                "includeAll": true,
-                "label": null,
-                "multi": false,
-                "name": "SessionName",
-                "options": [],
-                "query": {
-                    "query": "label_values(ray_train_report_total_blocked_time_s{}, SessionName)",
-                    "refId": "StandardVariableQuery"
-                },
-                "refresh": 2,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 2,
-                "tagValuesQuery": "",
-                "tags": [],
-                "tagsQuery": "",
-                "type": "query",
-                "useTags": false
-            },
-            {
-                "allValue": ".+",
-                "current": {
-                    "selected": false
-                },
-                "datasource": "${datasource}",
-                "definition": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_run_name)",
-                "description": "Filter queries to specific ray sessions.",
-                "error": null,
-                "hide": 0,
-                "includeAll": true,
-                "label": null,
-                "multi": false,
-                "name": "TrainRunName",
-                "options": [],
-                "query": {
-                    "query": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_run_name)",
-                    "refId": "StandardVariableQuery"
-                },
-                "refresh": 2,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 2,
-                "tagValuesQuery": "",
-                "tags": [],
-                "tagsQuery": "",
-                "type": "query",
-                "useTags": false
-            }
-        ]
-    },
     "time": {
         "from": "now-30m",
         "to": "now"
     },
-    "timepicker": {},
-    "timezone": "",
-    "title": "Train Dashboard",
-    "uid": "rayTrainDashboard",
-    "version": 1,
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+            }
+        ]
+    },
+    "templating": {
+        "list": [
+            {
+                "name": "datasource",
+                "type": "datasource",
+                "description": "Filter queries of a specific Prometheus type.",
+                "datasource": null,
+                "query": "prometheus",
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": false,
+                "multi": false,
+                "current": {
+                    "selected": false
+                }
+            },
+            {
+                "name": "SessionName",
+                "type": "query",
+                "description": "Filter queries to specific ray sessions.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_train_worker_group_start_total_time_s{}, SessionName)",
+                "query": {
+                    "query": "label_values(ray_train_worker_group_start_total_time_s{}, SessionName)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 0,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "TrainRunName",
+                "type": "query",
+                "description": "Filter queries to specific Ray Train run names.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_train_worker_group_start_total_time_s{}, ray_train_run_name)",
+                "query": {
+                    "query": "label_values(ray_train_worker_group_start_total_time_s{}, ray_train_run_name)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 0,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "TrainRunId",
+                "type": "query",
+                "description": "Filter queries to specific Ray Train run ids.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_train_worker_group_start_total_time_s{}, ray_train_run_id)",
+                "query": {
+                    "query": "label_values(ray_train_worker_group_start_total_time_s{}, ray_train_run_id)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "TrainWorkerWorldRank",
+                "type": "query",
+                "description": "Filter queries to specific Ray Train worker world ranks.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_worker_world_rank)",
+                "query": {
+                    "query": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_worker_world_rank)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 0,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "TrainWorkerActorId",
+                "type": "query",
+                "description": "Filter queries to specific Ray Train worker actor ids.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_worker_actor_id)",
+                "query": {
+                    "query": "label_values(ray_train_report_total_blocked_time_s{}, ray_train_worker_actor_id)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "Instance",
+                "type": "query",
+                "description": "Filter queries to specific node instances.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_node_network_receive_speed{}, instance)",
+                "query": {
+                    "query": "label_values(ray_node_network_receive_speed{}, instance)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": true,
+                "multi": false,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "GpuIndex",
+                "type": "query",
+                "description": "Filter queries to specific GPU indices.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_node_gpus_utilization{}, GpuIndex)",
+                "query": {
+                    "query": "label_values(ray_node_gpus_utilization{}, GpuIndex)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": true,
+                "multi": true,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "name": "GpuDeviceName",
+                "type": "query",
+                "description": "Filter queries to specific GPU device names.",
+                "datasource": "${datasource}",
+                "definition": "label_values(ray_node_gpus_utilization{}, GpuDeviceName)",
+                "query": {
+                    "query": "label_values(ray_node_gpus_utilization{}, GpuDeviceName)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 1,
+                "hide": 2,
+                "includeAll": true,
+                "multi": true,
+                "allValue": ".*",
+                "sort": 2,
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                }
+            },
+            {
+                "current": {
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                },
+                "description": "Filter queries to specific Ray node types (head or worker).",
+                "includeAll": true,
+                "multi": true,
+                "name": "RayNodeType",
+                "options": [
+                    {
+                        "selected": false,
+                        "text": "All",
+                        "value": "$__all"
+                    },
+                    {
+                        "selected": false,
+                        "text": "Head Node",
+                        "value": "head"
+                    },
+                    {
+                        "selected": false,
+                        "text": "Worker Node",
+                        "value": "worker"
+                    }
+                ],
+                "query": "head, worker",
+                "type": "custom"
+            }
+        ]
+    },
+    "tags": [
+        "rayVersion:2.49.2"
+    ],
     "rayMeta": [
         "supportsGlobalFilterOverride"
     ]
