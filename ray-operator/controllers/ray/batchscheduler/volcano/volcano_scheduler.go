@@ -78,13 +78,23 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
 	// (submitter waits for cluster; gang would wait for submitter). We still add the
 	// submitter's resource requests into MinResources so capacity is reserved.
-	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode || rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
-		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
-		submitterResource := utils.CalculatePodResource(submitterTemplate.Spec)
-		totalResourceList = append(totalResourceList, submitterResource)
-	}
-
+	submitterResource := getSubmitterResource(rayJob)
+	totalResourceList = append(totalResourceList, submitterResource)
 	return v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+}
+
+func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
+	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode {
+		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
+		return utils.CalculatePodResource(submitterTemplate.Spec)
+	} else if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+		submitterContainer := common.GetDefaultSubmitterContainer(rayJob.Spec.RayClusterSpec)
+		return corev1.ResourceList{
+			corev1.ResourceCPU:    submitterContainer.Resources.Requests[corev1.ResourceCPU],
+			corev1.ResourceMemory: submitterContainer.Resources.Requests[corev1.ResourceMemory],
+		}
+	}
+	return corev1.ResourceList{}
 }
 
 func getAppPodGroupName(object metav1.Object) string {
