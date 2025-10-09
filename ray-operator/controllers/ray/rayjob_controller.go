@@ -1244,7 +1244,7 @@ func (r *RayJobReconciler) handleShutdownAfterJobFinishes(ctx context.Context, r
 		}
 	} else {
 		// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
-		// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.		_, err = r.deleteClusterResources(ctx, rayJob)
+		// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
 		_, err = r.deleteClusterResources(ctx, rayJob)
 		if err == nil {
 			logger.Info("RayCluster is deleted", "RayCluster", rayJob.Status.RayClusterName)
