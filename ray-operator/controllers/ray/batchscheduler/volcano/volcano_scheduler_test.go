@@ -161,7 +161,8 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg, _ := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	a.NoError(err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -185,7 +186,8 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg, _ := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	a.NoError(err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
