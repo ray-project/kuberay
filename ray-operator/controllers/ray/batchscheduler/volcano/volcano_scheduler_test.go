@@ -162,7 +162,7 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
-	a.NoError(err)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -187,7 +187,7 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
-	a.NoError(err)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -231,7 +231,7 @@ func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
-	a.NoError(err)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 	a.Equal(volcanoschedulingv1beta1.NetworkTopologyMode("soft"), pg.Spec.NetworkTopology.Mode)
@@ -250,7 +250,7 @@ func TestCreatePodGroup_NetworkTopologyOnlyModeLabel(t *testing.T) {
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
-	a.NoError(err)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 	a.NotNil(pg.Spec.NetworkTopology)
@@ -271,7 +271,7 @@ func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
-	a.Error(err)
+	require.Error(t, err)
 	a.Contains(err.Error(), "failed to convert "+NetworkTopologyHighestTierAllowedLabelKey+" label to int")
 	a.Equal(cluster.Namespace, pg.Namespace)
 }
