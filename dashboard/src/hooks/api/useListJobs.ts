@@ -50,10 +50,8 @@ const convertRayJobItemToJobRow = (item: RayJobItem): JobRow => {
       item.spec.rayClusterSpec.headGroupSpec?.template?.spec?.containers?.[0].ports?.find(
         (port) => port.name === "dashboard",
       )?.containerPort;
-    if (!dashboardPort || !config.coreApiUrl) {
-      return {
-        rayHeadDashboardLink: "",
-      };
+    if (!serviceName || !dashboardPort || !config.coreApiUrl) {
+      return {};
     }
     const rayHeadDashboardLink = `${config.coreApiUrl}/namespaces/${namespace}/services/${serviceName}:${dashboardPort}/proxy/#/jobs`;
     const rayJobId = item.status?.jobId;
