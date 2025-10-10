@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 )
 
@@ -38,23 +37,33 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1
 	return nil
 }
 
-func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, _ string) {
 	logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
-	pod.Spec.SchedulerName = k.Name()
+	addSchedulerNameToObject(child, k.Name())
 
-	queue, ok := app.Labels[QueueLabelName]
+	parentLabel := parent.GetLabels()
+	queue, ok := parentLabel[QueueLabelName]
 	if !ok || queue == "" {
-		logger.Info("Queue label missing from RayCluster; pods will remain pending",
+		logger.Info("Queue label missing from parent; child will remain pending",
 			"requiredLabel", QueueLabelName)
 		return
 	}
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
+
+	childLabels := child.GetLabels()
+	if childLabels == nil {
+		childLabels = make(map[string]string)
 	}
-	pod.Labels[QueueLabelName] = queue
+	childLabels[QueueLabelName] = queue
+	child.SetLabels(childLabels)
 }
 
-func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
+func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
+	switch obj := obj.(type) {
+	case *corev1.Pod:
+		obj.Spec.SchedulerName = schedulerName
+	case *corev1.PodTemplateSpec:
+		obj.Spec.SchedulerName = schedulerName
+	}
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
