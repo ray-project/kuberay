@@ -184,8 +184,8 @@ func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) 
 	}
 	r.workerPool.channelContent.Set(jobId, struct{}{})
 	r.workerPool.taskQueue <- func() {
+		defer r.workerPool.channelContent.Remove(jobId)
 		jobInfo, err := r.GetJobInfo(ctx, jobId)
-		r.workerPool.channelContent.Remove(jobId)
 		if err != nil {
 			fmt.Printf("AsyncGetJobInfo: error: %v\n", err)
 			return
