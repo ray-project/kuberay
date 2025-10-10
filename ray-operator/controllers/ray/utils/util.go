@@ -760,7 +760,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	taskQueue := make(chan func())
 	workerPool := dashboardclient.NewWorkerPool(taskQueue)
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {

@@ -276,9 +276,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		var jobInfo *utiltypes.RayJobInfo
-		if loadedJobInfo := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId); loadedJobInfo != nil {
-			logger.Info("Job info found in map", "JobId", rayJobInstance.Status.JobId, "JobInfo", loadedJobInfo)
-			jobInfo = loadedJobInfo
+		if loadedJobCache := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId); loadedJobCache != nil {
+			if loadedJobCache.Err != nil {
+				rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
+				logger.Error(loadedJobCache.Err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId, "Error", loadedJobCache.Err)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, loadedJobCache.Err
+			}
+			jobInfo = loadedJobCache.JobInfo
 		} else {
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {

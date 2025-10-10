@@ -88,7 +88,7 @@ type Configuration struct {
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	jobInfoMap := cmap.New[*utiltypes.RayJobInfo]()
+	jobInfoMap := cmap.New[*utiltypes.RayJobCache]()
 	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, &jobInfoMap)
 }
 

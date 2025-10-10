@@ -21,7 +21,7 @@ type FakeRayDashboardClient struct {
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ *dashboardclient.WorkerPool, _ *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) {
+func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ *dashboardclient.WorkerPool, _ *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]) {
 }
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {
@@ -83,6 +83,6 @@ func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, _ string) error {
 	return nil
 }
 
-func (r *FakeRayDashboardClient) GetJobInfoFromCache(_ string) *utiltypes.RayJobInfo {
+func (r *FakeRayDashboardClient) GetJobInfoFromCache(_ string) *utiltypes.RayJobCache {
 	return nil
 }
