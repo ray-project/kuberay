@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	cmap "github.com/orcaman/concurrent-map/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,7 +44,6 @@ type RayJobReconciler struct {
 	client.Client
 	Scheme              *runtime.Scheme
 	Recorder            record.EventRecorder
-	JobInfoMap          *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
 }
@@ -57,13 +55,11 @@ type RayJobReconcilerOptions struct {
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	JobInfoMap := cmap.New[*utiltypes.RayJobInfo]()
-	dashboardClientFunc := provider.GetDashboardClient(mgr, &JobInfoMap)
+	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
-		JobInfoMap:          &JobInfoMap,
 		dashboardClientFunc: dashboardClientFunc,
 		options:             options,
 	}
@@ -280,7 +276,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		var jobInfo *utiltypes.RayJobInfo
-		if loadedJobInfo, ok := r.JobInfoMap.Get(rayJobInstance.Status.JobId); ok {
+		if loadedJobInfo := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId); loadedJobInfo != nil {
 			logger.Info("Job info found in map", "JobId", rayJobInstance.Status.JobId, "JobInfo", loadedJobInfo)
 			jobInfo = loadedJobInfo
 		} else {

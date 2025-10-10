@@ -82,3 +82,7 @@ func (r *FakeRayDashboardClient) StopJob(_ context.Context, _ string) (err error
 func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, _ string) error {
 	return nil
 }
+
+func (r *FakeRayDashboardClient) GetJobInfoFromCache(_ string) *utiltypes.RayJobInfo {
+	return nil
+}

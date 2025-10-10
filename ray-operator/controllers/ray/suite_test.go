@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	cmap "github.com/orcaman/concurrent-map/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -37,7 +36,6 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
-	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -54,7 +52,7 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager, _ *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
 		return fakeRayDashboardClient, nil
 	}

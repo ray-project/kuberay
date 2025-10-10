@@ -643,7 +643,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 

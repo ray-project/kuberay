@@ -87,8 +87,9 @@ type Configuration struct {
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobInfo]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, jobInfoMap)
+func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	jobInfoMap := cmap.New[*utiltypes.RayJobInfo]()
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, &jobInfoMap)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {

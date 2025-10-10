@@ -41,6 +41,7 @@ type RayDashboardClientInterface interface {
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
+	GetJobInfoFromCache(jobId string) *utiltypes.RayJobInfo
 }
 
 type RayDashboardClient struct {
@@ -355,6 +356,13 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	}
 	defer resp.Body.Close()
 
+	return nil
+}
+
+func (r *RayDashboardClient) GetJobInfoFromCache(jobId string) *utiltypes.RayJobInfo {
+	if jobInfo, ok := r.jobInfoMap.Get(jobId); ok {
+		return jobInfo
+	}
 	return nil
 }
 
