@@ -561,7 +561,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
 				return err
 			}
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedGateway), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
 			return nil
 		}
 		return err
@@ -775,7 +775,7 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
 				return err
 			}
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.FailedToCreateHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
 			return nil
 		}
 		return err
@@ -1293,8 +1293,8 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	}
 
 	// Retrieve the current observed Status fields for IncrementalUpgrade
-	activeTargetCapacity := ptr.Deref(activeRayServiceStatus.TargetCapacity, 100)
-	pendingTargetCapacity := ptr.Deref(pendingRayServiceStatus.TargetCapacity, 0)
+	activeTargetCapacity := *activeRayServiceStatus.TargetCapacity
+	pendingTargetCapacity := *pendingRayServiceStatus.TargetCapacity
 	pendingTrafficRoutedPercent := ptr.Deref(pendingRayServiceStatus.TrafficRoutedPercent, 0)
 
 	// Retrieve MaxSurgePercent - the maximum amount to change TargetCapacity by
@@ -1317,26 +1317,26 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	// increase its target_capacity by MaxSurgePercent.
 	// If the rayClusterInstance passed into this function is not the cluster to update based
 	// on the above conditions, we return without doing anything.
-	var clusterName string
 	var goalTargetCapacity int32
-	if activeTargetCapacity+pendingTargetCapacity > int32(100) {
-		// Scale down the Active RayCluster TargetCapacity on this iteration.
-		goalTargetCapacity = max(int32(0), activeTargetCapacity-maxSurgePercent)
-		clusterName = activeRayServiceStatus.RayClusterName
-		if clusterName != rayClusterInstance.Name {
-			return nil
+	shouldUpdate := false
+	if rayClusterInstance.Name == activeRayServiceStatus.RayClusterName {
+		if activeTargetCapacity+pendingTargetCapacity > 100 {
+			// Scale down the Active RayCluster TargetCapacity on this iteration.
+			goalTargetCapacity = max(int32(0), activeTargetCapacity-maxSurgePercent)
+			shouldUpdate = true
+			logger.Info("Setting target_capacity for active Raycluster", "Raycluster", rayClusterInstance.Name, "target_capacity", goalTargetCapacity)
 		}
-		activeRayServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
-		logger.Info("Setting target_capacity for active Raycluster", "Raycluster", clusterName, "target_capacity", goalTargetCapacity)
-	} else {
-		// Scale up the Pending RayCluster TargetCapacity on this iteration.
-		goalTargetCapacity = min(int32(100), pendingTargetCapacity+maxSurgePercent)
-		clusterName = pendingRayServiceStatus.RayClusterName
-		if clusterName != rayClusterInstance.Name {
-			return nil
+	} else if rayClusterInstance.Name == pendingRayServiceStatus.RayClusterName {
+		if activeTargetCapacity+pendingTargetCapacity <= 100 {
+			// Scale up the Pending RayCluster TargetCapacity on this iteration.
+			goalTargetCapacity = min(int32(100), pendingTargetCapacity+maxSurgePercent)
+			shouldUpdate = true
+			logger.Info("Setting target_capacity for pending Raycluster", "Raycluster", rayClusterInstance.Name, "target_capacity", goalTargetCapacity)
 		}
-		pendingRayServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
-		logger.Info("Setting target_capacity for pending Raycluster", "Raycluster", clusterName, "target_capacity", goalTargetCapacity)
+	}
+
+	if !shouldUpdate {
+		return nil
 	}
 
 	return r.applyServeTargetCapacity(ctx, rayServiceInstance, rayClusterInstance, rayDashboardClient, goalTargetCapacity)
