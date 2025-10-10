@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   FormLabel,
   Stack,
@@ -22,11 +23,11 @@ import {
   Alert,
 } from "@mui/joy";
 import { InfoOutlined } from "@mui/icons-material";
-import { useSnackBar } from "./SnackBarProvider";
 import { useCreateJob } from "@/hooks/api/useCreateJob";
 import { CreateRayJobConfig } from "@/types/v2/api/rayjob";
 
 export const CreateJobForm = () => {
+  const router = useRouter();
   const [jobName, setJobName] = React.useState(
     "test-job" + Math.floor(Math.random() * 100),
   );
@@ -75,6 +76,10 @@ export const CreateJobForm = () => {
     workerGpu,
   ]);
 
+  const navigateToJobsPage = () => {
+    router.push("/jobs");
+  };
+
   const handleCreateJob = async () => {
     const jobConfig: CreateRayJobConfig = {
       jobName,
@@ -95,8 +100,16 @@ export const CreateJobForm = () => {
       },
     };
 
-    await createJob(jobConfig);
+    const success = await createJob(jobConfig);
+    if (success) {
+      navigateToJobsPage();
+    }
   };
+
+  const handleCancel = () => {
+    navigateToJobsPage();
+  };
+
   return (
     <>
       <Stepper
@@ -335,7 +348,7 @@ export const CreateJobForm = () => {
         >
           Create Job
         </Button>
-        <Button variant="outlined" color="neutral">
+        <Button variant="outlined" color="neutral" onClick={handleCancel}>
           Cancel
         </Button>
       </Stack>

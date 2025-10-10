@@ -7,7 +7,6 @@ import {
 } from "@kubernetes/client-node";
 import { useSnackBar } from "@/components/SnackBarProvider";
 import { useNamespace } from "@/components/NamespaceProvider";
-import { useRouter } from "next/navigation";
 import { config } from "@/utils/constants";
 import { CreateRayJobConfig } from "@/types/v2/api/rayjob";
 import { ResourceKey } from "@/types/common";
@@ -165,7 +164,6 @@ async function createRayJobRequest(
 
 export const useCreateJob = () => {
   const [creating, setCreating] = React.useState(false);
-  const router = useRouter();
   const snackBar = useSnackBar();
   const namespace = useNamespace();
 
@@ -188,7 +186,7 @@ export const useCreateJob = () => {
           "success",
         );
 
-        router.push("/jobs");
+        return true;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         snackBar.showSnackBar(
@@ -196,11 +194,12 @@ export const useCreateJob = () => {
           `Error: ${errorMessage}`,
           "danger",
         );
+        return false;
       } finally {
         setCreating(false);
       }
     },
-    [namespace, router, snackBar],
+    [namespace, snackBar],
   );
 
   return {
