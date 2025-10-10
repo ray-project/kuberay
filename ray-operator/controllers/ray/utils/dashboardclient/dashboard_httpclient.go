@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	cmap "github.com/orcaman/concurrent-map/v2"
@@ -20,6 +21,7 @@ import (
 var (
 	// Multi-application URL paths
 	ServeDetailsPath = "/api/serve/applications/"
+	APITypeParam     = "declarative"
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
@@ -91,9 +93,17 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
 }
 
-// GetServeDetails gets details on all live applications on the Ray cluster.
+// GetServeDetails gets details on all declarative applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
+	serveDetailsURL, err := url.Parse(r.dashboardURL + ServeDetailsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse dashboard URL: %w", err)
+	}
+	q := serveDetailsURL.Query()
+	q.Set("api_type", APITypeParam)
+	serveDetailsURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", serveDetailsURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}

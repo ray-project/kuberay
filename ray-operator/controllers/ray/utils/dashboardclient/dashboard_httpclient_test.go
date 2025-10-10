@@ -172,4 +172,129 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		err := rayDashboardClient.StopJob(context.TODO(), "stop-job-1")
 		Expect(err).ToNot(HaveOccurred())
 	})
+
+	It("Test GetServeDetails URL construction with query parameters", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		// Mock the response
+		expectedResponse := &utiltypes.ServeDetails{
+			Applications: map[string]utiltypes.ServeApplicationDetails{
+				"app1": {
+					ServeApplicationStatus: utiltypes.ServeApplicationStatus{
+						Name:   "app1",
+						Status: "RUNNING",
+					},
+					Deployments: map[string]utiltypes.ServeDeploymentDetails{},
+				},
+			},
+			DeployMode: "MULTI_APP",
+		}
+		responseBytes, _ := json.Marshal(expectedResponse)
+
+		// Register responder that checks the URL includes the query parameter
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			func(req *http.Request) (*http.Response, error) {
+				// Verify the query parameter is present
+				Expect(req.URL.Query().Get("api_type")).To(Equal("declarative"))
+				return httpmock.NewBytesResponse(200, responseBytes), nil
+			})
+
+		details, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(details.Applications).To(HaveKey("app1"))
+		Expect(details.DeployMode).To(Equal("MULTI_APP"))
+	})
+
+	It("Test GetServeDetails with invalid dashboard URL", func() {
+		invalidClient := &RayDashboardClient{
+			dashboardURL: "://invalid-url",
+			client:       &http.Client{},
+		}
+
+		_, err := invalidClient.GetServeDetails(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse dashboard URL"))
+	})
+
+	It("Test GetServeDetails with HTTP 400 Bad Request", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		// Test 400 Bad Request (might happen with older Ray versions)
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewStringResponse(400, "Bad Request: unknown parameter api_type"), nil
+			})
+
+		_, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("GetServeDetails fail: 400"))
+		Expect(err.Error()).To(ContainSubstring("Bad Request: unknown parameter api_type"))
+	})
+
+	It("Test GetServeDetails with HTTP 500 Internal Server Error", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewStringResponse(500, "Internal Server Error"), nil
+			})
+
+		_, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("GetServeDetails fail: 500"))
+	})
+
+	It("Test GetServeDetails with invalid JSON response", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewStringResponse(200, "invalid json response"), nil
+			})
+
+		_, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("GetServeDetails failed. Failed to unmarshal bytes"))
+		Expect(err.Error()).To(ContainSubstring("invalid json response"))
+	})
+
+	It("Test GetServeDetails with empty response", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		// Test with empty but valid JSON
+		emptyResponse := &utiltypes.ServeDetails{
+			Applications: map[string]utiltypes.ServeApplicationDetails{},
+			DeployMode:   "",
+		}
+		responseBytes, _ := json.Marshal(emptyResponse)
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			func(req *http.Request) (*http.Response, error) {
+				// Verify the query parameter is present
+				Expect(req.URL.Query().Get("api_type")).To(Equal("declarative"))
+				return httpmock.NewBytesResponse(200, responseBytes), nil
+			})
+
+		details, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(details.Applications).To(BeEmpty())
+		Expect(details.DeployMode).To(Equal(""))
+	})
+
+	It("Test GetServeDetails with network error", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ServeDetailsPath,
+			httpmock.NewErrorResponder(context.DeadlineExceeded))
+
+		_, err := rayDashboardClient.GetServeDetails(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(Equal(context.DeadlineExceeded))
+	})
 })

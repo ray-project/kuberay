@@ -218,7 +218,10 @@ func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGetDefaultSubmitterTemplate(t *testing.T) {
+func TestGetSubmitterTemplate(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{},
+	}
 	rayCluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -234,6 +237,6 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 			},
 		},
 	}
-	template := GetDefaultSubmitterTemplate(&rayCluster.Spec)
+	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 }
