@@ -385,88 +385,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// TODO (kevin85421): We may not need to requeue the RayJob if it has already been suspended.
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
-		// If this RayJob uses an existing RayCluster (i.e., ClusterSelector is set), we should not delete the RayCluster.
-		ttlSeconds := rayJobInstance.Spec.TTLSecondsAfterFinished
-		nowTime := time.Now()
-		shutdownTime := rayJobInstance.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
-		logger.Info(string(rayJobInstance.Status.JobDeploymentStatus),
-			"ShutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes,
-			"ClusterSelector", rayJobInstance.Spec.ClusterSelector,
-			"ttlSecondsAfterFinished", ttlSeconds,
-			"Status.endTime", rayJobInstance.Status.EndTime,
-			"Now", nowTime,
-			"ShutdownTime", shutdownTime)
-
-		if features.Enabled(features.RayJobDeletionPolicy) &&
-			rayJobInstance.Spec.DeletionStrategy != nil &&
-			len(rayJobInstance.Spec.ClusterSelector) == 0 {
-
-			if shutdownTime.After(nowTime) {
-				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
-				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
-				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-			}
-
-			policy := rayv1.DeleteNone
-			if rayJobInstance.Status.JobStatus == rayv1.JobStatusSucceeded {
-				policy = *rayJobInstance.Spec.DeletionStrategy.OnSuccess.Policy
-			} else if rayJobInstance.Status.JobStatus == rayv1.JobStatusFailed {
-				policy = *rayJobInstance.Spec.DeletionStrategy.OnFailure.Policy
-			} else {
-				logger.Info("jobStatus not valid for deletion", "jobStatus", rayJobInstance.Status.JobStatus)
-			}
-
-			// no need to continue as the selected policy is DeleteNone
-			if policy == rayv1.DeleteNone {
-				break
-			}
-
-			logger.Info("Shutdown behavior is defined by the deletion policy", "deletionPolicy", rayJobInstance.Spec.DeletionStrategy)
-			if shutdownTime.After(nowTime) {
-				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
-				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
-				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
-			}
-
-			switch policy {
-			case rayv1.DeleteCluster:
-				logger.Info("Deleting RayCluster", "RayCluster", rayJobInstance.Status.RayClusterName)
-				_, err = r.deleteClusterResources(ctx, rayJobInstance)
-			case rayv1.DeleteWorkers:
-				logger.Info("Suspending all worker groups", "RayCluster", rayJobInstance.Status.RayClusterName)
-				err = r.suspendWorkerGroups(ctx, rayJobInstance)
-			case rayv1.DeleteSelf:
-				logger.Info("Deleting RayJob")
-				err = r.Client.Delete(ctx, rayJobInstance)
-			default:
-			}
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
+		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
+		// If the RayJob uses an existing RayCluster, we must not delete it.
+		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+			logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJobInstance.Spec.ClusterSelector)
+			return ctrl.Result{}, nil
 		}
 
-		if (!features.Enabled(features.RayJobDeletionPolicy) || rayJobInstance.Spec.DeletionStrategy == nil) && rayJobInstance.Spec.ShutdownAfterJobFinishes && len(rayJobInstance.Spec.ClusterSelector) == 0 {
-			logger.Info("Shutdown behavior is defined by the `ShutdownAfterJobFinishes` flag", "shutdownAfterJobFinishes", rayJobInstance.Spec.ShutdownAfterJobFinishes)
-			if shutdownTime.After(nowTime) {
-				delta := int32(time.Until(shutdownTime.Add(2 * time.Second)).Seconds())
-				logger.Info("shutdownTime not reached, requeue this RayJob for n seconds", "seconds", delta)
-				return ctrl.Result{RequeueAfter: time.Duration(delta) * time.Second}, nil
+		if features.Enabled(features.RayJobDeletionPolicy) && rayJobInstance.Spec.DeletionStrategy != nil {
+			// The previous validation logic ensures that either DeletionRules or the legacy policies are set, but not both.
+			if rayJobInstance.Spec.DeletionStrategy.DeletionRules != nil {
+				return r.handleDeletionRules(ctx, rayJobInstance)
 			}
-			if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
-				err = r.Client.Delete(ctx, rayJobInstance)
-				logger.Info("RayJob is deleted")
-			} else {
-				// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
-				// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
-				_, err = r.deleteClusterResources(ctx, rayJobInstance)
-				logger.Info("RayCluster is deleted", "RayCluster", rayJobInstance.Status.RayClusterName)
-			}
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
+			return r.handleLegacyDeletionPolicy(ctx, rayJobInstance)
 		}
 
-		// If the RayJob is completed, we should not requeue it.
+		if rayJobInstance.Spec.ShutdownAfterJobFinishes {
+			return r.handleShutdownAfterJobFinishes(ctx, rayJobInstance)
+		}
+
+		// Default: No deletion policy is configured. The reconciliation is complete for this RayJob.
 		return ctrl.Result{}, nil
 	default:
 		logger.Info("Unknown JobDeploymentStatus", "JobDeploymentStatus", rayJobInstance.Status.JobDeploymentStatus)
@@ -1200,4 +1138,268 @@ func isSubmitterContainerFinished(pod *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+// handleDeletionRules processes the DeletionRules with a impact-aware strategy.
+// It categorizes rules into "overdue" and "pending". If overdue rules exist,
+// it executes the most destructive one and then requeues for the next pending rule.
+// If no rules are overdue, it simply requeues for the
+// next pending rule. This function performs at most one deletion action per reconciliation.
+func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv1.RayJob) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx).WithValues("deletionMechanism", "DeletionRules")
+	nowTime := time.Now()
+
+	var overdueRules []rayv1.DeletionRule
+	var nextRequeueTime *time.Time
+
+	// Categorize all applicable and incomplete rules into "overdue" or "pending".
+	for _, rule := range rayJob.Spec.DeletionStrategy.DeletionRules {
+		// Skip rules that don't match the current job status.
+		if rule.Condition.JobStatus != rayJob.Status.JobStatus {
+			continue
+		}
+
+		deletionTime := rayJob.Status.EndTime.Add(time.Duration(rule.Condition.TTLSeconds) * time.Second)
+		// Track the earliest requeue time to re-check later.
+		if nowTime.Before(deletionTime) {
+			if nextRequeueTime == nil || deletionTime.Before(*nextRequeueTime) {
+				nextRequeueTime = &deletionTime
+			}
+			continue
+		}
+
+		// Need to check if the deletion action has already been completed to ensure idempotency.
+		isCompleted, err := r.isDeletionActionCompleted(ctx, rayJob, rule.Policy)
+		if err != nil {
+			logger.Error(err, "Failed to check if deletion action is completed", "rule", rule)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		if isCompleted {
+			logger.Info("Skipping completed deletion rule", "rule", rule)
+			continue
+		}
+
+		overdueRules = append(overdueRules, rule)
+	}
+
+	// Handle overdue rules if any exist.
+	if len(overdueRules) > 0 {
+		ruleToExecute := selectMostImpactfulRule(overdueRules)
+		logger.Info("Executing the most impactful overdue deletion rule", "rule", ruleToExecute, "overdueRulesCount", len(overdueRules))
+		if _, err := r.executeDeletionPolicy(ctx, rayJob, ruleToExecute.Policy); err != nil {
+			// If execution fails, return immediately for a retry.
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+	}
+
+	if nextRequeueTime != nil {
+		requeueAfter := requeueDelayFor(*nextRequeueTime)
+		logger.Info("Requeuing for the next scheduled rule", "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	logger.Info("All applicable deletion rules have been processed.")
+	return ctrl.Result{}, nil
+}
+
+// handleLegacyDeletionPolicy handles the deprecated onSuccess and onFailure policies.
+func (r *RayJobReconciler) handleLegacyDeletionPolicy(ctx context.Context, rayJob *rayv1.RayJob) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx).WithValues("deletionMechanism", "LegacyOnSuccessFailure")
+
+	var policy rayv1.DeletionPolicyType
+	switch rayJob.Status.JobStatus {
+	case rayv1.JobStatusSucceeded:
+		policy = *rayJob.Spec.DeletionStrategy.OnSuccess.Policy
+	case rayv1.JobStatusFailed:
+		policy = *rayJob.Spec.DeletionStrategy.OnFailure.Policy
+	default:
+		logger.Info("JobStatus is not valid for deletion, no policy applied", "jobStatus", rayJob.Status.JobStatus)
+		return ctrl.Result{}, nil
+	}
+
+	// If the policy is DeleteNone, we are done.
+	if policy == rayv1.DeleteNone {
+		logger.Info("Deletion policy is DeleteNone; no action taken.")
+		return ctrl.Result{}, nil
+	}
+
+	// These legacy policies use the top-level TTLSecondsAfterFinished.
+	nowTime := time.Now()
+	ttlSeconds := rayJob.Spec.TTLSecondsAfterFinished
+	shutdownTime := rayJob.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
+	logger.Info("Evaluating legacy deletion policy (onSuccess/onFailure)",
+		"JobDeploymentStatus", rayJob.Status.JobDeploymentStatus,
+		"policy", policy,
+		"JobStatus", rayJob.Status.JobStatus,
+		"ttlSecondsAfterFinished", ttlSeconds,
+		"Status.endTime", rayJob.Status.EndTime,
+		"Now", nowTime,
+		"ShutdownTime", shutdownTime)
+
+	if shutdownTime.After(nowTime) {
+		requeueAfter := requeueDelayFor(shutdownTime)
+		logger.Info("TTL has not been met for legacy policy. Requeuing.", "shutdownTime", shutdownTime, "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	logger.Info("Executing legacy deletion policy.", "policy", policy)
+	return r.executeDeletionPolicy(ctx, rayJob, policy)
+}
+
+// handleShutdownAfterJobFinishes handles the oldest deletion mechanism, the ShutdownAfterJobFinishes boolean flag.
+func (r *RayJobReconciler) handleShutdownAfterJobFinishes(ctx context.Context, rayJob *rayv1.RayJob) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx).WithValues("deletionMechanism", "ShutdownAfterJobFinishes")
+
+	nowTime := time.Now()
+	ttlSeconds := rayJob.Spec.TTLSecondsAfterFinished
+	shutdownTime := rayJob.Status.EndTime.Add(time.Duration(ttlSeconds) * time.Second)
+	logger.Info("Evaluating job deletion policy based on ShutdownAfterJobFinishes",
+		"JobDeploymentStatus", rayJob.Status.JobDeploymentStatus,
+		"ShutdownAfterJobFinishes", rayJob.Spec.ShutdownAfterJobFinishes,
+		"ClusterSelector", rayJob.Spec.ClusterSelector,
+		"ttlSecondsAfterFinished", ttlSeconds,
+		"Status.endTime", rayJob.Status.EndTime,
+		"Now", nowTime,
+		"ShutdownTime", shutdownTime)
+
+	if shutdownTime.After(nowTime) {
+		requeueAfter := requeueDelayFor(shutdownTime)
+		logger.Info("TTL has not been met for ShutdownAfterJobFinishes. Requeuing.", "shutdownTime", shutdownTime, "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	var err error
+	if s := os.Getenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES); strings.ToLower(s) == "true" {
+		err = r.Client.Delete(ctx, rayJob)
+		if err == nil {
+			logger.Info("RayJob is deleted", "RayJob", rayJob.Name)
+		}
+	} else {
+		// We only need to delete the RayCluster. We don't need to delete the submitter Kubernetes Job so that users can still access
+		// the driver logs. In addition, a completed Kubernetes Job does not actually use any compute resources.
+		_, err = r.deleteClusterResources(ctx, rayJob)
+		if err == nil {
+			logger.Info("RayCluster is deleted", "RayCluster", rayJob.Status.RayClusterName)
+		}
+	}
+
+	if err != nil {
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// executeDeletionPolicy performs the actual resource deletion based on the policy type.
+// This function centralizes the deletion logic to avoid code duplication.
+func (r *RayJobReconciler) executeDeletionPolicy(ctx context.Context, rayJob *rayv1.RayJob, policy rayv1.DeletionPolicyType) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	var err error
+
+	switch policy {
+	case rayv1.DeleteCluster:
+		logger.Info("Executing deletion policy: DeleteCluster", "RayCluster", rayJob.Status.RayClusterName)
+		_, err = r.deleteClusterResources(ctx, rayJob)
+	case rayv1.DeleteWorkers:
+		logger.Info("Executing deletion policy: DeleteWorkers", "RayCluster", rayJob.Status.RayClusterName)
+		err = r.suspendWorkerGroups(ctx, rayJob)
+	case rayv1.DeleteSelf:
+		logger.Info("Executing deletion policy: DeleteSelf", "RayJob", rayJob.Name)
+		err = r.Client.Delete(ctx, rayJob)
+	case rayv1.DeleteNone:
+		// This should be handled by the callers, but we include it for safety.
+		logger.Info("Executing deletion policy: DeleteNone. No action taken.")
+	default:
+		// This case should not be reached if validation is working correctly.
+		logger.Error(fmt.Errorf("unknown deletion policy: %s", policy), "Unknown deletion policy encountered")
+	}
+
+	if err != nil {
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// isDeletionActionCompleted checks if the state corresponding to a deletion policy is already achieved.
+// This is crucial for making the reconciliation loop idempotent by checking the actual cluster state.
+func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob *rayv1.RayJob, policy rayv1.DeletionPolicyType) (bool, error) {
+	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJob)
+	cluster := &rayv1.RayCluster{}
+
+	switch policy {
+	case rayv1.DeleteWorkers:
+		if err := r.Get(ctx, clusterIdentifier, cluster); err != nil {
+			if errors.IsNotFound(err) {
+				// If the cluster is gone, the workers are definitely gone.
+				return true, nil
+			}
+			// For any other error, we can't be sure of the state, so report the error.
+			return false, err
+		}
+
+		if !cluster.DeletionTimestamp.IsZero() {
+			// If the cluster is being deleted, we consider the action complete.
+			return true, nil
+		}
+
+		// If the cluster exists, check if all worker groups are suspended.
+		for _, wg := range cluster.Spec.WorkerGroupSpecs {
+			if wg.Suspend == nil || !*wg.Suspend {
+				// Found an active worker group, so the action is not complete.
+				return false, nil
+			}
+		}
+
+		return true, nil
+
+	case rayv1.DeleteCluster:
+		if err := r.Get(ctx, clusterIdentifier, cluster); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			// For any other error, we can't be sure of the state, so report the error.
+			return false, err
+		}
+
+		if !cluster.DeletionTimestamp.IsZero() {
+			// If the cluster is being deleted, we consider the action complete.
+			return true, nil
+		}
+
+		return false, nil
+
+	case rayv1.DeleteSelf:
+		// This action is terminal. If this function is running, the RayJob still exists,
+		// so the action cannot be considered complete.
+		return false, nil
+
+	case rayv1.DeleteNone:
+		// "DeleteNone" is a no-op and is always considered complete.
+		return true, nil
+	}
+
+	return false, fmt.Errorf("unknown deletion policy for completion check: %s", policy)
+}
+
+// selectMostImpactfulRule finds the rule with the most destructive policy from a given list.
+func selectMostImpactfulRule(rules []rayv1.DeletionRule) rayv1.DeletionRule {
+	order := map[rayv1.DeletionPolicyType]int{
+		rayv1.DeleteSelf:    4,
+		rayv1.DeleteCluster: 3,
+		rayv1.DeleteWorkers: 2,
+		rayv1.DeleteNone:    1,
+	}
+
+	mostImpactfulRule := rules[0]
+	for _, rule := range rules[1:] {
+		if order[rule.Policy] > order[mostImpactfulRule.Policy] {
+			mostImpactfulRule = rule
+		}
+	}
+	return mostImpactfulRule
+}
+
+// requeueDelayFor computes the duration for the next requeue, ensuring a minimum buffer.
+func requeueDelayFor(t time.Time) time.Duration {
+	return time.Until(t) + 2*time.Second
 }

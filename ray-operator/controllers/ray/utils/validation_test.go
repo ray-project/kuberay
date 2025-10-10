@@ -795,10 +795,10 @@ func TestValidateRayJobSpec(t *testing.T) {
 			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				},
@@ -956,14 +956,15 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		spec        rayv1.RayJobSpec
 		expectError bool
 	}{
+		// Legacy DeletionStrategy tests
 		{
 			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -974,10 +975,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -988,10 +989,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, RayClusterSpec: &rayv1.RayClusterSpec{
@@ -1005,10 +1006,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "valid RayJob with DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1029,10 +1030,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1044,7 +1045,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnSuccess unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1056,7 +1057,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnSuccess.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1068,7 +1069,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnFailure unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1080,10 +1081,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnFailure.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: rayv1.DeletionPolicy{},
+					OnFailure: &rayv1.DeletionPolicy{},
 				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
@@ -1097,6 +1098,272 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 				},
 			},
 			expectError: true,
+		},
+		// New Deletion Rules tests
+		{
+			name: "valid deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "deletionRules and ShutdownAfterJobFinishes both set",
+			spec: rayv1.RayJobSpec{
+				ShutdownAfterJobFinishes: true,
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules and legacy onSuccess both set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: &rayv1.DeletionPolicy{
+						Policy: ptr.To(rayv1.DeleteCluster),
+					},
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "nil DeletionStrategy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{},
+				RayClusterSpec:   createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "empty DeletionStrategy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "duplicate rule in deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "negative TTLSeconds in deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: -10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with ClusterSelector and DeleteWorkers policy",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"key": "value"},
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with ClusterSelector and DeleteCluster policy",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"key": "value"},
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with autoscaling and DeleteWorkers policy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					EnableInTreeAutoscaling: ptr.To(true),
+					HeadGroupSpec:           headGroupSpecWithOneContainer,
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "inconsistent TTLs in deletionRules (DeleteCluster < DeleteWorkers)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "inconsistent TTLs in deletionRules (DeleteSelf < DeleteCluster)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "valid complex deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusSucceeded,
+								TTLSeconds: 30,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  rayv1.JobStatusFailed,
+								TTLSeconds: 0,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
 		},
 	}
 
