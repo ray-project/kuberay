@@ -50,6 +50,31 @@ export const CreateJobForm = () => {
 
   const { creating, createJob } = useCreateJob();
 
+  // Check if all resource fields are filled
+  const areResourcesFilled = React.useMemo(() => {
+    return !!(
+      headCpu &&
+      headMemory &&
+      headGpu &&
+      workerReplicas &&
+      workerMinReplicas &&
+      workerMaxReplicas &&
+      workerCpu &&
+      workerMemory &&
+      workerGpu
+    );
+  }, [
+    headCpu,
+    headMemory,
+    headGpu,
+    workerReplicas,
+    workerMinReplicas,
+    workerMaxReplicas,
+    workerCpu,
+    workerMemory,
+    workerGpu,
+  ]);
+
   const handleCreateJob = async () => {
     const jobConfig: CreateRayJobConfig = {
       jobName,
@@ -147,7 +172,10 @@ export const CreateJobForm = () => {
         </Step>
         <Step
           indicator={
-            <StepIndicator variant="solid" color="primary">
+            <StepIndicator
+              variant={areResourcesFilled ? "solid" : "outlined"}
+              color="primary"
+            >
               3
             </StepIndicator>
           }
@@ -156,6 +184,12 @@ export const CreateJobForm = () => {
           <Typography level="body-sm" sx={{ mt: -1, mb: 1 }}>
             Configure compute resources for your Ray cluster
           </Typography>
+          {!areResourcesFilled && (
+            <Alert color="warning" size="sm" sx={{ mb: 1 }}>
+              <InfoOutlined />
+              Please fill in all resource fields
+            </Alert>
+          )}
           <AccordionGroup
             disableDivider
             sx={{
@@ -293,7 +327,9 @@ export const CreateJobForm = () => {
       <Stack direction="row" gap={2} mt={5} ml={4.5}>
         <Button
           className={"bg-[#0B6BCB]"}
-          disabled={!(jobName && dockerImage && entrypoint)}
+          disabled={
+            !(jobName && dockerImage && entrypoint && areResourcesFilled)
+          }
           onClick={handleCreateJob}
           loading={creating}
         >
