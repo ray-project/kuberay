@@ -354,13 +354,13 @@ env_vars:
 				WithManagedBy("kueue.x-k8s.io/multikueue"))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
-		//g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
 		// Should not to be able to change managedBy field as it's immutable
 		rayJobAC.Spec.WithManagedBy(utils.KubeRayController)
 		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
-		//g.Expect(err).To(HaveOccurred())
+		g.Expect(err).To(HaveOccurred())
 		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
 			Should(WithTransform(RayJobManagedBy, Equal(ptr.To("kueue.x-k8s.io/multikueue"))))
 
