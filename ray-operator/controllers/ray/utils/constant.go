@@ -320,6 +320,8 @@ const (
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
 
 	// RayService event list
+	CreatedGateway                  K8sEventType = "CreatedGateway"
+	CreatedHTTPRoute                K8sEventType = "CreatedHTTPRoute"
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
