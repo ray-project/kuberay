@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +37,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -73,6 +75,9 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func(ctx SpecContext) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	// Enable NetworkPolicy feature gate for integration tests
+	features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterNetworkPolicy, true)
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
@@ -85,6 +90,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(cfg).ToNot(BeNil())
 
 	err = rayv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Add networking scheme for NetworkPolicy resources
+	err = networkingv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -127,6 +136,13 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	rayJobOptions := RayJobReconcilerOptions{}
 	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
+
+	// NetworkPolicy controller (only registered if feature flag is enabled)
+	if features.Enabled(features.RayClusterNetworkPolicy) {
+		networkPolicyController := NewNetworkPolicyController(mgr)
+		err = networkPolicyController.SetupWithManager(mgr)
+		Expect(err).NotTo(HaveOccurred(), "failed to setup NetworkPolicy controller")
+	}
 
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())
