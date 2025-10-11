@@ -173,6 +173,32 @@ func TestRayJobRetry(t *testing.T) {
 			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
 	})
 
+	test.T().Run("WaitingTtlSeconds has passed", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("waiting-stuck", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithBackoffLimit(2).
+				WithSubmitterConfig(rayv1ac.SubmitterConfig().
+					WithBackoffLimit(0)).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithTTLSecondsAfterFinished(600).
+				WithWaitingTtlSeconds(1).
+				WithActiveDeadlineSeconds(500).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.JobDeploymentFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+	})
+
 	test.T().Run("Failing RayJob with HttpMode submission mode", func(_ *testing.T) {
 		// Set up the RayJob with HTTP mode and a BackoffLimit
 		rayJobAC := rayv1ac.RayJob("failing-rayjob-in-httpmode", namespace.Name).
