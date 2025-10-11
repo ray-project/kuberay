@@ -62,7 +62,7 @@ func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGro
 			},
 		},
 		Spec: v1alpha1.PodGroupSpec{
-			MinMember:    utils.CalculateDesiredReplicas(ctx, app) + 1, // +1 for the head pod
+			MinMember:    utils.CalculateDesiredReplicas(app) + 1, // +1 for the head pod
 			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
