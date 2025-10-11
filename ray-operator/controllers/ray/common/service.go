@@ -184,7 +184,10 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	namespace := rayCluster.Namespace
 	crdType := utils.RayClusterCRD
 	if isRayService {
-		name = rayService.Name
+		// For IncrementalUpgrade, the name is based on the unique RayCluster.
+		if !utils.IsIncrementalUpgradeEnabled(&rayService.Spec) {
+			name = rayService.Name
+		}
 		namespace = rayService.Namespace
 		crdType = utils.RayServiceCRD
 	}
@@ -225,7 +228,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				"otherwise, the Kubernetes service for Ray Serve will not be created.")
 		}
 
-		if rayService.Spec.ServeService != nil {
+		if rayService.Spec.ServeService != nil && !utils.IsIncrementalUpgradeEnabled(&rayService.Spec) {
 			// Use the provided "custom" ServeService.
 			// Deep copy the ServeService to avoid modifying the original object
 			serveService := rayService.Spec.ServeService.DeepCopy()
