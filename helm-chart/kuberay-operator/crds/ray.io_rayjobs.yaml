@@ -47,6 +47,9 @@ spec:
             type: object
           spec:
             properties:
+              waitingTtlSeconds:
+                format: int32
+                type: integer
               activeDeadlineSeconds:
                 format: int32
                 type: integer
@@ -742,6 +745,9 @@ spec:
                             type: object
                           spec:
                             properties:
+                              waitingTtlSeconds:
+                                format: int32
+                                type: integer
                               activeDeadlineSeconds:
                                 format: int64
                                 type: integer
@@ -4466,6 +4472,9 @@ spec:
                               type: object
                             spec:
                               properties:
+                                waitingTtlSeconds:
+                                  format: int32
+                                  type: integer
                                 activeDeadlineSeconds:
                                   format: int64
                                   type: integer
@@ -8157,6 +8166,9 @@ spec:
                     type: object
                   spec:
                     properties:
+                      waitingTtlSeconds:
+                        format: int32
+                        type: integer
                       activeDeadlineSeconds:
                         format: int64
                         type: integer
@@ -12465,6 +12477,9 @@ spec:
                             type: object
                           spec:
                             properties:
+                              waitingTtlSeconds:
+                                format: int32
+                                type: integer
                               activeDeadlineSeconds:
                                 format: int64
                                 type: integer
@@ -16173,6 +16188,9 @@ spec:
                               type: object
                             spec:
                               properties:
+                                waitingTtlSeconds:
+                                  format: int32
+                                  type: integer
                                 activeDeadlineSeconds:
                                   format: int64
                                   type: integer
@@ -19856,6 +19874,9 @@ spec:
                     type: object
                   spec:
                     properties:
+                      waitingTtlSeconds:
+                        format: int32
+                        type: integer
                       activeDeadlineSeconds:
                         format: int64
                         type: integer
