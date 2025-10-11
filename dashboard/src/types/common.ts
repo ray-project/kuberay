@@ -35,3 +35,7 @@ export interface AutoscalerOptions {
   envFrom?: Array<Record<string, any>>;
   volumeMounts?: Array<Record<string, any>>;
 }
+
+export enum ResourceKey {
+  GPU = "nvidia.com/gpu",
+}
