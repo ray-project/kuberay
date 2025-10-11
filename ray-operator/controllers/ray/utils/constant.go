@@ -313,6 +313,7 @@ const (
 	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
+	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
 
 	// RayService event list
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
