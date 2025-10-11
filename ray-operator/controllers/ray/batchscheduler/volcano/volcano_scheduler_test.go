@@ -161,7 +161,8 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -185,7 +186,8 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
-	pg := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	require.NoError(t, err)
 
 	a.Equal(cluster.Namespace, pg.Namespace)
 
@@ -204,6 +206,74 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 	// 2 GPUs * 2 (num of hosts) total
 	// 2 GPUs * 2 = 4 GPUs
 	a.Equal("4", pg.Spec.MinResources.Name("nvidia.com/gpu", resource.BinarySI).String())
+}
+
+func createTestRayClusterWithLabels(labels map[string]string) rayv1.RayCluster {
+	cluster := createTestRayCluster(1)
+	if cluster.ObjectMeta.Labels == nil {
+		cluster.ObjectMeta.Labels = make(map[string]string)
+	}
+	for k, v := range labels {
+		cluster.ObjectMeta.Labels[k] = v
+	}
+	return cluster
+}
+
+func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with both network topology mode and highest tier allowed
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey:               "soft",
+		NetworkTopologyHighestTierAllowedLabelKey: "3",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	require.NoError(t, err)
+
+	a.Equal(cluster.Namespace, pg.Namespace)
+	a.Equal(volcanoschedulingv1beta1.NetworkTopologyMode("soft"), pg.Spec.NetworkTopology.Mode)
+	a.NotNil(pg.Spec.NetworkTopology.HighestTierAllowed)
+	a.Equal(3, *pg.Spec.NetworkTopology.HighestTierAllowed)
+}
+
+func TestCreatePodGroup_NetworkTopologyOnlyModeLabel(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with only network topology mode set
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey: "hard",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+	require.NoError(t, err)
+
+	a.Equal(cluster.Namespace, pg.Namespace)
+	a.NotNil(pg.Spec.NetworkTopology)
+	a.Equal(volcanoschedulingv1beta1.NetworkTopologyMode("hard"), pg.Spec.NetworkTopology.Mode)
+	a.Nil(pg.Spec.NetworkTopology.HighestTierAllowed)
+}
+
+func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
+	a := assert.New(t)
+
+	// Test with network topology mode set and highest tier allowed is not an int
+	cluster := createTestRayClusterWithLabels(map[string]string{
+		NetworkTopologyModeLabelKey:               "soft",
+		NetworkTopologyHighestTierAllowedLabelKey: "not-an-int",
+	})
+
+	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	totalResource := utils.CalculateDesiredResources(&cluster)
+	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+
+	require.Error(t, err)
+	a.Contains(err.Error(), "failed to convert "+NetworkTopologyHighestTierAllowedLabelKey+" label to int")
+	a.Equal(cluster.Namespace, pg.Namespace)
 }
 
 func TestCreatePodGroupForRayJob(t *testing.T) {
