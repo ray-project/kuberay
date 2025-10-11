@@ -94,7 +94,7 @@ export const JobsTable = () => {
         </td>
         <td>{dayjs(row.createdAt).format("M/D/YY HH:mm:ss")}</td>
         <td className="flex">
-          {
+          {row.links.rayHeadDashboardLink && (
             <IconButton
               variant="plain"
               size="sm"
@@ -112,7 +112,7 @@ export const JobsTable = () => {
                 width={26}
               />
             </IconButton>
-          }
+          )}
           {row.links.rayGrafanaDashboardLink && (
             <IconButton
               variant="plain"
@@ -130,31 +130,33 @@ export const JobsTable = () => {
               <Image priority src={GrafanaIcon} alt="Grafana Metrics" />
             </IconButton>
           )}
-          <IconButton
-            variant="plain"
-            size="sm"
-            sx={{
-              minHeight: "1rem",
-              minWidth: "1rem",
-              px: 0.6,
-            }}
-            title="Loki Logs"
-            href={row.links.logsLink}
-            target="_blank"
-            component="a"
-          >
-            <Typography
+          {row.links.logsLink && (
+            <IconButton
+              variant="plain"
+              size="sm"
               sx={{
-                fontFamily: "monospace",
-                letterSpacing: -0.9,
-                fontSize: "small",
-                color: "#0b6bcb",
-                textDecoration: "underline",
+                minHeight: "1rem",
+                minWidth: "1rem",
+                px: 0.6,
               }}
+              title="Loki Logs"
+              href={row.links.logsLink}
+              target="_blank"
+              component="a"
             >
-              Logs
-            </Typography>
-          </IconButton>
+              <Typography
+                sx={{
+                  fontFamily: "monospace",
+                  letterSpacing: -0.9,
+                  fontSize: "small",
+                  color: "#0b6bcb",
+                  textDecoration: "underline",
+                }}
+              >
+                Logs
+              </Typography>
+            </IconButton>
+          )}
         </td>
         <td className="truncate">
           <Tooltip variant="outlined" title={row.message}>
