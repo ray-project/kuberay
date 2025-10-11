@@ -21,11 +21,26 @@ image:
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
+# -- Secrets with credentials to pull images from a private registry
+imagePullSecrets: []
+
+# -- Restrict to run on particular nodes.
+nodeSelector: {}
+
+# -- Pod priorityClassName
+priorityClassName: ""
+
 # -- Extra labels.
 labels: {}
 
 # -- Extra annotations.
 annotations: {}
+
+# -- Pod affinity
+affinity: {}
+
+# -- Pod tolerations
+tolerations: []
 
 serviceAccount:
   # -- Specifies whether a service account should be created.

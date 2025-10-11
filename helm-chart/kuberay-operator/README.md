@@ -150,8 +150,13 @@ spec:
 | image.repository | string | `"quay.io/kuberay/operator"` | Image repository. |
 | image.tag | string | `"nightly"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
+| imagePullSecrets | list | `[]` | Secrets with credentials to pull images from a private registry |
+| nodeSelector | object | `{}` | Restrict to run on particular nodes. |
+| priorityClassName | string | `""` | Pod priorityClassName |
 | labels | object | `{}` | Extra labels. |
 | annotations | object | `{}` | Extra annotations. |
+| affinity | object | `{}` | Pod affinity |
+| tolerations | list | `[]` | Pod tolerations |
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created. |
 | serviceAccount.name | string | `"kuberay-operator"` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |
 | logging.stdoutEncoder | string | `"json"` | Log encoder to use for stdout (one of `json` or `console`). |
