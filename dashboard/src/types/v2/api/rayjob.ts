@@ -53,3 +53,22 @@ export interface RayJobItem {
   spec: RayJobAPISpec;
   status: RayJobAPIStatus;
 }
+
+export interface CreateRayJobConfig {
+  jobName: string;
+  dockerImage: string;
+  entrypoint: string;
+  headResources: {
+    cpu: string;
+    memory: string;
+    gpu: string;
+  };
+  workerResources: {
+    replicas: number;
+    minReplicas: number;
+    maxReplicas: number;
+    cpu: string;
+    memory: string;
+    gpu: string;
+  };
+}
