@@ -79,6 +79,10 @@ const (
 	MetricsPortName   = "metrics"
 	ServingPortName   = "serve"
 
+	// Gateway defaults for HTTP protocol
+	GatewayListenerPortName    = "http"
+	DefaultGatewayListenerPort = 80
+
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
 
@@ -315,12 +319,22 @@ const (
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 
 	// RayService event list
+	CreatedGateway                  K8sEventType = "CreatedGateway"
+	CreatedHTTPRoute                K8sEventType = "CreatedHTTPRoute"
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
+	UpdatedGateway                  K8sEventType = "UpdatedGateway"
+	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	UpdatedServeTargetCapacity      K8sEventType = "UpdatedServeTargetCapacity"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
 	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
+	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
+	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
+	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
+	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
