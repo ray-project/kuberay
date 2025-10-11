@@ -3,6 +3,7 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -33,15 +34,50 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 	return nil
 }
 
+// validateRayGroupResourcesAndLabels checks for conflicting resource definitions and invalid labels.
+func validateRayGroupResourcesAndLabels(groupName string, rayStartParams, resources, labels map[string]string) error {
+	hasRayStartResources := rayStartParams["num-cpus"] != "" ||
+		rayStartParams["num-gpus"] != "" ||
+		rayStartParams["memory"] != "" ||
+		rayStartParams["resources"] != ""
+	if hasRayStartResources && len(resources) > 0 {
+		return fmt.Errorf("resource fields should not be set in both rayStartParams and Resources for %s group. Please use only one", groupName)
+	}
+
+	if _, ok := rayStartParams["labels"]; ok {
+		return fmt.Errorf("rayStartParams['labels'] is not supported for %s group. Please use the top-level Labels field instead", groupName)
+	}
+
+	// Validate syntax for the top-level Labels field is parsable.
+	for key, val := range labels {
+		if strings.Contains(key, ",") {
+			return fmt.Errorf("label key for %s group cannot contain commas, but found: '%s'", groupName, key)
+		}
+		if strings.Contains(val, ",") {
+			return fmt.Errorf("label value for key '%s' in %s group cannot contain commas, but found: '%s'", key, groupName, val)
+		}
+	}
+
+	return nil
+}
+
 // Validation for invalid Ray Cluster configurations.
 func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
 	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
+	if err := validateRayGroupResourcesAndLabels("Head", spec.HeadGroupSpec.RayStartParams, spec.HeadGroupSpec.Resources, spec.HeadGroupSpec.Labels); err != nil {
+		return err
+	}
+
 	for _, workerGroup := range spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
+		}
+
+		if err := validateRayGroupResourcesAndLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Resources, workerGroup.Labels); err != nil {
+			return err
 		}
 	}
 
