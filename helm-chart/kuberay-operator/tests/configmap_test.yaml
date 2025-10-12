@@ -34,11 +34,11 @@ tests:
           name: kuberay-operator-config
           namespace: default
 
-  - it: Should create ConfigMap with defaultRayEnvs when set
+  - it: Should create ConfigMap with defaultContainerEnvs when set
     set:
       configuration:
         enabled: true
-        defaultRayEnvs:
+        defaultContainerEnvs:
           - name: RAY_enable_open_telemetry
             value: "true"
     asserts:
@@ -50,11 +50,11 @@ tests:
           name: kuberay-operator-config
           namespace: default
 
-  - it: Should include defaultRayEnvs in Configuration
+  - it: Should include defaultContainerEnvs in Configuration
     set:
       configuration:
         enabled: true
-        defaultRayEnvs:
+        defaultContainerEnvs:
           - name: RAY_enable_open_telemetry
             value: "true"
           - name: RAY_metric_cardinality_level
@@ -68,7 +68,7 @@ tests:
           pattern: "kind: Configuration"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "defaultRayEnvs:"
+          pattern: "defaultContainerEnvs:"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "name: RAY_enable_open_telemetry"
@@ -82,7 +82,7 @@ tests:
           path: data["config.yaml"]
           pattern: "value: recommended"
 
-  - it: Should create ConfigMap without defaultRayEnvs when not set
+  - it: Should create ConfigMap without defaultContainerEnvs when not set
     set:
       configuration:
         enabled: true
@@ -97,4 +97,4 @@ tests:
           pattern: "kind: Configuration"
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "defaultRayEnvs:"
+          pattern: "defaultContainerEnvs:"

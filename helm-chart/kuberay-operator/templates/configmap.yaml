@@ -13,8 +13,8 @@ data:
   config.yaml: |
     apiVersion: config.ray.io/v1alpha1
     kind: Configuration
-    {{- if .Values.configuration.defaultRayEnvs }}
-    defaultRayEnvs:
-    {{- toYaml .Values.configuration.defaultRayEnvs | nindent 4 }}
+    {{- if .Values.configuration.defaultContainerEnvs }}
+    defaultContainerEnvs:
+    {{- toYaml .Values.configuration.defaultContainerEnvs | nindent 4 }}
     {{- end }}
 {{- end }}

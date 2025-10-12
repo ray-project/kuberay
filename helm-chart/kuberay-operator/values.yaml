@@ -90,12 +90,12 @@ configuration:
   # -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
   # This allows user to set feature flags across all Ray pods.
   # Example:
-  # defaultRayEnvs:
+  # defaultContainerEnvs:
   # - name: RAY_enable_open_telemetry
   #   value: "true"
   # - name: RAY_metric_cardinality_level
   #   value: "recommended"
-  defaultRayEnvs: []
+  defaultContainerEnvs: []
 
 featureGates:
 - name: RayClusterStatusConditions

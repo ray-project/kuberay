@@ -293,7 +293,7 @@ tests:
     set:
       configuration:
         enabled: true
-        defaultRayEnvs:
+        defaultContainerEnvs:
           - name: RAY_enable_open_telemetry
             value: "true"
           - name: RAY_metric_cardinality_level
@@ -316,7 +316,7 @@ tests:
     set:
       configuration:
         enabled: true
-        defaultRayEnvs:
+        defaultContainerEnvs:
           - name: RAY_enable_open_telemetry
             value: "true"
     asserts:

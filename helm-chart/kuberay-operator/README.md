@@ -162,7 +162,7 @@ spec:
 | batchScheduler.enabled | bool | `false` |  |
 | batchScheduler.name | string | `""` |  |
 | configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. |
-| configuration.defaultRayEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultRayEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
+| configuration.defaultContainerEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultContainerEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |

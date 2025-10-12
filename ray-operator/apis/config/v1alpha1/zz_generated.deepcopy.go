@@ -42,8 +42,8 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.DefaultRayEnvs != nil {
-		in, out := &in.DefaultRayEnvs, &out.DefaultRayEnvs
+	if in.DefaultContainerEnvs != nil {
+		in, out := &in.DefaultContainerEnvs, &out.DefaultContainerEnvs
 		*out = make([]v1.EnvVar, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
