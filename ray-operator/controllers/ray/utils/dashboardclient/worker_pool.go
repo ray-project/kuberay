@@ -6,7 +6,7 @@ import (
 
 type WorkerPool struct {
 	taskQueue chan func()
-	stop      chan struct{}
+	stopChan  chan struct{}
 	wg        sync.WaitGroup
 	workers   int
 }
@@ -15,16 +15,16 @@ func NewWorkerPool(taskQueue chan func()) *WorkerPool {
 	wp := &WorkerPool{
 		taskQueue: taskQueue,
 		workers:   10,
-		stop:      make(chan struct{}),
+		stopChan:  make(chan struct{}),
 	}
 
 	// Start workers immediately
-	wp.Start()
+	wp.start()
 	return wp
 }
 
 // Start launches worker goroutines to consume from queue
-func (wp *WorkerPool) Start() {
+func (wp *WorkerPool) start() {
 	for i := 0; i < wp.workers; i++ {
 		wp.wg.Add(1)
 		go wp.worker()
@@ -37,7 +37,7 @@ func (wp *WorkerPool) worker() {
 
 	for {
 		select {
-		case <-wp.stop:
+		case <-wp.stopChan:
 			return
 		case task := <-wp.taskQueue:
 			if task != nil {
@@ -45,10 +45,4 @@ func (wp *WorkerPool) worker() {
 			}
 		}
 	}
-}
-
-// Stop shuts down all workers
-func (wp *WorkerPool) Stop() {
-	close(wp.stop)
-	wp.wg.Wait()
 }
