@@ -21,6 +21,7 @@ type JobSubmissionMode =
 
 interface RayJobAPISpec extends RayJobSpec {
   activeDeadlineSeconds: number;
+  waitingTtlSeconds: number;
   backoffLimit: number;
   submitterConfig: SubmitterConfig;
   managedBy: string;

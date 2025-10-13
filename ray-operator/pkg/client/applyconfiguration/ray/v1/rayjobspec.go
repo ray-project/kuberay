@@ -11,6 +11,7 @@ import (
 // with apply.
 type RayJobSpecApplyConfiguration struct {
 	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
+	WaitingTtlSeconds        *int32                                    `json:"waitingTtlSeconds,omitempty"`
 	BackoffLimit             *int32                                    `json:"backoffLimit,omitempty"`
 	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
 	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
@@ -42,6 +43,14 @@ func RayJobSpec() *RayJobSpecApplyConfiguration {
 // If called multiple times, the ActiveDeadlineSeconds field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithActiveDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
 	b.ActiveDeadlineSeconds = &value
+	return b
+}
+
+// WithWaitingTtlSeconds sets the WithWaitingTtlSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the WithWaitingTtlSeconds field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithWaitingTtlSeconds(value int32) *RayJobSpecApplyConfiguration {
+	b.WaitingTtlSeconds = &value
 	return b
 }
 
