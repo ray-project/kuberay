@@ -166,6 +166,10 @@ message RayJob {
   // KubeRay actively tries to terminate the RayJob; value must be positive integer.
   // If not set, the job may run indefinitely until it completes, fails, or is manually stopped.
   int32 activeDeadlineSeconds = 25;
+  // Optional waitingTtlSeconds is the duration in seconds before RayJob must come into active state
+  // Kuberay will try to terminate the RayJob if job is not in active state before waitingTtlSeconds
+  // If not set, the job may run indefinitely until it comes to active state
+  int32 waitingTtlSeconds = 60;
   // Output. The time that the job created.
   google.protobuf.Timestamp created_at = 12 [(google.api.field_behavior) = OUTPUT_ONLY];
   // Output. The time that the job deleted.

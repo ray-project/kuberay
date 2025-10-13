@@ -483,6 +483,11 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.WaitingTtlSeconds != nil {
+		in, out := &in.WaitingTtlSeconds, &out.WaitingTtlSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	if in.BackoffLimit != nil {
 		in, out := &in.BackoffLimit, &out.BackoffLimit
 		*out = new(int32)
