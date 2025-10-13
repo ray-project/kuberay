@@ -2,24 +2,20 @@ package dashboardclient
 
 import (
 	"sync"
-
-	cmap "github.com/orcaman/concurrent-map/v2"
 )
 
 type WorkerPool struct {
-	channelContent cmap.ConcurrentMap[string, struct{}]
-	taskQueue      chan func()
-	stop           chan struct{}
-	wg             sync.WaitGroup
-	workers        int
+	taskQueue chan func()
+	stop      chan struct{}
+	wg        sync.WaitGroup
+	workers   int
 }
 
 func NewWorkerPool(taskQueue chan func()) *WorkerPool {
 	wp := &WorkerPool{
-		taskQueue:      taskQueue,
-		workers:        10,
-		stop:           make(chan struct{}),
-		channelContent: cmap.New[struct{}](),
+		taskQueue: taskQueue,
+		workers:   10,
+		stop:      make(chan struct{}),
 	}
 
 	// Start workers immediately

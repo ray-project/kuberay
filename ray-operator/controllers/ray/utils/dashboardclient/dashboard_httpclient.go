@@ -28,7 +28,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache])
+	InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache], workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}])
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -45,17 +45,19 @@ type RayDashboardClientInterface interface {
 }
 
 type RayDashboardClient struct {
-	client       *http.Client
-	workerPool   *WorkerPool
-	jobInfoMap   *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]
-	dashboardURL string
+	client                   *http.Client
+	workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}]
+	workerPool               *WorkerPool
+	jobInfoMap               *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]
+	dashboardURL             string
 }
 
-func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]) {
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache], workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}]) {
 	r.client = client
 	r.dashboardURL = dashboardURL
 	r.workerPool = workerPool
 	r.jobInfoMap = jobInfoMap
+	r.workerPoolChannelContent = workerPoolChannelContent
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -179,12 +181,12 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 }
 
 func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) {
-	if _, ok := r.workerPool.channelContent.Get(jobId); ok {
+	if _, ok := r.workerPoolChannelContent.Get(jobId); ok {
 		return
 	}
-	r.workerPool.channelContent.Set(jobId, struct{}{})
+	r.workerPoolChannelContent.Set(jobId, struct{}{})
 	r.workerPool.taskQueue <- func() {
-		defer r.workerPool.channelContent.Remove(jobId)
+		defer r.workerPoolChannelContent.Remove(jobId)
 		jobInfo, err := r.GetJobInfo(ctx, jobId)
 		if err != nil {
 			err = fmt.Errorf("failed to get job info: %w", err)

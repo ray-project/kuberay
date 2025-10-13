@@ -763,6 +763,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	taskQueue := make(chan func())
 	workerPool := dashboardclient.NewWorkerPool(taskQueue)
+	workerPoolChannelContent := cmap.New[struct{}]()
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		if useKubernetesProxy {
@@ -783,13 +784,14 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, job
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
 				workerPool,
 				jobInfoMap,
+				&workerPoolChannelContent,
 			)
 			return dashboardClient, nil
 		}
 
 		dashboardClient.InitClient(&http.Client{
 			Timeout: 2 * time.Second,
-		}, "http://"+url, workerPool, jobInfoMap)
+		}, "http://"+url, workerPool, jobInfoMap, &workerPoolChannelContent)
 		return dashboardClient, nil
 	}
 }
