@@ -199,25 +199,6 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
 
 
-#### IncrementalUpgradeOptions
-
-
-
-
-
-
-
-_Appears in:_
-- [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
-| `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent. |  |  |
-| `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
-| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
-
-
 
 
 #### JobSubmissionMode
@@ -396,7 +377,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`. |  |  |
-| `incrementalUpgradeOptions` _[IncrementalUpgradeOptions](#incrementalupgradeoptions)_ | IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set IncrementalUpgradeOptions. |  |  |
+| `clusterUpgradeOptions` _[ClusterUpgradeOptions](#clusterupgradeoptions)_ | ClusterUpgradeOptions defines the behavior of an IncrementalUpgrade.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set ClusterUpgradeOptions. |  |  |
 
 
 #### RayServiceUpgradeType

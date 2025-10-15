@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -773,11 +774,50 @@ func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
 		*spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade
 }
 
-func GetRayServiceIncrementalUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.IncrementalUpgradeOptions {
+func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.ClusterUpgradeOptions {
 	if spec != nil && spec.UpgradeStrategy != nil {
-		return spec.UpgradeStrategy.IncrementalUpgradeOptions
+		return spec.UpgradeStrategy.ClusterUpgradeOptions
 	}
 	return nil
+}
+
+// IsIncrementalUpgradeComplete checks if the conditions for completing an incremental upgrade are met.
+func IsIncrementalUpgradeComplete(rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) bool {
+	return pendingCluster != nil &&
+		ptr.Deref(rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity, -1) == 0 &&
+		ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1) == 100
+}
+
+// GetWeightsFromHTTPRoute parses a given HTTPRoute object and extracts the traffic weights
+// for the active and pending clusters (if present) of a RayService.
+func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv1.RayService) (activeWeight int32, pendingWeight int32) {
+	var activeClusterName, pendingClusterName string
+	if rayServiceInstance != nil {
+		activeClusterName = rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+		pendingClusterName = rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+	}
+
+	// Defaults if weights can't be detected.
+	activeWeight = -1
+	pendingWeight = -1
+
+	if httpRoute == nil || len(httpRoute.Spec.Rules) == 0 || len(httpRoute.Spec.Rules[0].BackendRefs) == 0 {
+		return
+	}
+
+	for _, backendRef := range httpRoute.Spec.Rules[0].BackendRefs {
+		backendName := string(backendRef.Name)
+		weight := ptr.Deref(backendRef.Weight, 0)
+
+		if activeClusterName != "" && strings.Contains(backendName, activeClusterName) {
+			activeWeight = weight
+		}
+		if pendingClusterName != "" && strings.Contains(backendName, pendingClusterName) {
+			pendingWeight = weight
+		}
+	}
+
+	return
 }
 
 // Check where we are running. We are trying to distinguish here whether

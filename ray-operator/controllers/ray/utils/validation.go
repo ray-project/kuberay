@@ -320,22 +320,22 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
 	}
 
-	// If type is IncrementalUpgrade, validate the IncrementalUpgradeOptions
+	// If type is IncrementalUpgrade, validate the ClusterUpgradeOptions
 	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
-		return ValidateIncrementalUpgradeOptions(rayService)
+		return ValidateClusterUpgradeOptions(rayService)
 	}
 
 	return nil
 }
 
-func ValidateIncrementalUpgradeOptions(rayService *rayv1.RayService) error {
+func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 	if !IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
 		return fmt.Errorf("Ray Autoscaler is required for IncrementalUpgrade")
 	}
 
-	options := rayService.Spec.UpgradeStrategy.IncrementalUpgradeOptions
+	options := rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions
 	if options == nil {
-		return fmt.Errorf("IncrementalUpgradeOptions are required for IncrementalUpgrade")
+		return fmt.Errorf("ClusterUpgradeOptions are required for IncrementalUpgrade")
 	}
 
 	// MaxSurgePercent defaults to 100% if unset.

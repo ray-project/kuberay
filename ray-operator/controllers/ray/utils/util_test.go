@@ -1442,29 +1442,29 @@ func TestIsIncrementalUpgradeEnabled(t *testing.T) {
 	}
 }
 
-func TestGetRayServiceIncrementalUpgradeOptions(t *testing.T) {
-	upgradeOptions := &rayv1.IncrementalUpgradeOptions{GatewayClassName: "gateway-class"}
+func TestGetRayServiceClusterUpgradeOptions(t *testing.T) {
+	upgradeOptions := &rayv1.ClusterUpgradeOptions{GatewayClassName: "gateway-class"}
 
 	tests := []struct {
 		rayServiceSpec  *rayv1.RayServiceSpec
-		expectedOptions *rayv1.IncrementalUpgradeOptions
+		expectedOptions *rayv1.ClusterUpgradeOptions
 		name            string
 	}{
 		{
-			name:            "RayServiceSpec is nil, return nil IncrementalUpgradeOptions",
+			name:            "RayServiceSpec is nil, return nil ClusterUpgradeOptions",
 			rayServiceSpec:  nil,
 			expectedOptions: nil,
 		},
 		{
-			name:            "UpgradeStrategy is nil, return nil IncrementalUpgradeOptions",
+			name:            "UpgradeStrategy is nil, return nil ClusterUpgradeOptions",
 			rayServiceSpec:  &rayv1.RayServiceSpec{},
 			expectedOptions: nil,
 		},
 		{
-			name: "Valid IncrementalUpgradeOptions",
+			name: "Valid ClusterUpgradeOptions",
 			rayServiceSpec: &rayv1.RayServiceSpec{
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					IncrementalUpgradeOptions: upgradeOptions,
+					ClusterUpgradeOptions: upgradeOptions,
 				},
 			},
 			expectedOptions: upgradeOptions,
@@ -1473,7 +1473,7 @@ func TestGetRayServiceIncrementalUpgradeOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualOptions := GetRayServiceIncrementalUpgradeOptions(tt.rayServiceSpec)
+			actualOptions := GetRayServiceClusterUpgradeOptions(tt.rayServiceSpec)
 			assert.Equal(t, tt.expectedOptions, actualOptions)
 		})
 	}
@@ -1519,6 +1519,99 @@ func TestGetContainerCommand(t *testing.T) {
 				defer os.Unsetenv("ENABLE_LOGIN_SHELL")
 			}
 			assert.Equal(t, test.expected, GetContainerCommand(test.additionalOptions))
+		})
+	}
+}
+
+func TestGetWeightsFromHTTPRoute(t *testing.T) {
+	activeClusterName := "rayservice-active"
+	pendingClusterName := "rayservice-pending"
+
+	// Helper to create a RayService with specified cluster names in its status.
+	makeRayService := func(activeName, pendingName string) *rayv1.RayService {
+		return &rayv1.RayService{
+			Status: rayv1.RayServiceStatuses{
+				ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: activeName},
+				PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: pendingName},
+			},
+		}
+	}
+
+	// Helper to create an HTTPRoute with specified backend weights.
+	makeHTTPRoute := func(activeWeight, pendingWeight *int32) *gwv1.HTTPRoute {
+		backends := []gwv1.HTTPBackendRef{}
+		if activeWeight != nil {
+			backends = append(backends, gwv1.HTTPBackendRef{
+				BackendRef: gwv1.BackendRef{
+					BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(GenerateServeServiceName(activeClusterName))},
+					Weight:                 activeWeight,
+				},
+			})
+		}
+		if pendingWeight != nil {
+			backends = append(backends, gwv1.HTTPBackendRef{
+				BackendRef: gwv1.BackendRef{
+					BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(GenerateServeServiceName(pendingClusterName))},
+					Weight:                 pendingWeight,
+				},
+			})
+		}
+		return &gwv1.HTTPRoute{
+			Spec: gwv1.HTTPRouteSpec{
+				Rules: []gwv1.HTTPRouteRule{{BackendRefs: backends}},
+			},
+		}
+	}
+
+	tests := []struct {
+		httpRoute       *gwv1.HTTPRoute
+		rayService      *rayv1.RayService
+		name            string
+		expectedActive  int32
+		expectedPending int32
+	}{
+		{
+			name:            "No HTTPRoute, return defaults for both weights",
+			httpRoute:       nil,
+			rayService:      makeRayService(activeClusterName, ""),
+			expectedActive:  -1,
+			expectedPending: -1,
+		},
+		{
+			name:            "HTTPRoute with missing backends, return defaults for both weights",
+			httpRoute:       &gwv1.HTTPRoute{Spec: gwv1.HTTPRouteSpec{Rules: []gwv1.HTTPRouteRule{{}}}},
+			rayService:      makeRayService(activeClusterName, pendingClusterName),
+			expectedActive:  -1,
+			expectedPending: -1,
+		},
+		{
+			name:            "Valid weights returned for both active and pending clusters",
+			httpRoute:       makeHTTPRoute(ptr.To(int32(80)), ptr.To(int32(20))),
+			rayService:      makeRayService(activeClusterName, pendingClusterName),
+			expectedActive:  80,
+			expectedPending: 20,
+		},
+		{
+			name:            "Valid HTTPRoute with only active cluster backend",
+			httpRoute:       makeHTTPRoute(ptr.To(int32(100)), nil),
+			rayService:      makeRayService(activeClusterName, ""),
+			expectedActive:  100,
+			expectedPending: -1,
+		},
+		{
+			name:            "Valid HTTPRoute with only pending cluster backend",
+			httpRoute:       makeHTTPRoute(nil, ptr.To(int32(100))),
+			rayService:      makeRayService("", pendingClusterName),
+			expectedActive:  -1,
+			expectedPending: 100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			active, pending := GetWeightsFromHTTPRoute(tt.httpRoute, tt.rayService)
+			assert.Equal(t, tt.expectedActive, active, "Active weight mismatch")
+			assert.Equal(t, tt.expectedPending, pending, "Pending weight mismatch")
 		})
 	}
 }

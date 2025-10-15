@@ -1665,7 +1665,7 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 	}
 }
 
-func TestValidateIncrementalUpgradeOptions(t *testing.T) {
+func TestValidateClusterUpgradeOptions(t *testing.T) {
 	tests := []struct {
 		maxSurgePercent   *int32
 		stepSizePercent   *int32
@@ -1741,7 +1741,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
 					Type: ptr.To(rayv1.IncrementalUpgrade),
-					IncrementalUpgradeOptions: &rayv1.IncrementalUpgradeOptions{
+					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 						MaxSurgePercent:  tt.maxSurgePercent,
 						StepSizePercent:  tt.stepSizePercent,
 						IntervalSeconds:  tt.intervalSeconds,
@@ -1764,7 +1764,7 @@ func TestValidateIncrementalUpgradeOptions(t *testing.T) {
 				},
 			}
 
-			err := ValidateIncrementalUpgradeOptions(rayService)
+			err := ValidateClusterUpgradeOptions(rayService)
 			if tt.expectError {
 				require.Error(t, err, tt.name)
 			} else {

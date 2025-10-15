@@ -2,25 +2,25 @@
 
 package v1
 
-// IncrementalUpgradeOptionsApplyConfiguration represents a declarative configuration of the IncrementalUpgradeOptions type for use
+// ClusterUpgradeOptionsApplyConfiguration represents a declarative configuration of the ClusterUpgradeOptions type for use
 // with apply.
-type IncrementalUpgradeOptionsApplyConfiguration struct {
+type ClusterUpgradeOptionsApplyConfiguration struct {
 	MaxSurgePercent  *int32  `json:"maxSurgePercent,omitempty"`
 	StepSizePercent  *int32  `json:"stepSizePercent,omitempty"`
 	IntervalSeconds  *int32  `json:"intervalSeconds,omitempty"`
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
 }
 
-// IncrementalUpgradeOptionsApplyConfiguration constructs a declarative configuration of the IncrementalUpgradeOptions type for use with
+// ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
 // apply.
-func IncrementalUpgradeOptions() *IncrementalUpgradeOptionsApplyConfiguration {
-	return &IncrementalUpgradeOptionsApplyConfiguration{}
+func ClusterUpgradeOptions() *ClusterUpgradeOptionsApplyConfiguration {
+	return &ClusterUpgradeOptionsApplyConfiguration{}
 }
 
 // WithMaxSurgePercent sets the MaxSurgePercent field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the MaxSurgePercent field is set to the value of the last call.
-func (b *IncrementalUpgradeOptionsApplyConfiguration) WithMaxSurgePercent(value int32) *IncrementalUpgradeOptionsApplyConfiguration {
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithMaxSurgePercent(value int32) *ClusterUpgradeOptionsApplyConfiguration {
 	b.MaxSurgePercent = &value
 	return b
 }
@@ -28,7 +28,7 @@ func (b *IncrementalUpgradeOptionsApplyConfiguration) WithMaxSurgePercent(value 
 // WithStepSizePercent sets the StepSizePercent field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the StepSizePercent field is set to the value of the last call.
-func (b *IncrementalUpgradeOptionsApplyConfiguration) WithStepSizePercent(value int32) *IncrementalUpgradeOptionsApplyConfiguration {
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithStepSizePercent(value int32) *ClusterUpgradeOptionsApplyConfiguration {
 	b.StepSizePercent = &value
 	return b
 }
@@ -36,7 +36,7 @@ func (b *IncrementalUpgradeOptionsApplyConfiguration) WithStepSizePercent(value 
 // WithIntervalSeconds sets the IntervalSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the IntervalSeconds field is set to the value of the last call.
-func (b *IncrementalUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value int32) *IncrementalUpgradeOptionsApplyConfiguration {
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value int32) *ClusterUpgradeOptionsApplyConfiguration {
 	b.IntervalSeconds = &value
 	return b
 }
@@ -44,7 +44,7 @@ func (b *IncrementalUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value 
 // WithGatewayClassName sets the GatewayClassName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the GatewayClassName field is set to the value of the last call.
-func (b *IncrementalUpgradeOptionsApplyConfiguration) WithGatewayClassName(value string) *IncrementalUpgradeOptionsApplyConfiguration {
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value string) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayClassName = &value
 	return b
 }
