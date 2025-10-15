@@ -1056,7 +1056,6 @@ func updateRayStartParamsLabels(rayStartParams map[string]string, groupLabels ma
 	for _, k := range keys {
 		labels = append(labels, fmt.Sprintf("%s=%s", k, groupLabels[k]))
 	}
-	// When provided this will override any `--labels` value specified in rayStartParams.
 	rayStartParams["labels"] = strings.Join(labels, ",")
 }
 
