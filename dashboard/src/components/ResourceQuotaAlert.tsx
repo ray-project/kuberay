@@ -2,13 +2,13 @@
 
 import { useSnackBar } from "@/components/SnackBarProvider";
 import { useHostURL } from "@/hooks/useHostURL";
-import { Job } from "@/types/rayjob";
 import Link from "@mui/joy/Link";
 import React from "react";
 import { useNamespace } from "./NamespaceProvider";
+import { JobRow } from "@/types/table";
 
 interface ResourceQuotaAlertProps {
-  jobs: Job[];
+  jobs: JobRow[];
 }
 
 // This component monitors the current list of jobs for resource quota errors

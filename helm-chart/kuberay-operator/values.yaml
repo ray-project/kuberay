@@ -21,11 +21,26 @@ image:
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
+# -- Secrets with credentials to pull images from a private registry
+imagePullSecrets: []
+
+# -- Restrict to run on particular nodes.
+nodeSelector: {}
+
+# -- Pod priorityClassName
+priorityClassName: ""
+
 # -- Extra labels.
 labels: {}
 
 # -- Extra annotations.
 annotations: {}
+
+# -- Pod affinity
+affinity: {}
+
+# -- Pod tolerations
+tolerations: []
 
 serviceAccount:
   # -- Specifies whether a service account should be created.
@@ -82,6 +97,20 @@ batchScheduler:
   # Set the customized scheduler name, supported values are "volcano", "yunikorn", "kai-scheduler" or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
+
+# Configuration for the KubeRay operator.
+configuration:
+  # -- Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator.
+  enabled: false
+  # -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
+  # This allows user to set feature flags across all Ray pods.
+  # Example:
+  # defaultContainerEnvs:
+  # - name: RAY_enable_open_telemetry
+  #   value: "true"
+  # - name: RAY_metric_cardinality_level
+  #   value: "recommended"
+  defaultContainerEnvs: []
 
 featureGates:
 - name: RayClusterStatusConditions

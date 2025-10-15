@@ -141,19 +141,7 @@ func TestRayJobSubmitter(t *testing.T) {
 		submitterPod := Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission"))(g)[0]
 
 		// Wait for the submitter pod to have log indicating successful submission
-		g.Eventually(func() bool {
-			logs, err := test.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(submitterPod.Name, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
-			if err != nil {
-				return false
-			}
-			defer logs.Close()
-			logsBytes, err := io.ReadAll(logs)
-			if err != nil {
-				return false
-			}
-			logsString := string(logsBytes)
-			return strings.Contains(logsString, "SUCC -- Job '")
-		}, TestTimeoutMedium).Should(BeTrue())
+		g.Eventually(checkSubmitterPodLogs(test, namespace.Name, submitterPod.Name, []string{"SUCC -- Job '"}), TestTimeoutMedium).Should(BeTrue())
 
 		// Delete the submitter pod after successful submission
 		err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), submitterPod.Name, metav1.DeleteOptions{})
@@ -169,19 +157,8 @@ func TestRayJobSubmitter(t *testing.T) {
 		newSubmitterPod := Pods(test, namespace.Name, LabelSelector("job-name=delete-submitter-pod-after-submission"))(g)[0]
 
 		// Check the logs of the new submitter pod
-		logs, err := test.Client().Core().CoreV1().Pods(namespace.Name).GetLogs(newSubmitterPod.Name, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
-		g.Expect(err).NotTo(HaveOccurred())
-		defer logs.Close()
-		logsBytes, err := io.ReadAll(logs)
-		g.Expect(err).NotTo(HaveOccurred())
-		logContent := string(logsBytes)
-		// Verify the logs contain expected content
-		g.Expect(logContent).To(ContainSubstring("has already been submitted, tailing logs."))
-		g.Expect(logContent).To(ContainSubstring("test_counter got 1"))
-		g.Expect(logContent).To(ContainSubstring("test_counter got 2"))
-		g.Expect(logContent).To(ContainSubstring("test_counter got 3"))
-		g.Expect(logContent).To(ContainSubstring("test_counter got 4"))
-		g.Expect(logContent).To(ContainSubstring("test_counter got 5"))
+		g.Eventually(checkSubmitterPodLogs(test, namespace.Name, newSubmitterPod.Name, []string{"has already been submitted, tailing logs.", "test_counter got 1", "test_counter got 2", "test_counter got 3", "test_counter got 4", "test_counter got 5"}), TestTimeoutMedium).Should(BeTrue())
+
 		LogWithTimestamp(test.T(), "New submitter pod %s/%s has logs indicating successful job completion", newSubmitterPod.Namespace, newSubmitterPod.Name)
 
 		// Delete the RayJob
@@ -189,4 +166,29 @@ func TestRayJobSubmitter(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
+}
+
+func checkSubmitterPodLogs(test Test, namespace, podName string, expectedMessages []string) func() bool {
+	return func() bool {
+		logs, err := test.Client().Core().CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Container: "ray-job-submitter"}).Stream(test.Ctx())
+		if err != nil {
+			return false
+		}
+		defer logs.Close()
+
+		logsBytes, err := io.ReadAll(logs)
+		if err != nil {
+			return false
+		}
+
+		logsString := string(logsBytes)
+
+		// Check if all expected messages are present
+		for _, message := range expectedMessages {
+			if !strings.Contains(logsString, message) {
+				return false
+			}
+		}
+		return true
+	}
 }

@@ -272,6 +272,7 @@ func main() {
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
+		DefaultContainerEnvs:     config.DefaultContainerEnvs,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
@@ -280,7 +281,8 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		RayJobMetricsManager: rayJobMetricsManager,
+		RayJobMetricsManager:  rayJobMetricsManager,
+		BatchSchedulerManager: batchSchedulerManager,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")

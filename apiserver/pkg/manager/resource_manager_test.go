@@ -72,7 +72,7 @@ func TestPopulateComputeTemplate(t *testing.T) {
 
 	// Run
 	resourceManager := NewResourceManager(mockClientManager)
-	computeTemplates, err := resourceManager.populateComputeTemplate(ctx, clusterSpec, namespace)
+	computeTemplates, err := resourceManager.PopulateComputeTemplate(ctx, clusterSpec, namespace)
 
 	// Assert
 	require.NoError(t, err)

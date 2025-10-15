@@ -5,25 +5,26 @@ import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import PendingRoundedIcon from "@mui/icons-material/PendingRounded";
+import { ClusterStatus } from "@/types/v2/raycluster";
 
 // There are two statues: JobStatus and JobDeploymentStatus. According to Ray CRD
 // https://github.com/ray-project/kuberay/blob/master/ray-operator/apis/ray/v1/rayjob_types.go
 // These are the enums:
 /*
   JobStatusNew       JobStatus = ""
-	JobStatusPending   JobStatus = "PENDING"
-	JobStatusRunning   JobStatus = "RUNNING"
-	JobStatusStopped   JobStatus = "STOPPED"
-	JobStatusSucceeded JobStatus = "SUCCEEDED"
-	JobStatusFailed    JobStatus = "FAILED"
+  JobStatusPending   JobStatus = "PENDING"
+  JobStatusRunning   JobStatus = "RUNNING"
+  JobStatusStopped   JobStatus = "STOPPED"
+  JobStatusSucceeded JobStatus = "SUCCEEDED"
+  JobStatusFailed    JobStatus = "FAILED"
 
   JobDeploymentStatusNew          JobDeploymentStatus = ""
-	JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
-	JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
-	JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
-	JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
-	JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
-	JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
+  JobDeploymentStatusInitializing JobDeploymentStatus = "Initializing"
+  JobDeploymentStatusRunning      JobDeploymentStatus = "Running"
+  JobDeploymentStatusComplete     JobDeploymentStatus = "Complete"
+  JobDeploymentStatusFailed       JobDeploymentStatus = "Failed"
+  JobDeploymentStatusSuspending   JobDeploymentStatus = "Suspending"
+  JobDeploymentStatusSuspended    JobDeploymentStatus = "Suspended"
 */
 // However, it seems like we also have WaitForDashboardReady status... which
 // is not in the Kuberay codebase.
@@ -33,14 +34,20 @@ import PendingRoundedIcon from "@mui/icons-material/PendingRounded";
 export const capitalize = (status: string) =>
   status.charAt(0).toUpperCase() + status.toLowerCase().slice(1);
 
-export const getClusterStatus = (status: string) => {
+export const getClusterStatusDisplay = (status: ClusterStatus) => {
   return capitalize(status);
 };
 
-export const getClusterStatusColor = (status: string) => {
+export const getClusterStatusColor = (
+  status: ClusterStatus,
+): ColorPaletteProp => {
   return {
-    PENDING: "warning",
     READY: "primary",
+    PENDING: "warning",
+    SUSPENDING: "warning",
+    FAILED: "danger",
+    SUSPENDED: "neutral",
+    UNKNOWN: "neutral",
   }[status] as ColorPaletteProp;
 };
 

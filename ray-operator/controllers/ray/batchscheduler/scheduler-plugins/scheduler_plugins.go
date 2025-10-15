@@ -69,7 +69,11 @@ func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGro
 	return podGroup
 }
 
-func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *rayv1.RayCluster) error {
+func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
+	app, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	if !k.isGangSchedulingEnabled(app) {
 		return nil
 	}
@@ -89,18 +93,21 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, app *
 	return nil
 }
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pods
+// AddMetadataToPod adds essential labels and annotations to the Ray pod
 // the scheduler needs these labels and annotations in order to do the scheduling properly
-func (k *KubeScheduler) AddMetadataToPod(_ context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+func (k *KubeScheduler) AddMetadataToPod(_ context.Context, rayCluster *rayv1.RayCluster, _ string, pod *corev1.Pod) {
 	// when gang scheduling is enabled, extra labels need to be added to all pods
-	if k.isGangSchedulingEnabled(app) {
-		pod.Labels[kubeSchedulerPodGroupLabelKey] = app.Name
+	if k.isGangSchedulingEnabled(rayCluster) {
+		pod.Labels[kubeSchedulerPodGroupLabelKey] = rayCluster.Name
 	}
 	pod.Spec.SchedulerName = k.Name()
 }
 
+func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
+}
+
 func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
-	_, exist := app.Labels[utils.RayClusterGangSchedulingEnabled]
+	_, exist := app.Labels[utils.RayGangSchedulingEnabled]
 	return exist
 }
 

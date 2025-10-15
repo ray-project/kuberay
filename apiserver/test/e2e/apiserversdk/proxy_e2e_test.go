@@ -41,7 +41,7 @@ func TestGetRayClusterProxy(t *testing.T) {
 	// Wait for the Ray cluster's head pod to be ready so that we can access the dashboard
 	waitForClusterConditions(t, tCtx, tCtx.GetRayClusterName(), []rayv1.RayClusterConditionType{rayv1.HeadPodReady})
 
-	k8sClient := tCtx.GetK8sHttpClient()
+	k8sClient := tCtx.GetK8sClient()
 	serviceName := tCtx.GetRayClusterName() + "-head-svc"
 	r := k8sClient.CoreV1().Services(tCtx.GetNamespaceName()).ProxyGet("http", serviceName, "8265", "", nil)
 	resp, err := r.DoRaw(tCtx.GetCtx())
