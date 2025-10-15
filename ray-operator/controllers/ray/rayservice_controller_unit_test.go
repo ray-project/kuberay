@@ -1352,7 +1352,7 @@ func makeIncrementalUpgradeRayService(
 	if withOptions {
 		spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
 			Type: ptr.To(rayv1.IncrementalUpgrade),
-			IncrementalUpgradeOptions: &rayv1.IncrementalUpgradeOptions{
+			ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 				GatewayClassName: gatewayClassName,
 				StepSizePercent:  stepSizePercent,
 				IntervalSeconds:  intervalSeconds,
@@ -1426,7 +1426,7 @@ func TestCreateGateway(t *testing.T) {
 			expectedListeners:   1,
 		},
 		{
-			name:       "missing IncrementalUpgradeOptions",
+			name:       "missing ClusterUpgradeOptions",
 			rayService: makeIncrementalUpgradeRayService(false, "gateway-class", ptr.To(int32(0)), ptr.To(int32(0)), ptr.To(int32(0)), &metav1.Time{Time: time.Now()}),
 			expectErr:  true,
 		},
@@ -1467,7 +1467,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 				Type: ptr.To(rayv1.IncrementalUpgrade),
-				IncrementalUpgradeOptions: &rayv1.IncrementalUpgradeOptions{
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
 					GatewayClassName: "istio",
@@ -1540,9 +1540,9 @@ func TestCreateHTTPRoute(t *testing.T) {
 			expectedPendingWeight: 5, // can only migrate 5% to pending until TargetCapacity reached
 		},
 		{
-			name: "Create HTTPRoute called with missing IncrementalUpgradeOptions.",
+			name: "Create HTTPRoute called with missing ClusterUpgradeOptions.",
 			modifier: func(rs *rayv1.RayService) {
-				rs.Spec.UpgradeStrategy.IncrementalUpgradeOptions = nil
+				rs.Spec.UpgradeStrategy.ClusterUpgradeOptions = nil
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
 			isPendingClusterReady: true,
@@ -1632,7 +1632,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 				Type: ptr.To(rayv1.IncrementalUpgrade),
-				IncrementalUpgradeOptions: &rayv1.IncrementalUpgradeOptions{
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
 					GatewayClassName: "istio",
@@ -1875,7 +1875,7 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 						Type: ptr.To(rayv1.IncrementalUpgrade),
-						IncrementalUpgradeOptions: &rayv1.IncrementalUpgradeOptions{
+						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 							MaxSurgePercent: ptr.To(tt.maxSurgePercent),
 						},
 					},
@@ -1988,7 +1988,7 @@ func makeHTTPRoute(name, namespace string, isReady bool) *gwv1.HTTPRoute {
 	}
 }
 
-func TestCheckIfNeedIncrementalUpgradeUpdate(t *testing.T) {
+func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 	rayServiceName := "test-rayservice"
 	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
 	httpRouteName := fmt.Sprintf("%s-%s", "httproute", gatewayName)
@@ -2085,7 +2085,7 @@ func TestCheckIfNeedIncrementalUpgradeUpdate(t *testing.T) {
 					PendingServiceStatus: tt.pendingStatus,
 				},
 			}
-			needsUpdate, reason := r.checkIfNeedIncrementalUpgradeUpdate(ctx, rayService)
+			needsUpdate, reason := r.checkIfNeedTargetCapacityUpdate(ctx, rayService)
 			assert.Equal(t, tt.expectedNeedsUpdate, needsUpdate)
 			assert.Equal(t, tt.expectedReason, reason)
 		})
@@ -2226,6 +2226,123 @@ func TestReconcilePerClusterServeService(t *testing.T) {
 				assert.Equal(t, rayCluster.Name, ownerRef.Name)
 				assert.Equal(t, "RayCluster", ownerRef.Kind)
 				assert.Equal(t, rayCluster.UID, ownerRef.UID)
+			}
+		})
+	}
+}
+
+func TestGetHTTPRouteTrafficWeights(t *testing.T) {
+	namespace := "test-ns"
+	rayServiceName := "test-rayservice"
+	activeClusterName := "rayservice-active"
+	pendingClusterName := "rayservice-pending"
+	routeName := "httproute-test-rayservice-gateway"
+
+	baseRayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: rayServiceName, Namespace: namespace},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: activeClusterName},
+			PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: pendingClusterName},
+		},
+	}
+
+	tests := []struct {
+		rayService            *rayv1.RayService
+		httpRoute             *gwv1.HTTPRoute
+		name                  string
+		expectedActiveWeight  int32
+		expectedPendingWeight int32
+		expectError           bool
+	}{
+		{
+			name:                  "HTTPRoute does not exist",
+			rayService:            baseRayService,
+			httpRoute:             nil,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+			expectError:           false,
+		},
+		{
+			name:       "HTTPRoute exists with active cluster backend",
+			rayService: baseRayService,
+			httpRoute: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{
+									BackendRef: gwv1.BackendRef{
+										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(activeClusterName))},
+										Weight:                 ptr.To(int32(100)),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedActiveWeight:  100,
+			expectedPendingWeight: -1,
+			expectError:           false,
+		},
+		{
+			name:       "HTTPRoute exists with active and pending cluster backends",
+			rayService: baseRayService,
+			httpRoute: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{
+									BackendRef: gwv1.BackendRef{
+										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(activeClusterName))},
+										Weight:                 ptr.To(int32(80)),
+									},
+								},
+								{
+									BackendRef: gwv1.BackendRef{
+										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(pendingClusterName))},
+										Weight:                 ptr.To(int32(20)),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedActiveWeight:  80,
+			expectedPendingWeight: 20,
+			expectError:           false,
+		},
+	}
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = gwv1.AddToScheme(newScheme)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runtimeObjects := []runtime.Object{tt.rayService}
+			if tt.httpRoute != nil {
+				tt.httpRoute.Name = utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s-gateway", tt.rayService.Name))
+				runtimeObjects = append(runtimeObjects, tt.httpRoute)
+			}
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+
+			r := RayServiceReconciler{Client: fakeClient}
+			ctx := context.TODO()
+
+			// Validates retried weights match what is expected.
+			activeWeight, pendingWeight, err := r.getHTTPRouteTrafficWeights(ctx, tt.rayService)
+
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedActiveWeight, activeWeight)
+				assert.Equal(t, tt.expectedPendingWeight, pendingWeight)
 			}
 		})
 	}

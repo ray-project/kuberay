@@ -8225,7 +8225,7 @@ spec:
                 type: integer
               upgradeStrategy:
                 properties:
-                  incrementalUpgradeOptions:
+                  clusterUpgradeOptions:
                     properties:
                       gatewayClassName:
                         type: string

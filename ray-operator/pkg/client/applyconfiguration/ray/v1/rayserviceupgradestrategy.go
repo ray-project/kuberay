@@ -9,8 +9,8 @@ import (
 // RayServiceUpgradeStrategyApplyConfiguration represents a declarative configuration of the RayServiceUpgradeStrategy type for use
 // with apply.
 type RayServiceUpgradeStrategyApplyConfiguration struct {
-	Type                      *rayv1.RayServiceUpgradeType                 `json:"type,omitempty"`
-	IncrementalUpgradeOptions *IncrementalUpgradeOptionsApplyConfiguration `json:"incrementalUpgradeOptions,omitempty"`
+	Type                  *rayv1.RayServiceUpgradeType             `json:"type,omitempty"`
+	ClusterUpgradeOptions *ClusterUpgradeOptionsApplyConfiguration `json:"clusterUpgradeOptions,omitempty"`
 }
 
 // RayServiceUpgradeStrategyApplyConfiguration constructs a declarative configuration of the RayServiceUpgradeStrategy type for use with
@@ -27,10 +27,10 @@ func (b *RayServiceUpgradeStrategyApplyConfiguration) WithType(value rayv1.RaySe
 	return b
 }
 
-// WithIncrementalUpgradeOptions sets the IncrementalUpgradeOptions field in the declarative configuration to the given value
+// WithClusterUpgradeOptions sets the ClusterUpgradeOptions field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IncrementalUpgradeOptions field is set to the value of the last call.
-func (b *RayServiceUpgradeStrategyApplyConfiguration) WithIncrementalUpgradeOptions(value *IncrementalUpgradeOptionsApplyConfiguration) *RayServiceUpgradeStrategyApplyConfiguration {
-	b.IncrementalUpgradeOptions = value
+// If called multiple times, the ClusterUpgradeOptions field is set to the value of the last call.
+func (b *RayServiceUpgradeStrategyApplyConfiguration) WithClusterUpgradeOptions(value *ClusterUpgradeOptionsApplyConfiguration) *RayServiceUpgradeStrategyApplyConfiguration {
+	b.ClusterUpgradeOptions = value
 	return b
 }

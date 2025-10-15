@@ -46,8 +46,8 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 	return rayv1ac.RayServiceSpec().
 		WithUpgradeStrategy(rayv1ac.RayServiceUpgradeStrategy().
 			WithType(rayv1.IncrementalUpgrade).
-			WithIncrementalUpgradeOptions(
-				rayv1ac.IncrementalUpgradeOptions().
+			WithClusterUpgradeOptions(
+				rayv1ac.ClusterUpgradeOptions().
 					WithGatewayClassName("istio").
 					WithStepSizePercent(*stepSizePercent).
 					WithIntervalSeconds(*intervalSeconds).

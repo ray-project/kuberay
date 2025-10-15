@@ -60,7 +60,8 @@ var DeploymentStatusEnum = struct {
 	UNHEALTHY: "UNHEALTHY",
 }
 
-type IncrementalUpgradeOptions struct {
+// These options are currently only supported for the IncrementalUpgrade type.
+type ClusterUpgradeOptions struct {
 	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
 	// Defaults to 100%.
 	// +kubebuilder:default:=100
@@ -77,9 +78,9 @@ type RayServiceUpgradeStrategy struct {
 	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
 	// +optional
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
-	// IncrementalUpgradeOptions defines the behavior of an IncrementalUpgrade.
-	// RayServiceIncrementalUpgrade feature gate must be enabled to set IncrementalUpgradeOptions.
-	IncrementalUpgradeOptions *IncrementalUpgradeOptions `json:"incrementalUpgradeOptions,omitempty"`
+	// ClusterUpgradeOptions defines the behavior of an IncrementalUpgrade.
+	// RayServiceIncrementalUpgrade feature gate must be enabled to set ClusterUpgradeOptions.
+	ClusterUpgradeOptions *ClusterUpgradeOptions `json:"clusterUpgradeOptions,omitempty"`
 }
 
 // RayServiceSpec defines the desired state of RayService
