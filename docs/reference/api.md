@@ -60,11 +60,6 @@ _Appears in:_
 
 
 These options are currently only supported for the IncrementalUpgrade type.
-#### DeletionCondition
-
-
-
-DeletionCondition specifies the trigger conditions for a deletion action.
 
 
 
@@ -79,7 +74,15 @@ _Appears in:_
 | `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
 
 
-#### DeletionPolicy
+#### DeletionCondition
+
+
+
+DeletionCondition specifies the trigger conditions for a deletion action.
+
+
+
+_Appears in:_
 - [DeletionRule](#deletionrule)
 
 | Field | Description | Default | Validation |
