@@ -1,7 +1,6 @@
 package volcano
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,7 +158,7 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 
 	cluster := createTestRayCluster(1)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -184,7 +183,7 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 	cluster := createTestRayCluster(2)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
