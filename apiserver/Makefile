@@ -188,6 +188,12 @@ docker-image: test ## Build image for the api server.
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
+docker-multi-arch-build: test ## Build multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
+docker-multi-arch-push: test ## Build and Push multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
 ##@ Deployment
 .PHONY: install
 install: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.

@@ -125,8 +125,11 @@ docker-build: build docker-image ## Build image with the manager.
 docker-push: ## Push image with the manager.
 	${ENGINE} push ${IMG}
 
-docker-multi-arch-image: # Build and push multi arch image, amd64 and arm64 currently
-	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64/v8 -t ${IMG} .
+docker-multi-arch-build: # Build multi arch image, amd64 and arm64 currently
+	${ENGINE} buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
+
+docker-multi-arch-push: ## Build and Push multi arch image, amd64 and arm64 currently
+	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 docker-image-rayjob-submitter:
 	${ENGINE} build -t ${IMG} --target submitter .
