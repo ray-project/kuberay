@@ -276,15 +276,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 		var jobInfo *utiltypes.RayJobInfo
-		if loadedJobCache := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId); loadedJobCache != nil {
-			if loadedJobCache.Err != nil {
+		jobCache := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId)
+		if jobCache != nil {
+			if jobCache.Err != nil {
+				if errors.IsBadRequest(jobCache.Err) && isSubmitterFinished {
+					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
+					break
+				}
+				logger.Error(jobCache.Err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId, "Error", jobCache.Err)
 				rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
-				logger.Error(loadedJobCache.Err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId, "Error", loadedJobCache.Err)
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, loadedJobCache.Err
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, jobCache.Err
 			}
-			jobInfo = loadedJobCache.JobInfo
+			jobInfo = jobCache.JobInfo
 		} else {
-			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
+			// Cache miss: try a direct fetch to disambiguate not-found vs. transient
+			jobInfo, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
 					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
@@ -301,9 +309,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					break
 				}
 			}
-			logger.Info("Job info not found in map", "JobId", rayJobInstance.Status.JobId)
-			rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
 		rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)

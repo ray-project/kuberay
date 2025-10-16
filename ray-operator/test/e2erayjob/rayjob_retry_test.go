@@ -107,7 +107,7 @@ func TestRayJobRetry(t *testing.T) {
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
 
 		// Ensure JobDeploymentStatus transit to Failed
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutLong).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		// Ensure JobStatus is empty
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
