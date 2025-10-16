@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -600,30 +599,6 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	validateServiceTypeForUserSpecifiedService(svc, userType, t)
 	validateLabelsForUserSpecifiedService(svc, userLabels, t)
 	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
-}
-
-func TestGetGatewayListenersForRayService(t *testing.T) {
-	rayService := &rayv1.RayService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-ray-service",
-			Namespace: "test-ns",
-		},
-	}
-
-	listeners := GetGatewayListenersForRayService(rayService)
-
-	// Validate expected Gateway HTTP listener is created.
-	require.Len(t, listeners, 1)
-	listener := listeners[0]
-
-	assert.Equal(t, gwv1.SectionName(utils.GatewayListenerPortName), listener.Name)
-	assert.Equal(t, gwv1.HTTPProtocolType, listener.Protocol)
-	assert.Equal(t, gwv1.PortNumber(utils.DefaultGatewayListenerPort), listener.Port)
-
-	// Verify hostname is created for compatibility with standard RayService Serve service endpoint.
-	expectedHostname := fmt.Sprintf("%s.%s.svc.cluster.local", rayService.Name, rayService.Namespace)
-	require.NotNil(t, listener.Hostname)
-	assert.Equal(t, expectedHostname, string(*listener.Hostname))
 }
 
 func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {

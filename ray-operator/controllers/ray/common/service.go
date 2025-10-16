@@ -339,19 +339,6 @@ func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
 	return gwv1.PortNumber(utils.DefaultServingPort)
 }
 
-// GetGatewayListenersForRayService constructs the default HTTP listener for a RayService Gateway.
-func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gwv1.Listener {
-	hostname := fmt.Sprintf("%s.%s.svc.cluster.local", rayServiceInstance.Name, rayServiceInstance.Namespace)
-
-	return []gwv1.Listener{
-		{
-			Name:     gwv1.SectionName(utils.GatewayListenerPortName),
-			Protocol: gwv1.HTTPProtocolType,
-			Port:     utils.DefaultGatewayListenerPort,
-		},
-	}
-}
-
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type

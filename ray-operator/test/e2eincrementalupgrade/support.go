@@ -20,7 +20,6 @@ import (
 func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,
-	hostname string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
 	rayServicePath,
@@ -32,7 +31,6 @@ func CurlRayServiceGateway(
 		"-X", "POST",
 		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
-		"-H", fmt.Sprintf("Host: %s", hostname),
 		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
 		"-d", body,
 	}
