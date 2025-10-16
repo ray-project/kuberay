@@ -574,10 +574,15 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		},
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: gwv1.ObjectName(options.GatewayClassName),
+			Listeners: []gwv1.Listener{
+				{
+					Name:     gwv1.SectionName(utils.GatewayListenerPortName),
+					Protocol: gwv1.HTTPProtocolType,
+					Port:     utils.DefaultGatewayListenerPort,
+				},
+			},
 		},
 	}
-
-	rayServiceGateway.Spec.Listeners = common.GetGatewayListenersForRayService(rayServiceInstance)
 
 	return rayServiceGateway, nil
 }
