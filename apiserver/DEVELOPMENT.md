@@ -161,13 +161,15 @@ make docker-image
 The API server supports building multi-architecture images for `linux/amd64` and `linux/arm64` platforms. This is useful for deploying on ARM-based systems like Apple Silicon.
 
 **Prerequisites:**
-- Docker Buildx installed and configured
+
+* Docker Buildx installed and configured
 
 **Build Process:**
 
 The multi-arch build follows a similar pattern to the ray-operator:
 
-1. **Build binaries for each architecture:**
+**Build binaries for each architecture:**
+
 ```bash
 # Build for amd64
 cd apiserver
@@ -177,7 +179,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kuberay-apiserver-amd64 cmd
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -o kuberay-apiserver-arm64 cmd/main.go
 ```
 
-2. **Build and push multi-arch image using Dockerfile.buildx:**
+**Build and push multi-arch image using Dockerfile.buildx:**
+
 ```bash
 # From the project root directory
 docker buildx build --platform linux/amd64,linux/arm64 \
@@ -186,11 +189,12 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 ```
 
-**Note:** 
-- The multi-arch image uses `apiserver/Dockerfile.buildx` which is optimized for copying pre-built binaries.
-- Since the API server is built with `CGO_ENABLED=0`, no cross-compilation tools (like gcc-aarch64-linux-gnu) are needed, making the build process simpler than the operator.
-- The build context must be the project root directory (`.`) because the `proto/` directory needs to be copied for serving swagger files at runtime.
-- Multi-arch images are automatically built and pushed to `quay.io/kuberay/apiserver:nightly` on merges to the `master` branch via the GitHub Actions workflow.
+**Note:**
+
+* The multi-arch image uses `apiserver/Dockerfile.buildx` which is optimized for copying pre-built binaries.
+* Since the API server is built with `CGO_ENABLED=0`, no cross-compilation tools (like gcc-aarch64-linux-gnu) are needed, making the build process simpler than the operator.
+* The build context must be the project root directory (`.`) because the `proto/` directory needs to be copied for serving swagger files at runtime.
+* Multi-arch images are automatically built and pushed to `quay.io/kuberay/apiserver:nightly` on merges to the `master` branch via the GitHub Actions workflow.
 
 #### Start Kubernetes Deployment
 
