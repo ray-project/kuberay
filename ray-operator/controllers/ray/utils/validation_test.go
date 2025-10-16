@@ -683,7 +683,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
+func TestValidateRayClusterSpec_Resources(t *testing.T) {
 	// Util function to create a RayCluster spec.
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
@@ -714,7 +714,7 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 				return s
 			}(),
 			expectError:  true,
-			errorMessage: "resource fields should not be set in both rayStartParams and Resources for Head group. Please use only one",
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for Head group; please use only one",
 		},
 		{
 			name: "Invalid: Worker group has resources in both rayStartParams and .Resources",
@@ -725,7 +725,7 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 				return s
 			}(),
 			expectError:  true,
-			errorMessage: "resource fields should not be set in both rayStartParams and Resources for worker-group group. Please use only one",
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for worker-group group; please use only one",
 		},
 		{
 			name: "Valid: Only rayStartParams resources are set for head",
@@ -749,6 +749,43 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 			}(),
 			expectError: false,
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_Labels(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "worker-group",
+					Template:  podTemplateSpec(nil, nil),
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		errorMessage string
+		spec         rayv1.RayClusterSpec
+		expectError  bool
+	}{
 		{
 			name: "Invalid: Head group has 'labels' in rayStartParams",
 			spec: func() rayv1.RayClusterSpec {
@@ -757,7 +794,7 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 				return s
 			}(),
 			expectError:  true,
-			errorMessage: "rayStartParams['labels'] is not supported for Head group. Please use the top-level Labels field instead",
+			errorMessage: "rayStartParams['labels'] is not supported for Head group; please use the top-level Labels field instead",
 		},
 		{
 			name: "Invalid: Worker group has 'labels' in rayStartParams",
@@ -767,7 +804,7 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 				return s
 			}(),
 			expectError:  true,
-			errorMessage: "rayStartParams['labels'] is not supported for worker-group group. Please use the top-level Labels field instead",
+			errorMessage: "rayStartParams['labels'] is not supported for worker-group group; please use the top-level Labels field instead",
 		},
 		{
 			name: "Valid: Only .Labels field is set",
@@ -780,14 +817,24 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "Invalid: .Labels field values contain commas",
+			name: "Invalid: Label key does not follow Kubernetes syntax",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.HeadGroupSpec.Labels = map[string]string{"invalid,labels,with,commas": "value"}
+				s.WorkerGroupSpecs[0].Labels = map[string]string{"invalid_key!": "value"}
 				return s
 			}(),
 			expectError:  true,
-			errorMessage: "label key for Head group cannot contain commas, but found: 'invalid,labels,with,commas'",
+			errorMessage: "invalid label key for worker-group group: 'invalid_key!', error: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
+		},
+		{
+			name: "Invalid: Label value does not follow Kubernetes syntax",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Labels = map[string]string{"valid-key": "invalid/value"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "invalid label value for key 'valid-key' in Head group: 'invalid/value', error: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
 		},
 	}
 
@@ -796,7 +843,7 @@ func TestValidateRayClusterSpec_ResourcesAndLabels(t *testing.T) {
 			err := ValidateRayClusterSpec(&tt.spec, nil)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.EqualError(t, err, tt.errorMessage)
+				assert.Contains(t, err.Error(), tt.errorMessage)
 			} else {
 				require.NoError(t, err)
 			}

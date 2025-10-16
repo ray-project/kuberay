@@ -34,28 +34,44 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 	return nil
 }
 
-// validateRayGroupResourcesAndLabels checks for conflicting resource definitions and invalid labels.
-func validateRayGroupResourcesAndLabels(groupName string, rayStartParams, resources, labels map[string]string) error {
+// validateRayGroupResources checks for conflicting resource definitions.
+func validateRayGroupResources(groupName string, rayStartParams, resources map[string]string) error {
 	hasRayStartResources := rayStartParams["num-cpus"] != "" ||
 		rayStartParams["num-gpus"] != "" ||
 		rayStartParams["memory"] != "" ||
 		rayStartParams["resources"] != ""
 	if hasRayStartResources && len(resources) > 0 {
-		return fmt.Errorf("resource fields should not be set in both rayStartParams and Resources for %s group. Please use only one", groupName)
+		return fmt.Errorf("resource fields should not be set in both rayStartParams and Resources for %s group; please use only one", groupName)
 	}
+	return nil
+}
 
+// validateRayGroupLabels checks for invalid label definitions and correct label syntax.
+func validateRayGroupLabels(groupName string, rayStartParams, labels map[string]string) error {
 	if _, ok := rayStartParams["labels"]; ok {
-		return fmt.Errorf("rayStartParams['labels'] is not supported for %s group. Please use the top-level Labels field instead", groupName)
+		return fmt.Errorf("rayStartParams['labels'] is not supported for %s group; please use the top-level Labels field instead", groupName)
 	}
 
-	// Validate syntax for the top-level Labels field is parsable.
+	// Validate that labels conforms to Kubernetes label syntax.
+	var allErrs []string
 	for key, val := range labels {
-		if strings.Contains(key, ",") {
-			return fmt.Errorf("label key for %s group cannot contain commas, but found: '%s'", groupName, key)
+		// Validate the label key.
+		if errs := validation.IsQualifiedName(key); len(errs) > 0 {
+			for _, err := range errs {
+				allErrs = append(allErrs, fmt.Sprintf("invalid label key for %s group: '%s', error: %s", groupName, key, err))
+			}
 		}
-		if strings.Contains(val, ",") {
-			return fmt.Errorf("label value for key '%s' in %s group cannot contain commas, but found: '%s'", key, groupName, val)
+
+		// Validate the label value.
+		if errs := validation.IsValidLabelValue(val); len(errs) > 0 {
+			for _, err := range errs {
+				allErrs = append(allErrs, fmt.Sprintf("invalid label value for key '%s' in %s group: '%s', error: %s", key, groupName, val, err))
+			}
 		}
+	}
+
+	if len(allErrs) > 0 {
+		return fmt.Errorf("%s", strings.Join(allErrs, "; "))
 	}
 
 	return nil
@@ -67,7 +83,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return fmt.Errorf("headGroupSpec should have at least one container")
 	}
 
-	if err := validateRayGroupResourcesAndLabels("Head", spec.HeadGroupSpec.RayStartParams, spec.HeadGroupSpec.Resources, spec.HeadGroupSpec.Labels); err != nil {
+	if err := validateRayGroupResources("Head", spec.HeadGroupSpec.RayStartParams, spec.HeadGroupSpec.Resources); err != nil {
+		return err
+	}
+	if err := validateRayGroupLabels("Head", spec.HeadGroupSpec.RayStartParams, spec.HeadGroupSpec.Labels); err != nil {
 		return err
 	}
 
@@ -76,7 +95,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 
-		if err := validateRayGroupResourcesAndLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Resources, workerGroup.Labels); err != nil {
+		if err := validateRayGroupResources(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Resources); err != nil {
+			return err
+		}
+		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
 			return err
 		}
 	}
