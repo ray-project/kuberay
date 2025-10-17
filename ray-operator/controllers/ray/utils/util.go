@@ -331,7 +331,7 @@ func GenerateRayJobId(rayjob string) string {
 }
 
 // GenerateRayWorkerReplicaGroupName generates a name for the replica group
-// currently used for RayMulithostIndexing
+// currently used for RayMultiHostIndexing
 func GenerateRayWorkerReplicaGroupName(workerGroupName string) string {
 	return fmt.Sprintf("%s-%s", workerGroupName, rand.String(5))
 }

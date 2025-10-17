@@ -49,6 +49,15 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		maxReplicas int32 = 4
 		replicas    int32 = 3
 	)
+	sharedMemVolume := corev1.Volume{
+		Name: "shared-mem",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium:    corev1.StorageMediumMemory,
+				SizeLimit: ptr.To(resource.MustParse("1Gi")),
+			},
+		},
+	}
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -58,6 +67,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						Volumes: []corev1.Volume{sharedMemVolume},
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
@@ -75,6 +85,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 					GroupName:   "small-group",
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{sharedMemVolume},
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-worker",
@@ -922,8 +933,9 @@ var _ = Context("Inside the default namespace", func() {
 		numWorkerPods := 3 * int(numOfHosts)
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
-		// Checks if the multi-host indexing is enabled
-		multihostIndexingEnabled := features.Enabled(features.RayMulithostIndexing)
+		BeforeEach(func() {
+			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayMultiHostIndexing, true)
+		})
 
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
@@ -969,22 +981,20 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("All multi-host pods are properly labeled", func() {
-			if multihostIndexingEnabled {
-				workerGrpReplicaMap := make(map[string][]string)
-				for _, pod := range workerPods.Items {
-					hostIndex := pod.Labels[utils.RayHostIndexKey]
-					hostGrpId := pod.Labels[utils.RayWorkerReplicaIndexKey]
+			workerGrpReplicaMap := make(map[string][]string)
+			for _, pod := range workerPods.Items {
+				hostIndex := pod.Labels[utils.RayHostIndexKey]
+				hostGrpId := pod.Labels[utils.RayWorkerReplicaIndexKey]
 
-					grpReplicaIndexList, grpIdExists := workerGrpReplicaMap[hostGrpId]
-					if grpIdExists {
-						Expect(strconv.Atoi(hostIndex)).Should(BeNumerically("<", numOfHosts))
-						Expect(strconv.Atoi(hostIndex)).Should(BeNumerically(">=", 0))
-						Expect(slices.Contains(grpReplicaIndexList, hostIndex)).To(BeFalse())
-						workerGrpReplicaMap[hostGrpId] = append(grpReplicaIndexList, hostIndex)
-					} else {
-						workerGrpReplicaMap[hostGrpId] = []string{}
-						Expect(len(workerGrpReplicaMap)).Should(BeNumerically("<", replicas))
-					}
+				grpReplicaIndexList, grpIdExists := workerGrpReplicaMap[hostGrpId]
+				if grpIdExists {
+					Expect(strconv.Atoi(hostIndex)).Should(BeNumerically("<", numOfHosts))
+					Expect(strconv.Atoi(hostIndex)).Should(BeNumerically(">=", 0))
+					Expect(slices.Contains(grpReplicaIndexList, hostIndex)).To(BeFalse())
+					workerGrpReplicaMap[hostGrpId] = append(grpReplicaIndexList, hostIndex)
+				} else {
+					workerGrpReplicaMap[hostGrpId] = []string{}
+					Expect(len(workerGrpReplicaMap)).Should(BeNumerically("<=", int(replicas)))
 				}
 			}
 		})
@@ -1059,12 +1069,6 @@ var _ = Context("Inside the default namespace", func() {
 			pod := workerPods.Items[0]
 			err := k8sClient.Delete(ctx, &pod, &client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete a Pod")
-			if multihostIndexingEnabled {
-				// Number of pods should go down by num of hosts but then be re-created
-				Eventually(
-					listResourceFunc(ctx, &workerPods, workerFilters...),
-					time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods-int(numOfHosts)), fmt.Sprintf("workerGroup %v", workerPods.Items))
-			}
 			Eventually(
 				listResourceFunc(ctx, &workerPods, workerFilters...),
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))

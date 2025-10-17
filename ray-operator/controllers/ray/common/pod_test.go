@@ -1179,7 +1179,7 @@ func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 
-	features.SetFeatureGateDuringTest(t, features.RayMulithostIndexing, true)
+	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
 
 	worker.Template.ObjectMeta.Name = "ray-worker-test"
 	worker.NumOfHosts = 4
