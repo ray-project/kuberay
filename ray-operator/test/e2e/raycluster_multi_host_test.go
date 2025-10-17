@@ -5,8 +5,8 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -165,7 +165,7 @@ func TestRayClusterMultiHost(t *testing.T) {
 
 	// The controller should first clean up the broken multi-host group (-4 pods), and then re-scale it up (+4 pods).
 	LogWithTimestamp(test.T(), "Waiting for controller to reconcile multi-host group.")
-	// Reconcilation happens too quickly to catch the state where expectedPodCount-NumOfHosts, but we can test
+	// Reconciliation happens too quickly to catch the state where expectedPodCount-NumOfHosts, but we can test
 	// that externally deleted Pods will be re-created to satisfy the expected number.
 	g.Eventually(func() ([]corev1.Pod, error) {
 		return GetWorkerPods(test, rayCluster)

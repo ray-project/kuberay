@@ -683,6 +683,174 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpec_Resources(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "worker-group",
+					Template:  podTemplateSpec(nil, nil),
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		errorMessage string
+		spec         rayv1.RayClusterSpec
+		expectError  bool
+	}{
+		{
+			name: "Invalid: Head group has resources in both rayStartParams and top-level Resources",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{"num-cpus": "1"}
+				s.HeadGroupSpec.Resources = map[string]string{"CPU": "1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for Head group; please use only one",
+		},
+		{
+			name: "Invalid: Worker group has resources in both rayStartParams and .Resources",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].RayStartParams = map[string]string{"num-gpus": "1"}
+				s.WorkerGroupSpecs[0].Resources = map[string]string{"GPU": "1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for worker-group group; please use only one",
+		},
+		{
+			name: "Valid: Only rayStartParams resources are set for head",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{
+					"num-cpus":  "2",
+					"memory":    "4G",
+					"resources": "{\"TPU\": \"8\"}",
+				}
+				return s
+			}(),
+			expectError: false,
+		},
+		{
+			name: "Valid: Only .Resources field is set for worker",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].Resources = map[string]string{"CPU": "2", "memory": "4G", "TPU": "8"}
+				return s
+			}(),
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_Labels(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "worker-group",
+					Template:  podTemplateSpec(nil, nil),
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		errorMessage string
+		spec         rayv1.RayClusterSpec
+		expectError  bool
+	}{
+		{
+			name: "Invalid: Head group has 'labels' in rayStartParams",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{"labels": "ray.io/node-group=worker-group-1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "rayStartParams['labels'] is not supported for Head group; please use the top-level Labels field instead",
+		},
+		{
+			name: "Invalid: Worker group has 'labels' in rayStartParams",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].RayStartParams = map[string]string{"labels": "ray.io/node-group=worker-group-1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "rayStartParams['labels'] is not supported for worker-group group; please use the top-level Labels field instead",
+		},
+		{
+			name: "Valid: Only .Labels field is set",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Labels = map[string]string{"ray.io/market-type": "on-demand"}
+				s.WorkerGroupSpecs[0].Labels = map[string]string{"ray.io/accelerator-type": "TPU-V6E"}
+				return s
+			}(),
+			expectError: false,
+		},
+		{
+			name: "Invalid: Label key does not follow Kubernetes syntax",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].Labels = map[string]string{"invalid_key!": "value"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "invalid label key for worker-group group: 'invalid_key!', error: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
+		},
+		{
+			name: "Invalid: Label value does not follow Kubernetes syntax",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Labels = map[string]string{"valid-key": "invalid/value"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "invalid label value for key 'valid-key' in Head group: 'invalid/value', error: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayJobStatus(t *testing.T) {
 	tests := []struct {
 		name        string
