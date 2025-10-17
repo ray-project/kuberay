@@ -16,3 +16,5 @@ featureGates:
     enabled: true
   - name: RayJobDeletionPolicy
     enabled: true
+  - name: RayMultiHostIndexing
+    enabled: true
