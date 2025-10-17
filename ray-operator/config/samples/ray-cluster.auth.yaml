@@ -79,7 +79,7 @@ spec:
               command:
               - bash
               - -c
-              - wget -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep success
+              - wget -T 10 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep success
             failureThreshold: 10
             initialDelaySeconds: 10
             periodSeconds: 5
@@ -90,7 +90,7 @@ spec:
               command:
               - bash
               - -c
-              - wget -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep success
+              - wget -T 10 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success && wget -T 10 -q -O- http://localhost:8443/api/gcs_healthz | grep success
             failureThreshold: 120
             initialDelaySeconds: 30
             periodSeconds: 5
