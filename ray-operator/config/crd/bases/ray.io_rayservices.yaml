@@ -611,7 +611,15 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
                       rayStartParams:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      resources:
                         additionalProperties:
                           type: string
                         type: object
@@ -4312,6 +4320,10 @@ spec:
                         idleTimeoutSeconds:
                           format: int32
                           type: integer
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
                         maxReplicas:
                           default: 2147483647
                           format: int32
@@ -4332,6 +4344,10 @@ spec:
                           default: 0
                           format: int32
                           type: integer
+                        resources:
+                          additionalProperties:
+                            type: string
+                          type: object
                         scaleStrategy:
                           properties:
                             workersToDelete:

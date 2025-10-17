@@ -13,6 +13,8 @@ type HeadGroupSpecApplyConfiguration struct {
 	Template       *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
 	HeadService    *apicorev1.Service                        `json:"headService,omitempty"`
 	EnableIngress  *bool                                     `json:"enableIngress,omitempty"`
+	Resources      map[string]string                         `json:"resources,omitempty"`
+	Labels         map[string]string                         `json:"labels,omitempty"`
 	RayStartParams map[string]string                         `json:"rayStartParams,omitempty"`
 	ServiceType    *apicorev1.ServiceType                    `json:"serviceType,omitempty"`
 }
@@ -44,6 +46,34 @@ func (b *HeadGroupSpecApplyConfiguration) WithHeadService(value apicorev1.Servic
 // If called multiple times, the EnableIngress field is set to the value of the last call.
 func (b *HeadGroupSpecApplyConfiguration) WithEnableIngress(value bool) *HeadGroupSpecApplyConfiguration {
 	b.EnableIngress = &value
+	return b
+}
+
+// WithResources puts the entries into the Resources field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Resources field,
+// overwriting an existing map entries in Resources field with the same key.
+func (b *HeadGroupSpecApplyConfiguration) WithResources(entries map[string]string) *HeadGroupSpecApplyConfiguration {
+	if b.Resources == nil && len(entries) > 0 {
+		b.Resources = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Resources[k] = v
+	}
+	return b
+}
+
+// WithLabels puts the entries into the Labels field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the Labels field,
+// overwriting an existing map entries in Labels field with the same key.
+func (b *HeadGroupSpecApplyConfiguration) WithLabels(entries map[string]string) *HeadGroupSpecApplyConfiguration {
+	if b.Labels == nil && len(entries) > 0 {
+		b.Labels = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.Labels[k] = v
+	}
 	return b
 }
 
