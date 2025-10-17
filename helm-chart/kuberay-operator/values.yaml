@@ -118,7 +118,7 @@ featureGates:
 - name: RayJobDeletionPolicy
   enabled: false
 - name: RayMultiHostIndexing
-  enabeld: false
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:
