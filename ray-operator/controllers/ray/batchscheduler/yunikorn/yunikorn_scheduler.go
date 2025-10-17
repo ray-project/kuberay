@@ -122,32 +122,6 @@ func (y *YuniKornScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
 	return exist
 }
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pod
-// the yunikorn scheduler needs these labels and annotations in order to do the scheduling properly
-func (y *YuniKornScheduler) AddMetadataToPod(ctx context.Context, rayCluster *rayv1.RayCluster, groupName string, pod *corev1.Pod) {
-	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
-	// the applicationID and queue name must be provided in the labels
-	populateLabelsFromObject(rayCluster, pod, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
-	populateLabelsFromObject(rayCluster, pod, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
-	addSchedulerNameToObject(pod, y.Name())
-
-	// when gang scheduling is enabled, extra annotations need to be added to all pods
-	if y.isGangSchedulingEnabled(rayCluster) {
-		// populate the taskGroups info to each pod
-		err := propagateTaskGroupsAnnotation(rayCluster, pod)
-		if err != nil {
-			logger.Error(err, "failed to add gang scheduling related annotations to pod, "+
-				"gang scheduling will not be enabled for this workload",
-				"name", pod.Name, "namespace", pod.Namespace)
-			return
-		}
-
-		// set the task group name based on the head or worker group name
-		// the group name for the head and each of the worker group should be different
-		pod.Annotations[YuniKornTaskGroupNameAnnotationName] = groupName
-	}
-}
-
 func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string) {
 	logger := ctrl.LoggerFrom(ctx).WithName(SchedulerName)
 
