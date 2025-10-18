@@ -348,7 +348,6 @@ func GetGatewayListenersForRayService(rayServiceInstance *rayv1.RayService) []gw
 			Name:     gwv1.SectionName(utils.GatewayListenerPortName),
 			Protocol: gwv1.HTTPProtocolType,
 			Port:     utils.DefaultGatewayListenerPort,
-			Hostname: (*gwv1.Hostname)(&hostname), // backwards compatibility with Serve service
 		},
 	}
 }
