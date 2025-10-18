@@ -126,7 +126,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "workqueue_depth{namespace=\"$namespace\", pod=\"$ControllerPod\"}",
+          "expr": "workqueue_depth{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}",
           "instant": false,
           "legendFormat": "{{controller}}",
           "range": true,
@@ -222,7 +222,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "irate(controller_runtime_reconcile_total{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])",
+          "expr": "irate(controller_runtime_reconcile_total{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\", controller=\"$Controller\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{controller}} - {{result}}",
           "range": true,
@@ -365,7 +365,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.50, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -380,7 +380,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.95, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "{{controller}} - P95",
@@ -394,7 +394,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.99, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$namespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
+          "expr": "histogram_quantile(0.99, sum(rate(controller_runtime_reconcile_time_seconds_bucket{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\", controller=~\"$Controller\"}[5m])) by (pod,le,controller))",
           "interval": "",
           "intervalFactor": 2,
           "legendFormat": "{{controller}} - P99",
@@ -2100,6 +2100,37 @@
         "type": "query"
       },
       {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "default"
+          ],
+          "value": [
+            "default"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(controller_runtime_active_workers{},namespace)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "ControllerNamespace",
+        "options": [],
+        "query": {
+          "query": "label_values(controller_runtime_active_workers{},namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
         "current": {
           "selected": false,
           "text": "raycluster",
@@ -2109,14 +2140,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(controller_runtime_active_workers{namespace=\"$namespace\", pod=\"$ControllerPod\"},controller)",
+        "definition": "label_values(controller_runtime_active_workers{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"},controller)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "Controller",
         "options": [],
         "query": {
-          "query": "label_values(controller_runtime_active_workers{namespace=\"$namespace\", pod=\"$ControllerPod\"},controller)",
+          "query": "label_values(controller_runtime_active_workers{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"},controller)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -2135,14 +2166,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(controller_runtime_active_workers{namespace=\"$namespace\"},pod)",
+        "definition": "label_values(controller_runtime_active_workers{namespace=\"$ControllerNamespace\"},pod)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "ControllerPod",
         "options": [],
         "query": {
-          "query": "label_values(controller_runtime_active_workers{namespace=\"$namespace\"},pod)",
+          "query": "label_values(controller_runtime_active_workers{namespace=\"$ControllerNamespace\"},pod)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
