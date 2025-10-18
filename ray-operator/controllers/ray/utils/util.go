@@ -21,12 +21,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -207,6 +210,40 @@ func CheckName(s string) string {
 	}
 
 	return s
+}
+
+func CheckGatewayName(name string) string {
+	const maxLength = 63
+
+	if len(name) > maxLength {
+		offset := len(name) - maxLength
+		fmt.Printf("Gateway name too long (len = %d), shortening by offset = %d", len(name), offset)
+		name = name[offset:]
+	}
+
+	// Cannot start with a digit or punctuation
+	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
+		name = "g" + name[1:]
+	}
+
+	return name
+}
+
+func CheckHTTPRouteName(name string) string {
+	const maxLength = 63
+
+	if len(name) > maxLength {
+		offset := len(name) - maxLength
+		fmt.Printf("HTTPRoute name too long (len = %d), shortening by offset = %d", len(name), offset)
+		name = name[offset:]
+	}
+
+	// Cannot start with a digit or punctuation
+	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
+		name = "h" + name[1:]
+	}
+
+	return name
 }
 
 // TrimJobName uses CheckLabel to trim Kubernetes job to constrains
@@ -673,6 +710,114 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 		return ""
 	}
 	return svc.Spec.Selector[RayClusterLabelKey]
+}
+
+func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
+	if gatewayInstance == nil {
+		return false
+	}
+	hasAccepted := false
+	hasProgrammed := false
+
+	for _, condition := range gatewayInstance.Status.Conditions {
+		if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
+			hasAccepted = true
+		}
+		if condition.Type == string(gwv1.GatewayConditionProgrammed) && condition.Status == metav1.ConditionTrue {
+			hasProgrammed = true
+		}
+	}
+
+	// If no ready condition found return false
+	return hasAccepted && hasProgrammed
+}
+
+// IsHTTPRouteReady returns whether the HTTPRoute associated with a given Gateway has a ready condition
+func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTTPRoute) bool {
+	if httpRouteInstance == nil {
+		return false
+	}
+	for _, parent := range httpRouteInstance.Status.Parents {
+		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) {
+			continue
+		}
+		if parent.ParentRef.Namespace != nil && *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+			continue
+		}
+		hasAccepted := false
+		hasResolved := false
+
+		for _, condition := range parent.Conditions {
+			switch gwv1.RouteConditionType(condition.Type) {
+			case gwv1.RouteConditionAccepted:
+				if condition.Status == metav1.ConditionTrue {
+					hasAccepted = true
+				}
+			case gwv1.RouteConditionResolvedRefs:
+				if condition.Status == metav1.ConditionTrue {
+					hasResolved = true
+				}
+			}
+		}
+		if hasAccepted && hasResolved {
+			return true
+		}
+	}
+	return false
+}
+
+func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
+	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
+		return false
+	}
+	return spec != nil && spec.UpgradeStrategy != nil &&
+		*spec.UpgradeStrategy.Type == rayv1.IncrementalUpgrade
+}
+
+func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.ClusterUpgradeOptions {
+	if spec != nil && spec.UpgradeStrategy != nil {
+		return spec.UpgradeStrategy.ClusterUpgradeOptions
+	}
+	return nil
+}
+
+// IsIncrementalUpgradeComplete checks if the conditions for completing an incremental upgrade are met.
+func IsIncrementalUpgradeComplete(rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) bool {
+	return pendingCluster != nil &&
+		ptr.Deref(rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity, -1) == 0 &&
+		ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1) == 100
+}
+
+// GetWeightsFromHTTPRoute parses a given HTTPRoute object and extracts the traffic weights
+// for the active and pending clusters (if present) of a RayService.
+func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv1.RayService) (activeWeight int32, pendingWeight int32) {
+	var activeClusterName, pendingClusterName string
+	if rayServiceInstance != nil {
+		activeClusterName = rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+		pendingClusterName = rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+	}
+
+	// Defaults if weights can't be detected.
+	activeWeight = -1
+	pendingWeight = -1
+
+	if httpRoute == nil || len(httpRoute.Spec.Rules) == 0 || len(httpRoute.Spec.Rules[0].BackendRefs) == 0 {
+		return
+	}
+
+	for _, backendRef := range httpRoute.Spec.Rules[0].BackendRefs {
+		backendName := string(backendRef.Name)
+		weight := ptr.Deref(backendRef.Weight, 0)
+
+		if activeClusterName != "" && strings.Contains(backendName, activeClusterName) {
+			activeWeight = weight
+		}
+		if pendingClusterName != "" && strings.Contains(backendName, pendingClusterName) {
+			pendingWeight = weight
+		}
+	}
+
+	return
 }
 
 // Check where we are running. We are trying to distinguish here whether

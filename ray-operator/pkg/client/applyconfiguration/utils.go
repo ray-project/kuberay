@@ -20,6 +20,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClusterUpgradeOptions"):
+		return &rayv1.ClusterUpgradeOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionCondition"):
 		return &rayv1.DeletionConditionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
