@@ -323,6 +323,10 @@ const (
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
 	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
 
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
 	FailedToDeletePod           K8sEventType = "FailedToDeletePod"
