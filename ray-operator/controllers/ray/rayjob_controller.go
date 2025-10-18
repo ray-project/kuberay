@@ -30,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -42,9 +43,8 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-
+	Scheme              *runtime.Scheme
+	Recorder            record.EventRecorder
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	options             RayJobReconcilerOptions
 }
@@ -281,10 +281,24 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-
-		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-		if err != nil {
-			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
+		var jobInfo *utiltypes.RayJobInfo
+		jobCache := rayDashboardClient.GetJobInfoFromCache(rayJobInstance.Status.JobId)
+		if jobCache != nil {
+			if jobCache.Err != nil {
+				if errors.IsBadRequest(jobCache.Err) && isSubmitterFinished {
+					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
+					break
+				}
+				logger.Error(jobCache.Err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId, "Error", jobCache.Err)
+				rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, jobCache.Err
+			}
+			jobInfo = jobCache.JobInfo
+		} else {
+			// Cache miss: try a direct fetch to disambiguate not-found vs. transient
+			jobInfo, err = rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
 					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
@@ -302,11 +316,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					break
 				}
 			}
+		}
 
+		rayDashboardClient.AsyncGetJobInfo(ctx, rayJobInstance.Status.JobId)
+		if jobInfo == nil {
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
-
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
