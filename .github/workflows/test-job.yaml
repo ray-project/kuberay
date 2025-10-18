@@ -97,13 +97,42 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push Apiserver to Quay.io
+      # Build apiserver binaries inside the gh runner vm directly and then copy the go binaries to docker images using the Dockerfile.buildx
+      - name: Build linux/amd64 apiserver go binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
         run: |
-          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-          docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:nightly;
-          docker push quay.io/kuberay/apiserver:nightly
-        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+        working-directory: ${{env.working-directory}}
+
+      - name: Build linux/arm64 apiserver binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: arm64
+        run: |
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+        working-directory: ${{env.working-directory}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build MultiArch Docker Image and Push on Merge
+        uses: docker/build-push-action@v5
+        env:
+          REPO_ORG: kuberay
+          REPO_NAME: apiserver
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./apiserver/Dockerfile.buildx
+          push: ${{ contains(fromJson('["refs/heads/master"]'), github.ref) }}
+          provenance: false
+          tags: |
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
 
   build_apiserversdk:
     env:
@@ -199,13 +228,42 @@ jobs:
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
         if: contains(fromJson('["refs/heads/master"]'), github.ref)
 
-      - name: Push security proxy to Quay.io
+      # Build security proxy binaries inside the gh runner vm directly and then copy the go binaries to docker images using the Dockerfile.buildx
+      - name: Build linux/amd64 security proxy go binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
         run: |
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker push quay.io/kuberay/security-proxy:${{ steps.vars.outputs.sha_short }};
-          docker image tag kuberay/security-proxy:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/security-proxy:nightly;
-          docker push quay.io/kuberay/security-proxy:nightly
-        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o security_proxy-$GOARCH cmd/main.go
+        working-directory: ${{env.working-directory}}
+
+      - name: Build linux/arm64 security proxy binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: arm64
+        run: |
+          CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o security_proxy-$GOARCH cmd/main.go
+        working-directory: ${{env.working-directory}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build MultiArch Docker Image and Push on Merge
+        uses: docker/build-push-action@v5
+        env:
+          REPO_ORG: kuberay
+          REPO_NAME: security-proxy
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./experimental/Dockerfile.buildx
+          push: ${{ contains(fromJson('["refs/heads/master"]'), github.ref) }}
+          provenance: false
+          tags: |
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
 
   build_operator:
     env:

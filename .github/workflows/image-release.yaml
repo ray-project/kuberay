@@ -52,14 +52,6 @@ jobs:
       run: go test ./pkg/... ./cmd/... -race -parallel 4
       working-directory: ${{env.working-directory}}
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Apiserver
-      run: |
-        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
-        docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-
     - name: Log in to Quay.io
       uses: docker/login-action@v2
       with:
@@ -67,12 +59,43 @@ jobs:
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
-    - name: Push Apiserver to Quay.io
+    # Build apiserver binaries inside the gh runner vm directly and then copy the go binaries to docker images using the Dockerfile.buildx
+    - name: Build linux/amd64 apiserver go binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: amd64
       run: |
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ env.tag }};
-        docker push quay.io/kuberay/apiserver:${{ env.tag }}
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Build linux/arm64 apiserver binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: arm64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build MultiArch Image
+      uses: docker/build-push-action@v5
+      env:
+        PUSH: true
+        REPO_ORG: kuberay
+        REPO_NAME: apiserver
+      with:
+        platforms: linux/amd64,linux/arm64
+        context: .
+        file: ./apiserver/Dockerfile.buildx
+        push: ${{env.PUSH}}
+        provenance: false
+        tags: |
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}
 
   release_operator_image:
     env:
@@ -120,14 +143,6 @@ jobs:
 
     - name: Test
       run: make test
-      working-directory: ${{env.working-directory}}
-
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Operator
-      run: |
-        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
       working-directory: ${{env.working-directory}}
 
     - name: Log in to Quay.io
@@ -215,9 +230,6 @@ jobs:
       id: vars
       run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
     - name: Log in to Quay.io
       uses: docker/login-action@v2
       with:
@@ -271,14 +283,6 @@ jobs:
 
     - name: Get dependencies
       run: go mod download
-      working-directory: ${{env.working-directory}}
-
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Submitter
-      run: |
-        IMG=kuberay/submitter:${{ steps.vars.outputs.sha_short }} make docker-image-rayjob-submitter
       working-directory: ${{env.working-directory}}
 
     - name: Log in to Quay.io

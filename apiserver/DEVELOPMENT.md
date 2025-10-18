@@ -156,6 +156,46 @@ Access the service at `localhost:8888` for http, and `localhost:8887` for the RP
 make docker-image
 ```
 
+#### Build Multi-Architecture Image
+
+The API server supports building multi-architecture images for `linux/amd64` and `linux/arm64` platforms. This is useful for deploying on ARM-based systems like Apple Silicon.
+
+**Prerequisites:**
+
+* Docker Buildx installed and configured
+
+**Build Process:**
+
+The multi-arch build follows a similar pattern to the ray-operator:
+
+**Build binaries for each architecture:**
+
+```bash
+# Build for amd64
+cd apiserver
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kuberay-apiserver-amd64 cmd/main.go
+
+# Build for arm64
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -o kuberay-apiserver-arm64 cmd/main.go
+```
+
+**Build and push multi-arch image using Dockerfile.buildx:**
+
+```bash
+# From the project root directory
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t your-registry/apiserver:your-tag \
+  -f apiserver/Dockerfile.buildx \
+  --push .
+```
+
+**Note:**
+
+* The multi-arch image uses `apiserver/Dockerfile.buildx` which is optimized for copying pre-built binaries.
+* Since the API server is built with `CGO_ENABLED=0`, no cross-compilation tools (like gcc-aarch64-linux-gnu) are needed, making the build process simpler than the operator.
+* The build context must be the project root directory (`.`) because the `proto/` directory needs to be copied for serving swagger files at runtime.
+* Multi-arch images are automatically built and pushed to `quay.io/kuberay/apiserver:nightly` on merges to the `master` branch via the GitHub Actions workflow.
+
 #### Start Kubernetes Deployment
 
 Note that you should make your KubeRay API server image available by either pushing it to an image registry, such as DockerHub or Quay, or by loading the image into the Kubernetes cluster. If you are using a Kind cluster for development, you can run `make load-image` to load the newly built API server image into the Kind cluster.  The operator image will also be needed to be loaded on your cluster. If you want run secure API server, you can build security proxy using `make security-proxy-image` and load it to the cluster using `make load-security-proxy-image`

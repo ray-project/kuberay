@@ -70,6 +70,12 @@ docker-image: ## Build image for the security proxy.
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
+docker-multi-arch-build: ## Build multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
+docker-multi-arch-push: ## Build and Push multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
 ##@ Development Tools Setup
 
 ## Location to install dependencies to
