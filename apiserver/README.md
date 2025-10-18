@@ -15,7 +15,7 @@ The KubeRay APIServer is an optional component that provides a layer of simplifi
 
 ### Install with Helm
 
-Ensure that the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) are based on Helm v3.4.1 and v3.9.4.
+Ensure that the version of Helm is v3+. Currently, [existing CI tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm.yaml) are based on Helm v3.4.1 and v3.9.4.
 
 ```sh
 helm version

@@ -135,7 +135,7 @@ spec:
 ...
 ```
 
-[existing CI tests]: https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml
+[existing CI tests]: https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm.yaml
 [Argo CD]: https://argoproj.github.io
 [this issue]: https://github.com/prometheus-operator/prometheus-operator/issues/4439
 [this document]: https://helm.sh/docs/chart_best_practices/custom_resource_definitions/
