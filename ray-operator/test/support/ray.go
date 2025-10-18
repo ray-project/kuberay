@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -215,6 +216,10 @@ func IsRayServiceUpgrading(service *rayv1.RayService) bool {
 	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
 }
 
+func IsRayServiceRollingBack(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RollbackInProgress))
+}
+
 func RayServicesNumEndPoints(service *rayv1.RayService) int32 {
 	return service.Status.NumServeEndpoints
 }
@@ -225,4 +230,24 @@ func GetRayClusterWorkerGroupReplicaSum(cluster *rayv1.RayCluster) int32 {
 		replicas += *workerGroup.Replicas
 	}
 	return replicas
+}
+
+func GetHTTPRoute(t Test, namespace, name string) (*gwv1.HTTPRoute, error) {
+	return t.Client().Gateway().GatewayV1().HTTPRoutes(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func HTTPRoute(t Test, namespace, name string) func() (*gwv1.HTTPRoute, error) {
+	return func() (*gwv1.HTTPRoute, error) {
+		return GetHTTPRoute(t, namespace, name)
+	}
+}
+
+func GetGateway(t Test, namespace, name string) (*gwv1.Gateway, error) {
+	return t.Client().Gateway().GatewayV1().Gateways(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
+	return func() (*gwv1.Gateway, error) {
+		return GetGateway(t, namespace, name)
+	}
 }
