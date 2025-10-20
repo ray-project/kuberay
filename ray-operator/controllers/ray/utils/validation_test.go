@@ -1740,7 +1740,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
 			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.IncrementalUpgrade),
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 						MaxSurgePercent:  tt.maxSurgePercent,
 						StepSizePercent:  tt.stepSizePercent,
@@ -1750,7 +1750,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 				}
 			} else if tt.expectError {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.IncrementalUpgrade),
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 				}
 			}
 

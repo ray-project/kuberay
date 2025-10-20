@@ -306,13 +306,13 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
 
-	// only IncrementalUpgrade, NewCluster, and None are valid upgradeType
+	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.IncrementalUpgrade {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.IncrementalUpgrade, rayv1.NewCluster, rayv1.None)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
@@ -320,7 +320,7 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
 	}
 
-	// If type is IncrementalUpgrade, validate the ClusterUpgradeOptions
+	// If type is NewClusterWithIncrementalUpgrade, validate the ClusterUpgradeOptions
 	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
 		return ValidateClusterUpgradeOptions(rayService)
 	}
@@ -330,12 +330,12 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 
 func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 	if !IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
-		return fmt.Errorf("Ray Autoscaler is required for IncrementalUpgrade")
+		return fmt.Errorf("Ray Autoscaler is required for NewClusterWithIncrementalUpgrade")
 	}
 
 	options := rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions
 	if options == nil {
-		return fmt.Errorf("ClusterUpgradeOptions are required for IncrementalUpgrade")
+		return fmt.Errorf("ClusterUpgradeOptions are required for NewClusterWithIncrementalUpgrade")
 	}
 
 	// MaxSurgePercent defaults to 100% if unset.
@@ -352,7 +352,7 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 	}
 
 	if options.GatewayClassName == "" {
-		return fmt.Errorf("gatewayClassName is required for IncrementalUpgrade")
+		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
 	}
 
 	return nil

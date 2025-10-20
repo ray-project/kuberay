@@ -151,8 +151,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// 1. If there is a pending cluster, reconcile serve applications for the pending cluster.
 	// 2. If there are both active and pending clusters, reconcile serve applications for the pending cluster only.
 	// 3. If there is no pending cluster, reconcile serve applications for the active cluster.
-	// 4. During an IncrementalUpgrade, reconcileServe will reconcile either the pending or active cluster based
-	//    on total TargetCapacity.
+	// 4. During NewClusterWithIncrementalUpgrade, reconcileServe will reconcile either the pending or active cluster
+	// based on total TargetCapacity.
 	var isActiveClusterReady, isPendingClusterReady bool = false, false
 	var activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus = nil, nil
 	if pendingRayClusterInstance != nil {
@@ -170,13 +170,13 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	} else if activeRayClusterInstance != nil && pendingRayClusterInstance != nil && utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		logger.Info("Reconciling the Serve applications for active cluster during IncrementalUpgrade", "clusterName", activeRayClusterInstance.Name)
+		logger.Info("Reconciling the Serve applications for active cluster during NewClusterWithIncrementalUpgrade", "clusterName", activeRayClusterInstance.Name)
 		if isActiveClusterReady, activeClusterServeApplications, err = r.reconcileServe(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
 	}
 
-	// Check if IncrementalUpgrade is enabled, if so reconcile Gateway objects.
+	// Check if NewClusterWithIncrementalUpgrade is enabled, if so reconcile Gateway objects.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// Ensure per-cluster Serve service exists for the active and pending RayClusters.
 		if err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
@@ -347,7 +347,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	var isPendingClusterServing bool
 	if headSvc != nil && serveSvc != nil {
 		if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-			logger.Info("Processing incremental upgrade strategy.", "rayService", rayServiceInstance.Name)
+			logger.Info("Processing NewClusterWithIncrementalUpgrade strategy.", "rayService", rayServiceInstance.Name)
 			oldActivePercent := ptr.Deref(rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent, -1)
 			oldPendingPercent := ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1)
 
@@ -424,7 +424,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		numServeEndpoints += len(subset.Addresses)
 	}
 
-	// During an IncrementalUpgrade, the pending RayCluster is also serving.
+	// During NewClusterWithIncrementalUpgrade, the pending RayCluster is also serving.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && pendingCluster != nil {
 		pendingServeServiceName := common.RayClusterServeServiceNamespacedName(pendingCluster)
 		if err := r.Get(ctx, pendingServeServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
@@ -539,8 +539,8 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
 			if features.Enabled(features.RayServiceIncrementalUpgrade) {
-				if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.IncrementalUpgrade {
-					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.IncrementalUpgrade))
+				if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.NewClusterWithIncrementalUpgrade {
+					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.NewClusterWithIncrementalUpgrade))
 					return false
 				}
 			} else if *upgradeType != rayv1.NewCluster {
@@ -793,7 +793,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	return desiredHTTPRoute, nil
 }
 
-// reconcileHTTPRoute reconciles a HTTPRoute resource for a RayService to route traffic during an IncrementalUpgrade.
+// reconcileHTTPRoute reconciles a HTTPRoute resource for a RayService to route traffic during a NewClusterWithIncrementalUpgrade.
 func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) error {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
@@ -1248,7 +1248,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 }
 
 // checkIfNeedTargetCapacityUpdate returns whether the controller should adjust the target_capacity
-// of the Serve config associated with a RayCluster during an IncrementalUpgrade.
+// of the Serve config associated with a RayCluster during NewClusterWithIncrementalUpgrade.
 //
 // This function implements the incremental upgrade state machine as defined in the design document:
 // https://github.com/ray-project/enhancements/blob/main/reps/2024-12-4-ray-service-incr-upgrade.md
@@ -1268,7 +1268,8 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 //
 // 4. Phase 4 (Step 11): Upgrade completion
 //   - Both clusters reach final state: active=0%, pending=100%
-//   - Returns false: "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete."
+//   - Returns false: "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade migration
+//     is complete."
 //
 // The function ensures that traffic migration only proceeds when the target cluster has reached
 // its capacity limit, preventing resource conflicts and ensuring upgrade stability.
@@ -1277,7 +1278,7 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	pendingRayServiceStatus := rayServiceInstance.Status.PendingServiceStatus
 
 	if activeRayServiceStatus.RayClusterName == "" || pendingRayServiceStatus.RayClusterName == "" {
-		return false, "Both active and pending RayCluster instances are required for incremental upgrade."
+		return false, "Both active and pending RayCluster instances are required for NewClusterWithIncrementalUpgrade."
 	}
 
 	// Validate Gateway and HTTPRoute objects are ready
@@ -1286,7 +1287,7 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 		return false, fmt.Sprintf("Failed to retrieve Gateway for RayService: %v", err)
 	}
 	if !utils.IsGatewayReady(gatewayInstance) {
-		return false, "Gateway for RayService IncrementalUpgrade is not ready."
+		return false, "Gateway for RayService NewClusterWithIncrementalUpgrade is not ready."
 	}
 
 	httpRouteInstance := &gwv1.HTTPRoute{}
@@ -1294,10 +1295,10 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 		return false, fmt.Sprintf("Failed to retrieve HTTPRoute for RayService: %v", err)
 	}
 	if !utils.IsHTTPRouteReady(gatewayInstance, httpRouteInstance) {
-		return false, "HTTPRoute for RayService IncrementalUpgrade is not ready."
+		return false, "HTTPRoute for RayService NewClusterWithIncrementalUpgrade is not ready."
 	}
 
-	// Retrieve the current observed IncrementalUpgrade Status fields for each RayService.
+	// Retrieve the current observed NewClusterWithIncrementalUpgrade Status fields for each RayService.
 	if activeRayServiceStatus.TargetCapacity == nil || activeRayServiceStatus.TrafficRoutedPercent == nil {
 		return true, "Active RayServiceStatus missing TargetCapacity or TrafficRoutedPercent."
 	}
@@ -1309,7 +1310,7 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	pendingTrafficRoutedPercent := int(*pendingRayServiceStatus.TrafficRoutedPercent)
 
 	if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
-		return false, "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete."
+		return false, "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade is complete."
 	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
 		return true, "Pending RayCluster has not finished scaling up."
 	}
@@ -1368,7 +1369,7 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 }
 
 // reconcileServeTargetCapacity reconciles the target_capacity of the ServeConfig for a given RayCluster during
-// an IncrementalUpgrade while also updating the Status.TargetCapacity of the Active and Pending RayServices.
+// a NewClusterWithIncrementalUpgrade while also updating the Status.TargetCapacity of the Active and Pending RayServices.
 func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient dashboardclient.RayDashboardClientInterface) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("reconcileServeTargetCapacity", "RayService", rayServiceInstance.Name)
@@ -1384,7 +1385,7 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 		pendingRayServiceStatus.TargetCapacity = ptr.To(int32(0))
 	}
 
-	// Retrieve the current observed Status fields for IncrementalUpgrade
+	// Retrieve the current observed Status fields for NewClusterWithIncrementalUpgrade
 	activeTargetCapacity := *activeRayServiceStatus.TargetCapacity
 	pendingTargetCapacity := *pendingRayServiceStatus.TargetCapacity
 	pendingTrafficRoutedPercent := ptr.Deref(pendingRayServiceStatus.TrafficRoutedPercent, 0)
@@ -1623,10 +1624,10 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
 
 	if isActiveCluster && isIncrementalUpgradeInProgress {
-		// Skip updating the Serve config for the Active cluster during IncrementalUpgrade. The updated
+		// Skip updating the Serve config for the Active cluster during NewClusterWithIncrementalUpgrade. The updated
 		// Serve config is applied to the pending RayService's RayCluster.
 		skipConfigUpdate = true
-		logger.Info("Blocking new Serve config submission for Active cluster during IncrementalUpgrade.", "clusterName", rayClusterInstance.Name)
+		logger.Info("Blocking new Serve config submission for Active cluster during upgrade.", "clusterName", rayClusterInstance.Name)
 	}
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)

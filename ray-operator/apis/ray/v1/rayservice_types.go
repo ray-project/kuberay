@@ -22,9 +22,9 @@ const (
 type RayServiceUpgradeType string
 
 const (
-	// During upgrade, IncrementalUpgrade strategy will create an upgraded cluster to gradually scale
+	// During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale
 	// and migrate traffic to using Gateway API.
-	IncrementalUpgrade RayServiceUpgradeType = "IncrementalUpgrade"
+	NewClusterWithIncrementalUpgrade RayServiceUpgradeType = "NewClusterWithIncrementalUpgrade"
 	// During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready
 	NewCluster RayServiceUpgradeType = "NewCluster"
 	// No new cluster will be created while the strategy is set to None
@@ -78,7 +78,7 @@ type RayServiceUpgradeStrategy struct {
 	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
 	// +optional
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
-	// ClusterUpgradeOptions defines the behavior of an IncrementalUpgrade.
+	// ClusterUpgradeOptions defines the behavior of a NewClusterWithIncrementalUpgrade type.
 	// RayServiceIncrementalUpgrade feature gate must be enabled to set ClusterUpgradeOptions.
 	ClusterUpgradeOptions *ClusterUpgradeOptions `json:"clusterUpgradeOptions,omitempty"`
 }

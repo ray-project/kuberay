@@ -29,7 +29,7 @@ const (
 	// rep: N/A
 	// alpha: v1.0
 	//
-	// Enabled incremental upgrades for RayService zero-downtime upgrades.
+	// Enabled NewClusterWithIncrementalUpgrade type for RayService zero-downtime upgrades.
 	RayServiceIncrementalUpgrade featuregate.Feature = "RayServiceIncrementalUpgrade"
 )
 

@@ -1413,20 +1413,20 @@ func TestIsIncrementalUpgradeEnabled(t *testing.T) {
 			expected:       false,
 		},
 		{
-			name: "UpgradeStrategy Type is IncrementalUpgrade but feature disabled",
+			name: "UpgradeStrategy Type is NewClusterWithIncrementalUpgrade but feature disabled",
 			spec: &rayv1.RayServiceSpec{
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.IncrementalUpgrade),
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 				},
 			},
 			featureEnabled: false,
 			expected:       false,
 		},
 		{
-			name: "UpgradeStrategy Type is IncrementalUpgrade and feature enabled",
+			name: "UpgradeStrategy Type is NewClusterWithIncrementalUpgrade and feature enabled",
 			spec: &rayv1.RayServiceSpec{
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.IncrementalUpgrade),
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 				},
 			},
 			featureEnabled: true,

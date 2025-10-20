@@ -1351,7 +1351,7 @@ func makeIncrementalUpgradeRayService(
 	}
 	if withOptions {
 		spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-			Type: ptr.To(rayv1.IncrementalUpgrade),
+			Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 			ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 				GatewayClassName: gatewayClassName,
 				StepSizePercent:  stepSizePercent,
@@ -1466,7 +1466,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.IncrementalUpgrade),
+				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1498,7 +1498,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		isPendingClusterReady bool
 	}{
 		{
-			name: "Incremental upgrade, but pending cluster is not ready, so no traffic shift.",
+			name: "NewClusterWithIncrementalUpgrade, but pending cluster is not ready, so no traffic shift.",
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 			},
@@ -1508,7 +1508,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			expectedPendingWeight: 0,
 		},
 		{
-			name: "Incremental upgrade, time since LastTrafficMigratedTime < IntervalSeconds.",
+			name: "NewClusterWithIncrementalUpgrade, time since LastTrafficMigratedTime < IntervalSeconds.",
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
 			},
@@ -1518,7 +1518,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			expectedPendingWeight: 0,
 		},
 		{
-			name: "Incremental upgrade, time since LastTrafficMigratedTime >= IntervalSeconds.",
+			name: "NewClusterWithIncrementalUpgrade, time since LastTrafficMigratedTime >= IntervalSeconds.",
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(60))
@@ -1529,7 +1529,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			expectedPendingWeight: 10,
 		},
 		{
-			name: "Incremental upgrade, TrafficRoutedPercent capped to pending TargetCapacity.",
+			name: "NewClusterWithIncrementalUpgrade, TrafficRoutedPercent capped to pending TargetCapacity.",
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(5))
@@ -1631,7 +1631,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.IncrementalUpgrade),
+				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1874,7 +1874,7 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-						Type: ptr.To(rayv1.IncrementalUpgrade),
+						Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
 						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 							MaxSurgePercent: ptr.To(tt.maxSurgePercent),
 						},
@@ -2005,7 +2005,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 		{
 			name:                "Missing RayClusterNames",
 			expectedNeedsUpdate: false,
-			expectedReason:      "Both active and pending RayCluster instances are required for incremental upgrade.",
+			expectedReason:      "Both active and pending RayCluster instances are required for NewClusterWithIncrementalUpgrade.",
 		},
 		{
 			name:          "Gateway not ready",
@@ -2015,7 +2015,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 				makeGateway(gatewayName, namespace, false), makeHTTPRoute(httpRouteName, namespace, true),
 			},
 			expectedNeedsUpdate: false,
-			expectedReason:      "Gateway for RayService IncrementalUpgrade is not ready.",
+			expectedReason:      "Gateway for RayService NewClusterWithIncrementalUpgrade is not ready.",
 		},
 		{
 			name:          "HTTPRoute not ready",
@@ -2025,10 +2025,10 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 				makeGateway(gatewayName, namespace, true), makeHTTPRoute(httpRouteName, namespace, false),
 			},
 			expectedNeedsUpdate: false,
-			expectedReason:      "HTTPRoute for RayService IncrementalUpgrade is not ready.",
+			expectedReason:      "HTTPRoute for RayService NewClusterWithIncrementalUpgrade is not ready.",
 		},
 		{
-			name: "Incremental upgrade is complete",
+			name: "NewClusterWithIncrementalUpgrade is complete",
 			activeStatus: rayv1.RayServiceStatus{
 				RayClusterName:       "active",
 				TargetCapacity:       ptr.To(int32(0)),
@@ -2043,7 +2043,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 				makeGateway(gatewayName, namespace, true), makeHTTPRoute(httpRouteName, namespace, true),
 			},
 			expectedNeedsUpdate: false,
-			expectedReason:      "All traffic has migrated to the upgraded cluster and IncrementalUpgrade is complete.",
+			expectedReason:      "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade is complete.",
 		},
 		{
 			name: "Pending RayCluster is still incrementally scaling",

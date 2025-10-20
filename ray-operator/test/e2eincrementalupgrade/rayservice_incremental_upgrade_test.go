@@ -101,7 +101,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-	// Attempt to trigger incremental upgrade by updating RayService serve config and RayCluster spec
+	// Attempt to trigger NewClusterWithIncrementalUpgrade by updating RayService serve config and RayCluster spec
 	g.Eventually(func() error {
 		latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
 		if err != nil {
