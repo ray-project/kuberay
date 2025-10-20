@@ -329,6 +329,12 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
 
+	// Add additional labels for RayMultihostIndexing
+	multihostIndexingEnabled := features.Enabled(features.RayMultiHostIndexing) && workerSpec.NumOfHosts > 1
+	if multihostIndexingEnabled {
+		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = replicaGrpName
+		podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
+	}
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -638,15 +644,6 @@ func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName st
 
 		labels[k] = v
 	}
-
-	return labels
-}
-
-// addMultihostIndexingPodLabels returns labels that contain RayMultihostIndexing feature labels
-func addMultihostIndexingPodLabels(currentLabels map[string]string, replicaGrpName string, numHostIndex int) map[string]string {
-	labels := currentLabels
-	labels[utils.RayWorkerReplicaIndexKey] = replicaGrpName
-	labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 
 	return labels
 }
