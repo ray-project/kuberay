@@ -41,7 +41,6 @@ func TestRayClusterMultiHost(t *testing.T) {
 	rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
-			WithEnableInTreeAutoscaling(true).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 				WithTemplate(HeadPodTemplateApplyConfiguration().
@@ -52,7 +51,6 @@ func TestRayClusterMultiHost(t *testing.T) {
 						WithContainers(corev1ac.Container().
 							WithName("ray-head").
 							WithImage(GetRayImage()).
-							WithEnv(corev1ac.EnvVar().WithName(utils.RAY_ENABLE_AUTOSCALER_V2).WithValue("1")).
 							WithPorts(
 								corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
 								corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
@@ -79,7 +77,6 @@ func TestRayClusterMultiHost(t *testing.T) {
 				WithMaxReplicas(5).
 				WithNumOfHosts(numOfHosts).
 				WithTemplate(WorkerPodTemplateApplyConfiguration().
-					// All PodSpec configurations go inside WithSpec here as well.
 					WithSpec(corev1ac.PodSpec().
 						WithVolumes(sharedMemVolumeAC).
 						WithRestartPolicy(corev1.RestartPolicyNever).
