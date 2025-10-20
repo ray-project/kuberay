@@ -1151,6 +1151,17 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	// set the KubeRay version used to create the RayCluster
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
+	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
+	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
+		rayService.Status.ActiveServiceStatus.RayClusterName != ""
+	if isPendingClusterForUpgrade {
+		// For incremental upgrade, start the pending cluster without a replicas value so
+		// that it autoscales based on the value of target_capacity from MinReplicas.
+		for i := range clusterSpec.WorkerGroupSpecs {
+			clusterSpec.WorkerGroupSpecs[i].Replicas = nil
+		}
+	}
+
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayClusterLabel,
@@ -1158,7 +1169,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 			Name:        rayClusterName,
 			Namespace:   rayService.Namespace,
 		},
-		Spec: rayService.Spec.RayClusterSpec,
+		Spec: *clusterSpec,
 	}
 
 	// Set the ownership in order to do the garbage collection by k8s.
@@ -1197,6 +1208,24 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	serveConfig := make(map[string]interface{})
 	if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
 		return err
+	}
+
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		// For incremental upgrades, set target_capacity if specified to avoid
+		// scaling initial Serve deployment to 100% immediately.
+		var targetCapacity *int32
+		activeStatus := rayServiceInstance.Status.ActiveServiceStatus
+		pendingStatus := rayServiceInstance.Status.PendingServiceStatus
+
+		if clusterName == activeStatus.RayClusterName && activeStatus.TargetCapacity != nil {
+			targetCapacity = activeStatus.TargetCapacity
+		} else if clusterName == pendingStatus.RayClusterName && pendingStatus.TargetCapacity != nil {
+			targetCapacity = pendingStatus.TargetCapacity
+		}
+		if targetCapacity != nil {
+			logger.Info("Setting target_capacity from status in Serve config.", "target_capacity", *targetCapacity)
+			serveConfig["target_capacity"] = *targetCapacity
+		}
 	}
 
 	configJson, err := json.Marshal(serveConfig)
