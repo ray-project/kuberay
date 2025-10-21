@@ -1,0 +1,166 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-label-cluster
+spec:
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    version: v2
+    upscalingMode: Default
+    idleTimeoutSeconds: 600
+    imagePullPolicy: Always
+    securityContext: {}
+    env: []
+    envFrom: []
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+  headGroupSpec:
+    rayStartParams:
+      num-cpus: "0"
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.50.0
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2G"
+            requests:
+              cpu: "1"
+              memory: "2G"
+          volumeMounts:
+          - mountPath: /home/ray/samples
+            name: ray-example-configmap
+        volumes:
+        - name: ray-example-configmap
+          configMap:
+            name: ray-example
+            defaultMode: 0777
+            items:
+            - key: example_task.py
+              path: example_task.py
+            - key: example_actor.py
+              path: example_actor.py
+            - key: example_placement_group.py
+              path: example_placement_group.py
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 10
+    groupName: large-cpu-group
+    labels:
+      cpu-family: intel
+      ray.io/market-type: on-demand
+      # ray.io/node-group: large-cpu-group
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.50.0
+          resources:
+            limits:
+              cpu: "4"
+              memory: "8G"
+            requests:
+              cpu: "4"
+              memory: "8G"
+        nodeSelector:
+          cloud.google.com/machine-family: "N4"
+          cloud.google.com/gke-spot: "false"
+  - replicas: 0
+    minReplicas: 0
+    maxReplicas: 10
+    groupName: accelerator-group
+    labels:
+      ray.io/market-type: on-demand
+      ray.io/availability-region: us-central2
+      # ray.io/node-group: accelerator-group
+      # ray.io/accelerator-type and TPU labels auto-detected
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.50.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1G"
+            requests:
+              cpu: "1"
+              memory: "1G"
+        nodeSelector:
+          cloud.google.com/gke-spot: "true"
+          cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
+          cloud.google.com/gke-tpu-topology: 4x4
+  - replicas: 0
+    minReplicas: 0
+    maxReplicas: 5
+    groupName: spot-group
+    labels:
+      ray.io/market-type: spot
+      # ray.io/node-group: spot-group
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.50.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1G"
+            requests:
+              cpu: "1"
+              memory: "1G"
+        nodeSelector:
+          cloud.google.com/gke-spot: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-example
+data:
+  example_task.py: |
+    import ray
+
+    @ray.remote(num_cpus=1, label_selector={"ray.io/market-type": "on-demand", "cpu-family": "in(intel,amd)""})
+    def test_task():
+      pass
+
+    ray.init()
+    ray.get(test_task.remote())
+
+  example_actor.py: |
+    import ray
+
+    @ray.remote(num_cpus=1, label_selector={"ray.io/tpu-topology": "4x4"})
+    class Actor:
+      def ready(self):
+        return True
+
+    ray.init()
+    my_actor = Actor.remote()
+    ray.get(my_actor.ready.remote())
+
+  example_placement_group.py: |
+    import ray
+    from ray.util.placement_group import placement_group
+
+    ray.init()
+    pg = placement_group([{"CPU": 1}] * 2, bundle_label_selector=[{"ray.io/market-type": "!on-demand"}] * 2, strategy="SPREAD")
+    ray.get(pg.ready())
