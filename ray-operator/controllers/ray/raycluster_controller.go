@@ -866,9 +866,6 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 			}
 		}
 	}
-	if len(deletedPods) > 0 {
-		return fmt.Errorf("deleted %d unhealthy worker Pods in multi-host groups, requeueing", len(deletedPods))
-	}
 
 	// 4. Handle explicit deletions from the autoscaler.
 	if len(worker.ScaleStrategy.WorkersToDelete) > 0 {
