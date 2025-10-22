@@ -328,15 +328,17 @@ func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
 		return gwv1.PortNumber(utils.DefaultServingPort)
 	}
 
-	// Find the port named "serve" in the head group's container spec.
-	headContainer := cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
-	for _, port := range headContainer.Ports {
-		if port.Name == utils.ServingPortName {
-			return gwv1.PortNumber(port.ContainerPort)
-		}
-	}
+	// Get the head container
+	headContainer := &cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
 
-	return gwv1.PortNumber(utils.DefaultServingPort)
+	// Find the port named "serve" in the head group's container spec.
+	port := utils.FindContainerPort(
+		headContainer,
+		utils.ServingPortName,
+		utils.DefaultServingPort,
+	)
+
+	return gwv1.PortNumber(port)
 }
 
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {

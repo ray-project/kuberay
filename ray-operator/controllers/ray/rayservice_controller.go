@@ -262,20 +262,9 @@ func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Conte
 	return headSvc, serveSvc, nil
 }
 
-// promotePendingClusterToActive handles the logic for promoting the pending RayCluster to active in RayService status.
-func (r *RayServiceReconciler) promotePendingClusterToActive(ctx context.Context, rayServiceInstance *rayv1.RayService) {
-	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("Promoting pending cluster to active.",
-		"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
-		"newCluster", rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
-
-	rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
-	rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-}
-
 // reconcilePromotionAndServingStatus handles the promotion logic after an upgrade, returning
 // isPendingClusterServing: True if the main Kubernetes services are pointing to the pending cluster.
-func (r *RayServiceReconciler) reconcilePromotionAndServingStatus(ctx context.Context, headSvc, serveSvc *corev1.Service, rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) (isPendingClusterServing bool) {
+func reconcilePromotionAndServingStatus(ctx context.Context, headSvc, serveSvc *corev1.Service, rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) (isPendingClusterServing bool) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Step 1: Service Consistency Check. Ensure head and serve services point to the
@@ -318,7 +307,12 @@ func (r *RayServiceReconciler) reconcilePromotionAndServingStatus(ctx context.Co
 
 	// Step 3: Promote the pending cluster if prior conditions are met.
 	if shouldPromote {
-		r.promotePendingClusterToActive(ctx, rayServiceInstance)
+		logger.Info("Promoting pending cluster to active.",
+			"oldCluster", rayServiceInstance.Status.ActiveServiceStatus.RayClusterName,
+			"newCluster", rayServiceInstance.Status.PendingServiceStatus.RayClusterName)
+
+		rayServiceInstance.Status.ActiveServiceStatus = rayServiceInstance.Status.PendingServiceStatus
+		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 	}
 
 	return (clusterSvcPointsTo == pendingClusterName)
@@ -377,7 +371,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 			}
 		}
 		// Reconcile serving status and promotion logic for all upgrade strategies.
-		isPendingClusterServing = r.reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayServiceInstance, pendingCluster)
+		isPendingClusterServing = reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayServiceInstance, pendingCluster)
 	}
 
 	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
@@ -565,7 +559,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		return nil, errstd.New("Missing RayService ClusterUpgradeOptions during upgrade.")
 	}
 
-	gatewayName := utils.CheckGatewayName(rayServiceInstance.Name + "-gateway")
+	gatewayName := rayServiceInstance.Name + "-gateway"
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
@@ -762,7 +756,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		})
 	}
 
-	httpRouteName := utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s", gatewayInstance.Name))
+	httpRouteName := rayServiceInstance.Name + "-httproute"
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
@@ -1679,7 +1673,7 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayS
 	}
 
 	rayContainer := headPod.Spec.Containers[utils.RayContainerIndex]
-	servingPort := utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort)
+	servingPort := int(utils.FindContainerPort(&rayContainer, utils.ServingPortName, utils.DefaultServingPort))
 
 	client := r.httpProxyClientFunc(headPod.Status.PodIP, headPod.Namespace, headPod.Name, servingPort)
 	if headPod.Labels == nil {

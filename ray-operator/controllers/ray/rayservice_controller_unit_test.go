@@ -1587,7 +1587,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, route)
 
-				assert.Equal(t, "httproute-test-rayservice-gateway", route.Name)
+				assert.Equal(t, "test-rayservice-httproute", route.Name)
 				assert.Equal(t, "test-ns", route.Namespace)
 
 				require.Len(t, route.Spec.Rules, 1)
@@ -1619,7 +1619,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	stepSize := int32(10)
 	interval := int32(30)
 	gatewayName := "test-rayservice-gateway"
-	routeName := fmt.Sprintf("httproute-%s", gatewayName)
+	routeName := "test-rayservice-httproute"
 
 	activeCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active-ray-cluster", Namespace: namespace}}
 	pendingCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "pending-ray-cluster", Namespace: namespace}}
@@ -1991,7 +1991,7 @@ func makeHTTPRoute(name, namespace string, isReady bool) *gwv1.HTTPRoute {
 func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 	rayServiceName := "test-rayservice"
 	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
-	httpRouteName := fmt.Sprintf("%s-%s", "httproute", gatewayName)
+	httpRouteName := fmt.Sprintf("%s-%s", rayServiceName, "httproute")
 	namespace := "test-ns"
 
 	tests := []struct {
@@ -2236,7 +2236,7 @@ func TestGetHTTPRouteTrafficWeights(t *testing.T) {
 	rayServiceName := "test-rayservice"
 	activeClusterName := "rayservice-active"
 	pendingClusterName := "rayservice-pending"
-	routeName := "httproute-test-rayservice-gateway"
+	routeName := "test-rayservice-httproute"
 
 	baseRayService := &rayv1.RayService{
 		ObjectMeta: metav1.ObjectMeta{Name: rayServiceName, Namespace: namespace},
@@ -2326,7 +2326,7 @@ func TestGetHTTPRouteTrafficWeights(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runtimeObjects := []runtime.Object{tt.rayService}
 			if tt.httpRoute != nil {
-				tt.httpRoute.Name = utils.CheckHTTPRouteName(fmt.Sprintf("httproute-%s-gateway", tt.rayService.Name))
+				tt.httpRoute.Name = fmt.Sprintf("%s-httproute", tt.rayService.Name)
 				runtimeObjects = append(runtimeObjects, tt.httpRoute)
 			}
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()

@@ -149,10 +149,18 @@ type RayServiceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	// +optional
 	Applications map[string]AppStatus `json:"applicationStatuses,omitempty"`
+	// TargetCapacity is the `target_capacity` percentage for all Serve replicas
+	// across the cluster for this RayService. The `num_replicas`, `min_replicas`, `max_replicas`,
+	// and `initial_replicas` for each deployment will be scaled by this percentage."
 	// +optional
 	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
+	// TrafficRoutedPercent is the percentage of traffic that is routed to the Serve service
+	// for this RayService. TrafficRoutedPercent is updated to reflect the weight on the HTTPRoute
+	// created for this RayService during incremental upgrades to a new cluster.
 	// +optional
 	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
+	// LastTrafficMigratedTime is the last time that TrafficRoutedPercent was updated to a new value
+	// for this RayService.
 	// +optional
 	LastTrafficMigratedTime *metav1.Time `json:"lastTrafficMigratedTime,omitempty"`
 	// +optional

@@ -16,6 +16,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -210,40 +211,6 @@ func CheckName(s string) string {
 	}
 
 	return s
-}
-
-func CheckGatewayName(name string) string {
-	const maxLength = 63
-
-	if len(name) > maxLength {
-		offset := len(name) - maxLength
-		fmt.Printf("Gateway name too long (len = %d), shortening by offset = %d", len(name), offset)
-		name = name[offset:]
-	}
-
-	// Cannot start with a digit or punctuation
-	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
-		name = "g" + name[1:]
-	}
-
-	return name
-}
-
-func CheckHTTPRouteName(name string) string {
-	const maxLength = 63
-
-	if len(name) > maxLength {
-		offset := len(name) - maxLength
-		fmt.Printf("HTTPRoute name too long (len = %d), shortening by offset = %d", len(name), offset)
-		name = name[offset:]
-	}
-
-	// Cannot start with a digit or punctuation
-	if len(name) > 0 && (unicode.IsDigit(rune(name[0])) || unicode.IsPunct(rune(name[0]))) {
-		name = "h" + name[1:]
-	}
-
-	return name
 }
 
 // TrimJobName uses CheckLabel to trim Kubernetes job to constrains
@@ -636,10 +603,10 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 // FindContainerPort searches for a specific port $portName in the container.
 // If the port is found in the container, the corresponding port is returned.
 // If the port is not found, the $defaultPort is returned instead.
-func FindContainerPort(container *corev1.Container, portName string, defaultPort int) int {
+func FindContainerPort(container *corev1.Container, portName string, defaultPort int32) int32 {
 	for _, port := range container.Ports {
 		if port.Name == portName {
-			return int(port.ContainerPort)
+			return port.ContainerPort
 		}
 	}
 	return defaultPort
@@ -712,27 +679,39 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 	return svc.Spec.Selector[RayClusterLabelKey]
 }
 
+// IsGatewayReady checks if a Gateway is considered "ready".
+//
+// A Gateway is "ready" only if both the `Accepted` and `Programmed` conditions
+// are set to 'True'.
+//
+//  1. 'Accepted': Signifies that the Gateway controller understands and accepts
+//     the Gateway resource. If 'False', it often indicates a conflict or an invalid
+//     specification.
+//
+//  2. 'Programmed': Signifies that the underlying network infrastructure for the Gateway
+//     (e.g. load balancer) has been successfully provisioned and configured.
 func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
 	if gatewayInstance == nil {
 		return false
 	}
-	hasAccepted := false
-	hasProgrammed := false
 
-	for _, condition := range gatewayInstance.Status.Conditions {
-		if condition.Type == string(gwv1.GatewayConditionAccepted) && condition.Status == metav1.ConditionTrue {
-			hasAccepted = true
-		}
-		if condition.Type == string(gwv1.GatewayConditionProgrammed) && condition.Status == metav1.ConditionTrue {
-			hasProgrammed = true
-		}
-	}
+	hasAccepted := meta.IsStatusConditionTrue(gatewayInstance.Status.Conditions, string(gwv1.GatewayConditionAccepted))
+	hasProgrammed := meta.IsStatusConditionTrue(gatewayInstance.Status.Conditions, string(gwv1.GatewayConditionProgrammed))
 
-	// If no ready condition found return false
 	return hasAccepted && hasProgrammed
 }
 
-// IsHTTPRouteReady returns whether the HTTPRoute associated with a given Gateway has a ready condition
+// IsHTTPRouteReady checks if an HTTPRoute is considered ready for a given Gateway.
+//
+// It returns true only if the route's parent status entry matching the Gateway has both
+// the 'Accepted' and 'ResolvedRefs' conditions set to 'True'.
+//
+//  1. 'Accepted': Signifies that the Gateway controller has validated the HTTPRoute's
+//     configuration (e.g. syntax, filters, matching rules). An 'Accepted' status of
+//     'False' means the route's specification is invalid.
+//
+//  2. 'ResolvedRefs': Signifies that all references within the route are valid, exist,
+//     and are resolvable by the Gateway.
 func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTTPRoute) bool {
 	if httpRouteInstance == nil {
 		return false
@@ -744,21 +723,9 @@ func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTT
 		if parent.ParentRef.Namespace != nil && *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
 			continue
 		}
-		hasAccepted := false
-		hasResolved := false
+		hasAccepted := meta.IsStatusConditionTrue(parent.Conditions, string(gwv1.RouteConditionAccepted))
+		hasResolved := meta.IsStatusConditionTrue(parent.Conditions, string(gwv1.RouteConditionResolvedRefs))
 
-		for _, condition := range parent.Conditions {
-			switch gwv1.RouteConditionType(condition.Type) {
-			case gwv1.RouteConditionAccepted:
-				if condition.Status == metav1.ConditionTrue {
-					hasAccepted = true
-				}
-			case gwv1.RouteConditionResolvedRefs:
-				if condition.Status == metav1.ConditionTrue {
-					hasResolved = true
-				}
-			}
-		}
 		if hasAccepted && hasResolved {
 			return true
 		}

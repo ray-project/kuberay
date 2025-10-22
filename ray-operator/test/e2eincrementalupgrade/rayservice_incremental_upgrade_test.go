@@ -70,7 +70,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
 
-	httpRouteName := fmt.Sprintf("%s-%s", "httproute", gatewayName)
+	httpRouteName := fmt.Sprintf("%s-%s", rayServiceName, "httproute")
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
 	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
 		Should(Not(BeNil()))
