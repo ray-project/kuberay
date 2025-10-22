@@ -20,13 +20,15 @@ spec:
         cpu: "500m"
         memory: "512Mi"
   headGroupSpec:
-    rayStartParams:
-      num-cpus: "0"
+    labels:
+      ray.io/region: us-central2
+    resources:
+      cpu: "0"
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.50.0
+          image: rayproject/ray:nightly
           ports:
           - containerPort: 6379
             name: gcs
@@ -64,62 +66,59 @@ spec:
     labels:
       cpu-family: intel
       ray.io/market-type: on-demand
-      # ray.io/node-group: large-cpu-group
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.50.0
+          image: rayproject/ray:nightly
           resources:
             limits:
-              cpu: "4"
-              memory: "8G"
+              cpu: "2"
+              memory: "4G"
             requests:
-              cpu: "4"
-              memory: "8G"
+              cpu: "2"
+              memory: "4G"
         nodeSelector:
           cloud.google.com/machine-family: "N4"
-          cloud.google.com/gke-spot: "false"
   - replicas: 0
     minReplicas: 0
     maxReplicas: 10
     groupName: accelerator-group
     labels:
       ray.io/market-type: on-demand
-      ray.io/availability-region: us-central2
-      # ray.io/node-group: accelerator-group
-      # ray.io/accelerator-type and TPU labels auto-detected
+      ray.io/region: us-central2
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.50.0
+          image: rayproject/ray:nightly-gpu
           resources:
             limits:
               cpu: "1"
+              nvidia.com/gpu: "1"
               memory: "1G"
             requests:
               cpu: "1"
+              nvidia.com/gpu: "1"
               memory: "1G"
         nodeSelector:
           cloud.google.com/gke-spot: "true"
-          cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
-          cloud.google.com/gke-tpu-topology: 4x4
+          cloud.google.com/gke-accelerator: "nvidia-tesla-a100"
   - replicas: 0
     minReplicas: 0
     maxReplicas: 5
     groupName: spot-group
     labels:
+      cpu-family: amd
       ray.io/market-type: spot
-      # ray.io/node-group: spot-group
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.50.0
+          image: rayproject/ray:nightly
           resources:
             limits:
               cpu: "1"
@@ -137,30 +136,26 @@ metadata:
 data:
   example_task.py: |
     import ray
-
-    @ray.remote(num_cpus=1, label_selector={"ray.io/market-type": "on-demand", "cpu-family": "in(intel,amd)""})
+    @ray.remote(num_cpus=1, label_selector={"ray.io/market-type": "on-demand", "cpu-family": "in(intel,amd)"})
     def test_task():
       pass
-
     ray.init()
     ray.get(test_task.remote())
-
   example_actor.py: |
     import ray
-
-    @ray.remote(num_cpus=1, label_selector={"ray.io/tpu-topology": "4x4"})
+    @ray.remote(num_gpus=1, label_selector={"ray.io/accelerator-type": "A100"})
     class Actor:
       def ready(self):
         return True
-
     ray.init()
     my_actor = Actor.remote()
     ray.get(my_actor.ready.remote())
-
   example_placement_group.py: |
     import ray
     from ray.util.placement_group import placement_group
-
     ray.init()
-    pg = placement_group([{"CPU": 1}] * 2, bundle_label_selector=[{"ray.io/market-type": "!on-demand"}] * 2, strategy="SPREAD")
+    pg = placement_group(
+      [{"CPU": 1}] * 2,
+      bundle_label_selector=[{"ray.io/market-type": "spot", "ray.io/region": "!us-central2"},] * 2, strategy="SPREAD"
+    )
     ray.get(pg.ready())
