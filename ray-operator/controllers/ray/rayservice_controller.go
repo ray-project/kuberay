@@ -177,6 +177,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Check if NewClusterWithIncrementalUpgrade is enabled, if so reconcile Gateway objects.
+	var httpRouteInstance *gwv1.HTTPRoute
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// Ensure per-cluster Serve service exists for the active and pending RayClusters.
 		if err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
@@ -193,7 +194,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 		}
 		// Create or update the HTTPRoute for the Gateway, passing in the pending cluster readiness status.
-		err = r.reconcileHTTPRoute(ctx, rayServiceInstance, isPendingClusterReady)
+		httpRouteInstance, err = r.reconcileHTTPRoute(ctx, rayServiceInstance, isPendingClusterReady)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 		}
@@ -235,6 +236,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		pendingRayClusterInstance,
 		activeClusterServeApplications,
 		pendingClusterServeApplications,
+		httpRouteInstance,
 	); err != nil {
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
@@ -318,7 +320,14 @@ func reconcilePromotionAndServingStatus(ctx context.Context, headSvc, serveSvc *
 	return (clusterSvcPointsTo == pendingClusterName)
 }
 
-func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceInstance *rayv1.RayService, headSvc, serveSvc *corev1.Service, activeCluster, pendingCluster *rayv1.RayCluster, activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus) error {
+func (r *RayServiceReconciler) calculateStatus(
+	ctx context.Context,
+	rayServiceInstance *rayv1.RayService,
+	headSvc, serveSvc *corev1.Service,
+	activeCluster, pendingCluster *rayv1.RayCluster,
+	activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus,
+	httpRoute *gwv1.HTTPRoute,
+) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
@@ -345,13 +354,8 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 			oldActivePercent := ptr.Deref(rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent, -1)
 			oldPendingPercent := ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1)
 
-			// Update traffic weights for incremental upgrade by fetching the current HTTPRoute.
-			activeWeight, pendingWeight, err := r.getHTTPRouteTrafficWeights(ctx, rayServiceInstance)
-			if err != nil {
-				logger.Error(err, "Failed to get HTTPRoute traffic weights.")
-				return err
-			}
-
+			// Update TrafficRoutedPercent to each RayService based on current weights from HTTPRoute.
+			activeWeight, pendingWeight := utils.GetWeightsFromHTTPRoute(httpRoute, rayServiceInstance)
 			now := metav1.Time{Time: time.Now()}
 			if activeWeight >= 0 {
 				rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = ptr.To(activeWeight)
@@ -788,18 +792,18 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 }
 
 // reconcileHTTPRoute reconciles a HTTPRoute resource for a RayService to route traffic during a NewClusterWithIncrementalUpgrade.
-func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) error {
+func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) (*gwv1.HTTPRoute, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
 	desiredHTTPRoute, err := r.createHTTPRoute(ctx, rayServiceInstance, isPendingClusterReady)
 	if err != nil {
 		logger.Error(err, "Failed to build HTTPRoute for RayService upgrade")
-		return err
+		return nil, err
 	}
 	if desiredHTTPRoute == nil {
 		logger.Info("Skipping HTTPRoute reconciliation: desired HTTPRoute is nil")
-		return nil
+		return nil, nil
 	}
 
 	// Check for existing HTTPRoute for RayService
@@ -808,16 +812,16 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		if errors.IsNotFound(err) {
 			// Set the ownership in order to do the garbage collection by k8s.
 			if err := ctrl.SetControllerReference(rayServiceInstance, desiredHTTPRoute, r.Scheme); err != nil {
-				return err
+				return nil, err
 			}
 			if err = r.Create(ctx, desiredHTTPRoute); err != nil {
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
-				return err
+				return nil, err
 			}
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
-			return nil
+			return desiredHTTPRoute, nil
 		}
-		return err
+		return nil, err
 	}
 
 	// If HTTPRoute already exists, check if update is needed
@@ -826,30 +830,12 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
-			return err
+			return nil, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
 	}
 
-	return nil
-}
-
-// getHTTPRouteTrafficWeights fetches the HTTPRoute associated with a RayService and returns
-// the traffic weights for the active and pending clusters.
-func (r *RayServiceReconciler) getHTTPRouteTrafficWeights(ctx context.Context, rayServiceInstance *rayv1.RayService) (activeWeight int32, pendingWeight int32, err error) {
-	activeWeight, pendingWeight = 100, 0
-
-	httpRoute := &gwv1.HTTPRoute{}
-	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err != nil {
-		if errors.IsNotFound(err) {
-			// If HTTPRoute doesn't exist yet, return the default weights.
-			return activeWeight, pendingWeight, nil
-		}
-		return 0, 0, err
-	}
-	activeWeight, pendingWeight = utils.GetWeightsFromHTTPRoute(httpRoute, rayServiceInstance)
-
-	return activeWeight, pendingWeight, nil
+	return existingHTTPRoute, nil
 }
 
 // `reconcileRayCluster` reconciles the active and pending Ray clusters. There are 4 possible cases:

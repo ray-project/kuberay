@@ -1735,12 +1735,8 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
 
-			err := reconciler.reconcileHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
+			reconciledRoute, err := reconciler.reconcileHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
 			require.NoError(t, err)
-
-			reconciledRoute := &gwv1.HTTPRoute{}
-			err = fakeClient.Get(ctx, client.ObjectKey{Name: routeName, Namespace: namespace}, reconciledRoute)
-			require.NoError(t, err, "Failed to fetch the reconciled HTTPRoute")
 
 			require.Len(t, reconciledRoute.Spec.Rules, 1)
 			rule := reconciledRoute.Spec.Rules[0]
@@ -2226,123 +2222,6 @@ func TestReconcilePerClusterServeService(t *testing.T) {
 				assert.Equal(t, rayCluster.Name, ownerRef.Name)
 				assert.Equal(t, "RayCluster", ownerRef.Kind)
 				assert.Equal(t, rayCluster.UID, ownerRef.UID)
-			}
-		})
-	}
-}
-
-func TestGetHTTPRouteTrafficWeights(t *testing.T) {
-	namespace := "test-ns"
-	rayServiceName := "test-rayservice"
-	activeClusterName := "rayservice-active"
-	pendingClusterName := "rayservice-pending"
-	routeName := "test-rayservice-httproute"
-
-	baseRayService := &rayv1.RayService{
-		ObjectMeta: metav1.ObjectMeta{Name: rayServiceName, Namespace: namespace},
-		Status: rayv1.RayServiceStatuses{
-			ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: activeClusterName},
-			PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: pendingClusterName},
-		},
-	}
-
-	tests := []struct {
-		rayService            *rayv1.RayService
-		httpRoute             *gwv1.HTTPRoute
-		name                  string
-		expectedActiveWeight  int32
-		expectedPendingWeight int32
-		expectError           bool
-	}{
-		{
-			name:                  "HTTPRoute does not exist",
-			rayService:            baseRayService,
-			httpRoute:             nil,
-			expectedActiveWeight:  100,
-			expectedPendingWeight: 0,
-			expectError:           false,
-		},
-		{
-			name:       "HTTPRoute exists with active cluster backend",
-			rayService: baseRayService,
-			httpRoute: &gwv1.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{
-							BackendRefs: []gwv1.HTTPBackendRef{
-								{
-									BackendRef: gwv1.BackendRef{
-										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(activeClusterName))},
-										Weight:                 ptr.To(int32(100)),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedActiveWeight:  100,
-			expectedPendingWeight: -1,
-			expectError:           false,
-		},
-		{
-			name:       "HTTPRoute exists with active and pending cluster backends",
-			rayService: baseRayService,
-			httpRoute: &gwv1.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{
-							BackendRefs: []gwv1.HTTPBackendRef{
-								{
-									BackendRef: gwv1.BackendRef{
-										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(activeClusterName))},
-										Weight:                 ptr.To(int32(80)),
-									},
-								},
-								{
-									BackendRef: gwv1.BackendRef{
-										BackendObjectReference: gwv1.BackendObjectReference{Name: gwv1.ObjectName(utils.GenerateServeServiceName(pendingClusterName))},
-										Weight:                 ptr.To(int32(20)),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedActiveWeight:  80,
-			expectedPendingWeight: 20,
-			expectError:           false,
-		},
-	}
-
-	newScheme := runtime.NewScheme()
-	_ = rayv1.AddToScheme(newScheme)
-	_ = gwv1.AddToScheme(newScheme)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			runtimeObjects := []runtime.Object{tt.rayService}
-			if tt.httpRoute != nil {
-				tt.httpRoute.Name = fmt.Sprintf("%s-httproute", tt.rayService.Name)
-				runtimeObjects = append(runtimeObjects, tt.httpRoute)
-			}
-			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-
-			r := RayServiceReconciler{Client: fakeClient}
-			ctx := context.TODO()
-
-			// Validates retried weights match what is expected.
-			activeWeight, pendingWeight, err := r.getHTTPRouteTrafficWeights(ctx, tt.rayService)
-
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedActiveWeight, activeWeight)
-				assert.Equal(t, tt.expectedPendingWeight, pendingWeight)
 			}
 		})
 	}

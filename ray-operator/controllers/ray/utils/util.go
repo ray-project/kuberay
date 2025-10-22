@@ -764,7 +764,8 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 		pendingClusterName = rayServiceInstance.Status.PendingServiceStatus.RayClusterName
 	}
 
-	// Defaults if weights can't be detected.
+	// Defaults if weights can't be detected. This is so that we avoid setting TrafficRoutedPercent
+	// before the HTTPRoute actually exists.
 	activeWeight = -1
 	pendingWeight = -1
 
