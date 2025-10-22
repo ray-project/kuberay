@@ -1082,11 +1082,13 @@ func updateRayStartParamsResources(ctx context.Context, rayStartParams map[strin
 			continue
 		}
 
-		if name == string(corev1.ResourceCPU) {
+		// Normalize the resource name to lowercase for all default checks.
+		normalizedName := strings.ToLower(name)
+		if normalizedName == string(corev1.ResourceCPU) {
 			rayStartParams["num-cpus"] = strconv.FormatInt(q.Value(), 10)
-		} else if name == string(corev1.ResourceMemory) {
+		} else if normalizedName == string(corev1.ResourceMemory) {
 			rayStartParams["memory"] = strconv.FormatInt(q.Value(), 10)
-		} else if utils.IsGPUResourceKey(name) {
+		} else if utils.IsGPUResourceKey(normalizedName) {
 			rayStartParams["num-gpus"] = strconv.FormatInt(q.Value(), 10)
 		} else {
 			rayResourcesJson[name] = q.AsApproximateFloat64()
