@@ -330,6 +330,12 @@ func GenerateRayJobId(rayjob string) string {
 	return fmt.Sprintf("%s-%s", rayjob, rand.String(5))
 }
 
+// GenerateRayWorkerReplicaGroupName generates a name for the replica group
+// currently used for RayMultiHostIndexing
+func GenerateRayWorkerReplicaGroupName(workerGroupName string) string {
+	return fmt.Sprintf("%s-%s", workerGroupName, rand.String(5))
+}
+
 // GenerateIdentifier generates identifier of same group pods
 func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
