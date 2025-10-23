@@ -1642,12 +1642,12 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		Status: rayv1.RayServiceStatuses{
 			ActiveServiceStatus: rayv1.RayServiceStatus{
 				RayClusterName:       activeCluster.Name,
-				TrafficRoutedPercent: ptr.To(int32(80)),
+				TrafficRoutedPercent: ptr.To(int32(100)),
 				TargetCapacity:       ptr.To(int32(100)),
 			},
 			PendingServiceStatus: rayv1.RayServiceStatus{
 				RayClusterName:       pendingCluster.Name,
-				TrafficRoutedPercent: ptr.To(int32(20)),
+				TrafficRoutedPercent: ptr.To(int32(0)),
 				TargetCapacity:       ptr.To(int32(100)),
 			},
 		},
@@ -1680,15 +1680,15 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			name:                  "Create new HTTPRoute with existing weights.",
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
-			expectedActiveWeight:  70,
-			expectedPendingWeight: 30,
+			expectedActiveWeight:  90,
+			expectedPendingWeight: 10,
 		},
 		{
 			name:                  "Update HTTPRoute when pending cluster is ready.",
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
-			expectedActiveWeight:  70,
-			expectedPendingWeight: 30,
+			expectedActiveWeight:  90,
+			expectedPendingWeight: 10,
 		},
 		{
 			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime >= IntervalSeconds so updates HTTPRoute.",
@@ -1701,8 +1701,8 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
 				Spec:       gwv1.HTTPRouteSpec{},
 			},
-			expectedActiveWeight:  70,
-			expectedPendingWeight: 30,
+			expectedActiveWeight:  90,
+			expectedPendingWeight: 10,
 		},
 		{
 			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime < IntervalSeconds so no update.",
@@ -1711,8 +1711,8 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			modifier: func(rs *rayv1.RayService) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
 			},
-			expectedActiveWeight:  80,
-			expectedPendingWeight: 20,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
 		},
 	}
 
