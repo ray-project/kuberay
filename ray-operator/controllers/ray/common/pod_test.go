@@ -20,6 +20,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var testMemoryLimit = resource.MustParse("1Gi")
@@ -686,7 +687,7 @@ func TestBuildPod(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, defaultContainerEnvs)
 
 	// Check resources
@@ -760,7 +761,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil)
 	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
@@ -791,7 +792,7 @@ func TestBuildPod_WithOverwriteCommand(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil)
 	workerContainer := workerPod.Spec.Containers[utils.RayContainerIndex]
 	assert.Equal(t, []string{"I am worker"}, workerContainer.Command)
@@ -846,7 +847,7 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP, nil)
 
 	val, ok = pod.Labels[utils.RayClusterServingServiceLabelKey]
@@ -902,7 +903,7 @@ func TestBuildPod_WithLoginBash(t *testing.T) {
 			worker := cluster.Spec.WorkerGroupSpecs[0]
 			podName = cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 			fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-			podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+			podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 			workerPod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP, nil)
 
 			// Verify worker container command
@@ -1165,9 +1166,31 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 	expectedWorker := *worker.DeepCopy()
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
-	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", "", 0)
 	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
 	assert.Equal(t, expectedWorker, worker)
+}
+
+func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+
+	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+
+	worker.Template.ObjectMeta.Name = "ray-worker-test"
+	worker.NumOfHosts = 4
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	groupReplicaName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
+
+	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", groupReplicaName, 2)
+	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
+	assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey], groupReplicaName)
+	assert.Equal(t, "2", podTemplateSpec.Labels[utils.RayHostIndexKey])
 }
 
 func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {
@@ -1212,7 +1235,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
-	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	// DefaultWorkerPodTemplate will add the default metrics port if user doesn't specify it.
 	// Verify the default metrics port exists.
 	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, int32(utils.DefaultMetricsPort)))
@@ -1222,7 +1245,7 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 		ContainerPort: customMetricsPort,
 	}
 	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Ports = []corev1.ContainerPort{metricsPort}
-	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379")
+	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0)
 	// Verify the custom metrics port exists.
 	require.NoError(t, containerPortExists(podTemplateSpec.Spec.Containers[0].Ports, customMetricsPort))
 }
@@ -1261,7 +1284,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			podTemplateSpec := DefaultWorkerPodTemplate(ctx, tc.cluster, tc.cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379")
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, tc.cluster, tc.cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379", "", 0)
 			assert.Equal(t, tc.expectedRestartPolicy, podTemplateSpec.Spec.RestartPolicy)
 		})
 	}
@@ -1277,7 +1300,7 @@ func TestDefaultInitContainer(t *testing.T) {
 	expectedResult := len(cluster.Spec.WorkerGroupSpecs[0].Template.Spec.InitContainers) + 1
 
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
-	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", "", 0)
 	numInitContainers := len(podTemplateSpec.Spec.InitContainers)
 	assert.Equal(t, expectedResult, numInitContainers, "A default init container is expected to be added.")
 
@@ -1336,7 +1359,7 @@ func TestDefaultInitContainerImagePullPolicy(t *testing.T) {
 			// set ray container imagePullPolicy
 			worker.Template.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy = tc.imagePullPolicy
 
-			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379")
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", "", 0)
 
 			healthCheckContainer := podTemplateSpec.Spec.InitContainers[len(podTemplateSpec.Spec.InitContainers)-1]
 			assert.Equal(t, tc.expectedPullPolicy, healthCheckContainer.ImagePullPolicy, "The ImagePullPolicy of the init container should be the same as the Ray container.")

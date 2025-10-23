@@ -663,6 +663,15 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 
+		isRayMultiHostIndexing := worker.NumOfHosts > 1 && features.Enabled(features.RayMultiHostIndexing)
+		if isRayMultiHostIndexing {
+			if err := r.reconcileMultiHostWorkerGroup(ctx, instance, &worker, workerPods.Items); err != nil {
+				return err
+			}
+			// Skip to the next worker as we've already handled multi-host reconciliation.
+			continue
+		}
+
 		// Delete unhealthy worker Pods.
 		deletedWorkers := make(map[string]struct{})
 		deleted := struct{}{}
@@ -783,6 +792,163 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			}
 		}
 	}
+	return nil
+}
+
+// deletePods is a helper function to handle the deletion of a list of Pods, setting scale expectations
+// and recording events.
+func (r *RayClusterReconciler) deletePods(ctx context.Context, instance *rayv1.RayCluster, podsToDelete []corev1.Pod, groupName string, reason string) error {
+	for i := range podsToDelete {
+		pod := podsToDelete[i]
+		if err := r.Delete(ctx, &pod); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod),
+				"Failed deleting worker Pod %s/%s for group %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v, %v",
+				pod.Namespace, pod.Name, groupName, pod.Status.Phase, pod.Spec.RestartPolicy, getRayContainerStateTerminated(pod), err)
+			return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
+		}
+		r.rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, groupName, pod.Name, expectations.Delete)
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+			"Deleted worker Pod %s/%s for group %s: %s", pod.Namespace, pod.Name, groupName, reason)
+	}
+	return nil
+}
+
+// reconcileMultiHostWorkerGroup handles reconciliation and Pod deletion for worker groups with NumOfHosts > 1 when
+// the RayMultihostIndexing feature is enabled. This function is responsible for:
+// 1. Deleting incomplete or unhealthy multi-host groups atomically.
+// 2. Explicit deletes of entire multi-host groups for the autoscaler.
+// 3. Scale up/down of multi-host groups.
+func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context, instance *rayv1.RayCluster, worker *rayv1.WorkerGroupSpec, workerPods []corev1.Pod) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// 1. Group existing pods by ray.io/worker-group-replica-index.
+	replicaMap := make(map[string][]corev1.Pod)
+	for _, pod := range workerPods {
+		if replicaName, ok := pod.Labels[utils.RayWorkerReplicaIndexKey]; ok {
+			replicaMap[replicaName] = append(replicaMap[replicaName], pod)
+		}
+	}
+
+	// 2. Clean up incomplete replica groups with deleted Pods caused by external deletion.
+	for replicaName, podList := range replicaMap {
+		if len(podList) < int(worker.NumOfHosts) {
+			logger.Info("Found incomplete multi-host replica group, deleting all remaining pods to maintain atomicity.", "group", worker.GroupName, "replica", replicaName, "found", len(podList), "expected", worker.NumOfHosts)
+			if err := r.deletePods(ctx, instance, podList, worker.GroupName, "cleanup of incomplete multi-host group"); err != nil {
+				return err
+			}
+			// Requeue to avoid creating new Pods on this reconciliation.
+			return fmt.Errorf("cleaned up incomplete replica group %s, requeueing", replicaName)
+		}
+	}
+
+	// 3. Delete unhealthy replica groups.
+	deletedPods := make(map[string]struct{})
+	for _, pod := range workerPods {
+		if _, alreadyDeleted := deletedPods[pod.Name]; alreadyDeleted {
+			continue
+		}
+		if shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode); shouldDelete {
+			replicaName := pod.Labels[utils.RayWorkerReplicaIndexKey]
+			podsToDelete, ok := replicaMap[replicaName]
+			if !ok {
+				continue
+			}
+			logger.Info("Deleting unhealthy replica group.", "group", worker.GroupName, "replica", replicaName, "reason", reason)
+			if err := r.deletePods(ctx, instance, podsToDelete, worker.GroupName, reason); err != nil {
+				return err
+			}
+			// All Pods in the group have been deleted.
+			for _, p := range podsToDelete {
+				deletedPods[p.Name] = struct{}{}
+			}
+		}
+	}
+
+	// 4. Handle explicit deletions from the autoscaler.
+	if len(worker.ScaleStrategy.WorkersToDelete) > 0 {
+		podsToDeleteFromStrategy := make(map[string]corev1.Pod)
+		for _, podName := range worker.ScaleStrategy.WorkersToDelete {
+			for _, pod := range workerPods {
+				if pod.Name == podName {
+					replicaName := pod.Labels[utils.RayWorkerReplicaIndexKey]
+					for _, p := range replicaMap[replicaName] {
+						podsToDeleteFromStrategy[p.Name] = p
+					}
+					break
+				}
+			}
+		}
+
+		if len(podsToDeleteFromStrategy) > 0 {
+			logger.Info("removing the pods in the scaleStrategy of", "group", worker.GroupName, "podsToDelete", len(podsToDeleteFromStrategy))
+			var podsToDel []corev1.Pod
+			for _, p := range podsToDeleteFromStrategy {
+				podsToDel = append(podsToDel, p)
+			}
+			if err := r.deletePods(ctx, instance, podsToDel, worker.GroupName, "autoscaler scale-down request"); err != nil {
+				return err
+			}
+			worker.ScaleStrategy.WorkersToDelete = []string{}
+			return fmt.Errorf("deleted %d worker Pods based on ScaleStrategy, requeueing", len(podsToDel))
+		}
+		// Clear WorkersToDelete after deletion.
+		worker.ScaleStrategy.WorkersToDelete = []string{}
+	}
+
+	// 5. Calculate Pod diff for scaling up or down by NumOfHosts.
+	runningPodsCount := len(workerPods) - len(deletedPods)
+	numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, *worker))
+	diff := numExpectedWorkerPods - runningPodsCount
+	logger.Info("Reconciling multi-host group", "group", worker.GroupName, "expectedPods", numExpectedWorkerPods, "runningPods", runningPodsCount, "diff", diff)
+
+	// Scale up NumOfHost workers per replica.
+	if diff > 0 {
+		logger.Info("reconcileMultiHostWorkerGroup", "Number workers to add", diff, "Worker group", worker.GroupName)
+		if diff%int(worker.NumOfHosts) != 0 {
+			return fmt.Errorf("cannot scale up multi-host group %s: required %d pods, which is not a multiple of NumOfHosts (%d)", worker.GroupName, diff, worker.NumOfHosts)
+		}
+		replicasToCreate := diff / int(worker.NumOfHosts)
+		logger.Info("Scaling up multi-host group", "group", worker.GroupName, "replicasToCreate", replicasToCreate)
+		for i := 0; i < replicasToCreate; i++ {
+			replicaName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
+			for j := 0; j < int(worker.NumOfHosts); j++ {
+				if err := r.createWorkerPodWithIndex(ctx, *instance, *worker, replicaName, j); err != nil {
+					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+				}
+			}
+		}
+	} else if diff < 0 {
+		// Scale down NumOfHost workers per replica.
+		enableInTreeAutoscaling := utils.IsAutoscalingEnabled(&instance.Spec)
+		enableRandomPodDelete := false
+		if enableInTreeAutoscaling {
+			if s := os.Getenv(utils.ENABLE_RANDOM_POD_DELETE); strings.ToLower(s) == "true" {
+				enableRandomPodDelete = true
+			}
+		}
+		if !enableInTreeAutoscaling || enableRandomPodDelete {
+			workersToRemove := -diff
+			groupsToRemove := (workersToRemove + int(worker.NumOfHosts) - 1) / int(worker.NumOfHosts)
+			logger.Info("Scaling down multi-host group by randomly deleting replica groups", "group", worker.GroupName, "groupsToRemove", groupsToRemove)
+
+			groupsDeleted := 0
+			for _, podList := range replicaMap {
+				if groupsDeleted >= groupsToRemove {
+					break
+				}
+				if err := r.deletePods(ctx, instance, podList, worker.GroupName, "scaling down"); err != nil {
+					return err
+				}
+				groupsDeleted++
+			}
+		} else {
+			logger.Info("Random replica group deletion is disabled for the cluster. The only decision-maker for Pod deletions is the Ray Autoscaler.")
+		}
+	}
+
 	return nil
 }
 
@@ -949,7 +1115,31 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 	logger := ctrl.LoggerFrom(ctx)
 
 	// build the pod then create it
-	pod := r.buildWorkerPod(ctx, instance, worker)
+	pod := r.buildWorkerPod(ctx, instance, worker, "", 0)
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
+		} else {
+			return err
+		}
+	}
+
+	replica := pod
+	if err := r.Create(ctx, &replica); err != nil {
+		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
+		return err
+	}
+	r.rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
+	logger.Info("Created worker Pod for RayCluster", "name", replica.Name)
+	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
+	return nil
+}
+
+func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, replicaGrpName string, hostIndex int) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// build the pod then create it
+	pod := r.buildWorkerPod(ctx, instance, worker, replicaGrpName, hostIndex)
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 			scheduler.AddMetadataToPod(ctx, &instance, worker.GroupName, &pod)
@@ -998,7 +1188,7 @@ func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
 }
 
 // Build worker instance pods.
-func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) corev1.Pod {
+func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, replicaGrpName string, hostIndex int) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(fmt.Sprintf("%s-%s", instance.Name, worker.GroupName), rayv1.WorkerNode, true)
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
@@ -1006,7 +1196,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
-	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort)
+	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort, replicaGrpName, hostIndex)
 	if len(r.options.WorkerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}

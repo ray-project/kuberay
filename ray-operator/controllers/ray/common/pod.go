@@ -17,6 +17,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -250,7 +251,7 @@ func getEnableProbesInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
@@ -328,6 +329,12 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
 
+	// Add additional labels for RayMultihostIndexing
+	multihostIndexingEnabled := features.Enabled(features.RayMultiHostIndexing) && workerSpec.NumOfHosts > 1
+	if multihostIndexingEnabled {
+		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = replicaGrpName
+		podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
+	}
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
