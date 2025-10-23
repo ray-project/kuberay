@@ -915,7 +915,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 		for i := 0; i < replicasToCreate; i++ {
 			replicaName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
 			for j := 0; j < int(worker.NumOfHosts); j++ {
-				if err := r.createWorkerPodWithIndex(ctx, *instance, *worker, replicaName, j); err != nil {
+				if err := r.createWorkerPodWithIndex(ctx, *instance, *worker.DeepCopy(), replicaName, j); err != nil {
 					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 				}
 			}
