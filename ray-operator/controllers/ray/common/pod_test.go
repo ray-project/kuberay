@@ -2044,6 +2044,17 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 				"memory":   "4294967296", // 4Gi in bytes
 			},
 		},
+		"Uppercase CPU and GPU resource names set in `Resources` override rayStartParams": {
+			initialRayStartParams: map[string]string{},
+			groupResources: map[string]string{
+				"CPU": "2",
+				"GPU": "4",
+			},
+			expectedRayStartParams: map[string]string{
+				"num-cpus": "2",
+				"num-gpus": "4",
+			},
+		},
 		"GPU and custom TPU resource set in `Resources` override rayStartParams": {
 			initialRayStartParams: map[string]string{},
 			groupResources: map[string]string{
