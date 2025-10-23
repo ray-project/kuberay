@@ -79,10 +79,14 @@ export const filterCluster = (
 };
 
 export const clusterIsRayJob = (cluster: ClusterRow): boolean => {
-  if (!cluster.labels) {
-    return false;
+  // Prefer official KubeRay label to determine whether a RayCluster originates from a RayJob
+  const labels = cluster.labels || {};
+  const originatedFrom = labels["ray.io/originated-from-crd"];
+  if (originatedFrom?.toLowerCase() === "rayjob") {
+    return true;
   }
 
-  const jobType = cluster.labels["mlp.rbx.com/component"];
-  return jobType === "rayjob" || jobType === "rayllmbatchinference";
+  // Backward compatibility: support legacy custom labels if present
+  const comp = labels["mlp.rbx.com/component"];
+  return comp === "rayjob" || comp === "rayllmbatchinference";
 };
