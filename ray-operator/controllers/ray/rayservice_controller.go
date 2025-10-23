@@ -649,8 +649,8 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 	pendingServiceStatus := &rayServiceInstance.Status.PendingServiceStatus
 
 	// Default to 100% traffic on the active cluster.
-	activeClusterWeight = 100
-	pendingClusterWeight = 0
+	activeClusterWeight = ptr.Deref(activeServiceStatus.TrafficRoutedPercent, 100)
+	pendingClusterWeight = ptr.Deref(pendingServiceStatus.TrafficRoutedPercent, 0)
 
 	if isPendingClusterReady {
 		// Zero-downtime upgrade in progress.
@@ -660,9 +660,7 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 		}
 
 		// Check that target_capacity has been updated before migrating traffic.
-		pendingClusterWeight = ptr.Deref(pendingServiceStatus.TrafficRoutedPercent, 0)
 		pendingClusterTargetCapacity := ptr.Deref(pendingServiceStatus.TargetCapacity, 0)
-		activeClusterWeight = ptr.Deref(activeServiceStatus.TrafficRoutedPercent, 100)
 
 		if pendingClusterWeight == pendingClusterTargetCapacity {
 			// Stop traffic migration because the pending cluster's current traffic weight has reached its target capacity limit.
