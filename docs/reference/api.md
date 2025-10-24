@@ -11,6 +11,7 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 ### Resource Types
 - [RayCluster](#raycluster)
+- [RayCronJob](#raycronjob)
 - [RayJob](#rayjob)
 - [RayService](#rayservice)
 
@@ -260,6 +261,41 @@ _Appears in:_
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
 
 
+#### RayCronJob
+
+
+
+RayCronJob represents the configuration of a single ray cron job.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `ray.io/v1` | | |
+| `kind` _string_ | `RayCronJob` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayCronJobSpec](#raycronjobspec)_ |  |  |  |
+
+
+#### RayCronJobSpec
+
+
+
+RayCronJobSpec describes how the job execution will look like and when it will actually run.
+
+
+
+_Appears in:_
+- [RayCronJob](#raycronjob)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `schedule` _string_ | The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron. |  |  |
+| `rayJobTemplate` _[RayJobTemplate](#rayjobtemplate)_ | Specifies the job that will be created when executing a CronJob. |  |  |
+
+
 #### RayJob
 
 
@@ -288,6 +324,7 @@ RayJobSpec defines the desired state of RayJob
 
 _Appears in:_
 - [RayJob](#rayjob)
+- [RayJobTemplate](#rayjobtemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -312,6 +349,23 @@ _Appears in:_
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
 
 
+
+
+#### RayJobTemplate
+
+
+
+
+
+
+
+_Appears in:_
+- [RayCronJobSpec](#raycronjobspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayJobSpec](#rayjobspec)_ | Specification of the desired behavior of the job. |  |  |
 
 
 
