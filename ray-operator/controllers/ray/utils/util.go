@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,6 +28,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 const (
@@ -764,7 +766,10 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	taskQueue := make(chan func())
+	workerPool := dashboardclient.NewWorkerPool(taskQueue)
+	workerPoolChannelContent := cmap.New[struct{}]()
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		if useKubernetesProxy {
@@ -783,13 +788,16 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				// configured to communicate with the Kubernetes API server.
 				mgr.GetHTTPClient(),
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+				workerPool,
+				jobInfoMap,
+				&workerPoolChannelContent,
 			)
 			return dashboardClient, nil
 		}
 
 		dashboardClient.InitClient(&http.Client{
 			Timeout: 2 * time.Second,
-		}, "http://"+url)
+		}, "http://"+url, workerPool, jobInfoMap, &workerPoolChannelContent)
 		return dashboardClient, nil
 	}
 }

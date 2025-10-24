@@ -46,3 +46,8 @@ type RayJobStopResponse struct {
 type RayJobLogsResponse struct {
 	Logs string `json:"logs,omitempty"`
 }
+
+type RayJobCache struct {
+	JobInfo *RayJobInfo
+	Err     error
+}

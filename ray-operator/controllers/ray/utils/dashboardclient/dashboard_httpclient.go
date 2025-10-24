@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -27,28 +28,36 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(client *http.Client, dashboardURL string)
+	InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache], workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}])
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*utiltypes.ServeApplicationStatus, error)
 	GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error)
+	AsyncGetJobInfo(ctx context.Context, jobId string)
 	ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
 	SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest) (string, error)
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
+	GetJobInfoFromCache(jobId string) *utiltypes.RayJobCache
 }
 
 type RayDashboardClient struct {
-	client       *http.Client
-	dashboardURL string
+	client                   *http.Client
+	workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}]
+	workerPool               *WorkerPool
+	jobInfoMap               *cmap.ConcurrentMap[string, *utiltypes.RayJobCache]
+	dashboardURL             string
 }
 
-func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string) {
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, workerPool *WorkerPool, jobInfoMap *cmap.ConcurrentMap[string, *utiltypes.RayJobCache], workerPoolChannelContent *cmap.ConcurrentMap[string, struct{}]) {
 	r.client = client
 	r.dashboardURL = dashboardURL
+	r.workerPool = workerPool
+	r.jobInfoMap = jobInfoMap
+	r.workerPoolChannelContent = workerPoolChannelContent
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -171,6 +180,25 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 	return &jobInfo, nil
 }
 
+func (r *RayDashboardClient) AsyncGetJobInfo(ctx context.Context, jobId string) {
+	if _, ok := r.workerPoolChannelContent.Get(jobId); ok {
+		return
+	}
+	r.workerPoolChannelContent.Set(jobId, struct{}{})
+	r.workerPool.taskQueue <- func() {
+		defer r.workerPoolChannelContent.Remove(jobId)
+		jobInfo, err := r.GetJobInfo(ctx, jobId)
+		if err != nil {
+			err = fmt.Errorf("failed to get job info: %w", err)
+			r.jobInfoMap.Set(jobId, &utiltypes.RayJobCache{JobInfo: nil, Err: err})
+			return
+		}
+		if jobInfo != nil {
+			r.jobInfoMap.Set(jobId, &utiltypes.RayJobCache{JobInfo: jobInfo, Err: nil})
+		}
+	}
+}
+
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath, nil)
 	if err != nil {
@@ -221,6 +249,7 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return
@@ -330,6 +359,13 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	}
 	defer resp.Body.Close()
 
+	return nil
+}
+
+func (r *RayDashboardClient) GetJobInfoFromCache(jobId string) *utiltypes.RayJobCache {
+	if jobInfo, ok := r.jobInfoMap.Get(jobId); ok {
+		return jobInfo
+	}
 	return nil
 }
 

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -19,7 +21,7 @@ type FakeRayDashboardClient struct {
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
 
-func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string) {
+func (r *FakeRayDashboardClient) InitClient(_ *http.Client, _ string, _ *dashboardclient.WorkerPool, _ *cmap.ConcurrentMap[string, *utiltypes.RayJobCache], _ *cmap.ConcurrentMap[string, struct{}]) {
 }
 
 func (r *FakeRayDashboardClient) UpdateDeployments(_ context.Context, _ []byte) error {
@@ -44,6 +46,9 @@ func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (
 		return (*mock)(ctx, jobId)
 	}
 	return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusRunning}, nil
+}
+
+func (r *FakeRayDashboardClient) AsyncGetJobInfo(_ context.Context, _ string) {
 }
 
 func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
@@ -75,5 +80,9 @@ func (r *FakeRayDashboardClient) StopJob(_ context.Context, _ string) (err error
 }
 
 func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *FakeRayDashboardClient) GetJobInfoFromCache(_ string) *utiltypes.RayJobCache {
 	return nil
 }
