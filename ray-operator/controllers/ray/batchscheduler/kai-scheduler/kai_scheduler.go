@@ -9,8 +9,8 @@ package kaischeduler
 
 import (
 	"context"
+	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -18,7 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 )
 
 const (
@@ -33,13 +35,17 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
+	_, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	return nil
 }
 
 func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, _ string) {
 	logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
-	addSchedulerNameToObject(child, k.Name())
+	utils.AddSchedulerNameToObject(child, k.Name())
 
 	parentLabel := parent.GetLabels()
 	queue, ok := parentLabel[QueueLabelName]
@@ -55,15 +61,6 @@ func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent me
 	}
 	childLabels[QueueLabelName] = queue
 	child.SetLabels(childLabels)
-}
-
-func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
-	switch obj := obj.(type) {
-	case *corev1.Pod:
-		obj.Spec.SchedulerName = schedulerName
-	case *corev1.PodTemplateSpec:
-		obj.Spec.SchedulerName = schedulerName
-	}
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {

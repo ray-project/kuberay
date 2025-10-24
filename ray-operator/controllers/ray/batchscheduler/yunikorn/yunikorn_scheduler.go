@@ -3,7 +3,6 @@ package yunikorn
 import (
 	"context"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -13,6 +12,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	batchschedulerutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -84,15 +84,6 @@ func populateLabelsFromObject(parent metav1.Object, child metav1.Object, sourceK
 	child.SetLabels(labels)
 }
 
-func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
-	switch obj := obj.(type) {
-	case *corev1.Pod:
-		obj.Spec.SchedulerName = schedulerName
-	case *corev1.PodTemplateSpec:
-		obj.Spec.SchedulerName = schedulerName
-	}
-}
-
 func getTaskGroupsAnnotationValue(obj metav1.Object) (string, error) {
 	taskGroups := newTaskGroups()
 	switch obj := obj.(type) {
@@ -127,7 +118,7 @@ func (y *YuniKornScheduler) AddMetadataToChildResource(ctx context.Context, pare
 
 	populateLabelsFromObject(parent, child, RayApplicationIDLabelName, YuniKornPodApplicationIDLabelName)
 	populateLabelsFromObject(parent, child, RayApplicationQueueLabelName, YuniKornPodQueueLabelName)
-	addSchedulerNameToObject(child, y.Name())
+	batchschedulerutils.AddSchedulerNameToObject(child, y.Name())
 
 	if y.isGangSchedulingEnabled(parent) {
 		logger.Info("gang scheduling is enabled, propagating task groups annotation to child", "name", child.GetName(), "namespace", child.GetNamespace())

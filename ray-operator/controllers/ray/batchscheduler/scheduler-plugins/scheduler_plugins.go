@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +16,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	batchschedulerutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -105,16 +105,7 @@ func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, parent met
 		labels[kubeSchedulerPodGroupLabelKey] = parent.GetName()
 		child.SetLabels(labels)
 	}
-	addSchedulerNameToObject(child, k.Name())
-}
-
-func addSchedulerNameToObject(obj metav1.Object, schedulerName string) {
-	switch obj := obj.(type) {
-	case *corev1.Pod:
-		obj.Spec.SchedulerName = schedulerName
-	case *corev1.PodTemplateSpec:
-		obj.Spec.SchedulerName = schedulerName
-	}
+	batchschedulerutils.AddSchedulerNameToObject(child, k.Name())
 }
 
 func (k *KubeScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
