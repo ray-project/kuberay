@@ -276,28 +276,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 		}
 
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode &&
-			rayJobInstance.Status.JobStatus == rayv1.JobStatusRunning {
-			headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
-			if err != nil {
-				logger.Error(err, "Failed to get head pod for RayCluster")
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			if headPod == nil {
-				rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				rayJobInstance.Status.JobStatus = rayv1.JobStatusFailed
-				rayJobInstance.Status.Reason = rayv1.AppFailed
-				rayJobInstance.Status.Message = "Ray head pod not found."
-				if len(rayJobInstance.Spec.ClusterSelector) == 0 {
-					if _, delErr := r.deleteClusterResources(ctx, rayJobInstance); delErr != nil {
-						logger.Error(delErr, "Failed to delete cluster resources after head pod deletion")
-						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, delErr
-					}
-				}
-				break
-			}
-		}
-
 		// Check the current status of ray jobs
 		rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
 		if err != nil {
