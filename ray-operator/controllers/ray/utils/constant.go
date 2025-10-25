@@ -53,6 +53,11 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayServiceInitializingTimeoutAnnotation specifies the timeout for RayService initialization.
+	// Accepts Go duration format (e.g., "30m", "1h") or integer seconds.
+	// If RayService stays in Initializing state beyond this timeout, it will be marked as failed.
+	RayServiceInitializingTimeoutAnnotation = "ray.io/initializing-timeout"
+
 	// RayJob default cluster selector key
 	RayJobClusterSelectorKey = "ray.io/cluster"
 
@@ -326,6 +331,7 @@ const (
 	// RayService event list
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
+	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"

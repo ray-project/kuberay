@@ -272,7 +272,8 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		}
 	}
 
-	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
+	if !isInitializingTimeoutForCurrentGeneration(rayServiceInstance) &&
+		shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 			RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 		}
@@ -297,6 +298,9 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 	calculateConditions(rayServiceInstance)
 
+	// If initializing too long, mark Failed (InitializingTimeout) and clear cluster names
+	maybeMarkFailedIfInitializingTimedOut(ctx, r, rayServiceInstance)
+
 	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
 	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
@@ -306,6 +310,19 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 }
 
 func calculateConditions(rayServiceInstance *rayv1.RayService) {
+	// Reset by clearing condition if generation increased after timeout
+	readyCond := meta.FindStatusCondition(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady))
+	if readyCond != nil &&
+		readyCond.Status == metav1.ConditionFalse &&
+		readyCond.Reason == string(rayv1.RayServiceInitializingTimeout) {
+		if readyCond.ObservedGeneration < rayServiceInstance.Generation {
+			// New generation - clear the timeout condition and let logic below recalculate
+			rayServiceInstance.Status.Conditions = []metav1.Condition{}
+		} else {
+			return
+		}
+	}
+
 	if rayServiceInstance.Status.Conditions == nil {
 		rayServiceInstance.Status.Conditions = []metav1.Condition{}
 	}
@@ -314,6 +331,7 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing, message)
 	}
+
 	if rayServiceInstance.Status.NumServeEndpoints > 0 {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
 	} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
@@ -1040,4 +1058,106 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 		return false, fmt.Errorf("found 0 head. cluster name %s, namespace %v", instance.Name, instance.Namespace)
 	}
 	return utils.IsRunningAndReady(headPod), nil
+}
+
+// getInitializingTimeout parses the initializing timeout annotation from RayService.
+// Returns (timeout, true) if valid. Accepts Go duration format (e.g., "5m", "1h") or integer seconds.
+// If the annotation is absent, invalid, or <= 0, returns (0, false).
+func getInitializingTimeout(rs *rayv1.RayService) (time.Duration, bool) {
+	if rs.Annotations == nil {
+		return 0, false
+	}
+
+	timeoutStr, exists := rs.Annotations[utils.RayServiceInitializingTimeoutAnnotation]
+	if !exists || timeoutStr == "" {
+		return 0, false
+	}
+
+	// Try parsing as Go duration first (e.g., "30m", "1h")
+	if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+		if timeout > 0 {
+			return timeout, true
+		}
+		return 0, false
+	}
+
+	// Try parsing as integer seconds
+	if seconds, err := strconv.Atoi(timeoutStr); err == nil {
+		if seconds > 0 {
+			return time.Duration(seconds) * time.Second, true
+		}
+	}
+
+	return 0, false
+}
+
+// isInitializingTimeoutForCurrentGeneration returns true if RayServiceReady is False with Reason=InitializingTimeout
+// and ObservedGeneration matches the current generation.
+func isInitializingTimeoutForCurrentGeneration(rs *rayv1.RayService) bool {
+	readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
+	if readyCond == nil {
+		return false
+	}
+
+	return readyCond.Status == metav1.ConditionFalse &&
+		readyCond.Reason == string(rayv1.RayServiceInitializingTimeout) &&
+		readyCond.ObservedGeneration == rs.Generation
+}
+
+// maybeMarkFailedIfInitializingTimedOut checks if the RayService has been initializing for too long.
+// If timeout is configured and exceeded:
+// - Sets RayServiceReady to False with Reason=InitializingTimeout for current generation
+// - Clears ActiveServiceStatus.RayClusterName and PendingServiceStatus.RayClusterName
+// - Emits a Warning event
+func maybeMarkFailedIfInitializingTimedOut(ctx context.Context, r *RayServiceReconciler, rs *rayv1.RayService) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Skip if no timeout is configured
+	timeout, ok := getInitializingTimeout(rs)
+	if !ok {
+		return
+	}
+
+	// Skip if already failed for this generation
+	if isInitializingTimeoutForCurrentGeneration(rs) {
+		return
+	}
+
+	// Check if currently in Initializing state
+	readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
+	if readyCond == nil {
+		return
+	}
+
+	if readyCond.Status != metav1.ConditionFalse || readyCond.Reason != string(rayv1.RayServiceInitializing) {
+		// Not in Initializing state
+		return
+	}
+
+	// Check if timeout has been exceeded
+	timeInInitializing := time.Since(readyCond.LastTransitionTime.Time)
+	if timeInInitializing < timeout {
+		// Still within timeout
+		return
+	}
+
+	// Timeout exceeded - mark as failed
+	logger.Info("RayService initializing timeout exceeded",
+		"timeout", timeout,
+		"timeInInitializing", timeInInitializing,
+		"generation", rs.Generation)
+
+	// Clear cluster names to trigger cleanup
+	rs.Status.ActiveServiceStatus.RayClusterName = ""
+	rs.Status.PendingServiceStatus.RayClusterName = ""
+
+	// Set condition to Failed with InitializingTimeout reason
+	message := fmt.Sprintf("RayService failed to become ready within the configured timeout of %s. Time spent initializing: %s",
+		timeout, timeInInitializing)
+	setCondition(rs, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializingTimeout, message)
+
+	// Emit warning event
+	r.Recorder.Eventf(rs, corev1.EventTypeWarning, string(utils.RayServiceInitializingTimeout),
+		"RayService initializing timeout exceeded after %s (configured timeout: %s)",
+		timeInInitializing, timeout)
 }

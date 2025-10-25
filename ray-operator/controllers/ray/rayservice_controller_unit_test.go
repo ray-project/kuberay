@@ -825,14 +825,55 @@ func TestCalculateConditions(t *testing.T) {
 			expectedConditionStatus: metav1.ConditionFalse,
 			expectedReason:          string(rayv1.RayServiceInitializing),
 		},
+		{
+			name: "InitializingTimeout failure is preserved for current generation",
+			rayServiceInstance: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints:  5,
+					ObservedGeneration: 1,
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "active",
+					},
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializingTimeout),
+			expectedConditionStatus: metav1.ConditionFalse,
+			expectedReason:          string(rayv1.RayServiceInitializingTimeout),
+		},
+		{
+			name: "Conditions calculated normally when not in InitializingTimeout state",
+			rayServiceInstance: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: rayv1.RayServiceStatuses{
+					NumServeEndpoints:  5,
+					ObservedGeneration: 1,
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "active",
+					},
+				},
+			},
+			conditionType:           rayv1.RayServiceReady,
+			originalConditionStatus: metav1.ConditionFalse,
+			originalReason:          string(rayv1.RayServiceInitializing),
+			expectedConditionStatus: metav1.ConditionTrue,
+			expectedReason:          string(rayv1.NonZeroServeEndpoints),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			meta.SetStatusCondition(&tt.rayServiceInstance.Status.Conditions, metav1.Condition{
-				Type:   string(tt.conditionType),
-				Status: tt.originalConditionStatus,
-				Reason: tt.originalReason,
+				Type:               string(tt.conditionType),
+				Status:             tt.originalConditionStatus,
+				Reason:             tt.originalReason,
+				ObservedGeneration: tt.rayServiceInstance.ObjectMeta.Generation,
 			})
 			calculateConditions(&tt.rayServiceInstance)
 			condition := meta.FindStatusCondition(tt.rayServiceInstance.Status.Conditions, string(tt.conditionType))
@@ -1318,4 +1359,573 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 			assert.InDelta(t, expectedTs.Unix(), ts.Unix(), 1, "Deletion timestamp should be within 1 second of expected timestamp")
 		})
 	}
+}
+
+func TestGetInitializingTimeout(t *testing.T) {
+	tests := []struct {
+		name            string
+		annotations     map[string]string
+		expectedTimeout time.Duration
+		expectedValid   bool
+	}{
+		{
+			name:            "No annotations",
+			annotations:     nil,
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+		{
+			name:            "Annotation not present",
+			annotations:     map[string]string{"other": "value"},
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+		{
+			name:            "Empty annotation value",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: ""},
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+		{
+			name:            "Valid Go duration - minutes",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "30m"},
+			expectedTimeout: 30 * time.Minute,
+			expectedValid:   true,
+		},
+		{
+			name:            "Valid Go duration - hours",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "2h"},
+			expectedTimeout: 2 * time.Hour,
+			expectedValid:   true,
+		},
+		{
+			name:            "Valid Go duration - seconds",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "90s"},
+			expectedTimeout: 90 * time.Second,
+			expectedValid:   true,
+		},
+		{
+			name:            "Valid integer seconds",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "1800"},
+			expectedTimeout: 1800 * time.Second,
+			expectedValid:   true,
+		},
+		{
+			name:            "Zero timeout",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "0"},
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+		{
+			name:            "Negative timeout",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "-10"},
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+		{
+			name:            "Invalid format",
+			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "invalid"},
+			expectedTimeout: 0,
+			expectedValid:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.annotations,
+				},
+			}
+
+			timeout, valid := getInitializingTimeout(rs)
+			assert.Equal(t, tt.expectedValid, valid)
+			assert.Equal(t, tt.expectedTimeout, timeout)
+		})
+	}
+}
+
+func TestIsFailedForCurrentGeneration(t *testing.T) {
+	tests := []struct {
+		name               string
+		conditions         []metav1.Condition
+		generation         int64
+		observedGeneration int64
+		expected           bool
+	}{
+		{
+			name:       "No conditions",
+			conditions: nil,
+			expected:   false,
+		},
+		{
+			name: "Failed due to timeout - current generation",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					ObservedGeneration: 5,
+				},
+			},
+			generation:         5,
+			observedGeneration: 5,
+			expected:           true,
+		},
+		{
+			name: "Failed due to timeout - old generation",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					ObservedGeneration: 4,
+				},
+			},
+			generation:         5,
+			observedGeneration: 5,
+			expected:           false,
+		},
+		{
+			name: "Failed for different reason",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.ZeroServeEndpoints),
+					ObservedGeneration: 5,
+				},
+			},
+			generation:         5,
+			observedGeneration: 5,
+			expected:           false,
+		},
+		{
+			name: "Ready condition is True",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionTrue,
+					Reason:             string(rayv1.NonZeroServeEndpoints),
+					ObservedGeneration: 5,
+				},
+			},
+			generation:         5,
+			observedGeneration: 5,
+			expected:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: tt.generation,
+				},
+				Status: rayv1.RayServiceStatuses{
+					Conditions:         tt.conditions,
+					ObservedGeneration: tt.observedGeneration,
+				},
+			}
+
+			result := isInitializingTimeoutForCurrentGeneration(rs)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMaybeMarkFailedIfInitializingTimedOut(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	tests := []struct {
+		name                  string
+		annotations           map[string]string
+		conditions            []metav1.Condition
+		activeClusterName     string
+		pendingClusterName    string
+		generation            int64
+		observedGeneration    int64
+		expectTimeout         bool
+		expectClustersCleared bool
+		expectEventRecorded   bool
+		timeInInitializing    time.Duration
+	}{
+		{
+			name:        "No timeout annotation - should not timeout",
+			annotations: nil,
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializing),
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-1 * time.Hour)),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:          1,
+			observedGeneration:  1,
+			expectTimeout:       false,
+			expectEventRecorded: false,
+		},
+		{
+			name: "Timeout not exceeded - should not timeout",
+			annotations: map[string]string{
+				utils.RayServiceInitializingTimeoutAnnotation: "30m",
+			},
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializing),
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-10 * time.Minute)),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:          1,
+			observedGeneration:  1,
+			expectTimeout:       false,
+			expectEventRecorded: false,
+		},
+		{
+			name: "Timeout exceeded - should timeout and clear clusters",
+			annotations: map[string]string{
+				utils.RayServiceInitializingTimeoutAnnotation: "30m",
+			},
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializing),
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-35 * time.Minute)),
+					ObservedGeneration: 1,
+				},
+			},
+			activeClusterName:     "active-cluster",
+			pendingClusterName:    "pending-cluster",
+			generation:            1,
+			observedGeneration:    1,
+			expectTimeout:         true,
+			expectClustersCleared: true,
+			expectEventRecorded:   true,
+			timeInInitializing:    35 * time.Minute,
+		},
+		{
+			name: "Already failed for current generation - should not timeout again",
+			annotations: map[string]string{
+				utils.RayServiceInitializingTimeoutAnnotation: "30m",
+			},
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-35 * time.Minute)),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:          1,
+			observedGeneration:  1,
+			expectTimeout:       false,
+			expectEventRecorded: false,
+		},
+		{
+			name: "Not in Initializing state - should not timeout",
+			annotations: map[string]string{
+				utils.RayServiceInitializingTimeoutAnnotation: "30m",
+			},
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionTrue,
+					Reason:             string(rayv1.NonZeroServeEndpoints),
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-35 * time.Minute)),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:          1,
+			observedGeneration:  1,
+			expectTimeout:       false,
+			expectEventRecorded: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-rayservice",
+					Namespace:   "default",
+					Generation:  tt.generation,
+					Annotations: tt.annotations,
+				},
+				Status: rayv1.RayServiceStatuses{
+					Conditions:         tt.conditions,
+					ObservedGeneration: tt.observedGeneration,
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: tt.activeClusterName,
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: tt.pendingClusterName,
+					},
+				},
+			}
+
+			ctx := context.TODO()
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).Build()
+			fakeRecorder := record.NewFakeRecorder(10)
+
+			r := &RayServiceReconciler{
+				Client:   fakeClient,
+				Scheme:   scheme.Scheme,
+				Recorder: fakeRecorder,
+			}
+
+			maybeMarkFailedIfInitializingTimedOut(ctx, r, rs)
+
+			// Check if timeout occurred
+			readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
+			require.NotNil(t, readyCond)
+
+			if tt.expectTimeout {
+				assert.Equal(t, metav1.ConditionFalse, readyCond.Status)
+				assert.Equal(t, string(rayv1.RayServiceInitializingTimeout), readyCond.Reason)
+				assert.Contains(t, readyCond.Message, "failed to become ready within the configured timeout")
+			}
+
+			// Check if clusters were cleared
+			if tt.expectClustersCleared {
+				assert.Empty(t, rs.Status.ActiveServiceStatus.RayClusterName)
+				assert.Empty(t, rs.Status.PendingServiceStatus.RayClusterName)
+			}
+
+			// Check if event was recorded
+			if tt.expectEventRecorded {
+				select {
+				case event := <-fakeRecorder.Events:
+					assert.Contains(t, event, "RayService initializing timeout exceeded")
+				case <-time.After(100 * time.Millisecond):
+					t.Fatal("Expected event to be recorded but none was found")
+				}
+			} else {
+				select {
+				case <-fakeRecorder.Events:
+					t.Fatal("Did not expect event to be recorded but one was found")
+				case <-time.After(100 * time.Millisecond):
+					// Expected - no event
+				}
+			}
+		})
+	}
+}
+
+func TestResetInitializingIfNewGenerationAfterTimeout(t *testing.T) {
+	tests := []struct {
+		name        string
+		conditions  []metav1.Condition
+		generation  int64
+		expectReset bool
+	}{
+		{
+			name:        "No conditions - should not reset",
+			conditions:  nil,
+			generation:  2,
+			expectReset: false,
+		},
+		{
+			name: "Previous generation failed due to timeout - should reset",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:  2,
+			expectReset: true,
+		},
+		{
+			name: "Current generation failed due to timeout - should not reset",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					ObservedGeneration: 2,
+				},
+			},
+			generation:  2,
+			expectReset: false,
+		},
+		{
+			name: "Previous generation failed for different reason - should not reset",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.ZeroServeEndpoints),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:  2,
+			expectReset: false,
+		},
+		{
+			name: "Previous generation was Ready - should not reset",
+			conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionTrue,
+					Reason:             string(rayv1.NonZeroServeEndpoints),
+					ObservedGeneration: 1,
+				},
+			},
+			generation:  2,
+			expectReset: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: tt.generation,
+				},
+				Status: rayv1.RayServiceStatuses{
+					Conditions:         tt.conditions,
+					ObservedGeneration: tt.generation,
+				},
+			}
+
+			// Call calculateConditions which now includes the reset logic
+			calculateConditions(rs)
+
+			readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
+
+			if tt.expectReset {
+				require.NotNil(t, readyCond)
+				assert.Equal(t, metav1.ConditionFalse, readyCond.Status)
+				assert.Equal(t, string(rayv1.RayServiceInitializing), readyCond.Reason)
+				// After clearing the timeout condition, it goes through normal initialization logic
+				assert.Contains(t, readyCond.Message, "RayService is initializing")
+			}
+		})
+	}
+}
+
+// TestCalculateStatus_BlocksNewClusterWhenTimedOut verifies that calculateStatus
+// does not prepare a new pending cluster when the RayService has failed due to
+// InitializingTimeout in the current generation. This prevents unnecessary cluster
+// creation attempts when initialization has already been determined to fail.
+// After generation increases (spec change) and the failure is reset to Initializing,
+// new cluster preparation should be allowed again.
+func TestCalculateStatus_BlocksNewClusterWhenTimedOut(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	ctx := context.TODO()
+	namespace := "test-namespace"
+	activeClusterName := "active-cluster"
+
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-service",
+			Namespace:  namespace,
+			Generation: 1,
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				RayVersion: "new-version",
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.RayServiceInitializingTimeout),
+					ObservedGeneration: 1,
+				},
+			},
+			ObservedGeneration: 1,
+			ActiveServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName: activeClusterName,
+			},
+		},
+	}
+
+	_, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	require.NoError(t, err)
+
+	activeCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      activeClusterName,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: "different-hash",
+				utils.NumWorkerGroupsKey:                       "0",
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+			},
+		},
+	}
+
+	// Create fake client with the RayService
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayService).Build()
+
+	// Test that calculateStatus doesn't prepare new cluster when failed
+	r := &RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   scheme.Scheme,
+		Recorder: record.NewFakeRecorder(1),
+	}
+
+	err = r.calculateStatus(
+		ctx,
+		rayService,
+		nil, // headSvc
+		nil, // serveSvc
+		activeCluster,
+		nil, // pendingCluster
+		nil, // activeClusterServeApplications
+		nil, // pendingClusterServeApplications
+	)
+	require.NoError(t, err)
+
+	// Should not have set a new pending cluster name
+	assert.Empty(t, rayService.Status.PendingServiceStatus.RayClusterName,
+		"Should not prepare new cluster when RayService failed for current generation")
+
+	// After generation increases and resets to Initializing, should be allowed
+	rayService.ObjectMeta.Generation = 2
+	rayService.Status.ObservedGeneration = 2
+	rayService.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(rayv1.RayServiceReady),
+			Status:             metav1.ConditionFalse,
+			Reason:             string(rayv1.RayServiceInitializing),
+			ObservedGeneration: 2,
+		},
+	}
+
+	// Update the spec to trigger shouldPrepareNewCluster
+	rayService.Spec.RayClusterSpec.RayVersion = "even-newer-version"
+
+	err = r.calculateStatus(
+		ctx,
+		rayService,
+		nil, // headSvc
+		nil, // serveSvc
+		activeCluster,
+		nil, // pendingCluster
+		nil, // activeClusterServeApplications
+		nil, // pendingClusterServeApplications
+	)
+	require.NoError(t, err)
+
+	// Should have set a new pending cluster name
+	assert.NotEmpty(t, rayService.Status.PendingServiceStatus.RayClusterName,
+		"Should prepare new cluster after generation increases and resets to Initializing")
 }
