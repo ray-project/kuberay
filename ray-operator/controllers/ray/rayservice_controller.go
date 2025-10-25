@@ -1062,7 +1062,8 @@ func (r *RayServiceReconciler) isHeadPodRunningAndReady(ctx context.Context, ins
 
 // getInitializingTimeout parses the initializing timeout annotation from RayService.
 // Returns (timeout, true) if valid. Accepts Go duration format (e.g., "5m", "1h") or integer seconds.
-// If the annotation is absent, invalid, or <= 0, returns (0, false).
+// The annotation is assumed to be already validated by ValidateRayServiceMetadata.
+// If the annotation is absent, returns (0, false).
 func getInitializingTimeout(rs *rayv1.RayService) (time.Duration, bool) {
 	if rs.Annotations == nil {
 		return 0, false
@@ -1074,20 +1075,19 @@ func getInitializingTimeout(rs *rayv1.RayService) (time.Duration, bool) {
 	}
 
 	// Try parsing as Go duration first (e.g., "30m", "1h")
+	// Validation already ensures this is valid, so we can ignore errors
 	if timeout, err := time.ParseDuration(timeoutStr); err == nil {
-		if timeout > 0 {
-			return timeout, true
-		}
-		return 0, false
+		return timeout, true
 	}
 
 	// Try parsing as integer seconds
+	// Validation already ensures this is valid if ParseDuration failed
 	if seconds, err := strconv.Atoi(timeoutStr); err == nil {
-		if seconds > 0 {
-			return time.Duration(seconds) * time.Second, true
-		}
+		return time.Duration(seconds) * time.Second, true
 	}
 
+	// This should never happen since validation ensures correctness,
+	// but we handle it gracefully by returning false
 	return 0, false
 }
 

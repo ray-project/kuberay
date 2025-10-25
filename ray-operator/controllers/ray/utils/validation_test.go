@@ -1655,6 +1655,56 @@ func TestValidateRayServiceMetadata(t *testing.T) {
 		Name: strings.Repeat("j", MaxRayServiceNameLength),
 	})
 	require.NoError(t, err)
+
+	// Test valid initializing timeout annotations
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "valid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "5m",
+		},
+	})
+	require.NoError(t, err)
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "valid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "300",
+		},
+	})
+	require.NoError(t, err)
+
+	// Test invalid initializing timeout annotations
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "0",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "-100",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "-5m",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive duration")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "invalid",
+		},
+	})
+	require.ErrorContains(t, err, "invalid format")
 }
 
 func createBasicRayClusterSpec() *rayv1.RayClusterSpec {

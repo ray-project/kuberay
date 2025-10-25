@@ -1411,18 +1411,6 @@ func TestGetInitializingTimeout(t *testing.T) {
 			expectedValid:   true,
 		},
 		{
-			name:            "Zero timeout",
-			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "0"},
-			expectedTimeout: 0,
-			expectedValid:   false,
-		},
-		{
-			name:            "Negative timeout",
-			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "-10"},
-			expectedTimeout: 0,
-			expectedValid:   false,
-		},
-		{
 			name:            "Invalid format",
 			annotations:     map[string]string{utils.RayServiceInitializingTimeoutAnnotation: "invalid"},
 			expectedTimeout: 0,
