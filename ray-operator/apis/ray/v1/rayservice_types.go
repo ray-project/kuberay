@@ -166,6 +166,7 @@ const (
 
 const (
 	RayServiceInitializing         RayServiceConditionReason = "Initializing"
+	RayServiceInitializingTimeout  RayServiceConditionReason = "InitializingTimeout"
 	ZeroServeEndpoints             RayServiceConditionReason = "ZeroServeEndpoints"
 	NonZeroServeEndpoints          RayServiceConditionReason = "NonZeroServeEndpoints"
 	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"

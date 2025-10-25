@@ -3,7 +3,9 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -294,7 +296,45 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
 		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
 	}
+
+	// Validate initializing timeout annotation if present
+	if err := validateInitializingTimeout(metadata.Annotations); err != nil {
+		return fmt.Errorf("RayService annotations is invalid: %w", err)
+	}
+
 	return nil
+}
+
+// validateInitializingTimeout validates the ray.io/initializing-timeout annotation if present.
+// Accepts Go duration format (e.g., "5m", "1h") or integer seconds.
+// Returns an error if the annotation is present but invalid.
+func validateInitializingTimeout(annotations map[string]string) error {
+	if annotations == nil {
+		return nil
+	}
+
+	timeoutStr, exists := annotations[RayServiceInitializingTimeoutAnnotation]
+	if !exists || timeoutStr == "" {
+		return nil
+	}
+
+	// Try parsing as Go duration first (e.g., "30m", "1h")
+	if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+		if timeout <= 0 {
+			return fmt.Errorf("annotation %s must be a positive duration, got: %s", RayServiceInitializingTimeoutAnnotation, timeoutStr)
+		}
+		return nil
+	}
+
+	// Try parsing as integer seconds
+	if seconds, err := strconv.Atoi(timeoutStr); err == nil {
+		if seconds <= 0 {
+			return fmt.Errorf("annotation %s must be a positive integer (seconds), got: %s", RayServiceInitializingTimeoutAnnotation, timeoutStr)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("annotation %s has invalid format: %s. Expected Go duration format (e.g., '5m', '1h') or positive integer seconds", RayServiceInitializingTimeoutAnnotation, timeoutStr)
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
