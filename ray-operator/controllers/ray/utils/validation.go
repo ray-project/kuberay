@@ -306,17 +306,53 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
 
-	// only NewCluster and None are valid upgradeType
+	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
 		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
 		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+	}
+
+	// If type is NewClusterWithIncrementalUpgrade, validate the ClusterUpgradeOptions
+	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
+		return ValidateClusterUpgradeOptions(rayService)
+	}
+
+	return nil
+}
+
+func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
+	if !IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
+		return fmt.Errorf("Ray Autoscaler is required for NewClusterWithIncrementalUpgrade")
+	}
+
+	options := rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions
+	if options == nil {
+		return fmt.Errorf("ClusterUpgradeOptions are required for NewClusterWithIncrementalUpgrade")
+	}
+
+	// MaxSurgePercent defaults to 100% if unset.
+	if *options.MaxSurgePercent < 0 || *options.MaxSurgePercent > 100 {
+		return fmt.Errorf("maxSurgePercent must be between 0 and 100")
+	}
+
+	if options.StepSizePercent == nil || *options.StepSizePercent < 0 || *options.StepSizePercent > 100 {
+		return fmt.Errorf("stepSizePercent must be between 0 and 100")
+	}
+
+	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {
+		return fmt.Errorf("intervalSeconds must be greater than 0")
+	}
+
+	if options.GatewayClassName == "" {
+		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
 	}
 
 	return nil

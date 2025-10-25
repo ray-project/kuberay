@@ -119,6 +119,8 @@ featureGates:
   enabled: false
 - name: RayMultiHostIndexing
   enabled: false
+- name: RayServiceIncrementalUpgrade
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:

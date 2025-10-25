@@ -30,6 +30,13 @@ const (
 	// alpha: v1.0
 	// Enables multi-host worker indexing
 	RayMultiHostIndexing featuregate.Feature = "RayMultiHostIndexing"
+
+	// owner: @ryanaoleary
+	// rep: N/A
+	// alpha: v1.0
+	//
+	// Enabled NewClusterWithIncrementalUpgrade type for RayService zero-downtime upgrades.
+	RayServiceIncrementalUpgrade featuregate.Feature = "RayServiceIncrementalUpgrade"
 )
 
 func init() {
@@ -37,9 +44,10 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions: {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:       {Default: false, PreRelease: featuregate.Alpha},
-	RayMultiHostIndexing:       {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:         {Default: false, PreRelease: featuregate.Alpha},
+	RayMultiHostIndexing:         {Default: false, PreRelease: featuregate.Alpha},
+	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

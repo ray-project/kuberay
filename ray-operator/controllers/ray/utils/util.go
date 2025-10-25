@@ -16,17 +16,21 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -605,10 +609,10 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 // FindContainerPort searches for a specific port $portName in the container.
 // If the port is found in the container, the corresponding port is returned.
 // If the port is not found, the $defaultPort is returned instead.
-func FindContainerPort(container *corev1.Container, portName string, defaultPort int) int {
+func FindContainerPort(container *corev1.Container, portName string, defaultPort int32) int32 {
 	for _, port := range container.Ports {
 		if port.Name == portName {
-			return int(port.ContainerPort)
+			return port.ContainerPort
 		}
 	}
 	return defaultPort
@@ -679,6 +683,115 @@ func GetRayClusterNameFromService(svc *corev1.Service) string {
 		return ""
 	}
 	return svc.Spec.Selector[RayClusterLabelKey]
+}
+
+// IsGatewayReady checks if a Gateway is considered "ready".
+//
+// A Gateway is "ready" only if both the `Accepted` and `Programmed` conditions
+// are set to 'True'.
+//
+//  1. 'Accepted': Signifies that the Gateway controller understands and accepts
+//     the Gateway resource. If 'False', it often indicates a conflict or an invalid
+//     specification.
+//
+//  2. 'Programmed': Signifies that the underlying network infrastructure for the Gateway
+//     (e.g. load balancer) has been successfully provisioned and configured.
+func IsGatewayReady(gatewayInstance *gwv1.Gateway) bool {
+	if gatewayInstance == nil {
+		return false
+	}
+
+	hasAccepted := meta.IsStatusConditionTrue(gatewayInstance.Status.Conditions, string(gwv1.GatewayConditionAccepted))
+	hasProgrammed := meta.IsStatusConditionTrue(gatewayInstance.Status.Conditions, string(gwv1.GatewayConditionProgrammed))
+
+	return hasAccepted && hasProgrammed
+}
+
+// IsHTTPRouteReady checks if an HTTPRoute is considered ready for a given Gateway.
+//
+// It returns true only if the route's parent status entry matching the Gateway has both
+// the 'Accepted' and 'ResolvedRefs' conditions set to 'True'.
+//
+//  1. 'Accepted': Signifies that the Gateway controller has validated the HTTPRoute's
+//     configuration (e.g. syntax, filters, matching rules). An 'Accepted' status of
+//     'False' means the route's specification is invalid.
+//
+//  2. 'ResolvedRefs': Signifies that all references within the route are valid, exist,
+//     and are resolvable by the Gateway.
+func IsHTTPRouteReady(gatewayInstance *gwv1.Gateway, httpRouteInstance *gwv1.HTTPRoute) bool {
+	if httpRouteInstance == nil {
+		return false
+	}
+	for _, parent := range httpRouteInstance.Status.Parents {
+		if parent.ParentRef.Name != gwv1.ObjectName(gatewayInstance.Name) {
+			continue
+		}
+		if parent.ParentRef.Namespace != nil && *parent.ParentRef.Namespace != gwv1.Namespace(gatewayInstance.Namespace) {
+			continue
+		}
+		hasAccepted := meta.IsStatusConditionTrue(parent.Conditions, string(gwv1.RouteConditionAccepted))
+		hasResolved := meta.IsStatusConditionTrue(parent.Conditions, string(gwv1.RouteConditionResolvedRefs))
+
+		if hasAccepted && hasResolved {
+			return true
+		}
+	}
+	return false
+}
+
+func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
+	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
+		return false
+	}
+	return spec != nil && spec.UpgradeStrategy != nil &&
+		*spec.UpgradeStrategy.Type == rayv1.NewClusterWithIncrementalUpgrade
+}
+
+func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.ClusterUpgradeOptions {
+	if spec != nil && spec.UpgradeStrategy != nil {
+		return spec.UpgradeStrategy.ClusterUpgradeOptions
+	}
+	return nil
+}
+
+// IsIncrementalUpgradeComplete checks if the conditions for completing an incremental upgrade are met.
+func IsIncrementalUpgradeComplete(rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) bool {
+	return pendingCluster != nil &&
+		ptr.Deref(rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity, -1) == 0 &&
+		ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1) == 100
+}
+
+// GetWeightsFromHTTPRoute parses a given HTTPRoute object and extracts the traffic weights
+// for the active and pending clusters (if present) of a RayService.
+func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv1.RayService) (activeWeight int32, pendingWeight int32) {
+	var activeClusterName, pendingClusterName string
+	if rayServiceInstance != nil {
+		activeClusterName = rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+		pendingClusterName = rayServiceInstance.Status.PendingServiceStatus.RayClusterName
+	}
+
+	// Defaults if weights can't be detected. This is so that we avoid setting TrafficRoutedPercent
+	// before the HTTPRoute actually exists.
+	activeWeight = -1
+	pendingWeight = -1
+
+	if httpRoute == nil || len(httpRoute.Spec.Rules) == 0 || len(httpRoute.Spec.Rules[0].BackendRefs) == 0 {
+		return
+	}
+
+	for _, backendRef := range httpRoute.Spec.Rules[0].BackendRefs {
+		backendName := string(backendRef.Name)
+		weight := ptr.Deref(backendRef.Weight, 0)
+
+		if activeClusterName != "" && strings.Contains(backendName, activeClusterName) {
+			activeWeight = weight
+		}
+		if pendingClusterName != "" && strings.Contains(backendName, pendingClusterName) {
+			pendingWeight = weight
+		}
+	}
+
+	return
 }
 
 // Check where we are running. We are trying to distinguish here whether
