@@ -299,7 +299,7 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 
 	// Validate initializing timeout annotation if present
 	if err := validateInitializingTimeout(metadata.Annotations); err != nil {
-		return err
+		return fmt.Errorf("RayService annotations is invalid: %w", err)
 	}
 
 	return nil
