@@ -55,7 +55,15 @@ const (
 
 	// RayServiceInitializingTimeoutAnnotation specifies the timeout for RayService initialization.
 	// Accepts Go duration format (e.g., "30m", "1h") or integer seconds.
-	// If RayService stays in Initializing state beyond this timeout, it will be marked as failed.
+	//
+	// Behavior when timeout is exceeded:
+	//   - RayServiceReady condition is set to False with reason InitializingTimeout
+	//   - Status is locked to current generation (prevents new cluster creation attempts)
+	//   - Cluster names are cleared, triggering cleanup via cleanUpRayClusterInstance in next reconciliation
+	//   - A Warning event is emitted with timeout details
+	//
+	// To retry after timeout:
+	//   Update the RayService spec to trigger a new generation, which resets the timeout state.
 	RayServiceInitializingTimeoutAnnotation = "ray.io/initializing-timeout"
 
 	// RayJob default cluster selector key

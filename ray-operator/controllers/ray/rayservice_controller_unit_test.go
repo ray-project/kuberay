@@ -1670,7 +1670,7 @@ func TestMaybeMarkFailedIfInitializingTimedOut(t *testing.T) {
 				Recorder: fakeRecorder,
 			}
 
-			maybeMarkFailedIfInitializingTimedOut(ctx, r, rs)
+			markFailedOnInitializingTimeout(ctx, r, rs)
 
 			// Check if timeout occurred
 			readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))

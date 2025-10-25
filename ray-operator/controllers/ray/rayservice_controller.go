@@ -296,10 +296,14 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		return errstd.New("numServeEndpoints exceeds math.MaxInt32")
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
+
+	// Calculate conditions based on current state (endpoints, clusters, etc.)
 	calculateConditions(rayServiceInstance)
 
-	// If initializing too long, mark Failed (InitializingTimeout) and clear cluster names
-	maybeMarkFailedIfInitializingTimedOut(ctx, r, rayServiceInstance)
+	// Check if initializing timeout has been exceeded and mark as failed if necessary.
+	// This must run AFTER calculateConditions so that if endpoints appear in the same
+	// reconciliation loop, the service is marked as ready instead of timing out.
+	markFailedOnInitializingTimeout(ctx, r, rayServiceInstance)
 
 	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
 	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
@@ -1104,12 +1108,13 @@ func isInitializingTimeoutForCurrentGeneration(rs *rayv1.RayService) bool {
 		readyCond.ObservedGeneration == rs.Generation
 }
 
-// maybeMarkFailedIfInitializingTimedOut checks if the RayService has been initializing for too long.
+// markFailedOnInitializingTimeout checks if the RayService has been initializing for too long.
 // If timeout is configured and exceeded:
-// - Sets RayServiceReady to False with Reason=InitializingTimeout for current generation
-// - Clears ActiveServiceStatus.RayClusterName and PendingServiceStatus.RayClusterName
-// - Emits a Warning event
-func maybeMarkFailedIfInitializingTimedOut(ctx context.Context, r *RayServiceReconciler, rs *rayv1.RayService) {
+//   - Sets RayServiceReady to False with Reason=InitializingTimeout for current generation
+//   - Clears ActiveServiceStatus.RayClusterName and PendingServiceStatus.RayClusterName to trigger cleanup.
+//     The next reconciliation will clean up the actual RayCluster resources via cleanUpRayClusterInstance.
+//   - Emits a Warning event
+func markFailedOnInitializingTimeout(ctx context.Context, r *RayServiceReconciler, rs *rayv1.RayService) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Skip if no timeout is configured
