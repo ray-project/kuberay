@@ -1363,8 +1363,8 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 
 func TestGetInitializingTimeout(t *testing.T) {
 	tests := []struct {
-		name            string
 		annotations     map[string]string
+		name            string
 		expectedTimeout time.Duration
 		expectedValid   bool
 	}{
@@ -1540,17 +1540,17 @@ func TestMaybeMarkFailedIfInitializingTimedOut(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme)
 
 	tests := []struct {
-		name                  string
 		annotations           map[string]string
-		conditions            []metav1.Condition
+		name                  string
 		activeClusterName     string
 		pendingClusterName    string
+		conditions            []metav1.Condition
 		generation            int64
 		observedGeneration    int64
+		timeInInitializing    time.Duration
 		expectTimeout         bool
 		expectClustersCleared bool
 		expectEventRecorded   bool
-		timeInInitializing    time.Duration
 	}{
 		{
 			name:        "No timeout annotation - should not timeout",
