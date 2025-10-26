@@ -122,8 +122,22 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
-	if err = r.cleanUpRayClusterInstance(ctx, rayServiceInstance); err != nil {
+	hasRayClustersToClean, err := r.cleanUpRayClusterInstance(ctx, rayServiceInstance)
+	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// If the RayService has timed out during initialization, skip the rest of the reconciliation.
+	// The service is in a terminal failure state - only cleanup (above) is needed.
+	// The user must delete and recreate the RayService to recover.
+	if isInitializingTimeout(rayServiceInstance) {
+		// Requeue only if there are still RayClusters to clean up
+		// This avoids unnecessary reconciliations after all resources are deleted
+		if hasRayClustersToClean {
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+		}
+		logger.Info("RayService in terminal failure state, all RayClusters cleaned up")
+		return ctrl.Result{}, nil
 	}
 
 	// Find active and pending ray cluster objects given current service name.
@@ -272,8 +286,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 		}
 	}
 
-	if !isInitializingTimeoutForCurrentGeneration(rayServiceInstance) &&
-		shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
+	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{
 			RayClusterName: utils.GenerateRayClusterName(rayServiceInstance.Name),
 		}
@@ -297,13 +310,8 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	}
 	rayServiceInstance.Status.NumServeEndpoints = int32(numServeEndpoints) //nolint:gosec // This is a false positive from gosec. See https://github.com/securego/gosec/issues/1212 for more details.
 
-	// Calculate conditions based on current state (endpoints, clusters, etc.)
-	calculateConditions(rayServiceInstance)
-
-	// Check if initializing timeout has been exceeded and mark as failed if necessary.
-	// This must run AFTER calculateConditions so that if endpoints appear in the same
-	// reconciliation loop, the service is marked as ready instead of timing out.
-	markFailedOnInitializingTimeout(ctx, r, rayServiceInstance)
+	// Calculate conditions based on current state (endpoints, clusters, timeout, etc.)
+	calculateConditions(ctx, r, rayServiceInstance)
 
 	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
 	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
@@ -313,20 +321,7 @@ func (r *RayServiceReconciler) calculateStatus(ctx context.Context, rayServiceIn
 	return nil
 }
 
-func calculateConditions(rayServiceInstance *rayv1.RayService) {
-	// Reset by clearing condition if generation increased after timeout
-	readyCond := meta.FindStatusCondition(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady))
-	if readyCond != nil &&
-		readyCond.Status == metav1.ConditionFalse &&
-		readyCond.Reason == string(rayv1.RayServiceInitializingTimeout) {
-		if readyCond.ObservedGeneration < rayServiceInstance.Generation {
-			// New generation - clear the timeout condition and let logic below recalculate
-			rayServiceInstance.Status.Conditions = []metav1.Condition{}
-		} else {
-			return
-		}
-	}
-
+func calculateConditions(ctx context.Context, r *RayServiceReconciler, rayServiceInstance *rayv1.RayService) {
 	if rayServiceInstance.Status.Conditions == nil {
 		rayServiceInstance.Status.Conditions = []metav1.Condition{}
 	}
@@ -340,6 +335,10 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionTrue, rayv1.NonZeroServeEndpoints, "Number of serve endpoints is greater than 0")
 	} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.ZeroServeEndpoints, "Number of serve endpoints dropped to 0")
+	} else {
+		// Check if initializing timeout has been exceeded
+		// This runs after endpoint check, so if endpoints appear, they take priority
+		markFailedOnInitializingTimeout(ctx, r, rayServiceInstance)
 	}
 
 	activeClusterName := rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
@@ -350,7 +349,8 @@ func calculateConditions(rayServiceInstance *rayv1.RayService) {
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Active Ray cluster exists and no pending Ray cluster")
 	} else {
 		cond := meta.FindStatusCondition(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
-		if cond == nil || cond.Reason != string(rayv1.RayServiceInitializing) {
+		// Don't override the condition if RayService is initializing or has timed out
+		if cond == nil || (cond.Reason != string(rayv1.RayServiceInitializing) && cond.Reason != string(rayv1.RayServiceInitializingTimeout)) {
 			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionUnknown, rayv1.NoActiveCluster, "No active Ray cluster exists, and the RayService is not initializing. Please open a GitHub issue in the KubeRay repository.")
 		}
 	}
@@ -486,13 +486,14 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 }
 
 // cleanUpRayClusterInstance cleans up all the dangling RayCluster instances that are owned by the RayService instance.
-func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
+// Returns true if there are still RayCluster instances that need to be cleaned up (either scheduled for deletion or waiting for deletion delay).
+func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterList := rayv1.RayClusterList{}
 
 	var err error
 	if err = r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
-		return err
+		return false, err
 	}
 
 	// Determine the ray cluster deletion delay seconds
@@ -500,9 +501,12 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	if rayServiceInstance.Spec.RayClusterDeletionDelaySeconds != nil {
 		deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
 	}
+
+	hasRayClustersToClean := false
 	// Clean up RayCluster instances. Each instance is deleted after the configured deletion delay.
 	for _, rayClusterInstance := range rayClusterList.Items {
 		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
+			hasRayClustersToClean = true
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
 			if !exists {
 				deletionTimestamp := metav1.Now().Add(deletionDelay)
@@ -525,7 +529,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 						r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
-						return err
+						return false, err
 					}
 					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 				}
@@ -533,7 +537,7 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 		}
 	}
 
-	return nil
+	return hasRayClustersToClean, nil
 }
 
 func (r *RayServiceReconciler) getRayClusterByNamespacedName(ctx context.Context, clusterKey client.ObjectKey) (*rayv1.RayCluster, error) {
@@ -1095,36 +1099,26 @@ func getInitializingTimeout(rs *rayv1.RayService) (time.Duration, bool) {
 	return 0, false
 }
 
-// isInitializingTimeoutForCurrentGeneration returns true if RayServiceReady is False with Reason=InitializingTimeout
-// and ObservedGeneration matches the current generation.
-func isInitializingTimeoutForCurrentGeneration(rs *rayv1.RayService) bool {
+// isInitializingTimeout returns true if RayServiceReady is False with Reason=InitializingTimeout.
+// Once a RayService has timed out, it remains in a terminal failure state regardless of generation changes.
+func isInitializingTimeout(rs *rayv1.RayService) bool {
 	readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
 	if readyCond == nil {
 		return false
 	}
 
 	return readyCond.Status == metav1.ConditionFalse &&
-		readyCond.Reason == string(rayv1.RayServiceInitializingTimeout) &&
-		readyCond.ObservedGeneration == rs.Generation
+		readyCond.Reason == string(rayv1.RayServiceInitializingTimeout)
 }
 
 // markFailedOnInitializingTimeout checks if the RayService has been initializing for too long.
-// If timeout is configured and exceeded:
-//   - Sets RayServiceReady to False with Reason=InitializingTimeout for current generation
-//   - Clears ActiveServiceStatus.RayClusterName and PendingServiceStatus.RayClusterName to trigger cleanup.
-//     The next reconciliation will clean up the actual RayCluster resources via cleanUpRayClusterInstance.
-//   - Emits a Warning event
+// If timeout is configured and exceeded, it marks the service as failed and triggers cleanup.
 func markFailedOnInitializingTimeout(ctx context.Context, r *RayServiceReconciler, rs *rayv1.RayService) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Skip if no timeout is configured
 	timeout, ok := getInitializingTimeout(rs)
 	if !ok {
-		return
-	}
-
-	// Skip if already failed for this generation
-	if isInitializingTimeoutForCurrentGeneration(rs) {
 		return
 	}
 

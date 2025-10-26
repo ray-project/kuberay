@@ -54,26 +54,27 @@ func TestRayServiceBecomesReadyBeforeTimeout(t *testing.T) {
 	g.Expect(readyCondition.Reason).NotTo(Equal(string(rayv1.RayServiceInitializingTimeout)))
 }
 
-// TestRayServiceTimeoutAndRecovery tests that a RayService fails with InitializingTimeout
-// when it cannot become ready within the configured timeout, and then recovers after spec update.
-func TestRayServiceTimeoutAndRecovery(t *testing.T) {
+// TestRayServiceInitializingTimeoutTerminalFailure tests that a RayService fails with InitializingTimeout
+// when it cannot become ready within the configured timeout, and remains in a terminal failure state
+// even after spec updates. The user must delete and recreate the RayService to recover.
+func TestRayServiceInitializingTimeoutTerminalFailure(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	rayServiceName := "rayservice-sample"
+	rayServiceName := "rayservice-timeout-test"
 
 	// Create RayService with a short timeout and an invalid container image
 	// to ensure the head Pod never starts (ImagePullBackOff).
-	// This guarantees the RayService stays in Initializing state.
+	// This guarantees the RayService stays in Initializing state and will timeout.
 	headPodTemplate := HeadPodTemplateApplyConfiguration()
 	// Override the image with a non-existent one to cause ImagePullBackOff
 	headPodTemplate.Spec.Containers[0].Image = ptr.To("invalid-image-does-not-exist:v1.0.0")
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
 		WithAnnotations(map[string]string{
-			utils.RayServiceInitializingTimeoutAnnotation: "5s",
+			utils.RayServiceInitializingTimeoutAnnotation: "10s",
 		}).
 		WithSpec(RayServiceSampleYamlApplyConfiguration().
 			WithRayClusterSpec(rayv1ac.RayClusterSpec().
@@ -86,10 +87,12 @@ func TestRayServiceTimeoutAndRecovery(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to timeout and fail", rayService.Namespace, rayService.Name)
+	initialGeneration := rayService.Generation
+	LogWithTimestamp(test.T(), "Created RayService %s/%s at generation %d with 10s timeout",
+		rayService.Namespace, rayService.Name, initialGeneration)
 
-	// Wait for the timeout to trigger and condition to be updated
-	// Using TestTimeoutShort (1 minute) to allow for 15s timeout + reconciliation + buffer
+	// Step 1: Wait for the timeout to trigger and verify terminal failure state
+	LogWithTimestamp(test.T(), "Waiting for RayService to timeout and enter terminal failure state")
 	g.Eventually(func(g Gomega) {
 		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -99,25 +102,29 @@ func TestRayServiceTimeoutAndRecovery(t *testing.T) {
 		g.Expect(readyCondition).NotTo(BeNil())
 		g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
 		g.Expect(readyCondition.Reason).To(Equal(string(rayv1.RayServiceInitializingTimeout)))
-		g.Expect(readyCondition.Message).To(ContainSubstring("RayService failed to become ready"))
+		g.Expect(readyCondition.Message).To(ContainSubstring("RayService failed to become ready within the configured timeout"))
 	}, TestTimeoutShort).Should(Succeed())
 
-	// Re-fetch to get latest state after timeout
+	LogWithTimestamp(test.T(), "RayService entered terminal failure state with InitializingTimeout")
+
+	// Step 2: Re-fetch and verify complete terminal failure state
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Verify cluster names are cleared after timeout
-	// Note: The actual RayCluster resources will be deleted after a 60-second delay,
-	// but the status fields should be cleared immediately
-	g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(BeEmpty())
-	g.Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
+	g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(BeEmpty(),
+		"ActiveServiceStatus.RayClusterName should be cleared after timeout")
+	g.Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty(),
+		"PendingServiceStatus.RayClusterName should be cleared after timeout")
 
-	// Test recovery: Update the RayService with valid config to trigger a new generation
-	oldGeneration := rayService.Generation
-	LogWithTimestamp(test.T(), "RayService timed out at generation %d, updating to valid config", oldGeneration)
+	// Verify ObservedGeneration is set
+	g.Expect(rayService.Status.ObservedGeneration).To(Equal(initialGeneration),
+		"ObservedGeneration should match the initial generation")
 
-	// Update with valid config - the new cluster can be created immediately
-	// Note: RayCluster deletion has a 60s delay by default, but this doesn't block new cluster creation
+	// Step 3: Update the RayService with valid config to test terminal failure behavior
+	LogWithTimestamp(test.T(), "Updating RayService spec with valid configuration to test terminal failure persistence")
+
+	// Update with valid config (correct image and longer timeout)
 	rayServiceUpdateAC := rayv1ac.RayService(rayServiceName, namespace.Name).
 		WithAnnotations(map[string]string{
 			utils.RayServiceInitializingTimeoutAnnotation: "10m",
@@ -126,31 +133,30 @@ func TestRayServiceTimeoutAndRecovery(t *testing.T) {
 
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceUpdateAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(rayService.Generation).To(BeNumerically(">", oldGeneration))
+	g.Expect(rayService.Generation).To(BeNumerically(">", initialGeneration),
+		"Generation should increment after spec update")
 
-	LogWithTimestamp(test.T(), "Waiting for RayService to clear timeout condition")
-	g.Eventually(func(g Gomega) {
+	updatedGeneration := rayService.Generation
+	LogWithTimestamp(test.T(), "Updated RayService spec to generation %d with valid config", updatedGeneration)
+
+	// Step 4: Verify that the terminal failure state persists despite spec update
+	LogWithTimestamp(test.T(), "Verifying that terminal failure state persists after spec update")
+
+	// Wait briefly for reconciliation to occur, then verify timeout state persists
+	g.Consistently(func(g Gomega) {
 		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// Verify timeout condition is cleared (conditions should be empty or not InitializingTimeout)
+		// Verify RayServiceReady condition remains False with InitializingTimeout reason
 		readyCondition := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RayServiceReady))
-		if readyCondition != nil {
-			g.Expect(readyCondition.Reason).NotTo(Equal(string(rayv1.RayServiceInitializingTimeout)))
-		}
-	}, TestTimeoutShort).Should(Succeed())
+		g.Expect(readyCondition).NotTo(BeNil())
+		g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+		g.Expect(readyCondition.Reason).To(Equal(string(rayv1.RayServiceInitializingTimeout)))
 
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	// Use TestTimeoutMedium (2 minutes) to allow enough time for:
-	// - New cluster creation and initialization
-	// - Serve deployment
-	// - Old cluster cleanup (60s delay doesn't block new cluster)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+		// Verify cluster names remain empty (no new cluster created)
+		g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(BeEmpty())
+		g.Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
+	}, "15s", "2s").Should(Succeed())
 
-	// Verify final state
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(IsRayServiceReady(rayService)).To(BeTrue())
-	g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).NotTo(BeEmpty())
+	LogWithTimestamp(test.T(), "Confirmed: RayService remains in terminal failure state despite spec update")
 }

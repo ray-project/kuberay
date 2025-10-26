@@ -58,12 +58,12 @@ const (
 	//
 	// Behavior when timeout is exceeded:
 	//   - RayServiceReady condition is set to False with reason InitializingTimeout
-	//   - Status is locked to current generation (prevents new cluster creation attempts)
-	//   - Cluster names are cleared, triggering cleanup via cleanUpRayClusterInstance in next reconciliation
+	//   - RayService enters a terminal failure state (cannot be recovered by spec updates)
+	//   - Cluster names are cleared, triggering cleanup of RayCluster resources
 	//   - A Warning event is emitted with timeout details
 	//
-	// To retry after timeout:
-	//   Update the RayService spec to trigger a new generation, which resets the timeout state.
+	// Recovery after timeout:
+	//   The RayService must be deleted and recreated. Updating the spec will NOT retry initialization.
 	RayServiceInitializingTimeoutAnnotation = "ray.io/initializing-timeout"
 
 	// RayJob default cluster selector key
