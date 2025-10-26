@@ -2,6 +2,7 @@ package e2erayservice
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -156,7 +157,7 @@ func TestRayServiceInitializingTimeoutTerminalFailure(t *testing.T) {
 		// Verify cluster names remain empty (no new cluster created)
 		g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).To(BeEmpty())
 		g.Expect(rayService.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
-	}, "15s", "2s").Should(Succeed())
+	}, 15*time.Second, 2*time.Second).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Confirmed: RayService remains in terminal failure state despite spec update")
 }
