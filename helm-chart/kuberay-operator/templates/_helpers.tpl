@@ -223,6 +223,17 @@ rules:
   - update
   - watch
 - apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - httproutes
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - networking.k8s.io
   resources:
   - ingressclasses

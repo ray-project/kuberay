@@ -1714,3 +1714,112 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 		},
 	}
 }
+
+func TestValidateClusterUpgradeOptions(t *testing.T) {
+	tests := []struct {
+		maxSurgePercent   *int32
+		stepSizePercent   *int32
+		intervalSeconds   *int32
+		name              string
+		gatewayClassName  string
+		spec              rayv1.RayServiceSpec
+		enableAutoscaling bool
+		expectError       bool
+	}{
+		{
+			name:              "valid config",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       false,
+		},
+		{
+			name:              "missing autoscaler",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: false,
+			expectError:       true,
+		},
+		{
+			name:              "missing options",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "invalid MaxSurgePercent",
+			maxSurgePercent:   ptr.To(int32(200)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "missing StepSizePercent",
+			maxSurgePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "invalid IntervalSeconds",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(0)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "missing GatewayClassName",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
+			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
+				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+						MaxSurgePercent:  tt.maxSurgePercent,
+						StepSizePercent:  tt.stepSizePercent,
+						IntervalSeconds:  tt.intervalSeconds,
+						GatewayClassName: tt.gatewayClassName,
+					},
+				}
+			} else if tt.expectError {
+				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				}
+			}
+
+			rayClusterSpec := *createBasicRayClusterSpec()
+			rayClusterSpec.EnableInTreeAutoscaling = ptr.To(tt.enableAutoscaling)
+
+			rayService := &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec:  rayClusterSpec,
+					UpgradeStrategy: upgradeStrategy,
+				},
+			}
+
+			err := ValidateClusterUpgradeOptions(rayService)
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
