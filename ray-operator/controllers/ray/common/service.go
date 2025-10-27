@@ -338,7 +338,7 @@ func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
 		utils.DefaultServingPort,
 	)
 
-	return gwv1.PortNumber(port)
+	return port
 }
 
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
