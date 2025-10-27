@@ -4,7 +4,7 @@
 Below is an example template on how to deploy using ArgoCD with
 3 different worker groups:
 
-```
+```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
