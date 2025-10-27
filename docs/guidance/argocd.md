@@ -138,7 +138,7 @@ spec:
 
 With regard to the Ray autoscaler, note this section in the ArgoCD application:
 
-```
+```yaml
   ignoreDifferences:
     - group: ray.io
       kind: RayCluster
