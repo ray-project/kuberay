@@ -3,7 +3,9 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -294,7 +296,45 @@ func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
 		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
 	}
+
+	// Validate initializing timeout annotation if present
+	if err := validateInitializingTimeout(metadata.Annotations); err != nil {
+		return fmt.Errorf("RayService annotations is invalid: %w", err)
+	}
+
 	return nil
+}
+
+// validateInitializingTimeout validates the ray.io/initializing-timeout annotation if present.
+// Accepts Go duration format (e.g., "5m", "1h") or integer seconds.
+// Returns an error if the annotation is present but invalid.
+func validateInitializingTimeout(annotations map[string]string) error {
+	if annotations == nil {
+		return nil
+	}
+
+	timeoutStr, exists := annotations[RayServiceInitializingTimeoutAnnotation]
+	if !exists || timeoutStr == "" {
+		return nil
+	}
+
+	// Try parsing as Go duration first (e.g., "30m", "1h")
+	if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+		if timeout <= 0 {
+			return fmt.Errorf("annotation %s must be a positive duration, got: %s", RayServiceInitializingTimeoutAnnotation, timeoutStr)
+		}
+		return nil
+	}
+
+	// Try parsing as integer seconds
+	if seconds, err := strconv.Atoi(timeoutStr); err == nil {
+		if seconds <= 0 {
+			return fmt.Errorf("annotation %s must be a positive integer (seconds), got: %s", RayServiceInitializingTimeoutAnnotation, timeoutStr)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("annotation %s has invalid format: %s. Expected Go duration format (e.g., '5m', '1h') or positive integer seconds", RayServiceInitializingTimeoutAnnotation, timeoutStr)
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
@@ -306,17 +346,53 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
 
-	// only NewCluster and None are valid upgradeType
+	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewCluster, rayv1.None)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
+		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
 		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
 		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+	}
+
+	// If type is NewClusterWithIncrementalUpgrade, validate the ClusterUpgradeOptions
+	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
+		return ValidateClusterUpgradeOptions(rayService)
+	}
+
+	return nil
+}
+
+func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
+	if !IsAutoscalingEnabled(&rayService.Spec.RayClusterSpec) {
+		return fmt.Errorf("Ray Autoscaler is required for NewClusterWithIncrementalUpgrade")
+	}
+
+	options := rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions
+	if options == nil {
+		return fmt.Errorf("ClusterUpgradeOptions are required for NewClusterWithIncrementalUpgrade")
+	}
+
+	// MaxSurgePercent defaults to 100% if unset.
+	if *options.MaxSurgePercent < 0 || *options.MaxSurgePercent > 100 {
+		return fmt.Errorf("maxSurgePercent must be between 0 and 100")
+	}
+
+	if options.StepSizePercent == nil || *options.StepSizePercent < 0 || *options.StepSizePercent > 100 {
+		return fmt.Errorf("stepSizePercent must be between 0 and 100")
+	}
+
+	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {
+		return fmt.Errorf("intervalSeconds must be greater than 0")
+	}
+
+	if options.GatewayClassName == "" {
+		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
 	}
 
 	return nil

@@ -91,7 +91,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		// The sidecar submitter shares the same network namespace as the Ray dashboard,
 		// so it uses 127.0.0.1 to connect to the Ray dashboard.
 		rayHeadContainer := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
-		port = utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort)
+		port = int(utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort))
 		address = "http://127.0.0.1:" + strconv.Itoa(port)
 	case rayv1.K8sJobMode:
 		// Submitter is a separate K8s Job; use cluster dashboard address.
