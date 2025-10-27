@@ -41,7 +41,7 @@ spec:
     targetRevision: v1.4.0  # update this as necessary
     path: helm-chart/kuberay-operator
     helm:
-      skipCrds: true   # note this skip step
+      skipCrds: true   # note this step is required
   destination:
     server: https://kubernetes.default.svc
     namespace: ray-cluster
@@ -152,4 +152,5 @@ With regard to the Ray autoscaler, note this section in the ArgoCD application:
 
 It has been observed that without this `ignoreDifferences` section, ArgoCD
 and the Ray Autoscaler may conflict, resulting in unexpected behaviour when
-it comes to requesting workers dynamically (e.g. `ray.autoscaler.sdk.request_resources`).
+it comes to requesting workers dynamically (e.g. `ray.autoscaler.sdk.request_resources`). 
+More specifically, when requesting N workers, the Autoscaler would not spin up N workers. 
