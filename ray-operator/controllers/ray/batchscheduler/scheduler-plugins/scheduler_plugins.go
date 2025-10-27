@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +16,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	batchschedulerutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
@@ -93,21 +93,23 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, objec
 	return nil
 }
 
-// AddMetadataToPod adds essential labels and annotations to the Ray pod
+// AddMetadataToChildResource adds essential labels and annotations to the child resource.
 // the scheduler needs these labels and annotations in order to do the scheduling properly
-func (k *KubeScheduler) AddMetadataToPod(_ context.Context, rayCluster *rayv1.RayCluster, _ string, pod *corev1.Pod) {
-	// when gang scheduling is enabled, extra labels need to be added to all pods
-	if k.isGangSchedulingEnabled(rayCluster) {
-		pod.Labels[kubeSchedulerPodGroupLabelKey] = rayCluster.Name
+func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
+	// when gang scheduling is enabled, extra labels need to be added to all child resources
+	if k.isGangSchedulingEnabled(parent) {
+		labels := child.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[kubeSchedulerPodGroupLabelKey] = parent.GetName()
+		child.SetLabels(labels)
 	}
-	pod.Spec.SchedulerName = k.Name()
+	batchschedulerutils.AddSchedulerNameToObject(child, k.Name())
 }
 
-func (k *KubeScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
-}
-
-func (k *KubeScheduler) isGangSchedulingEnabled(app *rayv1.RayCluster) bool {
-	_, exist := app.Labels[utils.RayGangSchedulingEnabled]
+func (k *KubeScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
+	_, exist := obj.GetLabels()[utils.RayGangSchedulingEnabled]
 	return exist
 }
 

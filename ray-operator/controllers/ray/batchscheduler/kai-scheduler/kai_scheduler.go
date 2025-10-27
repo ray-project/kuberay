@@ -9,8 +9,8 @@ package kaischeduler
 
 import (
 	"context"
+	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -20,6 +20,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 )
 
 const (
@@ -34,27 +35,32 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
+	_, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	}
 	return nil
 }
 
-func (k *KaiScheduler) AddMetadataToPod(ctx context.Context, app *rayv1.RayCluster, _ string, pod *corev1.Pod) {
+func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, _ string) {
 	logger := ctrl.LoggerFrom(ctx).WithName("kai-scheduler")
-	pod.Spec.SchedulerName = k.Name()
+	utils.AddSchedulerNameToObject(child, k.Name())
 
-	queue, ok := app.Labels[QueueLabelName]
+	parentLabel := parent.GetLabels()
+	queue, ok := parentLabel[QueueLabelName]
 	if !ok || queue == "" {
-		logger.Info("Queue label missing from RayCluster; pods will remain pending",
+		logger.Info("Queue label missing from parent; child will remain pending",
 			"requiredLabel", QueueLabelName)
 		return
 	}
-	if pod.Labels == nil {
-		pod.Labels = make(map[string]string)
-	}
-	pod.Labels[QueueLabelName] = queue
-}
 
-func (k *KaiScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
+	childLabels := child.GetLabels()
+	if childLabels == nil {
+		childLabels = make(map[string]string)
+	}
+	childLabels[QueueLabelName] = queue
+	child.SetLabels(childLabels)
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
