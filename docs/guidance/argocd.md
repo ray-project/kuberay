@@ -137,6 +137,7 @@ spec:
 ## Auto Scaling
 
 With regard to the Ray autoscaler, note this section in the ArgoCD application:
+
 ```
   ignoreDifferences:
     - group: ray.io
