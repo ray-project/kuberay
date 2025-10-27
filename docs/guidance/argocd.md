@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Deploying via ArgoCD
 
-Below is an example template on how to deploy using ArgoCD with 
+Below is an example template on how to deploy using ArgoCD with
 3 different worker groups:
 
 ```
@@ -134,7 +134,6 @@ spec:
 
 ```
 
-
 ## Auto Scaling
 
 With regard to the Ray autoscaler, note this section in the ArgoCD application:
@@ -152,5 +151,5 @@ With regard to the Ray autoscaler, note this section in the ArgoCD application:
 
 It has been observed that without this `ignoreDifferences` section, ArgoCD
 and the Ray Autoscaler may conflict, resulting in unexpected behaviour when
-it comes to requesting workers dynamically (e.g. `ray.autoscaler.sdk.request_resources`). 
-More specifically, when requesting N workers, the Autoscaler would not spin up N workers. 
+it comes to requesting workers dynamically (e.g. `ray.autoscaler.sdk.request_resources`).
+More specifically, when requesting N workers, the Autoscaler would not spin up N workers.
