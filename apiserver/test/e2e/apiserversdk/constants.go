@@ -1,5 +1,5 @@
 package apiserversdk
 
 const (
-	RayImage = "rayproject/ray:2.50.1"
+	RayImage = "rayproject/ray:2.46.0"
 )
