@@ -3,13 +3,13 @@ kind: RayCluster
 metadata:
   name: locust-cluster
 spec:
-  rayVersion: '2.51.0'
+  rayVersion: '2.50.1'
   headGroupSpec:
     template:
       spec:
         containers:
           - name: ray-head
-            image: rayproject/ray:2.51.0
+            image: rayproject/ray:2.50.1
             resources:
               requests:
                 cpu: 300m

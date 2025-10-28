@@ -11,7 +11,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.51.0
+          image: rayproject/ray:2.50.1
           ports:
           - containerPort: 6379
             name: gcs
@@ -57,7 +57,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.51.0
+          image: rayproject/ray:2.50.1
           volumeMounts:
           - mountPath: /tmp/ray
             name: ray-logs
