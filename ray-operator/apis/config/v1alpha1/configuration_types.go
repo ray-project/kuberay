@@ -88,6 +88,10 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// UseBackgroundGoroutine indicates that it wil use goroutine to fetch the job info from ray dashboard and
+	// store the job info in the cache
+	UseBackgroundGoroutine bool `json:"useBackgroundGoroutine,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
