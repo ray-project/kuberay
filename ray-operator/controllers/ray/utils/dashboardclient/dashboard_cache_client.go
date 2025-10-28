@@ -74,18 +74,15 @@ func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface)
 }
 
 func (r *RayDashboardCacheClient) UpdateDeployments(ctx context.Context, configJson []byte) error {
-	// TODO implement me
-	panic("implement me")
+	return r.client.UpdateDeployments(ctx, configJson)
 }
 
 func (r *RayDashboardCacheClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.GetServeDetails(ctx)
 }
 
 func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context) (map[string]*utiltypes.ServeApplicationStatus, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.GetMultiApplicationStatus(ctx)
 }
 
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
@@ -97,10 +94,9 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	// send to worker pool
 	task := func() bool {
-		jobInfoCache, ok := cacheStorage.Get(jobId)
-		if !ok {
-			// TODO: this should not happen
-		}
+		jobInfoCache, _ := cacheStorage.Get(jobId)
+		// TODO: should we handle cache not exist here, which it shouldn't happen
+
 		jobInfoCache.JobInfo, jobInfoCache.Err = r.client.GetJobInfo(ctx, jobId)
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
@@ -108,11 +104,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		cacheStorage.Set(jobId, jobInfoCache)
 		// handle not found(ex: rayjob has deleted)
 
-		if rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus) {
-			return false
-		}
-
-		return true
+		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
 	}
 
 	taskQueue <- task
@@ -121,31 +113,25 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 }
 
 func (r *RayDashboardCacheClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.ListJobs(ctx)
 }
 
 func (r *RayDashboardCacheClient) SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.SubmitJob(ctx, rayJob)
 }
 
 func (r *RayDashboardCacheClient) SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest) (string, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.SubmitJobReq(ctx, request)
 }
 
 func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string) (*string, error) {
-	// TODO implement me
-	panic("implement me")
+	return r.client.GetJobLog(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
-	// TODO implement me
-	panic("implement me")
+	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
-	// TODO implement me
-	panic("implement me")
+	return r.client.DeleteJob(ctx, jobName)
 }
