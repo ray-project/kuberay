@@ -33,14 +33,14 @@ spec:
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: '2.51.0'
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.51.0
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -65,7 +65,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.51.0
             resources:
               limits:
                 cpu: "1"

@@ -6,8 +6,8 @@ labels:
 annotations:
   dead: beef
 
-ray-version: 2.46.0
-image: rayproject/ray:2.46.0
+ray-version: 2.51.0
+image: rayproject/ray:2.51.0
 service-account: my-service-account@my-project.iam.gserviceaccount.com
 
 head:

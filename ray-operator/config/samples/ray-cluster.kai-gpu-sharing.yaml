@@ -74,7 +74,7 @@ spec:
       spec:
         containers:
         - name: head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.51.0
           resources:
             limits:
               cpu: "1"
@@ -91,7 +91,7 @@ spec:
       spec:
         containers:
         - name: worker
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.51.0
           resources:
             limits:
               cpu: "1"
