@@ -53,6 +53,19 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayServiceInitializingTimeoutAnnotation specifies the timeout for RayService initialization.
+	// Accepts Go duration format (e.g., "30m", "1h") or integer seconds.
+	//
+	// Behavior when timeout is exceeded:
+	//   - RayServiceReady condition is set to False with reason InitializingTimeout
+	//   - RayService enters a terminal failure state (cannot be recovered by spec updates)
+	//   - Cluster names are cleared, triggering cleanup of RayCluster resources
+	//   - A Warning event is emitted with timeout details
+	//
+	// Recovery after timeout:
+	//   The RayService must be deleted and recreated. Updating the spec will NOT retry initialization.
+	RayServiceInitializingTimeoutAnnotation = "ray.io/initializing-timeout"
+
 	// RayJob default cluster selector key
 	RayJobClusterSelectorKey = "ray.io/cluster"
 
@@ -86,6 +99,10 @@ const (
 	DashboardPortName = "dashboard"
 	MetricsPortName   = "metrics"
 	ServingPortName   = "serve"
+
+	// Gateway defaults for HTTP protocol
+	GatewayListenerPortName    = "http"
+	DefaultGatewayListenerPort = 80
 
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
@@ -324,12 +341,23 @@ const (
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
 
 	// RayService event list
+	CreatedGateway                  K8sEventType = "CreatedGateway"
+	CreatedHTTPRoute                K8sEventType = "CreatedHTTPRoute"
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
+	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
+	UpdatedGateway                  K8sEventType = "UpdatedGateway"
+	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"
 	UpdatedServeApplications        K8sEventType = "UpdatedServeApplications"
+	UpdatedServeTargetCapacity      K8sEventType = "UpdatedServeTargetCapacity"
 	FailedToUpdateHeadPodServeLabel K8sEventType = "FailedToUpdateHeadPodServeLabel"
 	FailedToUpdateServeApplications K8sEventType = "FailedToUpdateServeApplications"
+	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
+	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
+	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
+	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"

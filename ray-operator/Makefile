@@ -75,12 +75,20 @@ test-e2e-autoscaler: WHAT ?= ./test/e2eautoscaler
 test-e2e-autoscaler: manifests fmt vet ## Run e2e autoscaler tests.
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-rayservice: WHAT ?= ./test/e2erayservice
+test-e2e-rayservice: manifests fmt vet ## Run e2e RayService tests.
+	go test -timeout 30m -v $(WHAT)
+
 test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
-test-e2e-upgrade: manifests fmt vet ## Run e2e tests.
+test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.
+	go test -timeout 30m -v $(WHAT)
+
+test-e2e-incremental-upgrade: WHAT ?= ./test/e2eincrementalupgrade
+test-e2e-incremental-upgrade: manifests fmt vet ## Run e2e RayService incremental upgrade tests.
 	go test -timeout 30m -v $(WHAT)
 
 test-e2e-rayjob-submitter: WHAT ?= ./test/e2erayjobsubmitter
-test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e tests.
+test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e light weight submitter tests.
 	go test -timeout 30m -v $(WHAT)
 
 test-sampleyaml: WHAT ?= ./test/sampleyaml
@@ -88,11 +96,7 @@ test-sampleyaml: manifests fmt vet
 	go test -timeout 30m -v $(WHAT)
 
 test-e2e-rayjob: WHAT ?= ./test/e2erayjob
-test-e2e-rayjob: manifests fmt vet ## Run e2e tests.
-	go test -timeout 30m -v $(WHAT)
-
-test-e2e-rayservice: WHAT ?= ./test/e2erayservice
-test-e2e-rayservice: manifests fmt vet ## Run e2e tests.
+test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
 	go test -timeout 30m -v $(WHAT)
 
 sync: helm api-docs
