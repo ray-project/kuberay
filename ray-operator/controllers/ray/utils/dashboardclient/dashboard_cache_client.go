@@ -14,17 +14,20 @@ import (
 
 var ErrAgain = errors.New("EAGAIN")
 
-var (
-	initWorkPool sync.Once
-	taskQueue    chan Task
-
+const (
 	// TODO: make queue size and worker size configurable.
 	taskQueueSize = 128
 	workerSize    = 8
 
-	cacheStorage *cmap.ConcurrentMap[string, *JobInfoCache]
+	queryInterval = 3 * time.Second
+)
 
-	queryInterval = 3 * time.Second // TODO: make it configurable
+var (
+	initWorkPool sync.Once
+	pool         workerPool
+
+	initCacheStorage sync.Once
+	cacheStorage     *cmap.ConcurrentMap[string, *JobInfoCache]
 )
 
 type (
@@ -34,7 +37,35 @@ type (
 		Err      error
 		UpdateAt *time.Time
 	}
+
+	workerPool struct {
+		taskQueue chan Task
+	}
 )
+
+func (w *workerPool) init(taskQueueSize int, workerSize int, queryInterval time.Duration) {
+	w.taskQueue = make(chan Task, taskQueueSize)
+
+	// TODO: should we have observability for these goroutine?
+	for i := 0; i < workerSize; i++ {
+		// TODO: should we consider the stop ?
+		go func() {
+			for task := range w.taskQueue {
+				again := task()
+
+				if again {
+					time.AfterFunc(queryInterval, func() {
+						w.taskQueue <- task
+					})
+				}
+			}
+		}()
+	}
+}
+
+func (w *workerPool) PutTask(task Task) {
+	w.taskQueue <- task
+}
 
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
 
@@ -44,26 +75,10 @@ type RayDashboardCacheClient struct {
 
 func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface) {
 	initWorkPool.Do(func() {
-		if taskQueue == nil {
-			taskQueue = make(chan Task, taskQueueSize)
+		pool.init(taskQueueSize, workerSize, queryInterval)
+	})
 
-			// TODO: should we have observability for these goroutine?
-			for i := 0; i < workerSize; i++ {
-				// TODO: should we consider the stop ?
-				go func() {
-					for task := range taskQueue {
-						again := task()
-
-						if again {
-							time.AfterFunc(queryInterval, func() {
-								taskQueue <- task
-							})
-						}
-					}
-				}()
-			}
-		}
-
+	initCacheStorage.Do(func() {
 		if cacheStorage == nil {
 			tmp := cmap.New[*JobInfoCache]()
 			cacheStorage = &tmp
@@ -90,7 +105,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return cached.JobInfo, cached.Err
 	}
 	cached := &JobInfoCache{Err: ErrAgain}
-	cacheStorage.Set(jobId, cached)
+	cacheStorage.SetIfAbsent(jobId, cached)
 
 	// send to worker pool
 	task := func() bool {
@@ -107,7 +122,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
 	}
 
-	taskQueue <- task
+	pool.PutTask(task)
 
 	return nil, ErrAgain
 }
