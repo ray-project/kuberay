@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	cmap "github.com/orcaman/concurrent-map/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -20,6 +20,9 @@ const (
 	workerSize    = 8
 
 	queryInterval = 3 * time.Second
+
+	cacheSize   = 10000
+	cacheExpiry = 10 * time.Minute
 )
 
 var (
@@ -27,7 +30,7 @@ var (
 	pool         workerPool
 
 	initCacheStorage sync.Once
-	cacheStorage     *cmap.ConcurrentMap[string, *JobInfoCache]
+	cacheStorage     *lru.Cache[string, *JobInfoCache]
 )
 
 type (
@@ -80,8 +83,8 @@ func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface)
 
 	initCacheStorage.Do(func() {
 		if cacheStorage == nil {
-			tmp := cmap.New[*JobInfoCache]()
-			cacheStorage = &tmp
+			// the New() returns error only if the size is less or equal than zero.
+			cacheStorage, _ = lru.New[string, *JobInfoCache](cacheSize)
 		}
 	})
 
@@ -105,7 +108,9 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return cached.JobInfo, cached.Err
 	}
 	cached := &JobInfoCache{Err: ErrAgain}
-	cacheStorage.SetIfAbsent(jobId, cached)
+	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, cached); existed {
+		return cached.JobInfo, cached.Err
+	}
 
 	// send to worker pool
 	task := func() bool {
@@ -116,7 +121,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
 
-		cacheStorage.Set(jobId, jobInfoCache)
+		cacheStorage.Add(jobId, jobInfoCache)
 		// handle not found(ex: rayjob has deleted)
 
 		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
