@@ -9,7 +9,6 @@ import (
 // StorageWriter is the interface for storage writer.
 type StorageWritter interface {
 	CreateDirectory(path string) error
-	Append(file string, reader io.Reader, appendPosition int64) (nextPod int64, err error)
 	WriteFile(file string, reader io.Reader) error
 }
 

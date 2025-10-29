@@ -5,11 +5,13 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/backend"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/runtime"
+	"github.com/ray-project/kuberay/historyserver/backend/server"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 	"github.com/ray-project/kuberay/historyserver/utils"
 )
@@ -23,6 +25,7 @@ func main() {
 	rayClusterId := ""
 	rayRootDir := ""
 	logBatching := 1000
+	eventsPort := 8080
 	pushInterval := time.Minute
 
 	flag.StringVar(&role, "role", "Worker", "")
@@ -31,6 +34,7 @@ func main() {
 	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
+	flag.IntVar(&eventsPort, "events-port", 8080, "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
@@ -44,6 +48,8 @@ func main() {
 	if err != nil {
 		panic("Failed to get ray node id: " + err.Error())
 	}
+
+	sessionName := path.Base(sessionDir)
 
 	data, err := os.ReadFile(runtimeClassConfigPath)
 	if err != nil {
@@ -76,6 +82,11 @@ func main() {
 	if err != nil {
 		panic("Failed to create writter for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
+
+	// 创建并初始化EventServer
+	eventServer := server.NewEventServer(writter, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+	eventServer.InitServer(eventsPort)
+
 	collector := runtime.NewCollector(&globalConfig, writter)
 
 	sigChan := make(chan os.Signal, 1)

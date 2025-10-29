@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/historyserver
 
-go 1.25.1
+go 1.24.0
 
 require (
 	github.com/alibabacloud-go/tea v1.3.11

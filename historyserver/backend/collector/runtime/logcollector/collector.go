@@ -3,16 +3,17 @@ package logcollector
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/hpcloud/tail"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
 	"github.com/ray-project/kuberay/historyserver/utils"
 	"github.com/sirupsen/logrus"
@@ -40,6 +41,13 @@ type RayLogHandler struct {
 
 	// key job id
 	JobResourcesUrlInfo map[string]*JobUrlInfo
+
+	// Store file paths to be processed on shutdown
+	logFilePaths map[string]bool
+	filePathMu   sync.Mutex
+
+	// Channel for signaling shutdown
+	shutdownChan chan struct{}
 }
 
 func (r *RayLogHandler) Start(stop chan struct{}) {
@@ -49,13 +57,33 @@ func (r *RayLogHandler) Start(stop chan struct{}) {
 func (r *RayLogHandler) Run(stop chan struct{}) error {
 	watchPath := r.LogDir
 
+	// Initialize log file paths storage
+	r.logFilePaths = make(map[string]bool)
+	r.shutdownChan = make(chan struct{})
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
 	}
 	defer watcher.Close()
 	go r.WatchLogsLoops(watcher, watchPath, stop)
-	go r.PushLogsLoops(stop)
+
+	// Setup signal handling for SIGTERM
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM)
+
+	go func() {
+		select {
+		case <-sigChan:
+			logrus.Info("Received SIGTERM, processing all logs...")
+			r.processAllLogs()
+			close(r.shutdownChan)
+		case <-stop:
+			logrus.Info("Received stop signal, processing all logs...")
+			r.processAllLogs()
+			close(r.shutdownChan)
+		}
+	}()
 
 	if r.EnableMeta {
 		// Persist meta data
@@ -72,17 +100,45 @@ func (r *RayLogHandler) AddLogFile(absoluteLogPathName string) {
 }
 
 func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
-	// 判断文件是否存在
-	// 计算相对路径
+	// Simply store the file path for later processing
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
 
+	r.filePathMu.Lock()
+	r.logFilePaths[absoluteLogPathName] = true
+	r.filePathMu.Unlock()
+
+	logrus.Infof("Registered log file for later processing: %s", absoluteLogPathName)
+	return nil
+}
+
+func (r *RayLogHandler) processAllLogs() {
+	logrus.Info("Processing all log files...")
+	r.filePathMu.Lock()
+	defer r.filePathMu.Unlock()
+
+	if err := r.Writter.CreateDirectory(r.RootDir); err != nil {
+		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
+		return
+	}
+
+	for filePath := range r.logFilePaths {
+		// Process each file now
+		if err := r.processLogFile(filePath); err != nil {
+			logrus.Errorf("Failed to process log file %s: %v", filePath, err)
+		}
+	}
+
+	logrus.Info("Finished processing all log files")
+}
+
+func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
+	// 计算相对路径
 	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
 	// 分割相对路径为子目录和文件名
-	// subdir events/aa/
-	// filename a.txt
 	subdir, filename := filepath.Split(relativePath)
 	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, r.RayNodeName)
+
 	if len(subdir) != 0 {
 		dirName := path.Join(logDir, subdir)
 		if err := r.Writter.CreateDirectory(dirName); err != nil {
@@ -92,104 +148,36 @@ func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
 	}
 
 	objectName := path.Join(logDir, subdir, filename)
-	logrus.Infof("Begin to create and append oss object %s by absoluteLogPathName %s, oss subdir [%s] filename [%s] relativePath[%s]",
-		objectName, absoluteLogPathName, subdir, filename, relativePath)
+	logrus.Infof("Processing log file %s (object: %s)", absoluteLogPathName, objectName)
 
-	// utils.DeleteObject(r.OssBucket, objectName)
-
-	// 从文件开始读,
-	// Go 1.20推荐使用 io.SeekEnd, 老版本可能需要改为os.SEEK_END
-	seek := &tail.SeekInfo{Offset: 0, Whence: io.SeekStart}
-	t, err := tail.TailFile(absoluteLogPathName, tail.Config{
-		Follow:   true,
-		Location: seek,
-	})
+	// Read the entire file content only when processing
+	content, err := os.ReadFile(absoluteLogPathName)
 	if err != nil {
-		logrus.Errorf("Create TailFile %s error %v", absoluteLogPathName, err)
+		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
 		return err
 	}
 
-	var nextPos int64 = 0
-
-	logrus.Infof("Begin to first append oss object %s ...", objectName)
-	nextPos, err = r.Writter.Append(objectName, strings.NewReader(""), nextPos)
+	// Write to storage
+	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
-		logrus.Errorf("First append object %s error %v",
-			objectName,
-			err)
+		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
 	}
 
-	lines := 0
-	lastPush := time.Now()
-	buf := bytes.NewBufferString("")
-	for {
-		select {
-		case <-time.Tick(r.PushInterval):
-			if lines > 0 {
-				nextPos, err = r.Writter.Append(objectName, buf, nextPos)
-				if err != nil {
-					logrus.Errorf("Tail file %s to object %s error, append value: %v, nextPos %d error [%v]",
-						absoluteLogPathName,
-						objectName,
-						buf.String(),
-						nextPos,
-						err)
-					return err
-				}
-
-				now := time.Now()
-				logrus.Infof("Tail file %s to object %s success, by interval, append value %s, lines %v, interval %v",
-					absoluteLogPathName, objectName, buf.String(), lines, now.Sub(lastPush).Seconds())
-
-				lastPush = now
-				lines = 0
-				buf = bytes.NewBufferString("")
-			}
-		case line, ok := <-t.Lines:
-			if !ok {
-				logrus.Infof("channel for path %v is closed", absoluteLogPathName)
-				return nil
-			}
-			lines++
-			buf.WriteString(line.Text + "\n")
-			if lines >= r.LogBatching {
-				nextPos, err = r.Writter.Append(objectName, buf, nextPos)
-				if err != nil {
-					logrus.Errorf("Tail file %s to object %s error, append value: %v, nextPos %d error [%v]",
-						absoluteLogPathName,
-						objectName,
-						buf.String(),
-						nextPos,
-						err)
-					return err
-				}
-
-				now := time.Now()
-				logrus.Infof("Tail file %s to object %s success, by line count, append value %s, lines %v, interval %v",
-					absoluteLogPathName, objectName, buf.String(), lines, now.Sub(lastPush).Seconds())
-
-				lastPush = now
-				lines = 0
-				buf = bytes.NewBufferString("")
-			}
-		}
-	}
+	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	return nil
 }
 
 func (r *RayLogHandler) PushLogsLoops(stop chan struct{}) {
-
-	if err := r.Writter.CreateDirectory(r.RootDir); err != nil {
-		logrus.Errorf("Failed to create oss root directory %s: %v", r.RootDir, err)
-		return
-	}
-
 	for {
 		select {
 		case logfile := <-r.LogFiles:
 			go r.PushLog(logfile)
 		case <-stop:
 			logrus.Warnf("Receive stop signal, so return PushLogsLoop")
+			return
+		case <-r.shutdownChan:
+			logrus.Warnf("Receive shutdown signal, so return PushLogsLoop")
 			return
 		}
 	}
@@ -229,6 +217,9 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 		select {
 		case <-stop:
 			logrus.Warnf("Receive stop signal, so return watchFileLoops")
+			return
+		case <-r.shutdownChan:
+			logrus.Warnf("Receive shutdown signal, so return watchFileLoops")
 			return
 		case event, ok := <-watcher.Events:
 			if !ok {
