@@ -313,7 +313,7 @@ env_vars:
 			Should(WithTransform(RayJobReason, Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				Equal("Submitter completed but Ray job not found in RayCluster.")))
+				MatchRegexp("The RayJob submitter finished at .* but the ray job did not reach terminal state within .*")))
 
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
