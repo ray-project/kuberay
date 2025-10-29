@@ -8,6 +8,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"github.com/smallnest/chanx"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
