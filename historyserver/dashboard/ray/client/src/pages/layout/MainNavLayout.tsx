@@ -28,14 +28,16 @@ export const BREADCRUMBS_HEIGHT = 36;
 export const MainNavLayout = () => {
   const mainNavContextState = useMainNavState();
 
-  const { clusterName, sessionName } = useParams();
+  const { clusterName, clusterNamespace, sessionName } = useParams();
   useEffect(function () {
       if (clusterName) {
         const safeSessionName = sessionName ? sessionName : "";
+        const safeClusterNamespace = clusterNamespace ? clusterNamespace : "";
         Cookies.set('cluster_name', clusterName);
+        Cookies.set('cluster_namespace', safeClusterNamespace);
         Cookies.set('session_name', safeSessionName);
       }
-  }, [clusterName, sessionName])
+  }, [clusterName, clusterNamespace, sessionName])
 
   return (
     <MainNavContext.Provider value={mainNavContextState}>
@@ -76,7 +78,7 @@ const Main = () => {
 };
 
 const MainNavBar = () => {
-  const { clusterName, sessionName } = useParams();
+  const { clusterName, clusterNamespace, sessionName } = useParams();
   const { mainNavPageHierarchy } = useContext(MainNavContext);
   const rootRouteId = mainNavPageHierarchy[0]?.id;
   const { metricsContextLoaded, grafanaHost } = useContext(GlobalContext);
@@ -85,40 +87,40 @@ const MainNavBar = () => {
     [
       {
         title: "Overview",
-        path: `/clusters/${clusterName}/${sessionName}/overview`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/overview`,
         id: "overview",
       },
       {
         title: "Jobs",
-        path: `/clusters/${clusterName}/${sessionName}/jobs`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/jobs`,
         id: "jobs",
       },
       {
         title: "Serve",
-        path: `/clusters/${clusterName}/${sessionName}/serve`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/serve`,
         id: "serve",
       },
       {
         title: "Cluster",
-        path: `/clusters/${clusterName}/${sessionName}/cluster`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/cluster`,
         id: "cluster",
       },
       {
         title: "Actors",
-        path: `/clusters/${clusterName}/${sessionName}/actors`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/actors`,
         id: "actors",
       },
       {
         title: "Metrics",
-        path: `/clusters/${clusterName}/${sessionName}/metrics`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/metrics`,
         id: "metrics",
       },
       {
         title: "Logs",
-        path: `/clusters/${clusterName}/${sessionName}/logs`,
+        path: `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/logs`,
         id: "logs",
       }
-    ], [clusterName, sessionName]);
+    ], [clusterName, clusterNamespace, sessionName]);
 
   if (!metricsContextLoaded || grafanaHost === "DISABLED") {
     navItems = navItems.filter(({ id }) => id !== "metrics");

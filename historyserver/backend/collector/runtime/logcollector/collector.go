@@ -39,9 +39,6 @@ type RayLogHandler struct {
 	HttpClient *http.Client
 	Writter    storage.StorageWritter
 
-	// key job id
-	JobResourcesUrlInfo map[string]*JobUrlInfo
-
 	// Store file paths to be processed on shutdown
 	logFilePaths map[string]bool
 	filePathMu   sync.Mutex
@@ -50,11 +47,12 @@ type RayLogHandler struct {
 	shutdownChan chan struct{}
 }
 
-func (r *RayLogHandler) Start(stop chan struct{}) {
+func (r *RayLogHandler) Start(stop <-chan struct{}) error {
 	go r.Run(stop)
+	return nil
 }
 
-func (r *RayLogHandler) Run(stop chan struct{}) error {
+func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	watchPath := r.LogDir
 
 	// Initialize log file paths storage
@@ -66,33 +64,25 @@ func (r *RayLogHandler) Run(stop chan struct{}) error {
 		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
 	}
 	defer watcher.Close()
-	go r.WatchLogsLoops(watcher, watchPath, stop)
 
 	// Setup signal handling for SIGTERM
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
+	go r.WatchLogsLoops(watcher, watchPath)
+	go r.PushLogsLoops()
 
-	go func() {
-		select {
-		case <-sigChan:
-			logrus.Info("Received SIGTERM, processing all logs...")
-			r.processAllLogs()
-			close(r.shutdownChan)
-		case <-stop:
-			logrus.Info("Received stop signal, processing all logs...")
-			r.processAllLogs()
-			close(r.shutdownChan)
-		}
-	}()
-
-	if r.EnableMeta {
-		// Persist meta data
-		go r.PersistMetaLoop(stop)
+	select {
+	case <-sigChan:
+		logrus.Info("Received SIGTERM, processing all logs...")
+		r.processAllLogs()
+		close(r.shutdownChan)
 	}
-
-	<-stop
 	logrus.Warnf("Receive stop single, so stop ray collector ")
 	return nil
+}
+
+func (r *RayLogHandler) WaitForStop() <-chan struct{} {
+	return r.shutdownChan
 }
 
 func (r *RayLogHandler) AddLogFile(absoluteLogPathName string) {
@@ -137,7 +127,8 @@ func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
 	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
 	// 分割相对路径为子目录和文件名
 	subdir, filename := filepath.Split(relativePath)
-	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, r.RayNodeName)
+	sessionName := path.Base(r.SessionDir)
+	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
 
 	if len(subdir) != 0 {
 		dirName := path.Join(logDir, subdir)
@@ -168,14 +159,26 @@ func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
 	return nil
 }
 
-func (r *RayLogHandler) PushLogsLoops(stop chan struct{}) {
+func (r *RayLogHandler) PushLogsLoops() {
+	if r.EnableMeta {
+		metadir := path.Clean(r.RootDir + "/" + "metadir")
+		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
+			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+			path.Base(r.SessionDir),
+		))
+		if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+			return
+		}
+		if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+			return
+		}
+	}
 	for {
 		select {
 		case logfile := <-r.LogFiles:
-			go r.PushLog(logfile)
-		case <-stop:
-			logrus.Warnf("Receive stop signal, so return PushLogsLoop")
-			return
+			r.PushLog(logfile)
 		case <-r.shutdownChan:
 			logrus.Warnf("Receive shutdown signal, so return PushLogsLoop")
 			return
@@ -183,7 +186,7 @@ func (r *RayLogHandler) PushLogsLoops(stop chan struct{}) {
 	}
 }
 
-func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string, stop chan struct{}) {
+func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string) {
 	// 监听当前目录
 	if err := watcher.Add(walkPath); err != nil {
 		logrus.Fatalf("Watcher rootpath %s error %v", r.LogDir, err)
@@ -215,9 +218,6 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 
 	for {
 		select {
-		case <-stop:
-			logrus.Warnf("Receive stop signal, so return watchFileLoops")
-			return
 		case <-r.shutdownChan:
 			logrus.Warnf("Receive shutdown signal, so return watchFileLoops")
 			return
@@ -242,7 +242,6 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 			}
 		case _, ok := <-watcher.Errors:
 			if !ok {
-				close(stop)
 				logrus.Warnf("Watcher error, so return watchFileLoops")
 				return
 			}

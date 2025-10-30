@@ -17,15 +17,17 @@ type ServerHandler struct {
 	rootDir      string
 	dashboardDir string
 
-	reader storage.StorageReader
+	reader        storage.StorageReader
+	clientManager *ClientManager
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, reader storage.StorageReader) *ServerHandler {
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager) *ServerHandler {
 	return &ServerHandler{
-		reader: reader,
+		reader:        reader,
+		clientManager: clientManager,
 
 		rootDir:      c.RootDir,
-		dashboardDir: "/dashboard/ray/build",
+		dashboardDir: dashboardDir,
 	}
 }
 

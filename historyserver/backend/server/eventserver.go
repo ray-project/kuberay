@@ -27,6 +27,7 @@ type Event struct {
 type EventServer struct {
 	events        []Event
 	storageWriter storage.StorageWritter
+	root          string
 	sessionDir    string
 	nodeID        string
 	clusterName   string
@@ -34,13 +35,14 @@ type EventServer struct {
 	sessionName   string
 	mutex         sync.Mutex
 	flushInterval time.Duration
-	stopChan      chan struct{}
+	stopped       chan struct{}
 }
 
-func NewEventServer(writer storage.StorageWritter, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
+func NewEventServer(writer storage.StorageWritter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
 	server := &EventServer{
 		events:        make([]Event, 0),
 		storageWriter: writer,
+		root:          rootDir,
 		sessionDir:    sessionDir,
 		nodeID:        nodeID,
 		clusterName:   clusterName,
@@ -48,11 +50,8 @@ func NewEventServer(writer storage.StorageWritter, sessionDir, nodeID, clusterNa
 		sessionName:   sessionName,
 		mutex:         sync.Mutex{},
 		flushInterval: time.Hour, // 默认每小时刷新一次
-		stopChan:      make(chan struct{}),
+		stopped:       make(chan struct{}),
 	}
-
-	// 启动定期刷新 goroutine
-	go server.periodicFlush()
 
 	return server
 }
@@ -71,21 +70,8 @@ func (es *EventServer) InitServer(port int) {
 		logrus.Infof("Starting event server on port %d", port)
 		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
-
-	// Handle SIGTERM signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
 	go func() {
-		select {
-		case <-sigChan:
-			logrus.Info("Received SIGTERM, flushing events to storage")
-			es.Stop()
-			os.Exit(0)
-		case <-es.stopChan:
-			// Server is stopping
-			return
-		}
+		es.periodicFlush()
 	}()
 }
 
@@ -97,63 +83,65 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 		return
 	}
 
-	var eventData map[string]interface{}
-	if err := json.Unmarshal(body, &eventData); err != nil {
+	var eventDatas []map[string]interface{}
+	if err := json.Unmarshal(body, &eventDatas); err != nil {
 		logrus.Errorf("Failed to unmarshal event: %v", err)
 		resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
 
-	// 解析时间戳
-	timestampStr, ok := eventData["timestamp"].(string)
-	if !ok {
-		logrus.Errorf("Event timestamp not found or not a string")
-		resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
-		return
-	}
+	for _, eventData := range eventDatas {
+		// 解析时间戳
+		timestampStr, ok := eventData["timestamp"].(string)
+		if !ok {
+			logrus.Errorf("Event timestamp not found or not a string")
+			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
+			return
+		}
 
-	timestamp, err := time.Parse(time.RFC3339Nano, timestampStr)
-	if err != nil {
-		logrus.Errorf("Failed to parse timestamp: %v", err)
-		resp.WriteError(http.StatusBadRequest, err)
-		return
-	}
+		timestamp, err := time.Parse(time.RFC3339Nano, timestampStr)
+		if err != nil {
+			logrus.Errorf("Failed to parse timestamp: %v", err)
+			resp.WriteError(http.StatusBadRequest, err)
+			return
+		}
 
-	es.mutex.Lock()
-	event := Event{
-		Data:      eventData,
-		Timestamp: timestamp,
-	}
-	es.events = append(es.events, event)
-	es.mutex.Unlock()
+		es.mutex.Lock()
+		event := Event{
+			Data:      eventData,
+			Timestamp: timestamp,
+		}
+		es.events = append(es.events, event)
+		es.mutex.Unlock()
 
-	logrus.Infof("Received event with ID: %v at %v", eventData["eventId"], timestamp)
+		logrus.Infof("Received event with ID: %v at %v", eventData["eventId"], timestamp)
+	}
 
 	resp.WriteHeader(http.StatusOK)
 }
 
 func (es *EventServer) periodicFlush() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	ticker := time.NewTicker(es.flushInterval)
 	defer ticker.Stop()
+	defer close(es.stopped)
 
 	for {
 		select {
 		case <-ticker.C:
 			logrus.Info("Periodic flush triggered")
 			es.flushEvents()
-		case <-es.stopChan:
-			// Server is stopping, do final flush
-			logrus.Info("Final flush before stopping server")
+		case <-sigChan:
+			logrus.Info("Received signal, stopping server")
 			es.flushEvents()
 			return
 		}
 	}
 }
 
-func (es *EventServer) Stop() {
-	close(es.stopChan)
-	// 等待最后一次刷新完成
-	time.Sleep(100 * time.Millisecond)
+func (es *EventServer) WaitForStop() <-chan struct{} {
+	return es.stopped
 }
 
 func (es *EventServer) flushEvents() {
@@ -287,6 +275,7 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 
 	// 构建节点事件存储路径
 	basePath := path.Join(
+		es.root,
 		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
 		es.sessionName,
 		"node_events",
@@ -303,7 +292,7 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 		return fmt.Errorf("failed to write node events file %s: %v", basePath, err)
 	}
 
-	logrus.Infof("Successfully flushed %d node events for hour %s to %s", len(events), hourKey, basePath)
+	logrus.Infof("Successfully flushed %d node events for hour %s to %s, context: %s", len(events), hourKey, basePath, string(data))
 	return nil
 }
 
@@ -324,6 +313,7 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 
 	// 构建作业事件存储路径
 	basePath := path.Join(
+		es.root,
 		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
 		es.sessionName,
 		"job_events",

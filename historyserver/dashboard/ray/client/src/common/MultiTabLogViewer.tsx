@@ -252,6 +252,8 @@ const ApiLogViewer = ({
       onRefreshClick={refresh}
     />
   ) : (
-    <Typography color="error">Failed to load</Typography>
+    <Typography color="error">
+      Failed to load: {JSON.stringify(log, null, 2)}
+    </Typography>
   );
 };

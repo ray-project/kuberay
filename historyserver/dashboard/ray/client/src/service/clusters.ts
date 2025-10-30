@@ -5,6 +5,6 @@ export const getClusterList = async () => {
   return await get<ClusterListRsp>("clusters");
 };
 
-export const getClusterDetail = async (id: string, session: string) => {
-  return await get<ClusterDetail>(`clusters/${id}/${session}`);
+export const getClusterDetail = async (id: string, ns: string, session: string) => {
+  return await get<ClusterDetail>(`clusters/${ns}/${id}/${session}`);
 };

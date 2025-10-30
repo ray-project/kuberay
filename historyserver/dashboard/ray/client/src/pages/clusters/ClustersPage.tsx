@@ -38,12 +38,13 @@ const TEXT_COL_MIN_WIDTH = 100;
 
 type Cluster = {
     name: string;
+    namespace: string;
     createTime: string;
     sessionName: string;
 }
 
 
-export const ClusterRow = ( {name, createTime, sessionName}:Cluster) => {
+export const ClusterRow = ( {name, namespace, createTime, sessionName}:Cluster) => {
 
     return (
         <TableRow>
@@ -53,10 +54,14 @@ export const ClusterRow = ( {name, createTime, sessionName}:Cluster) => {
                     <div>
                         <ClusterLink
                             clusterName={name}
+                            clusterNamespace={namespace}
                             sessionName={sessionName}
                         />
                     </div>
                 </Tooltip>
+            </TableCell>
+            <TableCell>
+                <Box minWidth={TEXT_COL_MIN_WIDTH}>{sessionName === "live" ? "True" : "False"}</Box>
             </TableCell>
             <TableCell>
                 <Box minWidth={TEXT_COL_MIN_WIDTH}>{createTime}</Box>
@@ -71,6 +76,15 @@ const columns = [
         helpInfo: (
             <Typography>
                 RayClusterName
+                <br />
+            </Typography>
+        ),
+    },
+    {
+        label: "IsClusterAlive",
+        helpInfo: (
+            <Typography>
+                IsClusterAlive
                 <br />
             </Typography>
         ),
@@ -140,7 +154,7 @@ export const ClustersPage = () => {
                                 <TableBody>
 
                                     {clustersList.map((cluster) => (
-                                        <ClusterRow  name={cluster.name} createTime={cluster.createTime} sessionName={cluster.sessionName} />
+                                        <ClusterRow  name={cluster.name} namespace={cluster.namespace} createTime={cluster.createTime} sessionName={cluster.sessionName} />
                                     ))}
 
                                 </TableBody>

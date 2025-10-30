@@ -24,7 +24,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -80,16 +79,23 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.Reader) error {
 	return r.OssBucket.PutObject(file, reader)
 }
 
-func (r *RayLogsHandler) List() []utils.ClusterInfo {
+func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+	prefix := path.Join(r.OssRootDir, clusterId, dir)
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+		}
+	}()
 	// 初始的继续标记
 	continueToken := ""
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
-
-	getClusters := func() {
+	nodes := []string{}
+	getNodes := func() {
 		for {
 			options := []oss.Option{
-				oss.Prefix(path.Join(r.OssRootDir, "cluster_list") + "/"),
+				oss.Prefix(prefix + "/"),
 				oss.ContinuationToken(continueToken),
 				oss.MaxKeys(100),
 				oss.Delimiter("/"),
@@ -98,24 +104,76 @@ func (r *RayLogsHandler) List() []utils.ClusterInfo {
 			// 列举所有文件
 			lsRes, err := r.OssBucket.ListObjectsV2(options...)
 			if err != nil {
-				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "cluster_list")+"/", err)
+				logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
 				return
 			}
-			logrus.Infof("Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", path.Join(r.OssRootDir, "cluster_list")+"/", len(lsRes.Objects),
+			logrus.Infof("[ListFiles]Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", prefix+"/", len(lsRes.Objects),
 				len(lsRes.CommonPrefixes))
 			for _, objects := range lsRes.Objects {
-				logrus.Infof("Process %++v", objects)
+				nodes = append(nodes, objects.Key)
+			}
+			if lsRes.IsTruncated {
+				continueToken = lsRes.NextContinuationToken
+			} else {
+				break
+			}
+		}
+	}
+	getNodes()
+	sort.Sort(clusters)
+	return nodes
+}
+
+func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+		}
+	}()
+	// 初始的继续标记
+	continueToken := ""
+	clusters := make(utils.ClusterInfoList, 0, 10)
+	logrus.Debugf("Prepare to get list clusters info ...")
+
+	getClusters := func() {
+		for {
+			options := []oss.Option{
+				oss.Prefix(path.Join(r.OssRootDir, "metadir") + "/"),
+				oss.ContinuationToken(continueToken),
+				oss.MaxKeys(100),
+				oss.Delimiter(""),
+			}
+
+			// 列举所有文件
+			lsRes, err := r.OssBucket.ListObjectsV2(options...)
+			if err != nil {
+				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "metadir")+"/", err)
+				return
+			}
+			logrus.Infof("[List]Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(lsRes.Objects),
+				len(lsRes.CommonPrefixes))
+			for _, objects := range lsRes.Objects {
 				c := &utils.ClusterInfo{}
-				metas := strings.Split(objects.Key, "#")
-				if len(metas) < 4 {
+				metaInfo := strings.Trim(strings.TrimPrefix(objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
+				metas := strings.Split(metaInfo, "/")
+				if len(metas) < 2 {
 					continue
 				}
-				c.Name = path.Base(metas[0]) + "_" + metas[1]
-				c.SessionName = metas[2]
-				cs, _ := strconv.ParseInt(metas[3], 10, 64)
-				c.CreateTimeStamp = cs
-				t := time.Unix(cs, 0)
-				c.CreateTime = t.UTC().Format(("2006-01-02T15:04:05Z"))
+				logrus.Infof("Process %++v", metas)
+				namespaceName := strings.Split(metas[0], "_")
+				c.Name = namespaceName[0]
+				c.Namespace = namespaceName[1]
+				c.SessionName = metas[1]
+				sessionInfo := strings.Split(metas[1], "_")
+				date := sessionInfo[1]
+				dataTime := sessionInfo[2]
+				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+				if err != nil {
+					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+					continue
+				}
+				c.CreateTimeStamp = createTime.Unix()
+				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
 				clusters = append(clusters, *c)
 			}
 			if lsRes.IsTruncated {

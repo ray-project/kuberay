@@ -12,24 +12,31 @@ import (
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 )
 
-const runtimeClassConfigPath = "/var/collector-config/data"
-
 func main() {
 	runtimeClassName := ""
 	rayRootDir := ""
+	kubeconfigs := ""
+	runtimeClassConfigPath := "/var/collector-config/data"
+	dashboardDir := ""
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
-
+	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
+	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard/ray/build", "")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
 	flag.Parse()
 
-	data, err := os.ReadFile(runtimeClassConfigPath)
-	if err != nil {
-		panic("Failed to read runtime class config " + err.Error())
-	}
+	cliMgr := historyserver.NewClientManager(kubeconfigs)
+
 	jsonData := make(map[string]interface{})
-	err = json.Unmarshal(data, &jsonData)
-	if err != nil {
-		panic("Failed to parse runtime class config: " + err.Error())
+	if runtimeClassConfigPath != "" {
+		data, err := os.ReadFile(runtimeClassConfigPath)
+		if err != nil {
+			panic("Failed to read runtime class config " + err.Error())
+		}
+		err = json.Unmarshal(data, &jsonData)
+		if err != nil {
+			panic("Failed to parse runtime class config: " + err.Error())
+		}
 	}
 
 	registry := backend.GetReaderRegistry()
@@ -47,7 +54,7 @@ func main() {
 		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
 	}
 
-	handler := historyserver.NewServerHandler(&globalConfig, reader)
+	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr)
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)

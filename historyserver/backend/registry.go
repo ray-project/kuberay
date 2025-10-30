@@ -3,6 +3,7 @@ package backend
 import (
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/aliyunoss/ray"
+	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/localtest"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 )
 
@@ -24,4 +25,5 @@ func GetReaderRegistry() ReaderRegistry {
 
 var readerRegistry = ReaderRegistry{
 	"aliyunoss": ray.NewReader,
+	"localtest": localtest.NewReader,
 }

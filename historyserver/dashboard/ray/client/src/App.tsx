@@ -170,7 +170,7 @@ const App = () => {
                 {/* Redirect people hitting the /new path to root. TODO(aguo): Delete this redirect in ray 2.5 */}
                 <Route element={<Navigate replace to="/clusters" />} path="/" />
                 <Route element={<ClustersPage />} path="/clusters" />
-                <Route element={<MainNavLayout />} path="/clusters/:clusterName/:sessionName">
+                <Route element={<MainNavLayout />} path="/clusters/:clusterNamespace/:clusterName/:sessionName">
                   <Route element={<Navigate replace to="overview" />} path="" />
                   <Route element={<OverviewPage />} path="overview" />
                   <Route element={<ClusterMainPageLayout />} path="cluster">

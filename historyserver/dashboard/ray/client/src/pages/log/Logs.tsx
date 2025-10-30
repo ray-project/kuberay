@@ -11,7 +11,7 @@ import {
 import { grey } from "@mui/material/colors";
 import React, { useMemo, useState } from "react";
 import { RiDownload2Line } from "react-icons/ri";
-import { Outlet, Link as RouterLink, useSearchParams } from "react-router-dom";
+import { Outlet, Link as RouterLink, useSearchParams, useParams } from "react-router-dom";
 import useSWR from "swr";
 import { StateApiLogViewer } from "../../common/MultiTabLogViewer";
 import { SearchInput } from "../../components/SearchComponent";
@@ -26,6 +26,7 @@ export const StateApiLogsListPage = () => {
   const folder = searchParams.get("folder");
   const fileNameParam = searchParams.get("fileName");
   const [fileName, setFileName] = useState(fileNameParam || "");
+  const { clusterName, clusterNamespace, sessionName } = useParams();
 
   const backFolder = folder
     ? [...folder.split("/").slice(0, -1)].join("/")
@@ -34,10 +35,10 @@ export const StateApiLogsListPage = () => {
     // backGlob is undefined when glob is empty
     // backGlob is empty string when glob is 1 level deep.
     backFolder !== undefined && nodeId
-      ? `/logs/?nodeId=${encodeURIComponent(
+      ? `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/logs/?nodeId=${encodeURIComponent(
           nodeId,
         )}&folder=${encodeURIComponent(backFolder)}`
-      : `/logs/`;
+      : `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/logs/`;
 
   return (
     <Box sx={{ padding: 2, width: "100%" }}>
@@ -235,6 +236,7 @@ export const StateApiLogsFilesList = ({
 
 export const StateApiLogViewerPage = () => {
   const [searchParams] = useSearchParams();
+  const { clusterName, clusterNamespace, sessionName } = useParams();
   const nodeId = searchParams.get("nodeId");
   const fileName = searchParams.get("fileName");
 
@@ -245,8 +247,8 @@ export const StateApiLogViewerPage = () => {
     // backGlob is undefined when glob is empty
     // backGlob is empty string when glob is 1 level deep.
     backFolder !== undefined
-      ? `/logs/?nodeId=${nodeId}&folder=${backFolder}`
-      : `/logs/?nodeId=${nodeId}`;
+      ? `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/logs/?nodeId=${nodeId}&folder=${backFolder}`
+      : `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/logs/?nodeId=${nodeId}`;
 
   return (
     <Box sx={{ padding: 2, width: "100%" }}>

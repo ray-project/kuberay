@@ -13,18 +13,18 @@ type RecentJobsCardProps = {
 };
 
 {/*add by bingyu*/}
-const getLink = (clusterName: string | undefined, sessionName: string | undefined, job: UnifiedJob) => {
+const getLink = (clusterName: string | undefined, clusterNamespace: string | undefined, sessionName: string | undefined, job: UnifiedJob) => {
   if (job.job_id !== null && job.job_id !== "") {
-    return `/clusters/${clusterName}/${sessionName}/jobs/${job.job_id}`;
+    return `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/jobs/${job.job_id}`;
   } else if (job.submission_id !== null && job.submission_id !== "") {
-    return `/clusters/${clusterName}/${sessionName}/jobs/${job.submission_id}`;
+    return `/clusters/${clusterNamespace}/${clusterName}/${sessionName}/jobs/${job.submission_id}`;
   }
   return undefined;
 };
 
 export const RecentJobsCard = ({ className, sx }: RecentJobsCardProps) => {
   const { jobList } = useJobList();
-  const {clusterName, sessionName}= useParams();
+  const {clusterName, clusterNamespace, sessionName}= useParams();
   const sortedJobs = _.orderBy(jobList, ["startTime"], ["desc"]).slice(0, 6);
 
   const sortedJobToRender = sortedJobs.map((job) => {
@@ -37,7 +37,7 @@ export const RecentJobsCard = ({ className, sx }: RecentJobsCardProps) => {
     return {
       title,
       subtitle: job.entrypoint,
-      link: getLink(clusterName, sessionName, job),
+      link: getLink(clusterName, clusterNamespace, sessionName, job),
       className: className,
       icon: <JobStatusIcon sx={{ marginRight: 1 }} job={job} />,
     };
@@ -52,7 +52,7 @@ export const RecentJobsCard = ({ className, sx }: RecentJobsCardProps) => {
       items={sortedJobToRender}
       emptyListText="No jobs yet..."
       footerText="View all jobs"
-      footerLink={`/clusters/${clusterName}/jobs`}
+      footerLink={`/clusters/${clusterNamespace}/${clusterName}/jobs`}
     />
   );
 };

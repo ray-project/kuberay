@@ -1,12 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
-	"os/signal"
 	"path"
-	"syscall"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/backend"
@@ -14,6 +13,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/backend/server"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 	"github.com/ray-project/kuberay/historyserver/utils"
+	"github.com/sirupsen/logrus"
 )
 
 const runtimeClassConfigPath = "/var/collector-config/data"
@@ -77,6 +77,7 @@ func main() {
 		PushInterval:   pushInterval,
 		LogBatching:    logBatching,
 	}
+	logrus.Info("Using collector config: ", globalConfig)
 
 	writter, err := factory(&globalConfig, jsonData)
 	if err != nil {
@@ -84,15 +85,15 @@ func main() {
 	}
 
 	// 创建并初始化EventServer
-	eventServer := server.NewEventServer(writter, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+	eventServer := server.NewEventServer(writter, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
 	eventServer.InitServer(eventsPort)
 
 	collector := runtime.NewCollector(&globalConfig, writter)
+	_ = collector.Start(context.TODO().Done())
 
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	collector.Start(stop)
-	<-sigChan
-	stop <- struct{}{}
+	eventStop := eventServer.WaitForStop()
+	logStop := collector.WaitForStop()
+	<-eventStop
+	<-logStop
+	logrus.Info("All servers shutdown")
 }

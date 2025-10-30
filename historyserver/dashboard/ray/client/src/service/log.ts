@@ -72,11 +72,8 @@ export const getStateApiLog = async (props: StateApiLogInput) => {
   if (resp.status === 200 && resp.data.length === 0) {
     return "";
   }
-  // TODO(aguo): get rid of this first byte check once we support state-api logs without this streaming byte.
-  if (resp.data[0] !== "1") {
-    throw new Error(resp.data.substring(1));
-  }
-  return resp.data.substring(1);
+  // for higher version, no need to check first byte again
+  return resp.data;
 };
 
 type ListStateApiLogsResponse = {

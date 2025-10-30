@@ -181,9 +181,6 @@ func DeleteObject(bucket *oss.Bucket, objectName string) error {
 	return nil
 }
 
-func GetMetaDir(ossHistorySeverDir, rayClusterName, rayClusterID string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, AppendRayClusterNameID(rayClusterName, rayClusterID), RAY_SESSIONDIR_METADIR_NAME)))
-}
 func GetMetaDirByNameID(ossHistorySeverDir, rayClusterNameID string) string {
 	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameID, RAY_SESSIONDIR_METADIR_NAME)))
 }
@@ -192,8 +189,8 @@ func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameID, rayNodeID string) s
 	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameID, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
-func GetLogDir(ossHistorySeverDir, rayClusterName, rayClusterID, rayNodeID string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, AppendRayClusterNameID(rayClusterName, rayClusterID), RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
+func GetLogDir(ossHistorySeverDir, rayClusterName, rayClusterID, sessionId, rayNodeID string) string {
+	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, AppendRayClusterNameID(rayClusterName, rayClusterID), sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
 const (

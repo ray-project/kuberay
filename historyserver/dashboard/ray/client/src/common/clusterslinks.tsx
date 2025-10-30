@@ -7,6 +7,7 @@ import { GlobalContext } from "../App";
 type ClusterLinkProps = PropsWithChildren<
     {
         clusterName: string;
+        clusterNamespace: string;
         sessionName: string;
         /**
          * This can be provided to override where we link to.
@@ -15,13 +16,14 @@ type ClusterLinkProps = PropsWithChildren<
         sx?: SxProps<Theme>;
     } & ClassNameProps
 >;
-export const generateClusterLink = (clusterName: string, sessionName: string) => `/clusters/${clusterName}/${sessionName}`;
+export const generateClusterLink = (clusterName: string, clusterNamespace: string, sessionName: string) => `/clusters/${clusterNamespace}/${clusterName}/${sessionName}`;
 
 /**
  * A link to the top-level Cluster detail page.
  */
 export const ClusterLink = ({
   clusterName,
+  clusterNamespace,
   sessionName,
   to,
   children,
@@ -33,7 +35,7 @@ export const ClusterLink = ({
       className={className}
       sx={sx}
       component={RouterLink}
-      to={to ?? generateClusterLink(clusterName, sessionName)}
+      to={to ?? generateClusterLink(clusterName, clusterNamespace, sessionName)}
     >
       {children ?? clusterName}
     </Link>
