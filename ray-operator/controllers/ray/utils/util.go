@@ -406,6 +406,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		}
 	}
 
+	// #nosec G115 -- safe: count is capped at math.MaxInt32 above
 	return int32(count)
 }
 
