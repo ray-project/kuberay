@@ -32,7 +32,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 		timeoutBuffer := int32(30) // Additional wait time to allow for scale down operation
 
 		// Script for creating detached actors to trigger autoscaling
-		scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+		scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 		scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -64,7 +64,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 			)
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-			WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+			WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -110,7 +110,7 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -133,7 +133,7 @@ func TestRayClusterAutoscalerGPUNodesForCPUTasks(t *testing.T) {
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster-gpu-for-cpu", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -183,7 +183,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 			// Create a namespace
 			namespace := test.NewTestNamespace()
 
-			scriptsAC := newConfigMap(namespace.Name, files(test, "do_not_remove_idles_for_pg.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "do_not_remove_idles_for_pg.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -213,7 +213,7 @@ func TestRayClusterAutoscalerDoNotRemoveIdlesForPlacementGroup(t *testing.T) {
 					WithTemplate(workerTemplate))
 
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -245,7 +245,7 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Mount the call_request_resources.py script as a ConfigMap
-			scriptsAC := newConfigMap(namespace.Name, files(test, "call_request_resources.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "call_request_resources.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -266,7 +266,7 @@ func TestRayClusterAutoscalerSDKRequestResources(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster-sdk", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -304,7 +304,7 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Mount the create_detached_actor.py and terminate_detached_actor.py scripts as a ConfigMap
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -328,7 +328,7 @@ func TestRayClusterAutoscalerAddNewWorkerGroup(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -430,7 +430,7 @@ func TestRayClusterAutoscalerPlacementGroup(t *testing.T) {
 				namespace := test.NewTestNamespace()
 
 				// Mount the scripts as a ConfigMap
-				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_placement_group.py", "check_placement_group_ready.py"))
+				scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_placement_group.py", "check_placement_group_ready.py"))
 				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 				LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -451,7 +451,7 @@ func TestRayClusterAutoscalerPlacementGroup(t *testing.T) {
 						WithRayStartParams(setting.workerGroupRayStartParams).
 						WithTemplate(tc.WorkerPodTemplateGetter()))
 				rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-					WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+					WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 				rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -511,7 +511,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -544,7 +544,7 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 					WithTemplate(tc.WorkerPodTemplateGetter()),
 				)
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
