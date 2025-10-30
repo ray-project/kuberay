@@ -760,11 +760,11 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayCluster", cluster.Name)
 		} else {
 			if r.useBackgroundGoroutine {
-				// clear cache, and it will remove this job from updating loop.
 				rayDashboardClient, err := r.dashboardClientFunc(&cluster, rayJobInstance.Status.DashboardURL)
 				if err != nil {
 					logger.Error(err, "Failed to get dashboard client for RayJob")
 				}
+				// clear cache, and it will remove this job from the cache updating loop.
 				if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 					logger.Error(err, "Failed to stop job for RayJob")
 				}

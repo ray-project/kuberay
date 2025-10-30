@@ -27,9 +27,11 @@ const (
 )
 
 var (
+	// singleton
 	initWorkPool sync.Once
 	pool         workerPool
 
+	// singleton
 	initCacheStorage sync.Once
 	cacheStorage     *lru.Cache[string, *JobInfoCache]
 )
@@ -93,13 +95,14 @@ func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface)
 			ticker := time.NewTicker(queryInterval * 10)
 			defer ticker.Stop()
 
-			// TODO: observability
-			// TODO: should we consider the stop?
+			// TODO: observability ?
+			// TODO: should we consider the stop ?
 			for range ticker.C {
 				keys := cacheStorage.Keys()
+				expiredThreshold := time.Now().Add(-cacheExpiry)
 				for _, key := range keys {
 					if cached, ok := cacheStorage.Peek(key); ok {
-						if time.Now().Add(-cacheExpiry).Before(*cached.UpdateAt) {
+						if cached.UpdateAt.Before(expiredThreshold) {
 							cacheStorage.Remove(key)
 						}
 					}
@@ -127,12 +130,15 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	if cached, ok := cacheStorage.Get(jobId); ok {
 		return cached.JobInfo, cached.Err
 	}
-	cached := &JobInfoCache{Err: ErrAgain}
+	currentTime := time.Now()
+	cached := &JobInfoCache{Err: ErrAgain, UpdateAt: &currentTime}
+
+	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
+	// The placeholder will be removed when StopJob or DeleteJob.
 	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, cached); existed {
 		return cached.JobInfo, cached.Err
 	}
 
-	// send to worker pool
 	task := func() bool {
 		jobInfoCache, existed := cacheStorage.Get(jobId)
 		if !existed {
@@ -142,8 +148,6 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		jobInfoCache.JobInfo, jobInfoCache.Err = r.client.GetJobInfo(ctx, jobId)
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
-
-		// handle not found(ex: rayjob has deleted)
 
 		cacheStorage.Add(jobId, jobInfoCache)
 
