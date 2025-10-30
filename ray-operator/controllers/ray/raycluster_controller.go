@@ -619,6 +619,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
+		originatedFrom := utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
+		if originatedFrom == utils.RayJobCRD {
+			if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
+				logger.Info(
+					"reconcilePods: Found 0 head Pods for a RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
+					"rayCluster", instance.Name,
+				)
+				return nil
+			}
+		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
 		if err := r.createHeadPod(ctx, *instance); err != nil {
