@@ -393,15 +393,20 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 
 // CalculateMaxReplicas calculates max worker replicas at the cluster level
 func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
-	count := int32(0)
+	count := int64(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += (*nodeGroup.MaxReplicas * nodeGroup.NumOfHosts)
+		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
+
+		// early return if an overflow happens
+		if count > math.MaxInt32 {
+			return math.MaxInt32
+		}
 	}
 
-	return count
+	return int32(count)
 }
 
 // CalculateReadyReplicas calculates ready worker replicas at the cluster level
