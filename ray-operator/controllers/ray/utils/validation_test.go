@@ -1823,3 +1823,91 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
+	tests := map[string]struct {
+		expectedErr string
+		spec        rayv1.RayClusterSpec
+	}{
+		"should accept worker group with valid idleTimeoutSeconds": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				},
+			},
+			expectedErr: "",
+		},
+		"should reject negative idleTimeoutSeconds": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(-10)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				},
+			},
+			expectedErr: "idleTimeoutSeconds must be non-negative, got -10",
+		},
+		"should accept zero idleTimeoutSeconds": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: ptr.To(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(0)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				},
+			},
+			expectedErr: "",
+		},
+	}
+
+	for testName, tc := range tests {
+		t.Run(testName, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tc.spec, nil)
+			if tc.expectedErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, but got: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error: %s, but got no error", tc.expectedErr)
+				} else if err.Error() != tc.expectedErr {
+					t.Errorf("expected error: %s, but got: %v", tc.expectedErr, err)
+				}
+			}
+		})
+	}
+}
