@@ -21,6 +21,7 @@ const (
 
 	queryInterval = 3 * time.Second
 
+	// TODO: consider a proper size for accommodating the all live job info
 	cacheSize   = 10000
 	cacheExpiry = 10 * time.Minute
 )
@@ -114,15 +115,18 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	// send to worker pool
 	task := func() bool {
-		jobInfoCache, _ := cacheStorage.Get(jobId)
-		// TODO: should we handle cache not exist here, which it shouldn't happen
+		jobInfoCache, existed := cacheStorage.Get(jobId)
+		if !existed {
+			return false
+		}
 
 		jobInfoCache.JobInfo, jobInfoCache.Err = r.client.GetJobInfo(ctx, jobId)
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
 
-		cacheStorage.Add(jobId, jobInfoCache)
 		// handle not found(ex: rayjob has deleted)
+
+		cacheStorage.Add(jobId, jobInfoCache)
 
 		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
 	}
@@ -149,9 +153,11 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
+	cacheStorage.Remove(jobName)
 	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
+	cacheStorage.Remove(jobName)
 	return r.client.DeleteJob(ctx, jobName)
 }

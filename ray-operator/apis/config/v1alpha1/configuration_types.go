@@ -99,3 +99,7 @@ func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayClus
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
 	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
 }
+
+func (config Configuration) DoesUseBackgroundGoroutine() bool {
+	return config.UseBackgroundGoroutine
+}
