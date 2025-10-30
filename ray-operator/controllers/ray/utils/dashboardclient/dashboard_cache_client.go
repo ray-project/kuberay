@@ -50,8 +50,8 @@ type (
 func (w *workerPool) init(taskQueueSize int, workerSize int, queryInterval time.Duration) {
 	w.taskQueue = make(chan Task, taskQueueSize)
 
-	// TODO: should we have observability for these goroutine?
 	for i := 0; i < workerSize; i++ {
+		// TODO: observability for these goroutine
 		// TODO: should we consider the stop ?
 		go func() {
 			for task := range w.taskQueue {
@@ -87,6 +87,25 @@ func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface)
 			// the New() returns error only if the size is less or equal than zero.
 			cacheStorage, _ = lru.New[string, *JobInfoCache](cacheSize)
 		}
+
+		// expiry cache cleanup
+		go func() {
+			ticker := time.NewTicker(queryInterval * 10)
+			defer ticker.Stop()
+
+			// TODO: observability
+			// TODO: should we consider the stop?
+			for range ticker.C {
+				keys := cacheStorage.Keys()
+				for _, key := range keys {
+					if cached, ok := cacheStorage.Peek(key); ok {
+						if time.Now().Add(-cacheExpiry).Before(*cached.UpdateAt) {
+							cacheStorage.Remove(key)
+						}
+					}
+				}
+			}
+		}()
 	})
 
 	r.client = client
