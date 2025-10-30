@@ -23,7 +23,7 @@ spec:
     labels:
       ray.io/region: us-central2
     resources:
-      cpu: "0"
+      CPU: "0"
     template:
       spec:
         containers:
@@ -86,9 +86,11 @@ spec:
     maxReplicas: 10
     groupName: accelerator-group
     labels:
+      ray.io/accelerator-type: A100
       ray.io/market-type: on-demand
       ray.io/region: us-central2
-    rayStartParams: {}
+    resources:
+      GPU: "1"
     template:
       spec:
         containers:
@@ -97,11 +99,9 @@ spec:
           resources:
             limits:
               cpu: "1"
-              nvidia.com/gpu: "1"
               memory: "1G"
             requests:
               cpu: "1"
-              nvidia.com/gpu: "1"
               memory: "1G"
         nodeSelector:
           cloud.google.com/gke-spot: "true"
