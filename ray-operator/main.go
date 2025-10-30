@@ -73,6 +73,7 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var useBackgroundGoroutine bool
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -106,6 +107,7 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.BoolVar(&useBackgroundGoroutine, "use-background-goroutine", false, "Enable the background goroutine for fetching job info in RayJob.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -138,6 +140,7 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
+		config.UseBackgroundGoroutine = useBackgroundGoroutine
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
