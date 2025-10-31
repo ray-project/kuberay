@@ -805,6 +805,100 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 	}
 }
 
+func TestCalculateMaxReplicasOverflow(t *testing.T) {
+	tests := []struct {
+		name     string
+		specs    []rayv1.WorkerGroupSpec
+		expected int32
+	}{
+		{
+			name: "Bug reproduction: issue report with replicas=1, minReplicas=3, numOfHosts=4",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "workergroup",
+					Replicas:    ptr.To[int32](1),
+					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](2147483647), // Default max int32
+					NumOfHosts:  4,
+				},
+			},
+			expected: 2147483647, // Was -4 before fix, should be capped at max int32
+		},
+		{
+			name: "Single group overflow with default maxReplicas and numOfHosts=4",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  4,
+					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Should be capped at max int32
+		},
+		{
+			name: "Single group overflow with large values",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  1000,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Should be capped
+		},
+		{
+			name: "Multiple groups causing overflow when summed",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  2,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](1500000000),
+				},
+				{
+					NumOfHosts:  1,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](1000000000),
+				},
+			},
+			expected: 2147483647, // 3B + 1B > max int32, should be capped
+		},
+		{
+			name: "No overflow with reasonable values",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  4,
+					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](100),
+				},
+			},
+			expected: 400, // 100 * 4 = 400, no overflow
+		},
+		{
+			name: "Edge case: exactly at max int32",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  1,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Exactly at limit
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					WorkerGroupSpecs: tc.specs,
+				},
+			}
+			result := CalculateMaxReplicas(cluster)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestUnmarshalRuntimeEnv(t *testing.T) {
 	tests := []struct {
 		name           string
