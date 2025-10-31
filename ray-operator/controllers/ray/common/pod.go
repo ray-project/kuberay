@@ -251,7 +251,7 @@ func getEnableProbesInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, numHostIndex int) corev1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
@@ -329,11 +329,15 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
 
-	// Add additional labels for RayMultihostIndexing
-	multihostIndexingEnabled := features.Enabled(features.RayMultiHostIndexing) && workerSpec.NumOfHosts > 1
-	if multihostIndexingEnabled {
-		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = replicaGrpName
-		podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
+	// Add additional labels when RayMultihostIndexing is enabled.
+	if features.Enabled(features.RayMultiHostIndexing) {
+		// The ordered replica index can be used for the single-host, multi-slice case.
+		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = strconv.Itoa(replicaIndex)
+		if workerSpec.NumOfHosts > 1 {
+			// These labels are specific to multi-host group setup and reconciliation.
+			podTemplate.Labels[utils.RayWorkerReplicaIDKey] = replicaGrpName
+			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
+		}
 	}
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
