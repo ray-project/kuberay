@@ -335,7 +335,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = strconv.Itoa(replicaIndex)
 		if workerSpec.NumOfHosts > 1 {
 			// These labels are specific to multi-host group setup and reconciliation.
-			podTemplate.Labels[utils.RayWorkerReplicaIDKey] = replicaGrpName
+			podTemplate.Labels[utils.RayWorkerReplicaNameKey] = replicaGrpName
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
 	}

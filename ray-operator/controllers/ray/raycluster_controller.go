@@ -847,7 +847,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	// 1. Group existing pods by ray.io/worker-group-replica-index.
 	replicaMap := make(map[string][]corev1.Pod)
 	for _, pod := range workerPods {
-		if replicaName, ok := pod.Labels[utils.RayWorkerReplicaIDKey]; ok {
+		if replicaName, ok := pod.Labels[utils.RayWorkerReplicaNameKey]; ok {
 			replicaMap[replicaName] = append(replicaMap[replicaName], pod)
 		}
 	}
@@ -871,7 +871,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 			continue
 		}
 		if shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode); shouldDelete {
-			replicaName := pod.Labels[utils.RayWorkerReplicaIDKey]
+			replicaName := pod.Labels[utils.RayWorkerReplicaNameKey]
 			podsToDelete, ok := replicaMap[replicaName]
 			if !ok {
 				continue
@@ -893,7 +893,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 		for _, podName := range worker.ScaleStrategy.WorkersToDelete {
 			for _, pod := range workerPods {
 				if pod.Name == podName {
-					replicaName := pod.Labels[utils.RayWorkerReplicaIDKey]
+					replicaName := pod.Labels[utils.RayWorkerReplicaNameKey]
 					for _, p := range replicaMap[replicaName] {
 						podsToDeleteFromStrategy[p.Name] = p
 					}

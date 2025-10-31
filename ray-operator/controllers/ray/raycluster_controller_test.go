@@ -991,8 +991,8 @@ var _ = Context("Inside the default namespace", func() {
 			for _, pod := range workerPods.Items {
 				// Get all the labels
 				hostIndex := pod.Labels[utils.RayHostIndexKey]
-				replicaID := pod.Labels[utils.RayWorkerReplicaIDKey]
-				replicaIndex := pod.Labels[utils.RayWorkerReplicaIndexKey] // <-- The new label
+				replicaID := pod.Labels[utils.RayWorkerReplicaNameKey]
+				replicaIndex := pod.Labels[utils.RayWorkerReplicaIndexKey]
 
 				Expect(replicaIndex).NotTo(BeEmpty(), "Pod %s is missing label %s", pod.Name, utils.RayWorkerReplicaIndexKey)
 				seenReplicaIndices[replicaIndex] = true

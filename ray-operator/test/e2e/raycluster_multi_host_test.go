@@ -44,7 +44,7 @@ func verifyWorkerGroupIndices(t *testing.T, rayCluster *rayv1.RayCluster, worker
 	}
 
 	if expectedHosts > 1 {
-		// For multi-host, all three label should be set.
+		// For multi-host, all three labels should be set.
 		type ReplicaInfo struct {
 			HostIndices  map[int]bool
 			ReplicaIndex int
@@ -52,8 +52,8 @@ func verifyWorkerGroupIndices(t *testing.T, rayCluster *rayv1.RayCluster, worker
 		replicaGroups := make(map[string]ReplicaInfo)
 
 		for _, pod := range groupPods {
-			replicaID, ok := pod.Labels[utils.RayWorkerReplicaIDKey]
-			g.Expect(ok).To(BeTrue(), "Pod %s should have a replica ID label (%s)", pod.Name, utils.RayWorkerReplicaIDKey)
+			replicaID, ok := pod.Labels[utils.RayWorkerReplicaNameKey]
+			g.Expect(ok).To(BeTrue(), "Pod %s should have a replica ID label (%s)", pod.Name, utils.RayWorkerReplicaNameKey)
 
 			replicaIndexStr, ok := pod.Labels[utils.RayWorkerReplicaIndexKey]
 			g.Expect(ok).To(BeTrue(), "Pod %s should have a replica index label (%s)", pod.Name, utils.RayWorkerReplicaIndexKey)
@@ -90,7 +90,7 @@ func verifyWorkerGroupIndices(t *testing.T, rayCluster *rayv1.RayCluster, worker
 	} else {
 		// Single-host case, only replica index is set.
 		for _, pod := range groupPods {
-			g.Expect(pod.Labels).NotTo(HaveKey(utils.RayWorkerReplicaIDKey), "Pod %s should not have replica ID label for single-host group", pod.Name)
+			g.Expect(pod.Labels).NotTo(HaveKey(utils.RayWorkerReplicaNameKey), "Pod %s should not have replica ID label for single-host group", pod.Name)
 			g.Expect(pod.Labels).NotTo(HaveKey(utils.RayHostIndexKey), "Pod %s should not have host index label for single-host group", pod.Name)
 
 			// Check for unique replica index label

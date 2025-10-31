@@ -1189,7 +1189,7 @@ func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
 	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
 	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", groupReplicaName, 0, 2)
 	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
-	assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaIDKey], groupReplicaName)
+	assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaNameKey], groupReplicaName)
 	assert.Equal(t, "0", podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey])
 	assert.Equal(t, "2", podTemplateSpec.Labels[utils.RayHostIndexKey])
 }
