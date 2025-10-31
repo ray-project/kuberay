@@ -35,6 +35,15 @@ var (
 	scaleExample = templates.Examples(`
 		# Scale a Ray cluster by setting one of its worker groups to 3 replicas
 		kubectl ray scale cluster my-cluster --worker-group my-group --replicas 3
+
+		# Increase the maximum replicas for a worker group to 10
+		kubectl ray scale cluster my-cluster --worker-group my-group --max-replicas 10
+
+		# Set both minimum and maximum replicas for a worker group
+  		kubectl ray scale cluster my-cluster --worker-group my-group --min-replicas 2 --max-replicas 6
+
+		# Scale the worker group to 5 replicas and update its min and max bounds at the same time
+  		kubectl ray scale cluster my-cluster --worker-group my-group --replicas 5 --min-replicas 3 --max-replicas 7
 	`)
 )
 
@@ -184,7 +193,7 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 	}
 
 	// Validate the final state
-	if finalMaxReplicas > 0 && finalMinReplicas > finalMaxReplicas {
+	if finalMinReplicas > finalMaxReplicas {
 		return fmt.Errorf("cannot set --min-replicas (%d) greater than --max-replicas (%d)",
 			finalMinReplicas, finalMaxReplicas)
 	}
@@ -192,7 +201,7 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		return fmt.Errorf("cannot set --replicas (%d) smaller than --min-replicas (%d)",
 			finalReplicas, finalMinReplicas)
 	}
-	if finalMaxReplicas > 0 && finalReplicas > finalMaxReplicas {
+	if finalReplicas > finalMaxReplicas {
 		return fmt.Errorf("cannot set --replicas (%d) greater than --max-replicas (%d)",
 			finalReplicas, finalMaxReplicas)
 	}
