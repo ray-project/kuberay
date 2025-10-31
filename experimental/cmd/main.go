@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-
 	"k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/experimental/pkg/grpcproxy"
