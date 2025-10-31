@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -981,21 +980,56 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("All multi-host pods are properly labeled", func() {
-			workerGrpReplicaMap := make(map[string][]string)
-			for _, pod := range workerPods.Items {
-				hostIndex := pod.Labels[utils.RayHostIndexKey]
-				hostGrpId := pod.Labels[utils.RayWorkerReplicaIndexKey]
+			type ReplicaInfo struct {
+				HostIndices  map[string]bool
+				ReplicaIndex string
+			}
+			replicaGroups := make(map[string]ReplicaInfo)
+			// Track replicas to ensure unique indices are applied.
+			seenReplicaIndices := make(map[string]bool)
 
-				grpReplicaIndexList, grpIdExists := workerGrpReplicaMap[hostGrpId]
-				if grpIdExists {
-					Expect(strconv.Atoi(hostIndex)).Should(BeNumerically("<", numOfHosts))
-					Expect(strconv.Atoi(hostIndex)).Should(BeNumerically(">=", 0))
-					Expect(slices.Contains(grpReplicaIndexList, hostIndex)).To(BeFalse())
-					workerGrpReplicaMap[hostGrpId] = append(grpReplicaIndexList, hostIndex)
+			for _, pod := range workerPods.Items {
+				// Get all the labels
+				hostIndex := pod.Labels[utils.RayHostIndexKey]
+				replicaID := pod.Labels[utils.RayWorkerReplicaNameKey]
+				replicaIndex := pod.Labels[utils.RayWorkerReplicaIndexKey]
+
+				Expect(replicaIndex).NotTo(BeEmpty(), "Pod %s is missing label %s", pod.Name, utils.RayWorkerReplicaIndexKey)
+				seenReplicaIndices[replicaIndex] = true
+
+				if info, ok := replicaGroups[replicaID]; ok {
+					// Validate replicaIndex is the same for all pods in this group.
+					Expect(replicaIndex).To(Equal(info.ReplicaIndex), "Pod %s in group %s has replicaIndex %s, but expected %s", pod.Name, replicaID, replicaIndex, info.ReplicaIndex)
+
+					// Ensure hostIndex is unique within this replica group.
+					Expect(info.HostIndices[hostIndex]).To(BeFalse(), "Pod %s in group %s has duplicate hostIndex %s", pod.Name, replicaID, hostIndex)
+					info.HostIndices[hostIndex] = true
 				} else {
-					workerGrpReplicaMap[hostGrpId] = []string{}
-					Expect(len(workerGrpReplicaMap)).Should(BeNumerically("<=", int(replicas)))
+					replicaGroups[replicaID] = ReplicaInfo{
+						ReplicaIndex: replicaIndex,
+						HostIndices:  map[string]bool{hostIndex: true},
+					}
 				}
+
+				// Check hostIndex correctly set in range 0 to numOfHosts-1.
+				hostIndexInt, err := strconv.Atoi(hostIndex)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hostIndexInt).To(BeNumerically("<", numOfHosts))
+				Expect(hostIndexInt).To(BeNumerically(">=", 0))
+			}
+
+			// Validate we created 'replicas' number of groups.
+			Expect(replicaGroups).To(HaveLen(int(replicas)), "Expected %d replica groups, but found %d", replicas, len(replicaGroups))
+
+			// Validate replica indices are unique and indexed from 0 to replicas-1.
+			Expect(seenReplicaIndices).To(HaveLen(int(replicas)), "Expected %d unique replica indices, but found %d", replicas, len(seenReplicaIndices))
+			Expect(seenReplicaIndices["0"]).To(BeTrue())
+			Expect(seenReplicaIndices["1"]).To(BeTrue())
+			Expect(seenReplicaIndices["2"]).To(BeTrue())
+
+			// Validate each replica group has 'numOfHosts' Pods.
+			for replicaID, info := range replicaGroups {
+				Expect(info.HostIndices).To(HaveLen(int(numOfHosts)), "Replica group %s expected %d hosts, but found %d", replicaID, numOfHosts, len(info.HostIndices))
 			}
 		})
 
