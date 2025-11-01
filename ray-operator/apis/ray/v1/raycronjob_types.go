@@ -28,7 +28,7 @@ const (
 type RayCronJobStatus struct {
 	// LastScheduleTime is the last time the RayJob is being scheduled by this RayCronJob
 	// +optional
-	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
+	LastScheduleTime metav1.Time `json:"lastScheduleTime,omitempty"`
 	// +optional
 	ScheduleStatus ScheduleStatus `json:"scheduleStatus,omitempty"`
 }

@@ -294,8 +294,8 @@ RayCronJob is the Schema for the raycronjobs API
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `ray.io/v1` | | |
 | `kind` _string_ | `RayCronJob` | | |
+| `spec` _[RayCronJobSpec](#raycronjobspec)_ |  |  |  |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[RayCronJobSpec](#raycronjobspec)_ | Settings for RayCronJob |  |  |
 
 
 #### RayCronJobSpec
