@@ -19,9 +19,9 @@ type RayCronJobSpec struct {
 type ScheduleStatus string
 
 const (
-	StatusNew              ScheduleStatus = "new"
-	StatusScheduled        ScheduleStatus = "scheduled"
-	StatusValidationFailed ScheduleStatus = "validationFailed"
+	StatusNew              ScheduleStatus = "New"
+	StatusScheduled        ScheduleStatus = "Scheduled"
+	StatusValidationFailed ScheduleStatus = "ValidationFailed"
 )
 
 // RayCronJobStatus defines the observed state of RayCronJob

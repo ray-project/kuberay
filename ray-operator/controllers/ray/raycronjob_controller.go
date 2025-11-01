@@ -62,16 +62,40 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
 	}
 
+	// Please do NOT modify `originalRayCronJobInstance` in the following code.
+	originalRayCronJobInstance := rayCronJobInstance.DeepCopy()
+
 	// validate RayCronJob
 	if err := validateRayCronJob(rayCronJobInstance); err != nil {
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec),
 			"%s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
 
 		rayCronJobInstance.Status.ScheduleStatus = rayv1.StatusValidationFailed
-		// TODO: directly update rayjob status
+
+		// This is the only 2 places where we update the RayCronJob status. This will directly
+		// update the ScheduleStatus to ValidationFailed if there's validation error
+		if err = r.updateRayCronJobStatus(ctx, originalRayCronJobInstance, rayCronJobInstance); err != nil {
+			logger.Info("Failed to update RayCronJob status", "error", err)
+			return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRayCronJob *rayv1.RayCronJob, newRayCronJob *rayv1.RayCronJob) error {
+	logger := ctrl.LoggerFrom(ctx)
+	oldRayCronJobStatus := oldRayCronJob.Status
+	newRayCronJobStatus := newRayCronJob.Status
+	if oldRayCronJobStatus.ScheduleStatus != newRayCronJobStatus.ScheduleStatus {
+
+		logger.Info("updateRayCronJobStatus", "old ScheduleStatus", oldRayCronJobStatus.ScheduleStatus, "new ScheduleStatus", newRayCronJobStatus.ScheduleStatus)
+		if err := r.Status().Update(ctx, newRayCronJob); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Validate the RayCronJob
