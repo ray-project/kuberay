@@ -131,11 +131,11 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return cached.JobInfo, cached.Err
 	}
 	currentTime := time.Now()
-	cached := &JobInfoCache{Err: ErrAgain, UpdateAt: &currentTime}
+	placeholder := &JobInfoCache{Err: ErrAgain, UpdateAt: &currentTime}
 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
-	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, cached); existed {
+	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, placeholder); existed {
 		return cached.JobInfo, cached.Err
 	}
 
@@ -149,7 +149,9 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
 
-		cacheStorage.Add(jobId, jobInfoCache)
+		if _, existed := cacheStorage.ContainsOrAdd(jobId, jobInfoCache); !existed {
+			return false
+		}
 
 		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
 	}
