@@ -340,6 +340,9 @@ const (
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
 
+	// RayCronJob event list
+	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
+
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"
 	CreatedHTTPRoute                K8sEventType = "CreatedHTTPRoute"
