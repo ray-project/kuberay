@@ -19,8 +19,9 @@ type RayCronJobSpec struct {
 type ScheduleStatus string
 
 const (
-	StatusNew       ScheduleStatus = "new"
-	StatusScheduled ScheduleStatus = "scheduled"
+	StatusNew              ScheduleStatus = "new"
+	StatusScheduled        ScheduleStatus = "scheduled"
+	StatusValidationFailed ScheduleStatus = "validationFailed"
 )
 
 // RayCronJobStatus defines the observed state of RayCronJob
@@ -29,7 +30,7 @@ type RayCronJobStatus struct {
 	// +optional
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 	// +optional
-	ScheduleStatus string `json:"scheduleStatus,omitempty"`
+	ScheduleStatus ScheduleStatus `json:"scheduleStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
