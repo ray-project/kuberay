@@ -8,8 +8,11 @@ import (
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -26,6 +29,7 @@ type RayCronJobReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+	clock    clock.Clock
 }
 
 //+kubebuilder:rbac:groups=ray.io,resources=raycronjobs,verbs=get;list;watch;create;update;patch;delete
@@ -66,7 +70,8 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	originalRayCronJobInstance := rayCronJobInstance.DeepCopy()
 
 	// validate RayCronJob
-	if err := validateRayCronJob(rayCronJobInstance); err != nil {
+	schedule, err := validateAndParseRayCronJob(rayCronJobInstance)
+	if err != nil {
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec),
 			"%s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
 
@@ -81,7 +86,39 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, nil
+	now := r.clock.Now()
+	scheduledTime := schedule.Next(now)
+	requeueAt := scheduledTime.Sub(now)
+
+	switch rayCronJobInstance.Status.ScheduleStatus {
+	case rayv1.StatusNew:
+		// Update status to scheduled
+		rayCronJobInstance.Status.ScheduleStatus = rayv1.StatusScheduled
+
+	case rayv1.StatusScheduled:
+		// TODO: Create RayJob based on the jobTemplate
+		rayJob := constructRayJob(rayCronJobInstance)
+		if err := r.Create(ctx, rayJob); err != nil {
+			logger.Info("Failed to create RayJob from RayCronJob", "error", err)
+			// TODO: think if using requeueAt here is good?
+			return ctrl.Result{RequeueAfter: requeueAt}, err
+		}
+
+		rayCronJobInstance.Status.LastScheduleTime = metav1.NewTime(now)
+	default:
+		logger.Info("Unknown ScheduleStatus", "ScheduleStatus", rayCronJobInstance.Status.ScheduleStatus)
+		return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, nil
+
+	}
+
+	// This is the only 2 places where we update the RayCronJob status. This will directly
+	// update the ScheduleStatus to ValidationFailed if there's validation error
+	if err = r.updateRayCronJobStatus(ctx, originalRayCronJobInstance, rayCronJobInstance); err != nil {
+		logger.Info("Failed to update RayCronJob status", "error", err)
+		return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
+	}
+
+	return ctrl.Result{RequeueAfter: requeueAt}, nil
 }
 
 func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRayCronJob *rayv1.RayCronJob, newRayCronJob *rayv1.RayCronJob) error {
@@ -98,19 +135,33 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 	return nil
 }
 
-// Validate the RayCronJob
-func validateRayCronJob(rayCronJobInstance *rayv1.RayCronJob) error {
+// Validate the RayCronJob and return cron schedule string if valid
+func validateAndParseRayCronJob(rayCronJobInstance *rayv1.RayCronJob) (cron.Schedule, error) {
 	// TODO: Do we need this? Validate RayCronJob metadata -> validate the name length
-	_, parseErr := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
+	schedule, parseErr := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
 	if parseErr != nil {
 		// cron string validation error
-		return fmt.Errorf("The RayJobCron spec is invalid: Parse cron schedule with error: %w", parseErr)
+		return nil, fmt.Errorf("The RayJobCron spec is invalid: Parse cron schedule with error: %w", parseErr)
 	}
 	if err := utils.ValidateRayJobSpec(&rayv1.RayJob{Spec: *rayCronJobInstance.Spec.JobTemplate}); err != nil {
-		return fmt.Errorf("The RayJobCron spec is invalid: The RayJob spec is invalid with error: %w", err)
+		return nil, fmt.Errorf("The RayJobCron spec is invalid: The RayJob spec is invalid with error: %w", err)
 	}
 
-	return nil
+	return schedule, nil
+}
+
+func constructRayJob(cronJob *rayv1.RayCronJob) *rayv1.RayJob {
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
+			Namespace: cronJob.Namespace,
+			Labels: map[string]string{
+				"ray.io/cronjob-name": cronJob.Name,
+			},
+		},
+		Spec: *cronJob.Spec.JobTemplate.DeepCopy(),
+	}
+	return rayJob
 }
 
 // SetupWithManager sets up the controller with the Manager.
