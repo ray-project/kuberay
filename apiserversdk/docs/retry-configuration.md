@@ -46,7 +46,7 @@ const (
 )
 ```
 
-### Step 2: Rebuild and load the new APIServer image into your Kind cluster.
+### Step 2: Rebuild and load the new APIServer image into your Kind cluster
 
 ```bash
 cd apiserver
@@ -58,7 +58,7 @@ make docker-image IMG_REPO=kuberay-apiserver IMG_TAG=dev
 make load-image IMG_REPO=$IMG_REPO IMG_TAG=$IMG_TAG KIND_CLUSTER_NAME=$KIND_CLUSTER_NAME
 ```
 
-### Step 3: Redeploy the APIServer using Helm, overriding the image to use the new one you just built.
+### Step 3: Redeploy the APIServer using Helm, overriding the image to use the new one you just built
 
 ```bash
 helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait \
@@ -66,20 +66,7 @@ helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait 
   --set security=null
 ```
 
-To make sure it works. first find the name of the APIServer pod:
-
-```bash
-kubectl get pods -l app.kubernetes.io/component=kuberay-apiserver
-```
-
-Describe the pod and check the Image field:
-
-```bash
-kubectl describe pod <your-apiserver-pod-name> | grep Image:
-# The output should show Image: kuberay-apiserver:dev.
-```
-
-### Demonstrating Retries
+## Demonstrating Retries
 
 Make sure you have the apiserver port forwarded as mentioned in the [installation](installation.md).
 
@@ -88,25 +75,21 @@ kubectl port-forward service/kuberay-apiserver-service 31888:8888
 ```
   
 After port-forwarding, test the retry mechanism:  
+
+### Retries on 429 (Too Many Request)
   
 ```bash  
-# This request will automatically retry on transient failures  [header-7](#header-7)
-curl -X GET http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters -v  
-  
-# Watch for timing in the verbose output:  [header-8](#header-8)
-# - Initial attempt  [header-9](#header-9)
-# - If it fails with 503, wait 500ms  [header-10](#header-10)
-# - Second attempt after 500ms  [header-11](#header-11)
-# - If it fails again, wait 1s  [header-12](#header-12)
-# - Third attempt after 1s  [header-13](#header-13)
-# - If it fails again, wait 2s  [header-14](#header-14)
-# - Fourth attempt after 2s  [header-15](#header-15)
+seq 1 2000 | xargs -I{} -P 150 curl -s -o /dev/null -w "%{http_code}\n" \
+  http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters | sort | uniq -c
+```
 
 To see retry in action, you can check the APIServer logs:
 
 ```bash
 kubectl logs -f deployment/kuberay-apiserver 
 ```
+
+### Retries on 503
 
 ## Clean Up
 
