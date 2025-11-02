@@ -437,7 +437,7 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 }
 
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
-	desiredResourcesList := []corev1.ResourceList{{}}
+	desiredResourcesList := []corev1.ResourceList{}
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
@@ -454,7 +454,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 }
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
-	minResourcesList := []corev1.ResourceList{{}}
+	minResourcesList := []corev1.ResourceList{}
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
