@@ -4,7 +4,7 @@ name: ray-cluster
 
 description: A Helm chart for deploying the RayCluster with the kuberay operator.
 
-version: 1.5.0-rc.0
+version: 1.5.0-rc.1
 
 home: https://github.com/ray-project/kuberay
 
