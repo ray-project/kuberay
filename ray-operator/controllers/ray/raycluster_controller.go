@@ -764,7 +764,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					}
 					validReplicaIndices[newReplicaIndex] = true
 					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff, "replicaIndex", newReplicaIndex)
-					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), newReplicaIndex); err != nil {
+					if err := r.createWorkerPodWithIndex(ctx, *instance, *worker.DeepCopy(), "", newReplicaIndex, 0); err != nil {
 						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 					}
 				}
@@ -772,7 +772,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				// create all workers of this group
 				for i := 0; i < diff; i++ {
 					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
-					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), 0); err != nil {
+					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
 						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
 					}
 				}
@@ -1172,11 +1172,11 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	return nil
 }
 
-func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec, replicaIndex int) error {
+func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance rayv1.RayCluster, worker rayv1.WorkerGroupSpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// build the pod then create it
-	pod := r.buildWorkerPod(ctx, instance, worker, "", replicaIndex, 0)
+	pod := r.buildWorkerPod(ctx, instance, worker, "", 0, 0)
 	if r.options.BatchSchedulerManager != nil {
 		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 			scheduler.AddMetadataToChildResource(ctx, &instance, &pod, worker.GroupName)
