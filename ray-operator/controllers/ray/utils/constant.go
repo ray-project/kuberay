@@ -28,12 +28,18 @@ const (
 	KubeRayVersion                           = "ray.io/kuberay-version"
 
 	// Labels for feature RayMultihostIndexing
-	// RayWorkerReplicaIndexKey label is the unique label for the replica in a specific worker group. It is made up of the worker group name
-	// and a unique identifier. e.g. multi-host-worker-group-xh3hf
 	//
-	// RayHostIndexKey label represents the index of the host within the RayWorkerReplicaIndexKey.
+	// RayWorkerReplicaNameKey label is the unique name for the replica in a specific worker group. It is made up
+	// of the worker group name and a unique identifier (e.g. multi-host-worker-group-xh3hf). This label is unique
+	// across RayClusters.
+	RayWorkerReplicaNameKey = "ray.io/worker-group-replica-name"
+
+	// RayWorkerReplicaIndexKey label is the integer index for the replica in it's worker group (0 to replicas-1).
+	// The value for this label is unique within its worker group, but not across worker groups or RayClusters.
 	RayWorkerReplicaIndexKey = "ray.io/worker-group-replica-index"
-	RayHostIndexKey          = "ray.io/replica-host-index"
+
+	// RayHostIndexKey label represents the index of the host within the replica group.
+	RayHostIndexKey = "ray.io/replica-host-index"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
