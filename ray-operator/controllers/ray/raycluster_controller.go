@@ -754,19 +754,27 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if diff > 0 {
 			// pods need to be added
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
-			newReplicaIndex := 0
-			// create all workers of this group
-			for i := 0; i < diff; i++ {
-				logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
-				if features.Enabled(features.RayMultiHostIndexing) {
+			if features.Enabled(features.RayMultiHostIndexing) {
+				newReplicaIndex := 0
+				// create all workers of this group
+				for i := 0; i < diff; i++ {
 					// Find the next available replica index.
 					for validReplicaIndices[newReplicaIndex] {
 						newReplicaIndex++
 					}
 					validReplicaIndices[newReplicaIndex] = true
+					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff, "replicaIndex", newReplicaIndex)
+					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), newReplicaIndex); err != nil {
+						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+					}
 				}
-				if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), newReplicaIndex); err != nil {
-					return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+			} else {
+				// create all workers of this group
+				for i := 0; i < diff; i++ {
+					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
+					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy(), 0); err != nil {
+						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
+					}
 				}
 			}
 		} else if diff == 0 {
