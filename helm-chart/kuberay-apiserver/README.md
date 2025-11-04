@@ -1,6 +1,6 @@
 # KubeRay APIServer
 
-![Version: 1.5.0-rc.1](https://img.shields.io/badge/Version-1.5.0--rc.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+![Version: 1.5.0](https://img.shields.io/badge/Version-1.5.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 A Helm chart for kuberay-apiserver
 
@@ -103,7 +103,7 @@ kubectl get pods
 | replicaCount | int | `1` |  |
 | name | string | `"kuberay-apiserver"` |  |
 | image.repository | string | `"quay.io/kuberay/apiserver"` | Image repository. |
-| image.tag | string | `"v1.5.0-rc.1"` | Image tag. |
+| image.tag | string | `"v1.5.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | cors | string | `nil` |  |
 | labels | object | `{}` | Extra labels. |
