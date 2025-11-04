@@ -19,7 +19,7 @@ type RayCronJobSpec struct {
 type ScheduleStatus string
 
 const (
-	StatusNew              ScheduleStatus = "New"
+	StatusNew              ScheduleStatus = ""
 	StatusScheduled        ScheduleStatus = "Scheduled"
 	StatusValidationFailed ScheduleStatus = "ValidationFailed"
 )
