@@ -851,6 +851,70 @@ func TestValidateRayClusterSpec_Labels(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
+	tests := []struct {
+		name         string
+		rayVersion   string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name:        "Valid Ray version 2.51.0",
+			rayVersion:  "2.51.0",
+			expectError: false,
+		},
+		{
+			name:        "Valid Ray version 2.52.0",
+			rayVersion:  "2.52.0",
+			expectError: false,
+		},
+		{
+			name:        "Valid Ray version 3.0.0",
+			rayVersion:  "3.0.0",
+			expectError: false,
+		},
+		{
+			name:         "Invalid Ray version 2.50.0",
+			rayVersion:   "2.50.0",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but minimum Ray version is 2.51.0, got 2.50.0",
+		},
+		{
+			name:         "Invalid Ray version format",
+			rayVersion:   "invalid-version",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but RayVersion format is invalid: invalid-version could not parse \"invalid-version\" as version",
+		},
+		{
+			name:         "Empty Ray version",
+			rayVersion:   "",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.51.0 or later is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{
+				RayVersion: tt.rayVersion,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				AuthOptions: &rayv1.AuthOptions{
+					Mode: rayv1.AuthModeToken,
+				},
+			}
+			err := ValidateRayClusterSpec(spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayJobStatus(t *testing.T) {
 	tests := []struct {
 		name        string

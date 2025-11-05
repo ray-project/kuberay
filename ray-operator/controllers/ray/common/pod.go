@@ -221,6 +221,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
+	if utils.IsAuthEnabled(&instance.Spec) {
+		setAuthEnvVars(instance.Name, &podTemplate)
+	}
+
 	return podTemplate
 }
 
@@ -234,6 +238,47 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 		Value: "true",
 	})
+}
+
+// setAuthEnvVars sets environment variables required for Ray token authentication
+func setAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec) {
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+		Value: "token",
+	})
+
+	secretName := utils.CheckName(clusterName)
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+				Key:                  "auth_token",
+			},
+		},
+	})
+
+	// Configure auth token for wait-gcs-ready init container if it exists
+	for i, initContainer := range podTemplate.Spec.InitContainers {
+		if initContainer.Name != "wait-gcs-ready" {
+			continue
+		}
+
+		podTemplate.Spec.InitContainers[i].Env = append(podTemplate.Spec.InitContainers[i].Env, corev1.EnvVar{
+			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+			Value: "token",
+		})
+
+		podTemplate.Spec.InitContainers[i].Env = append(podTemplate.Spec.InitContainers[i].Env, corev1.EnvVar{
+			Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+					Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+				},
+			},
+		})
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -356,6 +401,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 
 	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
 		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+	}
+
+	if utils.IsAuthEnabled(&instance.Spec) {
+		setAuthEnvVars(instance.Name, &podTemplate)
 	}
 
 	return podTemplate
