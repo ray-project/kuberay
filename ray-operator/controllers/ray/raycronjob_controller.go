@@ -98,11 +98,18 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	switch rayCronJobInstance.Status.ScheduleStatus {
 	case rayv1.StatusNew:
-		// Update status to scheduled
+		// Update status to scheduled and set the LastScheduleTime
 		logger.Info("Status transition", "from", rayv1.StatusNew, "to", rayv1.StatusScheduled)
 		rayCronJobInstance.Status.ScheduleStatus = rayv1.StatusScheduled
+		rayCronJobInstance.Status.LastScheduleTime = metav1.NewTime(now)
 
 	case rayv1.StatusScheduled:
+		nextScheduleTime := schedule.Next(rayCronJobInstance.Status.LastScheduleTime.Time)
+		// if nextScheduleTime is after now, requeue it with their time difference
+		if nextScheduleTime.After(now) {
+			return ctrl.Result{RequeueAfter: nextScheduleTime.Sub(now)}, nil
+		}
+
 		rayJob := constructRayJob(rayCronJobInstance)
 		if err := r.Create(ctx, rayJob); err != nil {
 			logger.Error(err, "Failed to create RayJob from RayCronJob")
