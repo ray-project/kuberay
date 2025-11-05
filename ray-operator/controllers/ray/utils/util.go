@@ -253,6 +253,14 @@ func SafeUint64ToInt64(n uint64) int64 {
 	return int64(n)
 }
 
+// CapInt64ToInt32 converts int64 to int32, capping at math.MaxInt32 if the value exceeds it.
+func CapInt64ToInt32(n int64) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(n)
+}
+
 // GetNamespace return namespace
 func GetNamespace(metaData metav1.ObjectMeta) string {
 	if metaData.Namespace == "" {
@@ -406,8 +414,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		}
 	}
 
-	// #nosec G115 -- safe: count is capped at math.MaxInt32 above
-	return int32(count)
+	return CapInt64ToInt32(count)
 }
 
 // CalculateReadyReplicas calculates ready worker replicas at the cluster level
