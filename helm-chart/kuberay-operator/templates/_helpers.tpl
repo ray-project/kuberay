@@ -132,6 +132,7 @@ rules:
   resources:
   - events
   - pods/status
+  - secrets
   - services
   verbs:
   - create

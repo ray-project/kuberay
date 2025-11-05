@@ -2,6 +2,8 @@ package ray
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	errstd "errors"
 	"fmt"
 	"os"
@@ -98,6 +100,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
@@ -298,6 +301,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		r.reconcileAutoscalerRole,
 		r.reconcileAutoscalerRoleBinding,
 		r.reconcileIngress,
+		r.reconcileAuthSecret,
 		r.reconcileHeadService,
 		r.reconcileHeadlessService,
 		r.reconcileServeService,
@@ -352,6 +356,62 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 	logger.Info("Unconditional requeue after", "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
+}
+
+func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Reconciling Auth")
+
+	if instance.Spec.AuthOptions == nil || instance.Spec.AuthOptions.Mode == rayv1.AuthModeDisabled {
+		return nil
+	}
+
+	secret := &corev1.Secret{}
+	secretName := utils.CheckName(instance.Name)
+	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, secret)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return r.createAuthSecret(ctx, instance, secretName)
+		}
+		return err
+	}
+
+	return nil
+}
+
+// createAuthSecret generates a new secret with a random token.
+func (r *RayClusterReconciler) createAuthSecret(ctx context.Context, rayCluster *rayv1.RayCluster, secretName string) error {
+	token, err := generateRandomToken(32)
+	if err != nil {
+		return err
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: rayCluster.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: rayCluster.Name,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(rayCluster, rayv1.SchemeGroupVersion.WithKind("RayCluster")),
+			},
+		},
+		StringData: map[string]string{
+			"auth_token": token,
+		},
+	}
+
+	return r.Create(ctx, secret)
+}
+
+// generateRandomToken creates a random base64 encoded string.
+func generateRandomToken(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
 }
 
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {

@@ -5,6 +5,7 @@ package v1
 // RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
 type RayClusterSpecApplyConfiguration struct {
+	AuthOptions              *AuthOptionsApplyConfiguration              `json:"authOptions,omitempty"`
 	Suspend                  *bool                                       `json:"suspend,omitempty"`
 	ManagedBy                *string                                     `json:"managedBy,omitempty"`
 	AutoscalerOptions        *AutoscalerOptionsApplyConfiguration        `json:"autoscalerOptions,omitempty"`
@@ -20,6 +21,14 @@ type RayClusterSpecApplyConfiguration struct {
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
+}
+
+// WithAuthOptions sets the AuthOptions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AuthOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithAuthOptions(value *AuthOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.AuthOptions = value
+	return b
 }
 
 // WithSuspend sets the Suspend field in the declarative configuration to the given value

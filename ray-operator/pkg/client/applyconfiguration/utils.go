@@ -18,6 +18,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	// Group=ray.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("AuthOptions"):
+		return &rayv1.AuthOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ClusterUpgradeOptions"):
