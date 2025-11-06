@@ -253,10 +253,14 @@ func SafeUint64ToInt64(n uint64) int64 {
 	return int64(n)
 }
 
-// CapInt64ToInt32 converts int64 to int32, capping at math.MaxInt32 if the value exceeds it.
-func CapInt64ToInt32(n int64) int32 {
+// SafeInt64ToInt32 converts int64 to int32, preventing overflow/underflow by
+// bounding the value between [math.MinInt32, math.MaxInt32]
+func SafeInt64ToInt32(n int64) int32 {
 	if n > math.MaxInt32 {
 		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
 	}
 	return int32(n)
 }
@@ -414,7 +418,7 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		}
 	}
 
-	return CapInt64ToInt32(count)
+	return SafeInt64ToInt32(count)
 }
 
 // CalculateReadyReplicas calculates ready worker replicas at the cluster level
