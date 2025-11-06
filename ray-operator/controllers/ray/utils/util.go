@@ -411,11 +411,6 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 			continue
 		}
 		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
-
-		// early return if an overflow happens
-		if count > math.MaxInt32 {
-			return math.MaxInt32
-		}
 	}
 
 	return SafeInt64ToInt32(count)
