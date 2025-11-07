@@ -883,7 +883,7 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 			name:         "Invalid Ray version format",
 			rayVersion:   "invalid-version",
 			expectError:  true,
-			errorMessage: "authOptions.mode is 'token' but RayVersion format is invalid: invalid-version could not parse \"invalid-version\" as version",
+			errorMessage: "authOptions.mode is 'token' but RayVersion format is invalid: invalid-version, could not parse \"invalid-version\" as version",
 		},
 		{
 			name:         "Empty Ray version",
