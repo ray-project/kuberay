@@ -253,6 +253,18 @@ func SafeUint64ToInt64(n uint64) int64 {
 	return int64(n)
 }
 
+// SafeInt64ToInt32 converts int64 to int32, preventing overflow/underflow by
+// bounding the value between [math.MinInt32, math.MaxInt32]
+func SafeInt64ToInt32(n int64) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(n)
+}
+
 // GetNamespace return namespace
 func GetNamespace(metaData metav1.ObjectMeta) string {
 	if metaData.Namespace == "" {
@@ -393,15 +405,15 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 
 // CalculateMaxReplicas calculates max worker replicas at the cluster level
 func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
-	count := int32(0)
+	count := int64(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += (*nodeGroup.MaxReplicas * nodeGroup.NumOfHosts)
+		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
 	}
 
-	return count
+	return SafeInt64ToInt32(count)
 }
 
 // CalculateReadyReplicas calculates ready worker replicas at the cluster level
@@ -437,7 +449,7 @@ func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 }
 
 func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
-	desiredResourcesList := []corev1.ResourceList{{}}
+	desiredResourcesList := []corev1.ResourceList{}
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	desiredResourcesList = append(desiredResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
@@ -454,7 +466,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 }
 
 func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
-	minResourcesList := []corev1.ResourceList{{}}
+	minResourcesList := []corev1.ResourceList{}
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
