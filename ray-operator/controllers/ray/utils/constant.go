@@ -159,7 +159,7 @@ const (
 	// RAY_AUTH_MODE_ENV_VAR is the Ray environment variable for configuring the authentication mode
 	RAY_AUTH_MODE_ENV_VAR = "RAY_auth_mode" // TODO: change to RAY_AUTH_MODE once updated in Ray nightly
 	// RAY_AUTH_TOKEN_ENV_VAR is the Ray environment variable containing the authentication token.
-	RAY_AUTH_TOKEN_ENV_VAR = "RAY_AUTH_TOKEN"
+	RAY_AUTH_TOKEN_ENV_VAR = "RAY_AUTH_TOKEN" // #nosec G101
 	// RAY_AUTH_TOKEN_SECRET_KEY is the key used in the Secret containing Ray auth token
 	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
 
