@@ -222,7 +222,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		setAuthEnvVars(instance.Name, &podTemplate)
+		setTokenAuthEnvVars(instance.Name, &podTemplate)
 	}
 
 	return podTemplate
@@ -240,8 +240,8 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	})
 }
 
-// setAuthEnvVars sets environment variables required for Ray token authentication
-func setAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec) {
+// setTokenAuthEnvVars sets environment variables required for Ray token authentication
+func setTokenAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec) {
 	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
 		Value: "token",
@@ -253,7 +253,7 @@ func setAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec) {
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-				Key:                  "auth_token",
+				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
 			},
 		},
 	})
@@ -404,7 +404,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		setAuthEnvVars(instance.Name, &podTemplate)
+		setTokenAuthEnvVars(instance.Name, &podTemplate)
 	}
 
 	return podTemplate
