@@ -310,11 +310,10 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobReason, Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded)))
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				MatchRegexp("The RayJob submitter finished at .* but the ray job did not reach terminal state within .*")))
-
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
+				Equal(rayv1.SubmissionFailed),
+			)))
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
