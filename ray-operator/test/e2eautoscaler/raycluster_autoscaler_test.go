@@ -24,7 +24,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -43,7 +43,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -91,7 +91,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -110,7 +110,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1", "num-gpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -151,7 +151,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -172,7 +172,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"CustomResource": 1}'`}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -214,7 +214,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Scripts for creating and terminating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_concurrent_tasks.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_concurrent_tasks.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -236,7 +236,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
 					WithIdleTimeoutSeconds(scaleDownWaitSec))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -272,7 +272,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			// Script for creating detached actors to trigger autoscaling
-			scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py"))
 			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
@@ -293,7 +293,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 					WithRayStartParams(map[string]string{"num-cpus": "1"}).
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-				WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -363,7 +363,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 				namespace := test.NewTestNamespace()
 
-				scriptsAC := newConfigMap(namespace.Name, files(test, "create_detached_actor.py"))
+				scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py"))
 				scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -383,7 +383,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 						WithRayStartParams(map[string]string{"num-cpus": "1"}).
 						WithTemplate(tc.WorkerPodTemplateGetter()))
 				rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
-					WithSpec(apply(rayClusterSpecAC, mountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+					WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
 
 				rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 				g.Expect(err).NotTo(gomega.HaveOccurred())
