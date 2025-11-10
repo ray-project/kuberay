@@ -84,6 +84,7 @@ helm uninstall raycluster
 | head.labels | object | `{}` | Labels for the head pod |
 | head.serviceAccountName | string | `""` |  |
 | head.restartPolicy | string | `""` |  |
+| head.runtimeClassName | string | `""` |  |
 | head.containerEnv | list | `[]` |  |
 | head.envFrom | list | `[]` | envFrom to pass to head pod |
 | head.resources.limits.cpu | string | `"1"` |  |
@@ -113,6 +114,7 @@ helm uninstall raycluster
 | worker.labels | object | `{}` | Labels for the worker pod |
 | worker.serviceAccountName | string | `""` |  |
 | worker.restartPolicy | string | `""` |  |
+| worker.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the worker Pods. |
 | worker.initContainers | list | `[]` | Init containers to add to the worker pod |
 | worker.containerEnv | list | `[]` |  |
 | worker.envFrom | list | `[]` | envFrom to pass to worker pod |
@@ -142,6 +144,7 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.labels | object | `{}` | Labels for the additional worker pod |
 | additionalWorkerGroups.smallGroup.serviceAccountName | string | `""` |  |
 | additionalWorkerGroups.smallGroup.restartPolicy | string | `""` |  |
+| additionalWorkerGroups.smallGroup.runtimeClassName | string | `""` | runtimeClassName for this additional worker group. Empty string means default runtime. |
 | additionalWorkerGroups.smallGroup.containerEnv | list | `[]` |  |
 | additionalWorkerGroups.smallGroup.envFrom | list | `[]` | envFrom to pass to additional worker pod |
 | additionalWorkerGroups.smallGroup.resources.limits.cpu | int | `1` |  |

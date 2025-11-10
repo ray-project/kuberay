@@ -214,7 +214,7 @@ worker:
   serviceAccountName: ""
   restartPolicy: ""
 
-  # runtimeClassName is the name of the RuntimeClass to use to run the worker Pods.
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the worker Pods.
   runtimeClassName: ""
 
   # -- Init containers to add to the worker pod
@@ -325,7 +325,7 @@ additionalWorkerGroups:
     serviceAccountName: ""
     restartPolicy: ""
 
-    # runtimeClassName for this additional worker group. Empty string means default runtime.
+    # -- runtimeClassName for this additional worker group. Empty string means default runtime.
     runtimeClassName: ""
 
     # containerEnv specifies environment variables for the Ray container,
