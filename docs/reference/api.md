@@ -277,6 +277,36 @@ _Appears in:_
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
+| `upgradeStrategy` _[RayClusterUpgradeStrategy](#rayclusterupgradestrategy)_ | UpgradeStrategy defines the strategy used when upgrading the RayCluster Pods. |  |  |
+
+
+#### RayClusterUpgradeStrategy
+
+
+
+
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  |  |
+
+
+#### RayClusterUpgradeType
+
+_Underlying type:_ _string_
+
+
+
+
+
+_Appears in:_
+- [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
+
 
 
 #### RayJob

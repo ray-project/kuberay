@@ -9,6 +9,21 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type RayClusterUpgradeType string
+
+const (
+	// Recreate strategy allows deleting old Pods and automatically recreate them with the new spec
+	Recreate RayClusterUpgradeType = "Recreate"
+	// No new pod will be created while the strategy is set to None
+	RayClusterUpgradeNone RayClusterUpgradeType = "None"
+)
+
+type RayClusterUpgradeStrategy struct {
+	// Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`.
+	// +optional
+	Type *RayClusterUpgradeType `json:"type,omitempty"`
+}
+
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
 	// Suspend indicates whether a RayCluster should be suspended.
@@ -44,6 +59,9 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+	// UpgradeStrategy defines the strategy used when upgrading the RayCluster Pods.
+	// +optional
+	UpgradeStrategy *RayClusterUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 }
 
 // GcsFaultToleranceOptions contains configs for GCS FT

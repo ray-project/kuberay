@@ -604,6 +604,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
 		shouldDelete, reason := shouldDeletePod(headPod, rayv1.HeadNode)
+
+		if !shouldDelete && shouldRecreateForUpgrade(ctx, instance, &headPod, rayv1.HeadNode) {
+			shouldDelete = true
+			reason = "Pod template has changed and upgradeStrategy is set to Recreate"
+		}
+
 		logger.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
@@ -699,6 +705,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
+
+			if !shouldDelete && shouldRecreateForUpgrade(ctx, instance, &workerPod, rayv1.WorkerNode) {
+				shouldDelete = true
+				reason = "Pod template has changed and upgradeStrategy is set to Recreate"
+			}
+
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
@@ -1032,6 +1044,68 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	}
 
 	return nil
+}
+
+// shouldRecreateForUpgrade checks if a pod should be recreated due to spec changes
+// when upgradeStrategy is set to Recreate.
+//
+// @param ctx: The context for logging.
+// @param cluster: The RayCluster instance.
+// @param pod: The Pod to check.
+// @param nodeType: The type of the node (head or worker).
+//
+// @return: true if the pod should be recreated, false otherwise.
+func shouldRecreateForUpgrade(ctx context.Context, cluster *rayv1.RayCluster, pod *corev1.Pod, nodeType rayv1.RayNodeType) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// If upgradeStrategy is not set or is None, maintain current behavior (no automatic recreation)
+	if cluster.Spec.UpgradeStrategy == nil ||
+		cluster.Spec.UpgradeStrategy.Type == nil ||
+		*cluster.Spec.UpgradeStrategy.Type == rayv1.RayClusterUpgradeNone {
+		return false
+	}
+
+	// Only recreate pods when upgradeStrategy is set to Recreate
+	if *cluster.Spec.UpgradeStrategy.Type != rayv1.Recreate {
+		return false
+	}
+
+	// Calculate the expected template hash
+	var expectedHash string
+	var err error
+
+	if nodeType == rayv1.HeadNode {
+		expectedHash, err = utils.GenerateJsonHash(cluster.Spec.HeadGroupSpec.Template)
+	} else {
+		// Find the corresponding worker group
+		groupName := pod.Labels[utils.RayNodeGroupLabelKey]
+		for _, workerGroup := range cluster.Spec.WorkerGroupSpecs {
+			if workerGroup.GroupName == groupName {
+				expectedHash, err = utils.GenerateJsonHash(workerGroup.Template)
+				break
+			}
+		}
+	}
+
+	if err != nil {
+		logger.Error(err, "Failed to generate pod template hash", "pod", pod.Name)
+		return false
+	}
+
+	// Compare the pod's hash annotation with the expected hash
+	actualHash := pod.Annotations[utils.PodTemplateHashKey]
+
+	if actualHash != expectedHash {
+		logger.Info("Pod template has changed, will recreate pod",
+			"pod", pod.Name,
+			"nodeType", nodeType,
+			"actualHash", actualHash,
+			"expectedHash", expectedHash,
+			"upgradeStrategy", *cluster.Spec.UpgradeStrategy.Type)
+		return true
+	}
+
+	return false
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
