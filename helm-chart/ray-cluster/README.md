@@ -84,7 +84,7 @@ helm uninstall raycluster
 | head.labels | object | `{}` | Labels for the head pod |
 | head.serviceAccountName | string | `""` |  |
 | head.restartPolicy | string | `""` |  |
-| head.runtimeClassName | string | `""` |  |
+| head.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the head Pod. |
 | head.containerEnv | list | `[]` |  |
 | head.envFrom | list | `[]` | envFrom to pass to head pod |
 | head.resources.limits.cpu | string | `"1"` |  |

@@ -98,7 +98,7 @@ head:
   serviceAccountName: ""
   restartPolicy: ""
 
-  # runtimeClassName is the name of the RuntimeClass to use to run the head Pod.
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the head Pod.
   runtimeClassName: ""
 
   # containerEnv specifies environment variables for the Ray container,
