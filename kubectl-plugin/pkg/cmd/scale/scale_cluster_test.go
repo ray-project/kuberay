@@ -289,7 +289,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 			expectedError: "cannot set --min-replicas (8) greater than --max-replicas (5)",
 		},
 		{
-			name:     "should error when replicas smaller than min-replicas",
+			name:     "should error when replicas less than min-replicas",
 			replicas: 2,
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
@@ -309,7 +309,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 					},
 				},
 			},
-			expectedError: "cannot set --replicas (2) smaller than --min-replicas (3)",
+			expectedError: "cannot set --replicas (2) less than --min-replicas (3)",
 		},
 	}
 

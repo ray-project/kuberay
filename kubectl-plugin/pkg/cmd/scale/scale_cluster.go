@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 
@@ -170,7 +171,9 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		currentReplicas = *cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas
 	}
 
-	var currentMinReplicas, currentMaxReplicas int32
+	currentMinReplicas := int32(0)
+	currentMaxReplicas := int32(math.MaxInt32)
+
 	if cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MinReplicas != nil {
 		currentMinReplicas = *cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MinReplicas
 	}
@@ -181,15 +184,32 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 	finalMinReplicas := currentMinReplicas
 	finalMaxReplicas := currentMaxReplicas
 	finalReplicas := currentReplicas
+	hasChanges := false
+	var changes []string
 
 	if options.minReplicas != nil && *options.minReplicas >= 0 {
 		finalMinReplicas = *options.minReplicas
+		if finalMinReplicas != currentMinReplicas {
+			cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MinReplicas = &finalMinReplicas
+			changes = append(changes, fmt.Sprintf("Updated minReplicas: %d to %d", currentMinReplicas, *options.minReplicas))
+			hasChanges = true
+		}
 	}
 	if options.maxReplicas != nil && *options.maxReplicas >= 0 {
 		finalMaxReplicas = *options.maxReplicas
+		if finalMaxReplicas != currentMaxReplicas {
+			cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MaxReplicas = &finalMaxReplicas
+			changes = append(changes, fmt.Sprintf("Updated maxReplicas: %d to %d", currentMaxReplicas, *options.maxReplicas))
+			hasChanges = true
+		}
 	}
 	if options.replicas != nil && *options.replicas >= 0 {
 		finalReplicas = *options.replicas
+		if finalReplicas != currentReplicas {
+			cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas = &finalReplicas
+			changes = append(changes, fmt.Sprintf("Scaled Replicas: %d to %d", currentReplicas, *options.replicas))
+			hasChanges = true
+		}
 	}
 
 	// Validate the final state
@@ -198,33 +218,12 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 			finalMinReplicas, finalMaxReplicas)
 	}
 	if finalReplicas < finalMinReplicas {
-		return fmt.Errorf("cannot set --replicas (%d) smaller than --min-replicas (%d)",
+		return fmt.Errorf("cannot set --replicas (%d) less than --min-replicas (%d)",
 			finalReplicas, finalMinReplicas)
 	}
 	if finalReplicas > finalMaxReplicas {
 		return fmt.Errorf("cannot set --replicas (%d) greater than --max-replicas (%d)",
 			finalReplicas, finalMaxReplicas)
-	}
-
-	hasChanges := false
-	var changes []string
-
-	if options.minReplicas != nil && *options.minReplicas >= 0 && *options.minReplicas != currentMinReplicas {
-		cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MinReplicas = options.minReplicas
-		changes = append(changes, fmt.Sprintf("Updated minReplicas: %d to %d", currentMinReplicas, *options.minReplicas))
-		hasChanges = true
-	}
-
-	if options.maxReplicas != nil && *options.maxReplicas >= 0 && *options.maxReplicas != currentMaxReplicas {
-		cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MaxReplicas = options.maxReplicas
-		changes = append(changes, fmt.Sprintf("Updated maxReplicas: %d to %d", currentMaxReplicas, *options.maxReplicas))
-		hasChanges = true
-	}
-
-	if options.replicas != nil && *options.replicas >= 0 && currentReplicas != *options.replicas {
-		cluster.Spec.WorkerGroupSpecs[workerGroupIndex].Replicas = options.replicas
-		changes = append(changes, fmt.Sprintf("Scaled Replicas: %d to %d", currentReplicas, *options.replicas))
-		hasChanges = true
 	}
 
 	if hasChanges {
