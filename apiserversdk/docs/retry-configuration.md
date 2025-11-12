@@ -70,21 +70,21 @@ helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait 
 ```
 
 ## Observing Retry Behavior
-  
-### In Production  
-  
-When retry occurs in production, you won't see explicit logs by default because  
-the retry mechanism operates silently. However, you can observe its effects:  
-  
-1. **Monitor request latency**: Retried requests will take longer due to backoff delays  
-2. **Check Kubernetes API Server logs**: Look for repeated requests from the same client  
-  
-### In Development  
-  
-To verify retry behavior during development, you can:  
-  
-1. Run the unit tests to ensure retry logic works correctly:  
 
-```bash  
+### In Production
+
+When retry occurs in production, you won't see explicit logs by default because
+the retry mechanism operates silently. However, you can observe its effects:
+
+1. **Monitor request latency**: Retried requests will take longer due to backoff delays
+2. **Check Kubernetes API Server logs**: Look for repeated requests from the same client
+
+### In Development
+
+To verify retry behavior during development, you can:
+
+1. Run the unit tests to ensure retry logic works correctly:
+
+```bash
 make test
 ```
