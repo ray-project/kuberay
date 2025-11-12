@@ -3,6 +3,7 @@ package dashboardclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/jarcoal/httpmock"
@@ -295,6 +296,6 @@ var _ = Describe("RayFrameworkGenerator", func() {
 
 		_, err := rayDashboardClient.GetServeDetails(context.TODO())
 		Expect(err).To(HaveOccurred())
-		Expect(err).To(Equal(context.DeadlineExceeded))
+		Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
 	})
 })
