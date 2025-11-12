@@ -1,6 +1,8 @@
 # APIServer Retry Behavior
 
-By default, the KubeRay APIServer automatically retries failed requests to the Kubernetes API when transient errors occur—such as 429, 502, or 503. This built-in resilience improves reliability without requiring manual intervention. This guide explains the retry behavior and how to customize it.
+By default, the KubeRay APIServer automatically retries failed requests to the Kubernetes API when transient errors occur.
+This built-in resilience improves reliability without requiring manual intervention.
+This guide explains the retry behavior and how to customize it.
 
 ## Prerequisite
 
