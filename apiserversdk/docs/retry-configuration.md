@@ -1,9 +1,6 @@
-# APIServer Retry Behavior & Configuration
+# APIServer Retry Behavior
 
-This guide walks you through observing the default retry behavior of the KubeRay APIServer and then customizing its configuration for your needs.
-By default, the APIServer automatically retries failed requests to the Kubernetes API when transient errors occur
-(like 429, 502, 503, etc.).
-This mechanism improves reliability, and this guide shows you how to see it in action and change it.
+By default, the KubeRay APIServer automatically retries failed requests to the Kubernetes API when transient errors occur—such as 429, 502, or 503. This built-in resilience improves reliability without requiring manual intervention. This guide explains the retry behavior and how to customize it.
 
 ## Prerequisite
 
@@ -11,38 +8,44 @@ Follow [installation](installation.md) to install the cluster and apiserver.
 
 ## Default Retry Behavior
 
-By default, the APIServer automatically retries for these HTTP status codes:
+The APIServer automatically retries for these HTTP status codes:
 
-- 408 (Request Timeout)  
-- 429 (Too Many Requests)  
-- 500 (Internal Server Error)  
-- 502 (Bad Gateway)  
-- 503 (Service Unavailable)  
+- 408 (Request Timeout)
+- 429 (Too Many Requests)
+- 500 (Internal Server Error)
+- 502 (Bad Gateway)
+- 503 (Service Unavailable)
 - 504 (Gateway Timeout)
 
-With the following default configuration:  
-  
-- **MaxRetry**: 3 attempts (total 4 tries including initial attempt)  
-- **InitBackoff**: 500ms (initial wait time)  
-- **BackoffFactor**: 2.0 (exponential multiplier)  
-- **MaxBackoff**: 10s (maximum wait time between retries)  
+Note that non-retryable errors (4xx except 408/429) fail immediately without retries.
+
+The following default configuration explains how retry works:
+
+- **MaxRetry**: 3 retries (4 total attempts including the initial one)
+- **InitBackoff**: 500ms (initial wait time)
+- **BackoffFactor**: 2.0 (exponential multiplier)
+- **MaxBackoff**: 10s (maximum wait time between retries)
 - **OverallTimeout**: 30s (total timeout for all attempts)
+
+which means $$Backoff = min(InitBackoff * (BackoffFactor ^ attempt), MaxBackOff)$$
+and the retries will stop if the total time exceeds the `OverallTimeout`.
 
 ## Customize the Retry Configuration
 
-Currently, retry configuration is hardcoded. If you would like a customized retry behaviour, please follow the steps below.
+Currently, retry configuration is hardcoded. If you need custom retry behavior,
+you'll need to modify the source code and rebuild the image.
 
 ### Step 1: Modify the config in `apiserversdk/util/config.go`
 
 For example,
 
 ```go
-const (  
-    HTTPClientDefaultMaxRetry = 5  // Increase retries  
-    HTTPClientDefaultBackoffFactor = float64(2)  
-    HTTPClientDefaultInitBackoff = 2 * time.Second  // Longer backoff makes timing visible  
-    HTTPClientDefaultMaxBackoff = 20 * time.Second  
-    HTTPClientDefaultOverallTimeout = 120 * time.Second  // Longer timeout to allow more retries  
+const (
+    HTTPClientDefaultMaxRetry = 5  // Increase retries from 3 to 5
+    HTTPClientDefaultBackoffFactor = float64(2)
+    HTTPClientDefaultInitBackoff = 2 * time.Second  // Longer backoff makes timing visible
+    HTTPClientDefaultMaxBackoff = 20 * time.Second
+    HTTPClientDefaultOverallTimeout = 120 * time.Second  // Longer timeout to allow more retries
 )
 ```
 
@@ -66,39 +69,22 @@ helm upgrade --install kuberay-apiserver ../helm-chart/kuberay-apiserver --wait 
   --set security=null
 ```
 
-## Demonstrating Retries
-
-Make sure you have the apiserver port forwarded as mentioned in the [installation](installation.md).
-
-```bash
-kubectl port-forward service/kuberay-apiserver-service 31888:8888
-```
+## Observing Retry Behavior
   
-After port-forwarding, test the retry mechanism:  
-
-### Retries on 429 (Too Many Request)
+### In Production  
   
+When retry occurs in production, you won't see explicit logs by default because  
+the retry mechanism operates silently. However, you can observe its effects:  
+  
+1. **Monitor request latency**: Retried requests will take longer due to backoff delays  
+2. **Check Kubernetes API Server logs**: Look for repeated requests from the same client  
+  
+### In Development  
+  
+To verify retry behavior during development, you can:  
+  
+1. Run the unit tests to ensure retry logic works correctly:  
+
 ```bash  
-seq 1 2000 | xargs -I{} -P 150 curl -s -o /dev/null -w "%{http_code}\n" \
-  http://localhost:31888/apis/ray.io/v1/namespaces/default/rayclusters | sort | uniq -c
-```
-
-To see retry in action, you can check the APIServer logs:
-
-```bash
-kubectl logs -f deployment/kuberay-apiserver 
-```
-
-### Retries on 503
-
-## Clean Up
-
-Once you are finished, you can delete the Helm release and the Kind cluster.
-
-```bash
-# Delete the Helm release
-helm delete kuberay-apiserver
-
-# Delete the Kind cluster
-kind delete cluster
+make test
 ```
