@@ -4606,6 +4606,11 @@ spec:
                     type: string
                   suspend:
                     type: boolean
+                  upgradeStrategy:
+                    properties:
+                      type:
+                        type: string
+                    type: object
                   workerGroupSpecs:
                     items:
                       properties:

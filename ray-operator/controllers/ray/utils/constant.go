@@ -26,6 +26,8 @@ const (
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
+	// PodTemplateHashKey is the annotation key for the pod template hash to track changes in pod template.
+	PodTemplateHashKey = "ray.io/pod-template-hash"
 
 	// Labels for feature RayMultihostIndexing
 	//

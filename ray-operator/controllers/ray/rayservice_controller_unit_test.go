@@ -1263,19 +1263,19 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 		},
 		{
 			name:                     "upgrade strategy is set to None, and env var is not set",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "",
 			expected:                 false,
 		},
 		{
 			name:                     "upgrade strategy is set to None, and env var is set to true",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "true",
 			expected:                 false,
 		},
 		{
 			name:                     "upgrade strategy is set to None, and env var is set to false",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "false",
 			expected:                 false,
 		},

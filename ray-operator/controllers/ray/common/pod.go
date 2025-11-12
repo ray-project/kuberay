@@ -163,12 +163,29 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
+
+	// Calculate the pod template hash BEFORE any modifications
+	// This ensures the hash reflects the original user-defined template for upgrade detection
+	templateHash := ""
+	originalTemplate := instance.Spec.HeadGroupSpec.Template.DeepCopy()
+	if hash, err := utils.GenerateJsonHash(*originalTemplate); err == nil {
+		templateHash = hash
+	}
+
 	podTemplate := headSpec.Template
 	if utils.IsDeterministicHeadPodNameEnabled() {
 		podTemplate.Name = podName
 	} else {
 		podTemplate.GenerateName = podName
 	}
+
+	if templateHash != "" {
+		if podTemplate.Annotations == nil {
+			podTemplate.Annotations = make(map[string]string)
+		}
+		podTemplate.Annotations[utils.PodTemplateHashKey] = templateHash
+	}
+
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
@@ -252,8 +269,28 @@ func getEnableProbesInjection() bool {
 
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
+	// Calculate the pod template hash BEFORE any modifications
+	// This ensures the hash reflects the original user-defined template for upgrade detection
+	templateHash := ""
+	for _, wg := range instance.Spec.WorkerGroupSpecs {
+		if wg.GroupName == workerSpec.GroupName {
+			originalTemplate := wg.Template.DeepCopy()
+			if hash, err := utils.GenerateJsonHash(*originalTemplate); err == nil {
+				templateHash = hash
+			}
+			break
+		}
+	}
+
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
+
+	if templateHash != "" {
+		if podTemplate.Annotations == nil {
+			podTemplate.Annotations = make(map[string]string)
+		}
+		podTemplate.Annotations[utils.PodTemplateHashKey] = templateHash
+	}
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
