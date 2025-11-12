@@ -689,6 +689,11 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
 }
 
+// IsAuthEnabled returns whether Ray auth is enabled.
+func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
+}
+
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
 func GetRayClusterNameFromService(svc *corev1.Service) string {
 	if svc == nil || svc.Spec.Selector == nil {
