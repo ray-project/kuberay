@@ -103,6 +103,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -570,6 +573,21 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 	if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
 		return fmt.Errorf("The RayJob spec is invalid: shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+	}
+
+	return nil
+}
+
+// validateWorkerGroupIdleTimeout validates the idleTimeoutSeconds field in a worker group spec
+func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	idleTimeoutSeconds := workerGroup.IdleTimeoutSeconds
+	if idleTimeoutSeconds != nil && *idleTimeoutSeconds < 0 {
+		return fmt.Errorf("idleTimeoutSeconds must be non-negative, got %d", *idleTimeoutSeconds)
+	}
+
+	// idleTimeoutSeconds only allowed on autoscaler v2
+	if idleTimeoutSeconds != nil && !IsAutoscalingV2Enabled(spec) {
+		return fmt.Errorf("worker group %s has idleTimeoutSeconds set, but autoscaler version is not v2. Please set .spec.autoscalerOptions.version to v2", workerGroup.GroupName)
 	}
 
 	return nil
