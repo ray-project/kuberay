@@ -155,6 +155,9 @@ spec:
         {{- with .Values.head.restartPolicy }}
         restartPolicy: {{ . }}
         {{- end }}
+        {{- with .Values.head.runtimeClassName }}
+        runtimeClassName: {{ . }}
+        {{- end }}
         {{- with .Values.head.serviceAccountName }}
         serviceAccountName: {{ . }}
         {{- end }}
@@ -280,6 +283,9 @@ spec:
         {{- end }}
         {{- with .Values.worker.restartPolicy }}
         restartPolicy: {{ . }}
+        {{- end }}
+        {{- with .Values.worker.runtimeClassName }}
+        runtimeClassName: {{ . }}
         {{- end }}
         {{- with .Values.worker.serviceAccountName }}
         serviceAccountName: {{ . }}
@@ -407,6 +413,9 @@ spec:
         {{- end }}
         {{- with $values.restartPolicy }}
         restartPolicy: {{ . }}
+        {{- end }}
+        {{- with $values.runtimeClassName }}
+        runtimeClassName: {{ . }}
         {{- end }}
         {{- with $values.serviceAccountName }}
         serviceAccountName: {{ . }}
