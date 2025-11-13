@@ -29,8 +29,9 @@ The following default configuration explains how retry works:
 - **MaxBackoff**: 10s (maximum wait time between retries)
 - **OverallTimeout**: 30s (total timeout for all attempts)
 
-which means $$Backoff = min(InitBackoff * (BackoffFactor ^ attempt), MaxBackOff)$$
-and the retries will stop if the total time exceeds the `OverallTimeout`.
+which means $$Backoff_i = \min(InitBackoff \times BackoffFactor^i, MaxBackoff)$$
+where $i$ is the attempt number (starting from 0).
+The retries will stop if the total time exceeds the `OverallTimeout`.
 
 ## Customize the Retry Configuration
 
