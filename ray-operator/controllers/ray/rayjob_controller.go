@@ -152,8 +152,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.Reason = rayv1.ValidationFailed
 		rayJobInstance.Status.Message = err.Error()
 
-		// This is the only 2 places where we update the RayJob status. This will directly
-		// update the JobDeploymentStatus to ValidationFailed if there's validation error
+		// This is one of the only 3 places where we update the RayJob status. This will directly
+		// update the JobDeploymentStatus to ValidationFailed if there's validation error.
 		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 			logger.Info("Failed to update RayJob status", "error", err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -204,6 +204,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 			if rayClusterInstance.Status.State != rayv1.Ready {
 				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
+				// This is one of only 3 places where we update the RayJob status. For observability
+				// while waiting for the RayCluster to become ready, we lift the cluster status.
+				if err := r.updateRayJobClusterStatus(ctx, originalRayJobInstance, rayClusterInstance.Status); err != nil {
+					logger.Info("Failed to update RayJob status", "error", err)
+				}
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 
@@ -419,8 +424,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
-	// This is the only 2 places where we update the RayJob status. Please do NOT add any code
-	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
+	// This is one of the only 3 places where we update the RayJob status. Please do NOT add any
+	// code between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -870,6 +875,16 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 		}
 	}
 	return nil
+}
+
+// updateRayJobClusterStatus unconditionally updates only the RayClusterStatus
+// subfield of the RayJobStatus.
+func (r *RayJobReconciler) updateRayJobClusterStatus(ctx context.Context, oldRayJob *rayv1.RayJob, newStatus rayv1.RayClusterStatus) error {
+	logger := ctrl.LoggerFrom(ctx)
+	newRayJob := oldRayJob.DeepCopy()
+	newRayJob.Status.RayClusterStatus = newStatus
+	logger.Info("updateRayJobStatusClusterStatus", "oldRayClusterStatus", oldRayJob.Status.RayClusterStatus, "newRayClusterStatus", newStatus)
+	return r.Status().Update(ctx, newRayJob)
 }
 
 func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, rayJobInstance *rayv1.RayJob) (*rayv1.RayCluster, error) {
