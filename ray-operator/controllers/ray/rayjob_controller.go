@@ -854,10 +854,14 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	oldRayJobStatus := oldRayJob.Status
 	newRayJobStatus := newRayJob.Status
 	logger.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
+
+	rayClusterStatusChanged := utils.InconsistentRayClusterStatus(oldRayJobStatus.RayClusterStatus, newRayJobStatus.RayClusterStatus)
+
 	// If a status field is crucial for the RayJob state machine, it MUST be
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
-		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
+		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
+		rayClusterStatusChanged {
 
 		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
