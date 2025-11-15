@@ -241,6 +241,34 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
+			It("In Initializing state, the JobStatus should show the RayCluster status", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningNotReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// Now the cluster should have nonzero conditions.
+				Eventually(
+					func() int {
+						status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+						return len(status.Conditions)
+					},
+					time.Second*3, time.Millisecond*500).ShouldNot(Equal(0))
+
+				// We expect the RayJob's RayClusterStatus to eventually mirror the cluster's status.
+				Eventually(
+					func() (int, error) {
+						currentRayJob := &rayv1.RayJob{}
+						err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, currentRayJob)
+						if err != nil {
+							return 0, err
+						}
+						return len(currentRayJob.Status.RayClusterStatus.Conditions), nil
+					},
+					time.Second*3, time.Millisecond*500,
+				).ShouldNot(Equal(0))
+			})
+
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
 				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
