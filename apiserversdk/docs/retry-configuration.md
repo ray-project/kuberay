@@ -6,7 +6,7 @@ This guide describes the default retry behavior.
 
 ## Default Retry Behavior
 
-The APIServer automatically retries with exponential backoff for these HTTP status codes:
+The KubeRay APIServer automatically retries with exponential backoff for these HTTP status codes:
 
 - 408 (Request Timeout)
 - 429 (Too Many Requests)
