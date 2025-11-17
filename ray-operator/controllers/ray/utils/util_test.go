@@ -328,7 +328,7 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
-func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, status corev1.ConditionStatus) (pod *corev1.Pod) {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -345,7 +345,7 @@ func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.Pod
 			Phase: phase,
 			Conditions: []corev1.PodCondition{
 				{
-					Type:   typ,
+					Type:   corev1.PodReady,
 					Status: status,
 				},
 			},
@@ -945,7 +945,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 	}{
 		{
 			name: "condition true if Ray head pod is running and ready",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionTrue),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionTrue,
@@ -953,7 +953,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 		{
 			name: "condition false if Ray head pod is not running",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -961,7 +961,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 		{
 			name: "condition false if Ray head pod is not ready",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -981,8 +981,8 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 	tests := []struct {
 		name            string
 		message         string
-		status          []corev1.ContainerStatus
 		expectedMessage string
+		status          []corev1.ContainerStatus
 	}{{
 		name: "no message no status want nothing",
 	}, {
@@ -1039,7 +1039,7 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			pod := createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse)
+			pod := createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.ConditionFalse)
 			pod.Status.Conditions[0].Message = tc.message
 			pod.Status.ContainerStatuses = tc.status
 			cond := FindHeadPodReadyCondition(pod)
