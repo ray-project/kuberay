@@ -11,6 +11,9 @@ fullnameOverride: kuberay-operator
 # -- String to override component name.
 componentOverride: kuberay-operator
 
+# -- Number of replicas for the KubeRay operator Deployment.
+replicas: 1
+
 image:
   # -- Image repository.
   repository: quay.io/kuberay/operator
