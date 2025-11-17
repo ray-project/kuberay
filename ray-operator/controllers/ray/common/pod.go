@@ -199,6 +199,12 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+
+		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
+		if utils.IsAuthEnabled(&instance.Spec) {
+			setContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+		}
+
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -222,7 +228,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		setTokenAuthEnvVars(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate)
 	}
 
 	return podTemplate
@@ -240,15 +246,29 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	})
 }
 
-// setTokenAuthEnvVars sets environment variables required for Ray token authentication
-func setTokenAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec) {
-	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+// configureTokenAuth sets environment variables required for Ray token authentication
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
+	setContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+
+	// Configure auth token for wait-gcs-ready init container if it exists
+	for i, initContainer := range podTemplate.Spec.InitContainers {
+		if initContainer.Name != "wait-gcs-ready" {
+			continue
+		}
+
+		setContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+	}
+}
+
+// setContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+func setContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
+	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-		Value: "token",
+		Value: string(rayv1.AuthModeToken),
 	})
 
 	secretName := utils.CheckName(clusterName)
-	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+	container.Env = append(container.Env, corev1.EnvVar{
 		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
@@ -257,28 +277,6 @@ func setTokenAuthEnvVars(clusterName string, podTemplate *corev1.PodTemplateSpec
 			},
 		},
 	})
-
-	// Configure auth token for wait-gcs-ready init container if it exists
-	for i, initContainer := range podTemplate.Spec.InitContainers {
-		if initContainer.Name != "wait-gcs-ready" {
-			continue
-		}
-
-		podTemplate.Spec.InitContainers[i].Env = append(podTemplate.Spec.InitContainers[i].Env, corev1.EnvVar{
-			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-			Value: "token",
-		})
-
-		podTemplate.Spec.InitContainers[i].Env = append(podTemplate.Spec.InitContainers[i].Env, corev1.EnvVar{
-			Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-					Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
-				},
-			},
-		})
-	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -404,7 +402,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		setTokenAuthEnvVars(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate)
 	}
 
 	return podTemplate

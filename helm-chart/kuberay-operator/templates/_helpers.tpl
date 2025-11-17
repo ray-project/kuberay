@@ -132,7 +132,6 @@ rules:
   resources:
   - events
   - pods/status
-  - secrets
   - services
   verbs:
   - create
@@ -170,6 +169,17 @@ rules:
   - pods/resize
   verbs:
   - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
