@@ -977,6 +977,79 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 	}
 }
 
+func TestFindHeadPodReadyMessage(t *testing.T) {
+	tests := []struct {
+		name            string
+		message         string
+		status          []corev1.ContainerStatus
+		expectedMessage string
+	}{{
+		name: "no message no status want nothing",
+	}, {
+		name:            "only reason",
+		message:         "TooEarlyInTheMorning",
+		expectedMessage: "TooEarlyInTheMorning",
+	}, {
+		name:    "one reason one status",
+		message: "containers not ready",
+		status: []corev1.ContainerStatus{{
+			Name: "ray",
+			State: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{
+					Reason:  "ImagePullBackOff",
+					Message: `Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
+				},
+			},
+		}},
+		expectedMessage: `containers not ready; ray: ImagePullBackOff: Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
+	}, {
+		name:    "one reason two statuses",
+		message: "aesthetic problems",
+		status: []corev1.ContainerStatus{{
+			Name: "indigo",
+			State: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{
+					Reason:  "BadColor",
+					Message: "too blue",
+				},
+			},
+		}, {
+			Name: "circle",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					Reason:  "BadGeometry",
+					Message: "too round",
+				},
+			},
+		}},
+		expectedMessage: "aesthetic problems; indigo: BadColor: too blue, circle: BadGeometry: too round",
+	}, {
+		name: "no reason one status",
+		status: []corev1.ContainerStatus{{
+			Name: "my-image",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					Reason:  "Crashed",
+					Message: "bash not found",
+				},
+			},
+		}},
+		expectedMessage: "my-image: Crashed: bash not found",
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse)
+			pod.Status.Conditions[0].Message = tc.message
+			pod.Status.ContainerStatuses = tc.status
+			cond := FindHeadPodReadyCondition(pod)
+			if cond.Message != tc.expectedMessage {
+				t.Errorf("FindHeadPodReadyCondition(...) returned condition with message %q, but wanted %q", cond.Message, tc.expectedMessage)
+			}
+		})
+	}
+}
+
 func TestErrRayClusterReplicaFailureReason(t *testing.T) {
 	assert.Equal(t, "FailedDeleteAllPods", RayClusterReplicaFailureReason(ErrFailedDeleteAllPods))
 	assert.Equal(t, "FailedDeleteHeadPod", RayClusterReplicaFailureReason(ErrFailedDeleteHeadPod))

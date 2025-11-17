@@ -92,6 +92,16 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 		headPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
 		headPodReadyCondition.Message = cond.Message
 
+		// Add details from failed or waiting container statuses if available.
+		details := containerStatusDetails(headPod)
+		if details != "" {
+			if headPodReadyCondition.Message == "" {
+				headPodReadyCondition.Message = details
+			} else {
+				headPodReadyCondition.Message += "; " + details
+			}
+		}
+
 		// Determine the reason; default to HeadPodRunningAndReady if the headPod is ready but no specific reason is provided
 		reason := cond.Reason
 		if cond.Status == corev1.ConditionTrue && reason == "" {
@@ -107,6 +117,18 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 		break
 	}
 	return headPodReadyCondition
+}
+
+func containerStatusDetails(pod *corev1.Pod) string {
+	var details []string
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Waiting != nil {
+			details = append(details, fmt.Sprintf("%s: %s: %s", status.Name, status.State.Waiting.Reason, status.State.Waiting.Message))
+		} else if status.State.Terminated != nil {
+			details = append(details, fmt.Sprintf("%s: %s: %s", status.Name, status.State.Terminated.Reason, status.State.Terminated.Message))
+		}
+	}
+	return strings.Join(details, ", ")
 }
 
 // FindRayClusterSuspendStatus returns the current suspend status from two conditions:
