@@ -27,7 +27,7 @@ var (
 )
 
 type RayDashboardClientInterface interface {
-	InitClient(client *http.Client, dashboardURL string)
+	InitClient(client *http.Client, dashboardURL string, authToken string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -44,11 +44,19 @@ type RayDashboardClientInterface interface {
 type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
+	authToken    string
 }
 
-func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string) {
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, authToken string) {
 	r.client = client
 	r.dashboardURL = dashboardURL
+	r.authToken = authToken
+}
+
+func (r *RayDashboardClient) setAuthHeader(req *http.Request) {
+	if r.authToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", r.authToken))
+	}
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -60,6 +68,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -101,6 +110,8 @@ func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.Se
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
