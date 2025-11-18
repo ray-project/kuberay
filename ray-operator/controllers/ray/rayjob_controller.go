@@ -152,7 +152,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.Reason = rayv1.ValidationFailed
 		rayJobInstance.Status.Message = err.Error()
 
-		// This is one of the only 3 places where we update the RayJob status. This will directly
+		// This is one of the only 2 places where we update the RayJob status. This will directly
 		// update the JobDeploymentStatus to ValidationFailed if there's validation error.
 		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 			logger.Info("Failed to update RayJob status", "error", err)
@@ -204,13 +204,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 			if rayClusterInstance.Status.State != rayv1.Ready {
 				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
-				// This is one of only 3 places where we update the RayJob status. For observability
-				// while waiting for the RayCluster to become ready, we lift the cluster status.
+				// The nonready RayCluster status should be reflected in the RayJob's status.
+				// Breaking from the switch statement will drop directly to the status update code
+				// and return a default requeue duration and no error.
 				rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-				if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
-					logger.Info("Failed to update RayJob status", "error", err)
-				}
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				break
 			}
 
 			if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
@@ -425,7 +423,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
-	// This is one of the only 3 places where we update the RayJob status. Please do NOT add any
+	// This is one of the only 2 places where we update the RayJob status. Please do NOT add any
 	// code between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
