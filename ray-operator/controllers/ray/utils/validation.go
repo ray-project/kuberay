@@ -193,7 +193,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
-			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.51.0 or later is required")
+			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
 		}
 
 		rayVersion, err := version.ParseGeneric(spec.RayVersion)
@@ -201,10 +201,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
 		}
 
-		// Require minimum Ray version 2.51.0
-		minVersion := version.MustParseGeneric("2.51.0")
+		// Require minimum Ray version 2.52.0
+		minVersion := version.MustParseGeneric("2.52.0")
 		if rayVersion.LessThan(minVersion) {
-			return fmt.Errorf("authOptions.mode is 'token' but minimum Ray version is 2.51.0, got %s", spec.RayVersion)
+			return fmt.Errorf("authOptions.mode is 'token' but minimum Ray version is 2.52.0, got %s", spec.RayVersion)
 		}
 
 	}
