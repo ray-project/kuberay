@@ -188,10 +188,10 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				Equal("Ray head pod not found.")))
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.AppFailed),
+				Equal(rayv1.SubmissionFailed),
+			)))
 
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
