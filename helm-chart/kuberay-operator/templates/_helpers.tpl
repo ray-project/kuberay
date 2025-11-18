@@ -172,6 +172,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
