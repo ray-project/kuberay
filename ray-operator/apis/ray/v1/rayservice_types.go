@@ -28,7 +28,7 @@ const (
 	// During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready
 	NewCluster RayServiceUpgradeType = "NewCluster"
 	// No new cluster will be created while the strategy is set to None
-	None RayServiceUpgradeType = "None"
+	RayServiceUpgradeNone RayServiceUpgradeType = "None"
 )
 
 // These statuses should match Ray Serve's application statuses
